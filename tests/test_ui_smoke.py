@@ -29,3 +29,30 @@ def test_main_window_survives_snapshot_without_meminfo(qapp):
     win = MainWindow(collector_factory=lambda: a_snapshot())
     win.apply_snapshot(replace(a_snapshot(), mem=None))
     assert "meminfo indisponível" in win.windowTitle()
+
+
+def test_main_window_surfaces_poll_errors(qapp):
+    """A failing collect must be visible in the UI, not silently swallowed."""
+    def boom():
+        raise OSError(28, "No space left on device")
+
+    win = MainWindow(collector_factory=lambda: boom)
+    win.start()
+    win._poller.poll_once()  # o timer faria isso; no teste dirigimos direto
+    assert "No space left" in win._label.text()
+
+
+def test_main_window_error_clears_on_good_snapshot(qapp):
+    calls = {"n": 0}
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError("disk hiccup")
+        return a_snapshot()
+
+    win = MainWindow(collector_factory=lambda: flaky)
+    win.start()
+    win._poller.poll_once()
+    win._poller.poll_once()
+    assert "disk hiccup" not in win._label.text()
