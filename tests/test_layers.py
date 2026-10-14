@@ -4,7 +4,7 @@ import re
 
 SRC = pathlib.Path(__file__).resolve().parent.parent / "src" / "deck_wellness"
 
-NO_QT = ["core", "safely", "actions", "process", "store", "paths.py"]
+NO_QT = ["core", "safely", "actions", "process", "store", "paths.py", "cli.py"]
 QT_RE = re.compile(r"\bPySide6\b")
 PROC_DIRECT_RE = re.compile(r"open\(\s*[\"']/proc|procfs\.|sysfs\.|/mnt/")
 
@@ -35,3 +35,20 @@ def test_non_ui_layers_do_not_import_qt():
         if QT_RE.search(f.read_text()):
             offenders.append(str(f.relative_to(SRC)))
     assert offenders == []
+
+
+def test_disk_cli_imports_nothing_from_qt_at_runtime():
+    """Hygiene has to work from a TTY when the desktop is the thing that broke."""
+    import subprocess
+    import sys
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    result = subprocess.run(
+        [sys.executable, "-c",
+         "import sys; sys.path.insert(0, 'src'); "
+         "import deck_wellness.cli; "
+         "print(','.join(m for m in sys.modules if m.startswith('PySide6')) or 'none')"],
+        cwd=root, capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "none"
