@@ -7,6 +7,14 @@ import pytest
 REAL_EDGE_LOCAL_STATE = Path.home() / ".config" / "microsoft-edge" / "Local State"
 
 
+@pytest.fixture(scope="session")
+def qapp():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication([])
+    yield app
+
+
 def _edge_tripwire_state():
     if not REAL_EDGE_LOCAL_STATE.exists():
         return None
