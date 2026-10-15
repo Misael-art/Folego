@@ -39,7 +39,7 @@ def test_main_window_surfaces_poll_errors(qapp):
     win = MainWindow(collector_factory=lambda: boom)
     win.start()
     win._poller.poll_once()  # o timer faria isso; no teste dirigimos direto
-    assert "No space left" in win._label.text()
+    assert "No space left" in win.dashboard.status.text()
 
 
 def test_main_window_error_clears_on_good_snapshot(qapp):
@@ -55,4 +55,4 @@ def test_main_window_error_clears_on_good_snapshot(qapp):
     win.start()
     win._poller.poll_once()
     win._poller.poll_once()
-    assert "disk hiccup" not in win._label.text()
+    assert "disk hiccup" not in win.dashboard.status.text()

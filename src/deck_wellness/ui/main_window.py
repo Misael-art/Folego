@@ -1,45 +1,71 @@
-"""Main window: live RAM signal in the title bar + the M4 orphan/group panel.
+"""Main window: four tabs, one title-bar signal, and the polling that feeds them.
 
-The window owns the polling and the tracker; the panel only receives data and
-calls back here when the user confirms an act. The Reaper is created lazily —
-opening the window must never be enough to be able to signal a process.
+The window owns the poller, the orphan tracker and the two child-process layers
+(tunings and the disk plan); every tab receives plain data and calls back here
+when the user confirms an act. The Reaper stays lazy and the tunings tab is never
+consulted on its own: opening the window must never be enough to write a byte or
+signal a process.
 """
-from PySide6.QtWidgets import QLabel, QMainWindow, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QMainWindow, QTabWidget
 
 from . import title_signal
+from .dashboard_tab import DashboardTab
+from .disk_tab import DiskTab, plan_argv
 from .orphans_panel import OrphansPanel
+from .tray import Tray
+from .tune_jobs import TuneJobs
+from .tunings_tab import TuningsTab
 from ..core.orphans import OrphanTracker, group_targets
+
+# tab title -> the attribute the dashboard's "Ir para …" jumps to
+TABS = (("memória", "dashboard"), ("ajustes", "tunings"),
+        ("órfãos", "orphans"), ("disco", "disk"))
+JUMPS = {"memoria": "dashboard", "ajustes": "tunings", "orfaos": "orphans",
+         "disco": "disk"}
+DISK_TIMEOUT_MS = 120_000  # the real cache walk took 54,7 s on this Deck (M3 log)
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, collector_factory=None, thresholds: title_signal.Thresholds | None = None,
+    def __init__(self, collector_factory=None,
+                 thresholds: title_signal.Thresholds | None = None,
                  *, tracker: OrphanTracker | None = None, reaper_factory=None,
-                 confirm_fn=None):
+                 confirm_fn=None, jobs=None, disk_jobs=None):
         super().__init__()
         self._thresholds = thresholds or title_signal.Thresholds()
-        self.resize(760, 520)
-        self._label = QLabel("Aguardando primeira leitura…")
-        self._label.base_text = "Aguardando primeira leitura…"
+        self.resize(900, 620)
         self._tracker = tracker or OrphanTracker()
         self._reaper_factory = reaper_factory or _default_reaper
         self._reaper = None
+        self._collector_factory = collector_factory
+        self._poller = None
+        self._quitting = False
+        self._tray_note = ""
+        self._jobs = jobs if jobs is not None else TuneJobs(parent=self)
+        self._disk_jobs = disk_jobs if disk_jobs is not None else TuneJobs(
+            parent=self, argv_factory=plan_argv, timeout_ms=DISK_TIMEOUT_MS)
+
+        self.dashboard = DashboardTab(on_jump=self.jump_to, thresholds=self._thresholds)
+        self.tunings = TuningsTab(jobs=self._jobs, confirm_fn=confirm_fn)
         self.orphans = OrphansPanel(confirm_fn=confirm_fn,
                                     on_terminate=self._terminate,
                                     on_force=self._force,
                                     on_group=self._group)
+        self.disk = DiskTab(jobs=self._disk_jobs)
 
-        host = QWidget()
-        layout = QVBoxLayout()
-        layout.addWidget(self._label)
-        layout.addWidget(self.orphans)
-        host.setLayout(layout)
-        self.setCentralWidget(host)
-        self._poller = None
-        self._collector_factory = collector_factory
+        self.tabs = QTabWidget()
+        for title, attribute in TABS:
+            self.tabs.addTab(getattr(self, attribute), title)
+        self.setCentralWidget(self.tabs)
+
+        self.tray = Tray(self, thresholds=self._thresholds)
+
+    # -------------------------------------------------------------------- polling
 
     def start(self):
         if self._collector_factory is None or self._poller is not None:
             return
+        if not self.tray.install():
+            self._tray_note = self.tray.fallback
         from .workers import Poller
         collector = self._collector_factory()
         collect_fn = getattr(collector, "collect", None) or collector
@@ -49,22 +75,39 @@ class MainWindow(QMainWindow):
         self._poller.start()
 
     def show_error(self, message: str):
-        self._last_error = message
-        self._label.setText(f"⚠ última falha de coleta: {message}\n\n{self._label.base_text}")
+        self.dashboard.status.setText(f"⚠ última falha de coleta: {message}")
 
     def apply_snapshot(self, snapshot):
-        sig = title_signal.compute(snapshot, self._thresholds)
-        self.setWindowTitle(sig.text)
-        self._last_error = None
-        top = ", ".join(f"{a.group} {a.rss_kb // 1024} MB" for a in snapshot.apps[:5])
-        swap = snapshot.swap_used_kb // 1048576
-        base = (f"{sig.text}\nswap/zram: {swap} GB usados\ntop apps (RSS): {top or '—'}")
-        self._label.base_text = base
-        self._label.setText(base)
-        self.orphans.show_candidates(self._tracker.observe(snapshot))
+        self.setWindowTitle(title_signal.compute(snapshot, self._thresholds).text)
+        candidates = self._tracker.observe(snapshot)
+        self.orphans.show_candidates(candidates)
         self.orphans.show_groups(group_targets(snapshot.procs))
+        notes = (self._tray_note,) if self._tray_note else ()
+        self.dashboard.show_snapshot(snapshot, orphan_count=len(candidates),
+                                     thumbnails_kb=self.disk.thumbnails_kb,
+                                     extra_notes=notes)
+        if self.tray.tray is not None:
+            self.tray.show_snapshot(snapshot)
 
-    # ------------------------------------------------------------------ acts
+    # ------------------------------------------------------- navigation and lifetime
+
+    def jump_to(self, target: str):
+        attribute = JUMPS.get(target)
+        if attribute is not None:
+            self.tabs.setCurrentWidget(getattr(self, attribute))
+
+    def raise_to_user(self):
+        if not self.isVisible():
+            self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def quit(self):
+        """The tray menu's way out: stop watching, take the children down."""
+        self._quitting = True
+        self.close()
+
+    # ----------------------------------------------------------------------- acts
 
     def _reaper_or_new(self):
         if self._reaper is None:
@@ -84,9 +127,16 @@ class MainWindow(QMainWindow):
         return self._reaper_or_new().terminate_group(target)
 
     def closeEvent(self, event):
-        if self._poller is not None:
-            self._poller.stop()
-        super().closeEvent(event)
+        if self._quitting or self.tray.tray is None:
+            if self._poller is not None:
+                self._poller.stop()
+            self._jobs.shutdown()
+            self._disk_jobs.shutdown()
+            super().closeEvent(event)
+            return
+        # a live icon means the signal is resident: hide the window, keep watching
+        event.ignore()
+        self.hide()
 
 
 def _default_reaper():

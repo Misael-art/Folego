@@ -98,7 +98,7 @@ def census() -> int:
         problems.append(f"bytes mexidos durante a leitura: {moved}")
     grew = len(audit_lines()) - audit_before
     if grew:
-        problems.append(f"a leitura registrou {grew} linha(s) na auditoria")
+        problems.append(f"a leitura criou {grew} linha(s) na auditoria")
 
     print(f"ajustes={len(TUNINGS)} arquivos_inalterados={not moved} "
           f"audit_linhas_antes={audit_before} audit_linhas_depois={audit_before + grew}")
@@ -143,7 +143,7 @@ def guard() -> int:
 def report(problems: list[str]) -> int:
     for line in problems:
         print(f"FALHA: {line}")
-    print(f"veredito={'FALHOU' if problems else 'OK'} problemas={len(problems)}")
+    print(f"veredicto={'FALHOU' if problems else 'OK'} problemas={len(problems)}")
     return 1 if problems else 0
 
 
