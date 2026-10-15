@@ -1,21 +1,26 @@
 """DeckWellness command line.
 
-`disk` subcommands run headless (no display, no Qt import) so hygiene works
-even when the desktop session is the thing that is broken.
+`disk`, `orphans` and `groups` run headless (no display, no Qt import) so the
+toolbox still works when the desktop session is the thing that is broken.
 """
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 
 from .actions.disk import planner, tmpclean
 from .actions.disk.measure import measure_tree
 from .actions.disk.quarantine import Quarantine
+from .actions.orphans import scan
+from .core.orphans import GROUP_LABELS, KILLABLE_GROUPS, OrphanTracker, group_targets
 from .safely.audit import AuditLog
 
 EXIT_OK = 0
 EXIT_REFUSED = 1
 EXIT_NEEDS_CONFIRM = 2
+
+_sleep = time.sleep
 
 
 def run_gui(argv=None) -> int:
@@ -27,10 +32,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="deck-wellness",
         description="Bem-estar do Steam Deck: diagnóstico e higiene com confirmação.")
-    parser.add_argument("command", nargs="?", help="disk para higiene de disco; vazio abre a janela")
-    disk = parser.add_subparsers(dest="sub")
+    commands = parser.add_subparsers(dest="command")
 
-    plan = disk.add_parser("plan", help="dry-run: o que poderia ser liberado (nada muda)")
+    disk = commands.add_parser("disk", help="higiene de disco (dry-run primeiro)")
+    disk_sub = disk.add_subparsers(dest="sub", required=True)
+
+    plan = disk_sub.add_parser("plan", help="dry-run: o que poderia ser liberado (nada muda)")
     plan.add_argument("--json", action="store_true", help="saída para máquinas")
     plan.add_argument("--prazo", type=float, default=30.0,
                       help="segundos máximos de leitura por diretório")
@@ -40,21 +47,41 @@ def build_parser() -> argparse.ArgumentParser:
         ("restore", "devolver um item quarentenado ao lugar original"),
         ("purge", "apagar de vez um item já quarentenado"),
     ):
-        sub = disk.add_parser(name, help=help_text)
+        sub = disk_sub.add_parser(name, help=help_text)
         sub.add_argument("target", help="caminho (quarantine) ou id de quarentena")
         sub.add_argument("--confirmar", action="store_true", help="aceita esta mutação")
         if name == "purge":
             sub.add_argument("--irreversivel", action="store_true",
                              help="aceita que o conteúdo não voltará nunca mais")
 
-    disk.add_parser("list", help="itens em quarentena")
+    disk_sub.add_parser("list", help="itens em quarentena")
 
-    tmp = disk.add_parser("tmp", help="itens vencidos em /tmp (ocupa RAM e causa ENOSPC)")
+    tmp = disk_sub.add_parser("tmp", help="itens vencidos em /tmp (ocupa RAM e causa ENOSPC)")
     tmp.add_argument("--dias", type=float, default=3.0, help="idade mínima em dias")
     tmp.add_argument("--raiz", default="/tmp", help="diretório temporário a analisar")
     tmp.add_argument("--confirmar", action="store_true", help="apaga em vez de só listar")
     tmp.add_argument("--irreversivel", action="store_true",
                      help="aceita que itens de /tmp não têm volta")
+
+    orphans = commands.add_parser(
+        "orphans", help="processos abandonados pelo PID 1, parados há um tempo")
+    orphans.add_argument("--janela", type=float, default=10.0,
+                         help="segundos observados para provar a ociosidade")
+    orphans.add_argument("--amostras", type=int, default=2,
+                         help="número de leituras dentro da janela")
+    orphans.add_argument("--ocioso", type=float, default=None,
+                         help="ociosidade mínima exigida (padrão: a própria janela)")
+    orphans.add_argument("--confirmar", action="store_true",
+                         help="envia SIGTERM aos listados")
+    orphans.add_argument("--forcar", action="store_true",
+                         help="SIGKILL em vez de SIGTERM (com --confirmar)")
+
+    groups = commands.add_parser(
+        "groups", help="família inteira de navegador, para rendimento alto")
+    groups.add_argument("--grupo", choices=KILLABLE_GROUPS, default=None,
+                        help="restringe a edge ou chrome (padrão: ambos)")
+    groups.add_argument("--confirmar", action="store_true",
+                        help="envia SIGTERM à família listada")
     return parser
 
 
@@ -188,6 +215,83 @@ _HANDLERS = {
 }
 
 
+def _reaper():
+    from .actions.orphans.reaper import Reaper
+    return Reaper(audit=AuditLog())
+
+
+def _rss(rss_kb: int) -> str:
+    return planner.fmt_bytes(rss_kb * 1024)
+
+
+def _cmd_orphans(args) -> int:
+    if args.forcar and not args.confirmar:
+        sys.stderr.write("refused: SIGKILL é mais disruptivo que SIGTERM; use "
+                         "--confirmar --forcar\n")
+        return EXIT_NEEDS_CONFIRM
+    min_idle = args.janela if args.ocioso is None else args.ocioso
+    found = scan.scan_orphans(
+        scan.collector_for(), tracker=OrphanTracker(min_idle_s=min_idle),
+        samples=max(2, args.amostras), window_s=args.janela, sleep=_sleep)
+    if not found:
+        print(f"sem órfão comprovado (janela de {args.janela:g} s, "
+              f"{args.amostras} amostras)")
+        print("órfão comprovado: adotado por PID 1 ou pelo supervisor da sessão, "
+              "sem filhos vivos, fora da lista protegida e sem consumir CPU há "
+              f"{min_idle:g} s")
+        return EXIT_OK
+    print(f"{len(found)} órfão(s) comprovado(s) · {_rss(sum(c.rss_kb for c in found))} "
+          f"· ocioso ≥ {min_idle:g} s")
+    for c in found:
+        command = " ".join(c.cmdline)[:120] or "—"
+        print(f"  · pid {c.pid} · {c.comm} · {_rss(c.rss_kb)} · "
+              f"{c.idle_s:.0f} s sem CPU · estado {c.state} · pai {c.ppid}")
+        print(f"      comando: {command}")
+    if not args.confirmar:
+        sys.stderr.write("\ndry-run: nenhum processo foi encerrado. Para encerrar use "
+                         "--confirmar (SIGTERM) ou --confirmar --forcar (SIGKILL)\n")
+        return EXIT_OK
+    reaper = _reaper()
+    refused = 0
+    for c in found:
+        result = (reaper.force(c, confirm=True) if args.forcar
+                  else reaper.terminate(c))
+        if result.ok:
+            note = f" · {result.reason}" if result.reason else ""
+            print(f"encerrado: pid {result.pid} · {result.comm}{note}")
+        else:
+            refused += 1
+            sys.stderr.write(f"refused: pid {result.pid} · {result.reason}\n")
+    return EXIT_REFUSED if refused else EXIT_OK
+
+
+def _cmd_groups(args) -> int:
+    groups = (args.grupo,) if args.grupo else KILLABLE_GROUPS
+    targets = group_targets(scan.collector_for().collect().procs, groups=groups)
+    if not targets:
+        print("nenhum grupo aberto (" + ", ".join(GROUP_LABELS[g] for g in groups) + ")")
+        return EXIT_OK
+    for target in targets:
+        print(f"{target.label}: {len(target.members)} processo(s) · "
+              f"{_rss(target.total_rss_kb)}")
+        for member in target.members:
+            print(f"  · pid {member.pid} · {member.comm} · {_rss(member.rss_kb)}")
+    if not args.confirmar:
+        sys.stderr.write("\ndry-run: nenhum processo foi encerrado. Para encerrar use "
+                         "deck-wellness groups --grupo edge --confirmar\n")
+        return EXIT_OK
+    reaper = _reaper()
+    refused = 0
+    for target in targets:
+        for result in reaper.terminate_group(target):
+            if result.ok:
+                print(f"encerrado: pid {result.pid} · {result.comm}")
+            else:
+                refused += 1
+                sys.stderr.write(f"refused: pid {result.pid} · {result.reason}\n")
+    return EXIT_REFUSED if refused else EXIT_OK
+
+
 def main(argv=None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     parser = build_parser()
@@ -197,10 +301,15 @@ def main(argv=None) -> int:
         return int(exit_request.code or EXIT_NEEDS_CONFIRM)
     if ns.command is None:
         return run_gui(args)
+    if ns.command == "orphans":
+        return _cmd_orphans(ns)
+    if ns.command == "groups":
+        return _cmd_groups(ns)
     handler = _HANDLERS.get(ns.sub) if ns.command == "disk" else None
     if handler is None:
         sys.stderr.write(
             f"refused: comando desconhecido: {ns.command or ''} {ns.sub or ''}\n"
-            f"usage: deck-wellness [disk plan|quarantine|restore|purge|list]\n")
+            f"usage: deck-wellness [disk plan|quarantine|restore|purge|list] "
+            f"[orphans] [groups]\n")
         return EXIT_NEEDS_CONFIRM
     return handler(ns)

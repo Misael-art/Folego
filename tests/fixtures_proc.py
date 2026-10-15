@@ -5,6 +5,8 @@ minflt cminflt majflt cmajflt utime stime prio nice nthr itreal starttime
 """
 from pathlib import Path
 
+from deck_wellness.core.snapshot import ProcInfo, Snapshot
+
 DEFAULT_MEMINFO = """MemTotal:       14374304 kB
 MemFree:          993972 kB
 MemAvailable:    6242228 kB
@@ -43,7 +45,8 @@ def pid_dir(root: Path, pid: int, *, comm="app", state="S", ppid=1, pgid=None,
 def build_proc(root: Path, *, meminfo=DEFAULT_MEMINFO, swaps=DEFAULT_SWAPS,
                loadavg=DEFAULT_LOADAVG, pressure_memory=DEFAULT_PRESSURE_MEMORY,
                pids=()):
-    (root / "pressure").mkdir(exist_ok=True)
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "pressure").mkdir(parents=True, exist_ok=True)
     if meminfo is not None:
         (root / "meminfo").write_text(meminfo)
     if swaps is not None:
@@ -55,3 +58,21 @@ def build_proc(root: Path, *, meminfo=DEFAULT_MEMINFO, swaps=DEFAULT_SWAPS,
     for kw in pids:
         pid_dir(root, **kw)
     return root
+
+
+def proc_info(pid, *, comm="app", state="S", ppid=1, pgid=None, session=None,
+              utime=100, stime=50, starttime=12345, rss_kb=1024, swap_kb=0,
+              uid=1000, cmdline=None) -> ProcInfo:
+    """In-memory ProcInfo with the same defaults as pid_dir (leader by default)."""
+    return ProcInfo(pid=pid, comm=comm, state=state, ppid=ppid,
+                    pgrp=pid if pgid is None else pgid,
+                    session=pid if session is None else session,
+                    utime=utime, stime=stime, starttime=starttime,
+                    rss_kb=rss_kb, swap_kb=swap_kb, uid=uid,
+                    cmdline=tuple(cmdline or [f"/usr/bin/{comm}", "--flag"]))
+
+
+def snapshot_of(*procs, ts=1_000.0) -> Snapshot:
+    return Snapshot(ts=ts, mem=None, swap_used_kb=0, swap_total_kb=0,
+                    pressure_memory=None, pressure_io=None, pressure_cpu=None,
+                    load=None, apps=(), self_rss_kb=0, procs=tuple(procs))

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# DeckWellness launcher — M1: janela com sinal de RAM ao vivo na barra de título.
+# DeckWellness launcher — M1: RAM ao vivo no título · M4: painel de órfãos e grupo.
+# Só encerra processo depois de um clique com confirmação; sem clique, nada é sinalizado.
 set -euo pipefail
 cd "$(dirname "$0")"
 export PYTHONPATH=src
