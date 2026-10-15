@@ -5,7 +5,13 @@
 
 Nothing here clicks, writes or signals a process: the window is built offscreen
 unless the session says otherwise, the disk numbers come from the same child
-process the tab uses, and the tray only reports whether Plasma lets the icon in.
+process the tab uses, and the tray is only believed when the Plasma watcher itself
+lists an item owned by this pid — ``QSystemTrayIcon.show()`` promises a registration
+it has not performed yet, because the DBus call is asynchronous and needs the loop.
+
+Offscreen/minimal platforms have no SNI host to consult, so the check says
+``observacao_impossivel`` there instead of claiming a tray; the real verdict needs
+the session (``QT_QPA_PLATFORM=wayland``, dentro do Plasma).
 
 Every claim is reconciled against a path that does not go through the app: the
 title's GB figures against a direct /proc/meminfo parse (taken just after the
@@ -32,6 +38,9 @@ from deck_wellness.ui.main_window import MainWindow  # noqa: E402
 
 PROC_ROOT = Path(os.environ.get("DECKWELLNESS_PROC_ROOT", "/proc"))
 DISK_DEADLINE_S = 150.0  # above the tab's 120 s child timeout; the walk took 54,7 s here
+SNI_DEADLINE_S = 8.0  # the DBus registration landed in well under 1 s on this Deck
+SNI_WATCHER = "org.kde.StatusNotifierWatcher"
+SNI_WATCHER_PATH = "/StatusNotifierWatcher"
 TITLE_NUMBERS = re.compile(r"DeckWellness (🟢|🟡|🔴|⚪) · ([\d,]+)/([\d,]+) GB "
                            r"livre ([\d,]+) · app (\d+) MB")
 LEVELS = {"critico": 0, "alto": 1, "medio": 2}
@@ -153,14 +162,71 @@ def check_disk(win, app, problems) -> None:
         problems.append(f"miniaturas divergem do du em {drift * 100:.0f}%")
 
 
-def check_tray(win, problems) -> None:
+def sni_items() -> list[str]:
+    """Os itens que o Plasma registrou, lidos por um processo de fora do app.
+
+    ``QSystemTrayIcon.show()`` não prova nada: o registro no watcher é uma chamada
+    DBus assíncrona. Se o loop não roda, ou se o host morreu, o Qt promete e a bandeja
+    não existe — a lista do watcher é a única palavra que não é do app.
+    """
+    out = subprocess.run(
+        ["busctl", "--user", "--no-pager", "get-property", SNI_WATCHER, SNI_WATCHER_PATH,
+         SNI_WATCHER, "RegisteredStatusNotifierItems"],
+        capture_output=True, text=True, timeout=20)
+    if out.returncode != 0:
+        return []
+    return re.findall(r'"([^"]+)"', out.stdout)
+
+
+def bus_pids() -> dict[str, int]:
+    """nome DBus único -> pid, para o item registrado ser cobrado ao nosso processo."""
+    out = subprocess.run(["busctl", "--user", "--no-pager", "list"],
+                         capture_output=True, text=True, timeout=20)
+    pairs = {}
+    for line in out.stdout.splitlines():
+        fields = line.split()
+        if len(fields) >= 2 and fields[0].startswith(":"):
+            try:
+                pairs[fields[0]] = int(fields[1])
+            except ValueError:
+                pass
+    return pairs
+
+
+def owner_of(item: str, pids: dict[str, int]) -> int:
+    name = item.split("/", 1)[0]
+    if name.startswith(":"):
+        return pids.get(name, -1)
+    found = re.match(r"org\.kde\.StatusNotifierItem-(\d+)-\d+", name)
+    return int(found.group(1)) if found else -1
+
+
+def check_tray(win, app, problems) -> None:
+    watcher_alive = bool(sni_items())
+    before = set(sni_items())
     installed = win.tray.install()
     print(f"bandeja={'instalada' if installed else 'indisponível'}")
     print(f"fallback={win.tray.fallback or '—'}")
     if not installed:
         return
+    if not watcher_alive:
+        print("observacao_impossivel=sem watcher SNI vivo para conferir; esta execução "
+              "não prova bandeja visível")
+        return
     match = TITLE_NUMBERS.match(win.windowTitle())
     win.tray.show_snapshot(MetricsCollector().collect())
+    if not drive(app, lambda: set(sni_items()) - before, SNI_DEADLINE_S):
+        problems.append(f"o Plasma não registrou o item em {SNI_DEADLINE_S:g} s: show() "
+                        "do Qt não virou bandeja (watcher vivo?)")
+        return
+    pids = bus_pids()
+    new = {i: owner_of(i, pids) for i in set(sni_items()) - before}
+    ours = [i for i, pid in new.items() if pid == os.getpid()]
+    print(f"itens_novos={new} pid={os.getpid()}")
+    if not ours:
+        problems.append(f"nenhum item novo pertence ao nosso pid ({os.getpid()}): {new}")
+        return
+    print(f"bandeja_registrada={ours[0]}")
     tooltip = win.tray.tray.toolTip()
     print(f"tooltip={tooltip!r}")
     if match and match.group(1) not in tooltip:
@@ -213,7 +279,7 @@ def main(argv=None) -> int:
     problems: list[str] = []
     check_title(win, problems)
     check_dashboard(win, snapshot, problems)
-    check_tray(win, problems)
+    check_tray(win, app, problems)
     if not args.sem_disco:
         check_disk(win, app, problems)
     check_adverse(win, problems)
