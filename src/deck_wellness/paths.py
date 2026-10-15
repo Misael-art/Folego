@@ -12,7 +12,11 @@ def _env_dir(var: str, fallback: Path) -> Path:
 
 
 def config_dir() -> Path:
-    return _env_dir("XDG_CONFIG_HOME", Path.home() / ".config") / APP_NAME
+    return xdg_config_home() / APP_NAME
+
+
+def xdg_config_home() -> Path:
+    return _env_dir("XDG_CONFIG_HOME", Path.home() / ".config")
 
 
 def data_dir() -> Path:
@@ -41,3 +45,20 @@ def proc_root() -> str:
 
 def sys_root() -> str:
     return os.environ.get("DECKWELLNESS_SYS_ROOT", "/sys")
+
+
+EDGE_DIR_NAME = "microsoft-edge"
+
+
+def edge_config_dir() -> Path:
+    """Where Edge keeps the profile the browser rewrites on exit. Read through
+    XDG at call time so an isolated HOME in a test moves the whole app."""
+    return xdg_config_home() / EDGE_DIR_NAME
+
+
+def edge_local_state() -> Path:
+    return edge_config_dir() / "Local State"
+
+
+def edge_profile_preferences(profile: str = "Default") -> Path:
+    return edge_config_dir() / profile / "Preferences"

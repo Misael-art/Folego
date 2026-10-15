@@ -1,7 +1,9 @@
 """DeckWellness command line.
 
-`disk`, `orphans` and `groups` run headless (no display, no Qt import) so the
-toolbox still works when the desktop session is the thing that is broken.
+`disk`, `orphans`, `groups` and `tune` run headless (no display, no Qt import) so
+the toolbox still works when the desktop session is the thing that is broken.
+`tune` never writes in this process: each mutation is handed to a child that can
+be killed if the disk stalls.
 """
 import argparse
 import json
@@ -13,12 +15,17 @@ from .actions.disk import planner, tmpclean
 from .actions.disk.measure import measure_tree
 from .actions.disk.quarantine import Quarantine
 from .actions.orphans import scan
+from .actions.tunings.registry import TUNINGS
 from .core.orphans import GROUP_LABELS, KILLABLE_GROUPS, OrphanTracker, group_targets
+from .process.runner import run_isolated
 from .safely.audit import AuditLog
 
 EXIT_OK = 0
 EXIT_REFUSED = 1
 EXIT_NEEDS_CONFIRM = 2
+
+WORKER_MODULE = "deck_wellness.actions.tunings.worker"
+TUNE_TIMEOUT_S = 15.0
 
 _sleep = time.sleep
 
@@ -82,6 +89,19 @@ def build_parser() -> argparse.ArgumentParser:
                         help="restringe a edge ou chrome (padrão: ambos)")
     groups.add_argument("--confirmar", action="store_true",
                         help="envia SIGTERM à família listada")
+
+    tune = commands.add_parser(
+        "tune", help="ajustes de economia na config do navegador (dry-run primeiro)")
+    tune_sub = tune.add_subparsers(dest="sub", required=True)
+    status = tune_sub.add_parser("status", help="estado atual de cada ajuste (não escreve)")
+    status.add_argument("--json", action="store_true", help="saída para máquinas")
+    for name, help_text in (
+        ("apply", "aplica um ajuste, com backup reversível"),
+        ("revert", "devolve o arquivo ao último backup"),
+    ):
+        sub = tune_sub.add_parser(name, help=help_text)
+        sub.add_argument("tuning", help="id do ajuste, ex. edge.startup_boost")
+        sub.add_argument("--confirmar", action="store_true", help="aceita esta mutação")
     return parser
 
 
@@ -292,6 +312,150 @@ def _cmd_groups(args) -> int:
     return EXIT_REFUSED if refused else EXIT_OK
 
 
+def _worker(acao: str, tuning_id: str, *, confirmar: bool = False):
+    """One tuning action, in a child the terminal can outlive."""
+    argv = [sys.executable, "-m", WORKER_MODULE, acao, tuning_id]
+    if confirmar:
+        argv.append("--confirmar")
+    return run_isolated(argv, timeout=TUNE_TIMEOUT_S)
+
+
+def _worker_answer(res) -> dict | None:
+    """The child's JSON line, or None when it never gave one."""
+    if res.refused or res.timed_out or not res.stdout.strip():
+        return None
+    try:
+        return json.loads(res.stdout.strip().splitlines()[-1])
+    except ValueError:
+        return None
+
+
+def _child_failure(res) -> str:
+    if res.refused:
+        return res.refused
+    if res.timed_out:
+        return (f"o processo de leitura não respondeu em {TUNE_TIMEOUT_S:g} s e foi "
+                f"encerrado (disco travado?)")
+    if res.stderr.strip():
+        return res.stderr.strip()
+    return f"o processo filho terminou sem resposta (código {res.exit_code})"
+
+
+def _tune_label(tuning_id: str) -> str:
+    tuning = next((t for t in TUNINGS if t.id == tuning_id), None)
+    return tuning.label if tuning else tuning_id
+
+
+def _tune_state(payload) -> str:
+    if payload is None:
+        return "não respondeu"
+    if payload.get("error"):
+        if not payload.get("exists"):
+            return "arquivo não existe"
+        return payload["error"]
+    if not payload.get("present"):
+        return "padrão do navegador (chave ausente)"
+    return "ligado" if payload.get("current") else "desligado"
+
+
+def _cmd_tune_status(args) -> int:
+    rows, failures = [], 0
+    for tuning in TUNINGS:
+        res = _worker("detect", tuning.id)
+        payload = _worker_answer(res)
+        if payload is None:
+            failures += 1
+        row = {"id": tuning.id, "label": tuning.label, "key": tuning.key,
+               "state": _tune_state(payload)}
+        if payload is not None:
+            row.update(file=payload.get("file"), present=payload.get("present"),
+                       current=payload.get("current"), desired=payload.get("desired"),
+                       change_needed=payload.get("change_needed"),
+                       error=payload.get("error"))
+        else:
+            row.update(file=None, present=None, current=None, desired=tuning.desired,
+                       change_needed=None, error=_child_failure(res))
+        rows.append(row)
+
+    if args.json:
+        print(json.dumps({"tunings": rows}, ensure_ascii=False))
+        return EXIT_REFUSED if failures else EXIT_OK
+
+    print("Ajustes de economia (dry-run: nada foi escrito):")
+    for row in rows:
+        print(f"{row['id']} · {row['label']}")
+        print(f"   chave:   {row['key']}")
+        print(f"   arquivo: {row['file'] or '—'}")
+        note = ""
+        if row["present"] and not row["change_needed"]:
+            note = " (já econômico)"
+        print(f"   estado: {row['state']}{note}")
+        if row["error"]:
+            print(f"   aviso:  {row['error']}")
+    if failures:
+        print(f"\n{failures} ajuste(s) sem leitura confiável — o arquivo pode estar "
+              "em um disco travado")
+    print("\nPara aplicar: deck-wellness tune apply <id> --confirmar "
+          "(o Edge precisa estar fechado)")
+    return EXIT_REFUSED if failures else EXIT_OK
+
+
+def _report_mutation(res, acao: str, tuning_id: str) -> int:
+    label = _tune_label(tuning_id)
+    payload = _worker_answer(res)
+    if payload is None:
+        sys.stderr.write(f"refused: {_child_failure(res)}\n")
+        return EXIT_REFUSED
+    if payload.get("conhecidos") is not None:
+        sys.stderr.write(f"refused: {payload['reason']}\n")
+        sys.stderr.write("existem: " + ", ".join(payload["conhecidos"]) + "\n")
+        return EXIT_REFUSED
+
+    ok = bool(payload.get("ok"))
+    exit_code = payload.get("exit", EXIT_OK if ok else EXIT_REFUSED)
+    if ok:
+        if acao == "apply" and not payload.get("changed"):
+            print(f"nada a fazer: {payload.get('reason') or 'já está no valor desejado'}")
+            return EXIT_OK
+        print(f"{'aplicado' if acao == 'apply' else 'restaurado'}: {label}")
+        print(f"   arquivo: {payload.get('file')}")
+        print(f"   sha256:  {payload.get('sha')}")
+        if payload.get("backup_id"):
+            print(f"   backup:  {payload['backup_id']}")
+        if acao == "apply":
+            print(f"   reverta: deck-wellness tune revert {tuning_id} --confirmar")
+        return EXIT_OK
+
+    if exit_code == EXIT_NEEDS_CONFIRM:
+        sys.stderr.write(f"dry-run: nada foi escrito ({payload.get('reason')}).\n")
+        sys.stderr.write(f"        para aplicar: deck-wellness tune apply "
+                         f"{tuning_id} --confirmar\n")
+        return EXIT_NEEDS_CONFIRM
+    sys.stderr.write(f"refused: {payload.get('reason')}\n")
+    return exit_code
+
+
+def _cmd_tune_apply(args) -> int:
+    return _report_mutation(_worker("apply", args.tuning, confirmar=args.confirmar),
+                            "apply", args.tuning)
+
+
+def _cmd_tune_revert(args) -> int:
+    if not args.confirmar:
+        sys.stderr.write("refused: restaurar regrava o arquivo do navegador e exige "
+                         "--confirmar (nada foi alterado)\n")
+        return EXIT_NEEDS_CONFIRM
+    return _report_mutation(_worker("revert", args.tuning, confirmar=True),
+                            "revert", args.tuning)
+
+
+_TUNE_HANDLERS = {
+    "status": _cmd_tune_status,
+    "apply": _cmd_tune_apply,
+    "revert": _cmd_tune_revert,
+}
+
+
 def main(argv=None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     parser = build_parser()
@@ -305,11 +469,17 @@ def main(argv=None) -> int:
         return _cmd_orphans(ns)
     if ns.command == "groups":
         return _cmd_groups(ns)
+    if ns.command == "tune":
+        handler = _TUNE_HANDLERS.get(ns.sub)
+        if handler is None:
+            sys.stderr.write(f"refused: subcomando desconhecido: {ns.sub}\n")
+            return EXIT_NEEDS_CONFIRM
+        return handler(ns)
     handler = _HANDLERS.get(ns.sub) if ns.command == "disk" else None
     if handler is None:
         sys.stderr.write(
             f"refused: comando desconhecido: {ns.command or ''} {ns.sub or ''}\n"
-            f"usage: deck-wellness [disk plan|quarantine|restore|purge|list] "
-            f"[orphans] [groups]\n")
+            f"usage: deck-wellness [disk plan|quarantine|restore|purge|list|tmp] "
+            f"[orphans] [groups] [tune status|apply|revert]\n")
         return EXIT_NEEDS_CONFIRM
     return handler(ns)
