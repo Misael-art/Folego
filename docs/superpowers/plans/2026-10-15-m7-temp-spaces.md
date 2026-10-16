@@ -550,6 +550,11 @@ def test_age_uses_the_newest_file_inside_the_tree(tmp_path):
     fresh = session / "saida.log"
     fresh.write_text("agora")
     os.utime(fresh, (NOW - 60, NOW - 60))
+    # escrever move o mtime do diretório para o relógio real de verdade; a cena do
+    # docstring é mtime do diretório velho com escrita nova dentro — refaz o velho.
+    # (sem isto, measure_tree devolve o mtime do diretório como mais novo e a idade
+    # do pai sai 0.0: o teste não poderia passar, e a mutação não teria o que matar)
+    os.utime(session, (NOW - 40 * 86_400, NOW - 40 * 86_400))
 
     entry = inventory.entry_at(str(fresh), (), EMPTY, volume=str(root), now=NOW)
     assert entry.age_days == pytest.approx(60 / 86_400, abs=1e-6)
@@ -617,6 +622,22 @@ def test_inventory_lists_only_the_top_level_children(tmp_path):
     outer = child(root, "outer", is_dir=True)
     (outer / "inner" / "deep").mkdir(parents=True)
     assert [e.name for e in inventory.inventory(str(root), (), EMPTY, now=NOW)] == ["outer"]
+
+
+def test_an_unreadable_volume_reads_as_empty_not_as_clean(tmp_path):
+    """`inventory` não tem canal de erro: volume ilegível devolve () mesmo.
+
+    Pinar isto é o que obriga T11/T13 a dizer "pode estar vazio por permissão" em
+    vez de apresentar um volume EACCES como limpo.
+    """
+    root = volume_dir(tmp_path)
+    fechado = child(root, "fechado", is_dir=True)
+    (fechado / "dentro").write_text("x")
+    fechado.chmod(0o000)
+    try:
+        assert inventory.inventory(str(fechado), (), EMPTY, now=NOW) == ()
+    finally:
+        fechado.chmod(0o755)
 
 
 def test_symlinks_are_reported_as_symlinks(tmp_path):
@@ -799,7 +820,7 @@ def scan_volume(volume, *, proc_root=None, now=None,
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.venv/bin/python -m pytest tests/test_tmpfs_inventory.py -v` → PASS (11).
+Run: `.venv/bin/python -m pytest tests/test_tmpfs_inventory.py -v` → PASS (12).
 Run: `.venv/bin/python -m pytest -q` → verde.
 
 **Coerção de mutação:** usar `st_mtime_ns` do diretório em vez de `newest_ns` da
@@ -812,8 +833,13 @@ a afirmação.
 
 ```bash
 git add src/deck_wellness/actions/tmpfs/inventory.py tests/test_tmpfs_inventory.py
-git commit -m "M7 T3: inventário de tmpfs — tipo, dono, idade real, monte e holder por item"
-```
+git commit -m "$(cat <<'MSG'
+M7 T3: inventário de tmpfs — tipo, dono, idade real, monte e holder por item
+
+<corpo: RED, GREEN com total da suíte, e a saída -v das três coerções de mutação,
+uma por vez, com a linha revertida conferida byte a byte>
+MSG
+)"```
 
 ---
 
