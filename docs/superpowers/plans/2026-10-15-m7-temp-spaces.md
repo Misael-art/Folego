@@ -85,7 +85,6 @@ Testes novos: `tests/test_core_tmpfs.py`, `test_tmpfs_holders.py`, `test_tmpfs_i
 O host monta tmpfs em muito mais lugares do que os que importam (/run,
 /run/credentials/*, …), então isto é lista nominal, não "todo tmpfs".
 """
-import time
 from collections import namedtuple
 
 import pytest
@@ -195,7 +194,7 @@ def test_the_document_portal_is_not_a_watched_volume(fake_proc):
 - [ ] **Step 2: Rodar e ver falhar**
 
 Run: `.venv/bin/python -m pytest tests/test_core_tmpfs.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'deck_wellness.core.tmpfs'` (erro de collection nos 9 testes).
+Expected: FAIL — `ModuleNotFoundError: No module named 'deck_wellness.core.tmpfs'` (erro de collection nos 8 testes).
 
 - [ ] **Step 3: Implementar o mínimo**
 
@@ -281,8 +280,8 @@ E `src/deck_wellness/actions/tmpfs/__init__.py`:
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.venv/bin/python -m pytest tests/test_core_tmpfs.py -v` → PASS (9).
-Run: `.venv/bin/python -m pytest -q` → suite inteira verde (372 + 9 = 381).
+Run: `.venv/bin/python -m pytest tests/test_core_tmpfs.py -v` → PASS (8).
+Run: `.venv/bin/python -m pytest -q` → suite inteira verde (372 + 8 = 380).
 
 - [ ] **Step 5: Commit**
 
