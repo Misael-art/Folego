@@ -1784,6 +1784,11 @@ git commit -m "M7 T7: pressão de tmpfs no título — escala o sinal, nunca rel
   `over_budget(*, days=RETENTION_DAYS, max_bytes=MAX_RETAINED_BYTES, now=None) -> tuple[LedgerRecord, ...]`,
   `budget_view(*, now=None) -> BudgetView`
 
+A spec (§7) escreve `over_budget(...) -> tuple[str, ...]`; aqui devolve **registros**
+porque o T10 aplica o guard e desliga o caminho a partir de `r.src`/`r.stored` — com ids
+seria preciso reabrir o ledger para saber o que apagar (`release.expire_over_budget` usa
+`r.entry_id`, `r.bytes` e `r.src` na mesma passada).
+
 - [ ] **Step 1: Escrever os testes que falham**
 
 ```python
@@ -1799,7 +1804,6 @@ import time
 import pytest
 
 from deck_wellness.actions.tmpfs import ledger as L
-from deck_wellness.paths import tmp_ledger_path
 
 DAY = 86_400
 NOW = 1_700_000_000.0
@@ -1821,18 +1825,9 @@ def rec(**over):
     return base
 
 
-def stamp(days_ago: float, *, ledger) -> str:
-    """Escreve uma linha com ts falsa para trás: o ledger usa o relógio injetável."""
-    return time.strftime("%Y-%m-%dT%H:%M:%SZ",
-                         time.gmtime(NOW - days_ago * DAY))
-
-
-def test_paths_land_on_the_ssd_not_in_ram(fake_home):
-    from deck_wellness import paths
-    assert paths.tmp_ledger_path() == (
-        fake_home / ".local" / "state" / "deck-wellness" / "tmp-ledger.jsonl")
-    assert paths.tmp_quarantine_dir() == (
-        fake_home / ".local" / "share" / "deck-wellness" / "tmp-quarantine")
+def stamp(days_ago: float) -> str:
+    """ts ISO-Z deslocada para trás a partir de NOW: o teste controla a idade."""
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(NOW - days_ago * DAY))
 
 
 def test_append_writes_one_fsynced_line_per_transition(book):
@@ -1842,6 +1837,28 @@ def test_append_writes_one_fsynced_line_per_transition(book):
     assert len(lines) == 2
     assert json.loads(lines[0])["state"] == "released"
     assert first.entry_id == second.entry_id
+    # 0o600: cada linha guarda caminhos absolutos do home do usuário
+    assert book.path.stat().st_mode & 0o777 == 0o600
+
+
+def test_append_refuses_a_line_that_cannot_be_attributed(book):
+    """Sem entry_id/state/action_id a linha é arquivo morto: nada depois a lê."""
+    for dropped in ("entry_id", "state", "action_id"):
+        with pytest.raises(ValueError, match=dropped):
+            book.append(**{k: v for k, v in rec().items() if k != dropped})
+
+
+def test_to_dict_round_trips_back_into_a_new_line(book):
+    """O T10 expira assim: append(**{**record.to_dict(), "ts": "", ...})."""
+    origin = book.append(**rec(holder_pids=(4242,)))
+    again = book.append(**{**origin.to_dict(), "ts": "", "state": L.STATE_DROPPED})
+    assert set(origin.to_dict()) == set(L.FIELDS)
+    assert again.entry_id == origin.entry_id
+    assert again.src == origin.src
+    assert again.bytes == origin.bytes
+    assert again.holder_pids == (4242,)
+    assert again.state == L.STATE_DROPPED
+    assert again.ts != ""            # ts vazio pede relógio novo, não grava vazio
 
 
 def test_the_current_state_is_the_last_line_for_an_entry(book):
@@ -1871,39 +1888,56 @@ def test_partial_counts_as_retained_because_it_occupies_the_ssd(book):
 
 def test_over_budget_returns_victims_oldest_first(book):
     """A mais velha sai primeiro: é a única ordem que o usuário pode auditar."""
-    book.append(**rec(entry_id="a", bytes=2 * GIB, state=L.STATE_RELEASED))
-    book.append(**rec(entry_id="b", bytes=2 * GIB, state=L.STATE_RELEASED))
-    # envelhece "a" reescrevendo a linha
-    rows = [json.loads(line) for line in book.path.read_text().splitlines()]
-    rows[0]["ts"] = stamp(days_ago=30, ledger=book)
-    book.path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    book.append(**rec(entry_id="a", bytes=1024, ts=stamp(30)))
+    book.append(**rec(entry_id="b", bytes=1024, ts=stamp(20)))
+    book.append(**rec(entry_id="c", bytes=1024, ts=stamp(1)))
 
     due = book.over_budget(now=NOW)
-    assert [r.entry_id for r in due] == ["a"]
+    assert [r.entry_id for r in due] == ["a", "b"]
     assert book.oldest().entry_id == "a"
 
 
-def test_over_budget_is_empty_inside_both_limits(book):
-    book.append(**rec(entry_id="a", bytes=1024))
+def test_the_age_limit_is_strictly_over_the_retention_days(book):
+    """14 d contados não vencem; 14 d + 1 s vence. E bytes dentro do teto não contam."""
+    book.append(**rec(entry_id="a", bytes=1024, ts=stamp(L.RETENTION_DAYS)))
     assert book.over_budget(now=NOW) == ()
+
+    book.append(**rec(entry_id="b", bytes=1024, ts=stamp(L.RETENTION_DAYS + 0.00002)))
+    assert [r.entry_id for r in book.over_budget(now=NOW)] == ["b"]
 
 
 def test_bytes_over_the_ceiling_evict_oldest_until_it_fits(book):
+    """O orçamento pede o conjunto mínimo: 6 GiB retidos, teto 5 GiB, um item sai."""
     for i, size in enumerate((2 * GIB, 2 * GIB, 2 * GIB)):
-        book.append(**rec(entry_id=f"e{i}", bytes=size, ts=""))
+        book.append(**rec(entry_id=f"e{i}", bytes=size, ts=stamp(3 - i)))
+
     due = book.over_budget(max_bytes=5 * GIB, now=NOW)
-    assert [r.entry_id for r in due] == ["e0", "e1"]  # sobra e2 = 2 GiB ≤ 5 GiB
+    assert [r.entry_id for r in due] == ["e0"]   # sobram 4 GiB ≤ 5 GiB: nada mais sai
+
+
+def test_an_age_victim_already_pays_for_the_excess(book):
+    """Idade OU bytes, não as duas somas: o que a idade tirou abate o excesso."""
+    book.append(**rec(entry_id="a", bytes=2 * GIB, ts=stamp(30)))
+    book.append(**rec(entry_id="b", bytes=2 * GIB, ts=stamp(1)))
+
+    # sem abater "a" do excesso, "b" (1 dia, saudável) seria expulso junto
+    assert [r.entry_id for r in book.over_budget(max_bytes=3 * GIB, now=NOW)] == ["a"]
 
 
 def test_budget_view_reports_ram_freed_against_ssd_retained(book):
-    book.append(**rec(entry_id="a", bytes=3 * GIB, volume="/tmp"))
-    book.append(**rec(entry_id="b", bytes=1 * GIB, volume="/run/user/1000"))
-    book.append(**rec(entry_id="a", state=L.STATE_RESTORED, bytes=3 * GIB))
+    book.append(**rec(entry_id="a", bytes=3 * GIB, volume="/tmp", ts=stamp(3)))
+    book.append(**rec(entry_id="b", bytes=1 * GIB, volume="/run/user/1000", ts=stamp(2)))
+    book.append(**rec(entry_id="c", bytes=1 * GIB, volume="/tmp", ts=stamp(1),
+                      state=L.STATE_PARTIAL))
+    book.append(**rec(entry_id="a", bytes=3 * GIB, volume="/tmp", ts=stamp(0),
+                      state=L.STATE_RESTORED))
     view = book.budget_view(now=NOW)
-    assert view.retained_bytes == 1 * GIB
-    assert view.freed_bytes == 1 * GIB            # o que a RAM ainda não viu de volta
-    assert view.slack_bytes == L.MAX_RETAINED_BYTES - 1 * GIB
-    assert view.by_volume == {"/run/user/1000": 1 * GIB}
+    assert view.retained_bytes == 2 * GIB        # b retido + c ainda clonando
+    assert view.retained_count == 2
+    assert view.freed_bytes == 1 * GIB           # RAM que não viu de volta: só b
+    assert view.slack_bytes == L.MAX_RETAINED_BYTES - 2 * GIB
+    assert view.oldest_days == 2.0               # b, o mais velho dos que ocupam a SSD
+    assert view.by_volume == {"/tmp": 1 * GIB, "/run/user/1000": 1 * GIB}
 
 
 def test_a_corrupt_line_is_skipped_not_fatal(book):
@@ -1920,11 +1954,24 @@ def test_find_accepts_entry_id_or_the_tail_of_a_path(book):
     assert book.find("inexistente") is None
 ```
 
+Em `tests/test_paths.py` (o arquivo já faz `from deck_wellness import paths` na linha 1 e
+usa o fixture `fake_home` do `conftest.py` — os dois caminhos novos vão no fim dele, porque
+são da superfície de `paths.py`, não do ledger):
+
+```python
+def test_tmp_retention_lands_on_the_ssd_not_in_ram(fake_home):
+    assert paths.tmp_ledger_path() == (
+        fake_home / ".local" / "state" / "deck-wellness" / "tmp-ledger.jsonl")
+    assert paths.tmp_quarantine_dir() == (
+        fake_home / ".local" / "share" / "deck-wellness" / "tmp-quarantine")
+```
+
 - [ ] **Step 2: Rodar e ver falhar**
 
-Run: `.venv/bin/python -m pytest tests/test_tmpfs_ledger.py -v`
+Run: `.venv/bin/python -m pytest tests/test_tmpfs_ledger.py tests/test_paths.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'deck_wellness.actions.tmpfs.ledger'`
-e `AttributeError: module 'deck_wellness.paths' has no attribute 'tmp_quarantine_dir'`.
+e, em `tests/test_paths.py`, `AttributeError: module 'deck_wellness.paths' has no attribute
+'tmp_ledger_path'` (a primeira asserção do teste novo).
 
 - [ ] **Step 3: Escrever a implementação mínima**
 
@@ -1947,12 +1994,14 @@ def tmp_ledger_path() -> Path:
 
 Cada linha é uma transição (``partial`` → ``released`` → ``restored``/``dropped``/
 ``expired``); o estado vigente de um item é o da sua última linha. O orçamento é do
-que ainda *ocupa* a SSD: ``partial`` conta, porque o clone existe.
+que ainda *ocupa* a SSD: ``partial`` conta, porque o clone existe. "RAM liberada" é o
+outro lado da moeda: saiu da RAM e não voltou -- ``restored`` fica de fora, ``partial``
+também, porque a liberação ainda não terminou.
 """
 import json
 import os
 import time
-from dataclasses import dataclass, field, fields, replace
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 from ... import paths
@@ -1989,8 +2038,11 @@ class LedgerRecord:
     audit_event_id: str
 
     def to_dict(self) -> dict:
-        return {k: (list(v) if k == "holder_pids" else v)
-                for k, v in zip(FIELDS, (getattr(self, f.name) for f in fields(self)))}
+        # fields(self) e não zip(FIELDS, ...): se a ordem divergir do dataclass, o
+        # zip truncaria em silêncio e o T10 regravaria linhas com campos trocados
+        row = {f.name: getattr(self, f.name) for f in fields(self)}
+        row["holder_pids"] = list(row["holder_pids"])
+        return row
 
 
 @dataclass(frozen=True)
@@ -2082,13 +2134,17 @@ class Ledger:
         now = time.time() if now is None else now
         held = sorted(self.retained(), key=lambda r: (r.ts, r.entry_id))
         due = [r for r in held if _days_since(r.ts, now) > days]
-        if sum(r.bytes for r in held) > max_bytes:
-            remaining = max_bytes - sum(r.bytes for r in due)
-            for record in held:
-                if record in due or remaining < 0:
-                    continue
-                due.append(record)
-                remaining -= record.bytes
+        # "até caber" = conjunto mínimo: para de expulsar no segundo em que o resto
+        # cabe. O termo devida à idade abate o excesso antes de expulsar qualquer
+        # item saudável -- sem ele "b" pagaria por "a", que já está saindo.
+        overflow = sum(r.bytes for r in held) - max_bytes - sum(r.bytes for r in due)
+        for record in held:
+            if overflow <= 0:
+                break
+            if record in due:
+                continue
+            due.append(record)
+            overflow -= record.bytes
         return tuple(due)
 
     def budget_view(self, *, now: float | None = None) -> BudgetView:
@@ -2104,7 +2160,7 @@ class Ledger:
             oldest_days=_days_since(oldest.ts, now) if oldest else 0.0,
             slack_bytes=max(0, MAX_RETAINED_BYTES - sum(r.bytes for r in held)),
             freed_bytes=sum(r.bytes for r in self.records().values()
-                            if r.state in (STATE_RESTORED, STATE_DROPPED, STATE_EXPIRED)),
+                            if r.state in (STATE_RELEASED, STATE_DROPPED, STATE_EXPIRED)),
             by_volume=by_volume,
         )
 
@@ -2126,13 +2182,25 @@ class Ledger:
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.venv/bin/python -m pytest tests/test_tmpfs_ledger.py tests/test_paths.py -v` → PASS (12 + as existentes).
-Run: `.venv/bin/python -m pytest -q` → verde.
+Run: `.venv/bin/python -m pytest tests/test_tmpfs_ledger.py tests/test_paths.py -v`
+Expected: PASS — 13 + 6 = `19 passed`.
+Run: `.venv/bin/python -m pytest -v 2>&1 | tail -2` → `461 passed` (447 + 14).
 
-**Coerção de mutação:** tirar `STATE_PARTIAL` de `ACTIVE_STATES`, contar `restored`
-como retido, ou ordenar `over_budget` do mais novo para o mais velho — cada um desses
-mata ao menos um teste desta tarefa. Guarde a saída de `-v` no corpo do commit; a
-spec (§10) pede a evidência, não a afirmação.
+**Coerção de mutação** (rode cada uma e anote qual teste morre; o corpo do commit é onde
+a evidência mora, a spec §10 pede a saída, não a afirmação):
+
+- tirar `STATE_PARTIAL` de `ACTIVE_STATES` → `test_partial_counts_as_retained_because_it_occupies_the_ssd`
+- contar `restored` como retido → `test_restored_and_dropped_stop_counting_against_the_budget`
+- `freed_bytes` com `restored` no lugar de `released` (o plano tinha isso invertido) →
+  `test_budget_view_reports_ram_freed_against_ssd_retained`
+- `>` trocado por `>=` no limite de idade → `test_the_age_limit_is_strictly_over_the_retention_days`
+- expulsar por bytes sem parar quando já cabe → `test_bytes_over_the_ceiling_evict_oldest_until_it_fits`
+- esquecer de abater as vítimas por idade do excesso → `test_an_age_victim_already_pays_for_the_excess`
+- ordenar `over_budget` do mais novo para o mais velho, ou `min` por `max` em `oldest()` →
+  `test_over_budget_returns_victims_oldest_first`
+- gravar `ts` vazio em vez de relógio novo, ou `to_dict()` por `zip` com ordem divergente →
+  `test_to_dict_round_trips_back_into_a_new_line`
+- `0o644` no `os.open` → `test_append_writes_one_fsynced_line_per_transition`
 
 - [ ] **Step 5: Commit**
 
