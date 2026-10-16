@@ -2239,19 +2239,16 @@ entre dispositivos porque lá a promessa é zero-copy; aqui a promessa é libera
 memória, então o movimento é explicitamente copy → verify → unlink, e o ledger
 registra o meio do caminho.
 """
-import json
 import os
-import shutil
-import time
 from pathlib import Path
 
 import pytest
 
 from deck_wellness.actions.tmpfs import release
 from deck_wellness.actions.tmpfs.inventory import TmpfsEntry
-from deck_wellness.actions.tmpfs.ledger import (MAX_RETAINED_BYTES, RETENTION_DAYS,
-                                                 STATE_PARTIAL, STATE_RELEASED, Ledger)
-from deck_wellness.actions.tmpfs.plan import PlanItem, build_plan
+from deck_wellness.actions.tmpfs.ledger import (MAX_RETAINED_BYTES, STATE_PARTIAL,
+                                                 STATE_RELEASED, STATE_RESTORED, Ledger)
+from deck_wellness.actions.tmpfs.plan import build_plan
 from deck_wellness.actions.tmpfs.policy import Policy
 from deck_wellness.core.tmpfs import TmpfsVolume
 from deck_wellness.safely.audit import AuditLog
@@ -2273,29 +2270,47 @@ def sandbox_policy(tmp_path):
                                   str(tmp_path / "qoder-cli-1000" / "*")))
 
 
-def item(tmp_path, name="qoder-cli-1000", size=4096, *, holder=(),
-         mode=0o040755):
-    """Um diretório real na SSD-emulada do tmp_path, velho e sem dono aberto."""
-    src = tmp_path / name
+def item(tmp_path, name="qoder-cli-1000", size=4096, *, under=None, allow=None):
+    """Um diretório real na SSD-emulada do tmp_path, velho e sem dono aberto.
+
+    O blob é **esparso** (`touch` + `truncate`): estes testes precisam de um item de
+    1 GiB aparente para a checagem de folga, e `write_bytes(b"a" * 1GiB)` alocaria
+    isso de verdade — em `/tmp`, que neste host é tmpfs de 7,3 G e já viu ENOSPC.
+    `under`/`allow` existem para o caso dos homônimos: um segundo item com o mesmo
+    nome, em outro pai, com a própria allow-list.
+    """
+    src = (Path(under) if under is not None else tmp_path) / name
     src.mkdir(parents=True, exist_ok=True)
-    (src / "blob.bin").write_bytes(b"a" * size)
+    blob = src / "blob.bin"
+    blob.touch()
+    os.truncate(str(blob), size)
     old = NOW - 10 * DAY
     os.utime(src / "blob.bin", (old, old))
     os.utime(src, (old, old))
     entry = TmpfsEntry(path=str(src), name=src.name, volume="/tmp", kind="dir",
                        uid=os.getuid(), bytes=size, files=1, age_days=10.0,
-                       is_mount_point=False, under_mount=False,
-                       holder_pids=tuple(holder))
-    plan = build_plan((VOL,), (entry,), sandbox_policy(tmp_path), now=NOW)
+                       is_mount_point=False, under_mount=False, holder_pids=())
+    policy = Policy(allow_patterns=tuple(allow)) if allow else sandbox_policy(tmp_path)
+    plan = build_plan((VOL,), (entry,), policy, now=NOW)
     return plan, plan.find(str(src)), src
 
 
-def free(tmp_path, path, **entry_kw):
-    """entry_fn padrão: re-derivado limpo, sem holder, sem monte."""
-    return lambda p, **kw: TmpfsEntry(path=p, name=Path(p).name, volume="/tmp",
-                                      kind="dir", uid=os.getuid(), bytes=4096,
-                                      files=1, age_days=10.0, is_mount_point=False,
-                                      under_mount=False, holder_pids=(), **entry_kw)
+def free(**over):
+    """entry_fn padrão: re-derivado limpo, sem holder, sem monte.
+
+    `over` corrige campos por teste (ex.: `bytes=1 * GIB`) para que o re-derivado e o
+    item do plano tenham o mesmo tamanho — senão a checagem de folga compararia um
+    número que não é o de nenhum dos dois. Os defaults entram por `update`, não por
+    `**over` na chamada: `bytes=` e `holder_pids=` já são literais ali, e Python
+    recusa o argumento duplicado antes de qualquer asserção.
+    """
+    def entry_fn(p, **kw):
+        campos = dict(name=Path(p).name, volume="/tmp", kind="dir", uid=os.getuid(),
+                      bytes=4096, files=1, age_days=10.0, is_mount_point=False,
+                      under_mount=False, holder_pids=())
+        campos.update(over)
+        return TmpfsEntry(path=p, **campos)
+    return entry_fn
 
 
 def roots(tmp_path):
@@ -2326,13 +2341,14 @@ def test_release_without_confirmation_writes_nothing(tmp_path, book, audit):
 def test_release_copies_verifies_and_frees_the_bytes(tmp_path, book, audit):
     plan, it, src = item(tmp_path, size=8192)
     res = release.release_item(plan, it, ledger=book, audit=audit, confirm=True,
-                               dest_root=tmp_path / "retida", entry_fn=free(tmp_path),
+                               dest_root=tmp_path / "retida", entry_fn=free(),
                                statvfs_fn=lambda p: _vfs(20 * GIB),
                                allowed_roots=roots(tmp_path), now=NOW)
     assert res.ok is True and res.freed_bytes == 8192
     assert not src.exists(), "a origem tem de sumir — é RAM liberada"
     stored = Path(res.stored)
-    assert (stored / "blob.bin").read_bytes() == b"a" * 8192
+    # o fixture é esparso: o conteúdo copiado é zero, e é isso que tem de chegar igual
+    assert (stored / "blob.bin").read_bytes() == b"\0" * 8192
     assert book.records()[res.entry_id].state == STATE_RELEASED
     assert book.retained_bytes() == 8192
     kinds = [r["kind"] for r in audit.tail(8)]
@@ -2343,7 +2359,7 @@ def test_a_holder_that_appeared_after_the_plan_refuses_the_release(tmp_path, boo
     plan, it, src = item(tmp_path)
     res = release.release_item(plan, it, ledger=book, confirm=True,
                                dest_root=tmp_path / "retida",
-                               entry_fn=free(tmp_path, holder_pids=(4242,)),
+                               entry_fn=free(holder_pids=(4242,)),
                                statvfs_fn=lambda p: _vfs(20 * GIB),
                                allowed_roots=roots(tmp_path), now=NOW)
     assert res.ok is False and "fd aberto" in res.reason
@@ -2354,7 +2370,7 @@ def test_a_mount_point_that_appeared_after_the_plan_refuses(tmp_path, book):
     plan, it, src = item(tmp_path)
     res = release.release_item(plan, it, ledger=book, confirm=True,
                                dest_root=tmp_path / "retida",
-                               entry_fn=free(tmp_path, is_mount_point=True),
+                               entry_fn=free(is_mount_point=True),
                                statvfs_fn=lambda p: _vfs(20 * GIB),
                                allowed_roots=roots(tmp_path), now=NOW)
     assert res.ok is False and "montagem" in res.reason
@@ -2362,9 +2378,10 @@ def test_a_mount_point_that_appeared_after_the_plan_refuses(tmp_path, book):
 
 
 def test_release_refuses_when_the_destination_has_no_room(tmp_path, book):
-    plan, it, src = item(tmp_path, size=6 * GIB)
+    plan, it, src = item(tmp_path, size=1 * GIB)
     res = release.release_item(plan, it, ledger=book, confirm=True,
-                               dest_root=tmp_path / "retida", entry_fn=free(tmp_path),
+                               dest_root=tmp_path / "retida",
+                               entry_fn=free(bytes=1 * GIB),
                                statvfs_fn=lambda p: _vfs(1 * GIB),
                                allowed_roots=roots(tmp_path), now=NOW)
     assert res.ok is False and "destino" in res.reason
@@ -2379,7 +2396,7 @@ def test_release_refuses_when_retention_would_exceed_the_budget(tmp_path, book):
                 holder_pids=(), state=STATE_RELEASED, action_id="tmpfs.release",
                 audit_event_id="e")
     res = release.release_item(plan, it, ledger=book, confirm=True,
-                               dest_root=tmp_path / "retida", entry_fn=free(tmp_path),
+                               dest_root=tmp_path / "retida", entry_fn=free(),
                                statvfs_fn=lambda p: _vfs(20 * GIB),
                                allowed_roots=roots(tmp_path), now=NOW)
     assert res.ok is False and "orçamento" in res.reason
@@ -2390,12 +2407,11 @@ def test_dev_shm_is_measured_never_mutated(tmp_path, book):
     """R9: o guard já blacklista /dev; este teste prova que não afrouxamos nada.
 
     A allow-list é alargada de propósito aqui: sem um padrão casando, a recusa viria
-    do filtro de padrão e o teste não diria nada sobre o guard.
+    do filtro de padrão e o teste não diria nada sobre o guard. Nada é criado sob
+    `tmp_path` — o item apontado não existe, e é exatamente por isso que a recusa tem
+    de vir antes de qualquer escrita.
     """
     assert "/dev/shm" not in release.MUTABLE_VOLUMES
-    src = tmp_path / "shm" / "bloco"
-    src.mkdir(parents=True)
-    (src / "d.txt").write_text("x")
     entry = TmpfsEntry(path="/dev/shm/bloco", name="bloco", volume="/dev/shm",
                        kind="dir", uid=os.getuid(), bytes=1, files=1, age_days=9.0,
                        is_mount_point=False, under_mount=False, holder_pids=())
@@ -2403,10 +2419,12 @@ def test_dev_shm_is_measured_never_mutated(tmp_path, book):
                       (entry,), Policy(allow_patterns=("/dev/shm/*",)), now=NOW)
     res = release.release_item(plan, plan.find("/dev/shm/bloco"), ledger=book,
                                confirm=True, dest_root=tmp_path / "retida",
-                               entry_fn=free(tmp_path),
+                               entry_fn=free(),
                                statvfs_fn=lambda p: _vfs(20 * GIB),
                                allowed_roots=roots(tmp_path), now=NOW)
     assert res.ok is False and "blacklisted prefix" in res.reason
+    assert not (tmp_path / "retida").exists()
+    assert book.retained_count() == 0
 
 
 def test_a_failed_removal_leaves_the_clone_recorded_as_partial(tmp_path, book, audit):
@@ -2416,7 +2434,7 @@ def test_a_failed_removal_leaves_the_clone_recorded_as_partial(tmp_path, book, a
         raise OSError(30, "Read-only file system")
 
     res = release.release_item(plan, it, ledger=book, audit=audit, confirm=True,
-                               dest_root=tmp_path / "retida", entry_fn=free(tmp_path),
+                               dest_root=tmp_path / "retida", entry_fn=free(),
                                statvfs_fn=lambda p: _vfs(20 * GIB),
                                allowed_roots=roots(tmp_path), now=NOW, remove_fn=boom)
     assert res.ok is False
@@ -2436,7 +2454,7 @@ def test_a_digest_mismatch_refuses_and_keeps_the_original(tmp_path, book, monkey
 
     monkeypatch.setattr(release, "tree_digest", diverged)
     res = release.release_item(plan, it, ledger=book, confirm=True,
-                               dest_root=tmp_path / "retida", entry_fn=free(tmp_path),
+                               dest_root=tmp_path / "retida", entry_fn=free(),
                                statvfs_fn=lambda p: _vfs(20 * GIB),
                                allowed_roots=roots(tmp_path), now=NOW)
     assert res.ok is False and "digest" in res.reason
@@ -2447,15 +2465,98 @@ def test_a_digest_mismatch_refuses_and_keeps_the_original(tmp_path, book, monkey
 def test_releasing_a_path_already_in_the_ledger_is_refused(tmp_path, book):
     plan, it, src = item(tmp_path)
     res = release.release_item(plan, it, ledger=book, confirm=True,
-                               dest_root=tmp_path / "retida", entry_fn=free(tmp_path),
+                               dest_root=tmp_path / "retida", entry_fn=free(),
                                statvfs_fn=lambda p: _vfs(20 * GIB),
                                allowed_roots=roots(tmp_path), now=NOW)
     assert res.ok
     again = release.release_item(plan, it, ledger=book, confirm=True,
-                                 dest_root=tmp_path / "retida", entry_fn=free(tmp_path),
+                                 dest_root=tmp_path / "retida", entry_fn=free(),
                                  statvfs_fn=lambda p: _vfs(20 * GIB),
                                  allowed_roots=roots(tmp_path), now=NOW)
     assert again.ok is False and "ledger" in again.reason
+
+
+def test_an_item_already_restored_can_be_released_again(tmp_path, book):
+    """O ledger não é uma lista de proibidos: `restored` liberou a pena.
+
+    Sem esta distinção, um item devolvido ao tmpfs ficava para sempre marcado no
+    ledger e a segunda liberação seria recusada para sempre — o oposto do que o
+    `restore` da T10 existe para fazer.
+    """
+    plan, it, src = item(tmp_path)
+    book.append(entry_id="velho", src=it.path, volume="/tmp",
+                stored=str(tmp_path / "velho"), bytes=4096, sha256="x",
+                age_days=9.0, matched_pattern="/tmp/qoder-cli-1000", holder_pids=(),
+                state=STATE_RESTORED, action_id="tmpfs.release", audit_event_id="e")
+    res = release.release_item(plan, it, ledger=book, confirm=True,
+                               dest_root=tmp_path / "retida", entry_fn=free(),
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               allowed_roots=roots(tmp_path), now=NOW)
+    assert res.ok is True
+    assert book.records()["velho"].state == STATE_RESTORED
+
+
+def test_two_homonyms_in_the_same_second_do_not_collide(tmp_path, book, audit):
+    """Mesmo nome, mesmo segundo → o destino já existe: recusa, não overwrite.
+
+    O `_sanitize(src.name)` no caminho de retenção é o que torna dois itens homônimos
+    indistinguíveis. Apagar por cima do clone já ledgerado da liberação anterior
+    perderia bytes sem registro; a recusa mantém os dois vivos.
+    """
+    plan, it, src = item(tmp_path)
+    first = release.release_item(plan, it, ledger=book, audit=audit, confirm=True,
+                                 dest_root=tmp_path / "retida", entry_fn=free(),
+                                 statvfs_fn=lambda p: _vfs(20 * GIB),
+                                 allowed_roots=roots(tmp_path), now=NOW)
+    assert first.ok
+    clone = Path(first.stored)
+
+    other_plan, other_it, other = item(tmp_path, under=tmp_path / "sessoes",
+                                        allow=[str(tmp_path / "sessoes"
+                                                   / "qoder-cli-1000")])
+    again = release.release_item(other_plan, other_it, ledger=book, audit=audit,
+                                 confirm=True, dest_root=tmp_path / "retida",
+                                 entry_fn=free(),
+                                 statvfs_fn=lambda p: _vfs(20 * GIB),
+                                 allowed_roots=roots(tmp_path), now=NOW)
+    assert again.ok is False and "colide" in again.reason
+    assert (clone / "blob.bin").read_bytes() == b"\0" * 4096, "o clone anterior vive"
+    assert (other / "blob.bin").exists(), "o homônimo fica onde está"
+
+
+def test_the_ledger_line_points_at_its_own_audit_event(tmp_path, book, audit):
+    """§7: cada transição tem um evento, e a linha do ledger nomeia o dela.
+
+    É o join que permite ao viewer (T13) abrir o evento de um item retido sem
+    adivinhar por timestamp.
+    """
+    plan, it, src = item(tmp_path)
+    res = release.release_item(plan, it, ledger=book, audit=audit, confirm=True,
+                               dest_root=tmp_path / "retida", entry_fn=free(),
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               allowed_roots=roots(tmp_path), now=NOW)
+    record = book.records()[res.entry_id]
+    events = {e["event_id"]: e for e in audit.tail(8)}
+    assert record.audit_event_id != ""
+    assert record.audit_event_id in events
+    assert events[record.audit_event_id]["outcome"] == STATE_RELEASED
+    assert events[record.audit_event_id]["targets"] == [str(src), record.stored]
+
+
+def test_a_destination_that_does_not_exist_yet_is_still_gravable(tmp_path, book):
+    """Primeira liberação da vida: o diretório de retenção ainda não existe.
+
+    Validar o gravável no próprio destino (ou no diretório de timestamp, que é o
+    primeiro nível do caminho) recusaria para sempre enquanto alguém não criasse a
+    árvore — e quem cria a árvore é exatamente esta chamada.
+    """
+    plan, it, src = item(tmp_path)
+    res = release.release_item(plan, it, ledger=book, confirm=True,
+                               dest_root=tmp_path / "nova" / "retida", entry_fn=free(),
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               allowed_roots=roots(tmp_path), now=NOW)
+    assert res.ok is True, res.reason
+    assert (tmp_path / "nova" / "retida").is_dir()
 
 
 def test_tree_digest_is_stable_and_order_independent(tmp_path):
@@ -2467,7 +2568,8 @@ def test_tree_digest_is_stable_and_order_independent(tmp_path):
     os.utime(a / "a.txt", (NOW, NOW))  # mtime não entra no digest
     second, _ = release.tree_digest(a)
     assert first == second and len(first) == 64
-    assert size == len("abc") + len("conteúdo")
+    # bytes, não caracteres: "conteúdo" tem 9 bytes em UTF-8 e 8 caracteres
+    assert size == len("abc".encode()) + len("conteúdo".encode())
 
 
 class _vfs:
@@ -2479,7 +2581,8 @@ class _vfs:
 - [ ] **Step 2: Rodar e ver falhar**
 
 Run: `.venv/bin/python -m pytest tests/test_tmpfs_release.py -v`
-Expected: FAIL — `ImportError: cannot import name 'release' from 'deck_wellness.actions.tmpfs'`.
+Expected: FAIL — `ImportError: cannot import name 'release' from 'deck_wellness.actions.tmpfs'`
+nas 15 coleções.
 Os testes de cima dependem de `PlanItem.matched` vir preenchido pelo `build_plan` (T5)
 e de `plan.find(caminho)` aceitar o caminho absoluto como alça.
 
@@ -2500,7 +2603,7 @@ import re
 import shutil
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from ... import paths
@@ -2509,10 +2612,9 @@ from ...safely.hashing import sha256_file
 from ..disk import planner
 from .inventory import TmpfsEntry, entry_at
 from .holders import holder_index
-from .ledger import (Ledger, LedgerRecord, MAX_RETAINED_BYTES, RETENTION_DAYS,
-                     STATE_PARTIAL, STATE_RELEASED)
+from .ledger import (ACTIVE_STATES, MAX_RETAINED_BYTES, STATE_PARTIAL, STATE_RELEASED)
 from .policy import classify
-from ...core.tmpfs import WATCHED, read_mounts
+from ...core.tmpfs import read_mounts
 
 KIND = "tmpfs.release"
 # /dev/shm é medido e exibido, nunca mutável: o guard blacklista o prefixo /dev
@@ -2593,31 +2695,39 @@ def release_item(plan, item, *, ledger, dest_root=None, audit=None, confirm=Fals
                                  "nada foi alterado")
 
     held = ledger.find(item.path)
-    if held is not None:
+    if held is not None and held.state in ACTIVE_STATES:
         return _refuse(entry_id, f"refused: {item.path} já está no ledger como "
                                  f"{held.state} ({held.entry_id}); a correção é "
                                  "manual (restore ou purge por id)")
 
     fresh = entry_fn(str(src), volume=item.volume, proc_root=proc_root, now=now)
-    verdict = classify(fresh, plan.policy, now=now)
+    verdict = classify(fresh, plan.policy)
     if not verdict.ok:
         return _refuse(entry_id, f"refused: {verdict.reason}")
 
     roots = list(allowed_roots) if allowed_roots else default_allowed_roots()
-    for check in (src,):
-        guard_verdict = guard.validate_target(check, roots)
-        if not guard_verdict.ok:
-            return _refuse(entry_id, guard_verdict.reason)
+    guard_verdict = guard.validate_target(src, roots)
+    if not guard_verdict.ok:
+        return _refuse(entry_id, guard_verdict.reason)
 
     dest_root = Path(dest_root) if dest_root else paths.tmp_quarantine_dir()
     dest = dest_root / _stamp(now) / _sanitize(src.name)
-    if not guard.validate_target(dest_root.parent, roots).ok:
-        return _refuse(entry_id, "refused: o destino de retenção não é gravável "
-                                 "por este usuário")
+    # o pai do destino, não o destino: num destino ainda inexistente o guard avaliaria
+    # o diretório de timestamp, que também não existe — e a primeira liberação da vida
+    # seria recusada para sempre. O prefixo blacklisted pega o destino de verdade.
+    probe = dest_root if dest_root.exists() else dest_root.parent
+    dest_verdict = guard.validate_target(probe, roots)
+    if not dest_verdict.ok:
+        return _refuse(entry_id, f"refused: o destino de retenção não é gravável "
+                                 f"em {probe}: {dest_verdict.reason}")
 
-    if statvfs_fn(str(dest_root if dest_root.exists() else dest_root.parent)).f_bavail \
-            * statvfs_fn(str(dest_root if dest_root.exists() else dest_root.parent)).f_frsize \
-            < 2 * item.bytes:
+    if dest.exists():
+        return _refuse(entry_id, f"refused: {dest} já existe — itens homônimos "
+                                 "colidem nesse destino, e o clone já ledgerado "
+                                 "seria pisado")
+
+    vfs = statvfs_fn(str(probe))
+    if vfs.f_bavail * vfs.f_frsize < 2 * item.bytes:
         return _refuse(entry_id, f"refused: o destino não tem folga para copiar "
                                  f"{item.bytes} bytes antes de apagar a origem")
 
@@ -2646,8 +2756,10 @@ def release_item(plan, item, *, ledger, dest_root=None, audit=None, confirm=Fals
                                  "nada foi apagado")
 
     # o clone existe e o original ainda está lá: esse estado é registrado, não inferido
+    partial_event = _audit(audit, entry_id, STATE_PARTIAL, [str(src), str(dest)],
+                           plan_digest=plan.digest)
     ledger.append(**_fields(entry_id, item, fresh, dest, clone_digest, clone_bytes,
-                            STATE_PARTIAL, audit))
+                            STATE_PARTIAL, partial_event))
     _sync_dir(dest.parent)
 
     remove = remove_fn or _remove
@@ -2664,10 +2776,10 @@ def release_item(plan, item, *, ledger, dest_root=None, audit=None, confirm=Fals
                              bytes=item.bytes, stored=str(dest), sha256=clone_digest,
                              freed_bytes=0)
 
+    released_event = _audit(audit, entry_id, STATE_RELEASED, [str(src), str(dest)],
+                            plan_digest=plan.digest)
     ledger.append(**_fields(entry_id, item, fresh, dest, clone_digest, clone_bytes,
-                            STATE_RELEASED, audit))
-    _audit(audit, entry_id, STATE_RELEASED, [str(src), str(dest)],
-           plan_digest=plan.digest)
+                            STATE_RELEASED, released_event))
     return ReleaseResult(True, entry_id, "ok", bytes=item.bytes, stored=str(dest),
                          sha256=clone_digest, freed_bytes=item.bytes)
 
@@ -2698,42 +2810,58 @@ def _quiet_remove(path: Path) -> None:
         pass  # o clone falho não apaga nada de valor; a recusa já foi reportada
 
 
-def _fields(entry_id, item, fresh, dest, digest, size, state, audit) -> dict:
-    event = ""
-    if audit is not None:
-        last = audit.tail(1)
-        event = last[-1]["event_id"] if last else ""
+def _fields(entry_id, item, fresh, dest, digest, size, state, event_id) -> dict:
     return {
         "entry_id": entry_id, "src": item.path, "volume": item.volume,
         "stored": str(dest), "bytes": size, "sha256": digest,
         "age_days": fresh.age_days, "matched_pattern": item.matched,
         "holder_pids": tuple(fresh.holder_pids), "state": state,
-        "action_id": KIND, "audit_event_id": event,
+        "action_id": KIND, "audit_event_id": event_id or "",
     }
 
 
-def _audit(audit, entry_id, outcome, targets, *, plan_digest=None, error=None) -> None:
+def _audit(audit, entry_id, outcome, targets, *, plan_digest=None,
+           error=None) -> str:
     if audit is None:
-        return
-    audit.append(kind=KIND, action_id=entry_id, outcome=outcome, targets=targets,
-                 risk="reversible", plan_digest=plan_digest, error=error)
+        return ""
+    return audit.append(kind=KIND, action_id=entry_id, outcome=outcome,
+                        targets=targets, risk="reversible",
+                        plan_digest=plan_digest, error=error)["event_id"]
 ```
 
-A ordem das chamadas é o contrato: `_fields(..., STATE_PARTIAL)` e o `fsync` do
-diretório vêm **antes** de `remove(src)`; a linha `released` vem **depois**. O
-`audit_event_id` do ledger aponta para o evento de auditoria já escrito, por isso
-`_fields` lê `audit.tail(1)` — se o auditor for `None`, o campo fica vazio em vez de
-mentir.
+A ordem das chamadas é o contrato, em dois sentidos:
+
+- **mutação**: `_audit(..., STATE_PARTIAL)` → `ledger.append(partial)` → `fsync` do
+  diretório vêm **antes** de `remove(src)`; a linha `released` vem **depois**. Se o
+  processo tombar entre os dois, o disco tem o clone e o ledger diz `partial`.
+- **causalidade**: o evento de auditoria é escrito **primeiro** porque é ele que
+  recebe o id, e a linha do ledger carrega `audit_event_id` apontando para um evento
+  que já existe. O contrário (`tail(1)` antes de auditar) daria um id de um evento
+  alheio ou vazio — e o viewer da T13 teria de adivinhar por timestamp. Se o auditor
+  for `None`, o campo fica vazio em vez de mentir.
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.venv/bin/python -m pytest tests/test_tmpfs_release.py -v` → PASS (12).
-Run: `.venv/bin/python -m pytest -q` → verde.
+Run: `.venv/bin/python -m pytest tests/test_tmpfs_release.py -v` → PASS (15).
+Run: `.venv/bin/python -m pytest -v 2>&1 | tail -2` → verde, e a linha de resumo tem
+de ler **476 passed** (461 da T8 + 15 daqui).
 
-**Evidência de não-vacuidade:** `test_release_copies_verifies_and_frees_the_bytes`
-falha se o `unlink` da origem for removido, e `test_a_failed_removal_leaves_the_clone_recorded_as_partial`
-falha se a linha `partial` for escrita depois do `rmtree`. Trocar `f_bavail` por
-`f_bfree` no checador de folga mata `test_release_refuses_when_the_destination_has_no_room`.
+**Coerção de mutação** — cada mutação abaixo mata o teste nomeado; guarde a saída no
+corpo do commit, como na T8:
+
+| Mutação | Teste que morre |
+|---|---|
+| remover o `unlink`/`rmtree` da origem | `test_release_copies_verifies_and_frees_the_bytes` |
+| a linha `partial` escrita só depois do `remove(src)` | `test_a_failed_removal_leaves_the_clone_recorded_as_partial` |
+| trocar `f_bavail` por `f_bfree` | `test_release_refuses_when_the_destination_has_no_room` |
+| `2 * item.bytes` → `item.bytes` | idem (a folga deixaria de ser o dobro) |
+| ignorar o digest do clone (`if False`) | `test_a_digest_mismatch_refuses_and_keeps_the_original` |
+| pular a re-checagem (`if not verdict.ok` → `if False`) | os dois testes de "apareceu depois do plano" |
+| `held.state in ACTIVE_STATES` → `held is not None` | `test_an_item_already_restored_can_be_released_again` |
+| tirar a recusa de `dest.exists()` | `test_two_homonyms_in_the_same_second_do_not_collide` (e o clone anterior é pisado) |
+| validar o gravável no `dest` em vez do pai do destino | `test_a_destination_that_does_not_exist_yet_is_still_gravable` |
+| `audit_event_id` vazio na linha `released` | `test_the_ledger_line_points_at_its_own_audit_event` |
+| `total += p.stat().st_size` → `total += len(p.read_text())` | `test_tree_digest_is_stable_and_order_independent` (11 ≠ 12) |
 
 - [ ] **Step 5: Commit**
 
