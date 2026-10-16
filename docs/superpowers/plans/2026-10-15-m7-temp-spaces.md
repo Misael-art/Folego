@@ -1643,10 +1643,14 @@ funcionalidade ausente.
 ```python
 def test_the_tooltip_shows_the_worst_watched_volume(qapp):
     """A bandeja não tem regra própria: ela herda o texto do título."""
+    # 8 GiB de teto e 8_010_114_007 usados = 93,2%, que é o "93%" do exemplo da
+    # spec (§8). Os bytes são literais e somam o teto porque a spec dava aquilo como
+    # prosa ilustrativa e este plano o endureceu em asserção: com used+avail != total
+    # o volume era incoerente e `round(used_frac*100)` dava 89%, não 93%.
     tray, _ = build()
     tray.install()
     tray.show_snapshot(snap(tmpfs=(TmpfsVolume(
-        "/tmp", "tmpfs", 8 * 1024**3, 7_639_801_600, 419_430_400),)))
+        "/tmp", "tmpfs", 8 * 1024**3, 8_010_114_007, 579_820_585),)))
     assert "/tmp 93%" in tray.tray.tooltips[-1]
 ```
 
