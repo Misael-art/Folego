@@ -8,6 +8,7 @@ fell back to instead of pretending.
 import pytest
 
 from deck_wellness.core.snapshot import MemInfo, Pressure, Snapshot
+from deck_wellness.core.tmpfs import TmpfsVolume
 from deck_wellness.ui.tray import Tray
 
 pytest.importorskip("PySide6")
@@ -19,12 +20,12 @@ def _app(qapp):
     return qapp
 
 
-def snap(available_kb=5_000_000, total_kb=14_374_304, psi10=0.0):
+def snap(available_kb=5_000_000, total_kb=14_374_304, psi10=0.0, tmpfs=()):
     return Snapshot(ts=0.0, mem=MemInfo(total_kb, available_kb),
                     swap_used_kb=0, swap_total_kb=0,
                     pressure_memory=Pressure(psi10, psi10, psi10, 0),
                     pressure_io=None, pressure_cpu=None, load=None,
-                    apps=(), self_rss_kb=90_000)
+                    apps=(), self_rss_kb=90_000, tmpfs=tmpfs)
 
 
 class StubSignal:
@@ -127,3 +128,16 @@ def test_the_tray_never_writes_anywhere():
     """The tray is a viewer: no jobs object exists to give it a lever."""
     tray, _ = build()
     assert not hasattr(tray, "jobs")
+
+
+def test_the_tooltip_shows_the_worst_watched_volume(qapp):
+    """A bandeja não tem regra própria: ela herda o texto do título."""
+    # 8 GiB de teto e 8_010_114_007 usados = 93,2%, que é o "93%" do exemplo da
+    # spec (§8). Os bytes são literais e somam o teto porque a spec dava aquilo como
+    # prosa ilustrativa e este plano o endureceu em asserção: com used+avail != total
+    # o volume era incoerente e `round(used_frac*100)` dava 89%, não 93%.
+    tray, _ = build()
+    tray.install()
+    tray.show_snapshot(snap(tmpfs=(TmpfsVolume(
+        "/tmp", "tmpfs", 8 * 1024**3, 8_010_114_007, 579_820_585),)))
+    assert "/tmp 93%" in tray.tray.tooltips[-1]

@@ -7,9 +7,10 @@ known files and numeric /proc/<pid> entries only.
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 from .. import paths
-from . import procfs, sysfs
+from . import procfs, sysfs, tmpfs as tmpfs_read
 from .snapshot import AppRSS, ProcInfo, Snapshot
 
 GROUP_RULES = (
@@ -21,11 +22,16 @@ GROUP_RULES = (
 )
 
 
+def _read_tmpfs(proc_root: str) -> tuple:
+    return tmpfs_read.watched_volumes(proc_root=proc_root)
+
+
 @dataclass
 class MetricsCollector:
     proc_root: Path | None = None
     sys_root: Path | None = None
     max_groups: int = 12
+    tmpfs_fn: Callable[[str], tuple] | None = None
 
     def _proc(self) -> Path:
         return Path(self.proc_root) if self.proc_root else Path(paths.proc_root())
@@ -45,6 +51,9 @@ class MetricsCollector:
         load = procfs.read_loadavg(root)
         swaps = procfs.read_swaps(root)
         procs = procfs.list_processes(root)
+        # None, não a função, como default: função como default de campo de
+        # dataclass vira método ligado e receberia `self` como primeiro argumento
+        volumes = (self.tmpfs_fn or _read_tmpfs)(str(root))
         return Snapshot(
             ts=time.time(),
             mem=mem,
@@ -57,6 +66,7 @@ class MetricsCollector:
             apps=self._group_rss(procs),
             self_rss_kb=self._self_rss(root),
             procs=tuple(procs),
+            tmpfs=volumes,
             errors=tuple(errors),
         )
 

@@ -1,6 +1,8 @@
 """Pure data containers for one metrics sample. No logic, no Qt."""
 from dataclasses import dataclass, field
 
+from .tmpfs import TmpfsVolume
+
 
 @dataclass(frozen=True)
 class MemInfo:
@@ -71,4 +73,5 @@ class Snapshot:
     apps: tuple[AppRSS, ...]
     self_rss_kb: int
     procs: tuple[ProcInfo, ...] = ()
+    tmpfs: tuple[TmpfsVolume, ...] = ()
     errors: tuple[str, ...] = field(default_factory=tuple)

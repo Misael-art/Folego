@@ -74,3 +74,19 @@ def test_missing_pressure_degrades_not_crashes(fake_proc, syszram):
     assert snap.mem is None
     assert snap.pressure_memory is None
     assert "meminfo" in " ".join(snap.errors)
+
+
+def test_the_collector_carries_watched_volumes_into_the_snapshot(env):
+    from deck_wellness.core.tmpfs import TmpfsVolume
+    proc_root, sys_root = env
+    volumes = (TmpfsVolume("/tmp", "tmpfs", 8 * 1024**3, 7 * 1024**3, 1024**3),)
+    snap = collector.MetricsCollector(
+        proc_root=proc_root, sys_root=sys_root, tmpfs_fn=lambda root: volumes).collect()
+    assert snap.tmpfs == volumes
+
+
+def test_a_fake_proc_root_with_no_mounts_carries_no_tmpfs(env):
+    """O collector não inventa ocupação: sem /proc/mounts não há volume medido."""
+    proc_root, sys_root = env
+    snap = collector.MetricsCollector(proc_root=proc_root, sys_root=sys_root).collect()
+    assert snap.tmpfs == ()
