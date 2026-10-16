@@ -3,6 +3,9 @@
 Não segue nada, não abre nada: só readlink de /proc/<pid>/fd/*. Um alvo fora dos
 prefixos não nos diz respeito, e um fd de outro usuário que não conseguimos ler é
 pulado — a varredura tem de terminar mesmo quando metade da sessão é opaca.
+
+Sem /proc legível o índice chega com proc_count == 0, que quer dizer "não sabemos":
+refs vazio nesse caso não prova nada, e quem vai mutar trata o índice como não provado.
 """
 import os
 from dataclasses import dataclass

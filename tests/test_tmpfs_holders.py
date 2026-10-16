@@ -17,10 +17,14 @@ def make_proc(root, pid: int, links: dict):
 
 def test_only_targets_under_the_prefixes_are_recorded(fake_proc):
     make_proc(fake_proc, 400, {"3": "/tmp/agente/sessao", "4": "/home/u/nota.md",
-                               "5": "/run/user/1000/bus", "6": "socket:[917]"})
+                               "5": "/run/user/1000/bus", "6": "socket:[917]",
+                               "7": "/tmpx/algo"})
     idx = holders.holder_index(proc_root=str(fake_proc))
     assert idx.refs == {"/run/user/1000/bus": (400,), "/tmp/agente/sessao": (400,)}
-    assert (idx.proc_count, idx.fd_count) == (1, 4)
+    assert (idx.proc_count, idx.fd_count) == (1, 5)
+    assert "/tmpx/algo" not in idx.refs   # compartilha as letras, não o separador
+    assert idx.pids_holding("/tmp/algo") == frozenset()
+    assert idx.pids_holding("/tmpx/algo") == frozenset()
 
 
 def test_pids_holding_covers_a_directory_and_what_is_inside_it(fake_proc):
@@ -29,6 +33,7 @@ def test_pids_holding_covers_a_directory_and_what_is_inside_it(fake_proc):
     assert idx.pids_holding("/tmp/qoder-cli-1000/abc") == frozenset({700})
     assert idx.pids_holding("/tmp/qoder-cli-1000/abc/sessao-1") == frozenset({700})
     assert idx.pids_holding("/tmp/qoder-cli-1000/outra") == frozenset()
+    assert idx.pids_holding("/tmp/qoder-cli-1000/ab") == frozenset()  # prefixo de string não é ancestral
 
 
 def test_several_pids_on_the_same_file_are_all_named(fake_proc):
@@ -81,3 +86,17 @@ def test_the_explicit_pid_list_decides_what_is_looked_at(fake_proc):
     idx = holders.holder_index(proc_root=str(fake_proc), pids=[22])
     assert idx.refs == {"/tmp/dois": (22,)}
     assert idx.proc_count == 1
+
+
+def test_the_default_root_is_the_proc_seam_of_paths(fake_proc):
+    make_proc(fake_proc, 300, {"0": "/dev/shm/fila"})
+    idx = holders.holder_index()          # sem proc_root: paths.proc_root() decide
+    assert idx.refs == {"/dev/shm/fila": (300,)}
+    assert (idx.proc_count, idx.fd_count) == (1, 1)
+
+
+def test_an_absent_proc_root_is_not_proof_of_no_holders(tmp_path):
+    idx = holders.holder_index(proc_root=str(tmp_path / "nao-existe"))
+    assert idx.refs == {}
+    assert idx.proc_count == 0            # quer dizer "não sabemos", não "nada aberto"
+    assert idx.fd_count == 0
