@@ -1581,9 +1581,20 @@ def test_tmpfs_below_the_floor_does_not_touch_the_signal():
     assert after.text == before.text
 
 
+def test_the_floor_itself_is_included():
+    # 6 GiB de 8 = 0,75 exato (e 0,75 é representável em binário, então este teste
+    # é fronteira de verdade, não sorteio de ponto flutuante). Trocar `>=` por `>`
+    # faria um volume exatamente no piso sumir do título.
+    volume = TmpfsVolume("/dev/shm", "tmpfs", 8 * GIB, 6 * GIB, 2 * GIB)
+    s = title_signal.compute(snap(5_000_000, tmpfs=(volume,)))
+    assert s.level == "yellow" and s.text.endswith("· /dev/shm 75%")
+
+
 def test_the_title_names_the_worst_watched_volume():
+    # os dois passam do piso de 75%: com um só flagged, min e max dariam o mesmo
+    # volume e o seletor do pior ficaria sem teste
     s = title_signal.compute(snap(5_000_000, tmpfs=(
-        vol("/tmp", used=2.0), vol("/run/user/1000", total=1.45, used=1.40))))
+        vol("/tmp", used=6.0, total=7.24), vol("/run/user/1000", total=1.45, used=1.40))))
     assert s.text.endswith("· /run/user/1000 97%")
 
 
@@ -1591,6 +1602,15 @@ def test_the_tmpfs_rule_only_escalates_never_relaxes():
     # RAM crítica continua vermelha com tmpfs tranquilo
     s = title_signal.compute(snap(1_000_000, tmpfs=(vol(used=0.5),)))
     assert s.level == "red"
+
+
+def test_a_yellow_tmpfs_does_not_downgrade_a_red_machine():
+    # 80% de tmpfs sozinho é amarelo; com RAM crítica o título segue vermelho,
+    # só que agora dizendo as duas coisas. Afrouxar `elif level == "green"` para
+    # `else` é a inversão que este teste existe para pegar.
+    s = title_signal.compute(snap(1_000_000, tmpfs=(vol(used=5.8, total=7.24),)))
+    assert s.level == "red" and s.emoji == "🔴"
+    assert "/tmp 80%" in s.text
 ```
 
 Em `tests/test_collector.py` (o fixture `env` já existe):
@@ -1613,7 +1633,12 @@ def test_a_fake_proc_root_with_no_mounts_carries_no_tmpfs(env):
 ```
 
 Em `tests/test_ui_tray.py`, estender o `snap()` local (linha 23) com `tmpfs=()` e
-`tmpfs=tmpfs` no `Snapshot(...)`, e somar:
+`tmpfs=tmpfs` no `Snapshot(...)`, e somar. O arquivo ainda não importa
+`TmpfsVolume` — a linha 10 hoje é
+`from deck_wellness.core.snapshot import MemInfo, Pressure, Snapshot` e precisa
+ganhar um `from deck_wellness.core.tmpfs import TmpfsVolume` junto: sem isso o
+vermelho do Step 2 seria `NameError`, que é defeito do teste e não evidência da
+funcionalidade ausente.
 
 ```python
 def test_the_tooltip_shows_the_worst_watched_volume(qapp):
@@ -1712,8 +1737,15 @@ Import necessário no topo: `from ..core.tmpfs import TmpfsVolume`.
 - [ ] **Step 4: Rodar e ver passar**
 
 Run: `.venv/bin/python -m pytest tests/test_title_signal.py tests/test_collector.py tests/test_ui_tray.py -v` → PASS.
-Run: `.venv/bin/python -m pytest -q` → verde (o `Snapshot` com campo novo não quebra
-`test_workers.py`/`test_ui_dashboard.py`, que só passam os campos antigos).
+Run: `.venv/bin/python -m pytest -v 2>&1 | tail -2` → `447 passed` (437 + 10). O
+`Snapshot` com campo novo não quebra `test_workers.py`/`test_ui_dashboard.py`, que só
+passam os campos antigos.
+
+**Coerção de mutação:** inverter `elif level == "green"` para `else`, trocar
+`>= thresholds.tmpfs_yellow_frac` por `>`, ou remover o sufixo do título matam ao
+menos um teste desta tarefa; `min` em vez de `max` por `used_frac` mata
+`test_the_title_names_the_worst_watched_volume`. Guarde a saída de `-v` e o resultado
+de cada mutação no corpo do commit — a spec (§10) pede a evidência, não a afirmação.
 
 - [ ] **Step 5: Commit**
 
