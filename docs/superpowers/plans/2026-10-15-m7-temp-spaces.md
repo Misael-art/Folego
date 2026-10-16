@@ -865,6 +865,11 @@ a spec escreve `protegido: mais novo que {floor} dias` na tabela, e a implementa
 devolve `refused: {idade} d, mais novo que o piso de {piso} d`; o que a tabela exige é o
 motivo nomeado por item, não a literalidade, e o Task 11 busca a palavra "piso".
 
+`kind == "missing"` (filho que sumiu entre o `listdir` e o `lstat`, `inventory.py:62`) não
+ganha ramo próprio: cai na R2 e a razão nomeia o tipo — `refused: missing não é arquivo nem
+árvore regular`. Um ramo dedicado a ele violaria a R2 da tabela e quebraria o próprio teste
+que enumera os tipos (`kind in verdict.reason` para `missing`).
+
 - [ ] **Step 1: Escrever o teste que falha**
 
 ```python
@@ -935,6 +940,14 @@ def test_a_live_holder_is_refused_and_named():
 
 def test_a_truncated_walk_is_not_evidence_enough_to_delete():
     assert policy.classify(entry(truncated=True), policy.Policy()).ok is False
+
+
+def test_a_walk_that_failed_to_read_a_child_is_not_evidence_enough_to_delete():
+    """Sem `errors` na regra, um walk que não leu um filho libera o irmão legível
+    contando com um `bytes` e um `age_days` que sabem por baixo."""
+    verdict = policy.classify(entry(errors=("/tmp/x: Permissão negada",)),
+                              policy.Policy())
+    assert verdict.ok is False and "incompleta" in verdict.reason
 
 
 def test_a_huge_item_is_refused_by_the_per_item_ceiling():
@@ -1048,8 +1061,6 @@ def matches(path: str, patterns) -> str | None:
 def classify(entry, policy: Policy) -> Eligibility:
     if entry.is_mount_point or entry.under_mount:
         return Eligibility(False, "refused: ponto de montagem (ou contém uma)")
-    if entry.kind == "missing":
-        return Eligibility(False, "refused: o item sumiu durante a leitura")
     if entry.kind not in ("dir", "file"):
         return Eligibility(False,
                            f"refused: {entry.kind} não é arquivo nem árvore regular")
@@ -1059,8 +1070,11 @@ def classify(entry, policy: Policy) -> Eligibility:
         pids = ", ".join(str(p) for p in entry.holder_pids)
         return Eligibility(False, f"refused: {len(entry.holder_pids)} processo(s) "
                                   f"com fd aberto: {pids}")
-    if entry.truncated:
-        return Eligibility(False, "refused: leitura truncada — tamanho e idade não provam")
+    if entry.truncated or entry.errors:
+        por = ("truncada" if entry.truncated
+               else f"{len(entry.errors)} erro(s) de walk")
+        return Eligibility(False, f"refused: leitura incompleta ({por}) — "
+                                  f"tamanho e idade não provam")
     if entry.bytes > policy.max_item_bytes:
         return Eligibility(False,
                            f"refused: {entry.bytes} bytes acima do limite por item")
@@ -1078,7 +1092,9 @@ def classify(entry, policy: Policy) -> Eligibility:
 - [ ] **Step 4: Rodar e ver passar**
 
 Run: `.venv/bin/python -m pytest tests/test_tmpfs_policy.py -v` → PASS (16).
-Run: `.venv/bin/python -m pytest -q` → verde.
+Run: `.venv/bin/python -m pytest -v 2>&1 | tail -2` → `418 passed` (402 + 16). O `-q` extra
+empilhado com `addopts = "-q"` leva a verbosidade a −2 e suprime a linha de resumo: para
+conferir o total use `-v … | tail -2`.
 
 - [ ] **Step 5: Commit**
 
