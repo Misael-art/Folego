@@ -2363,6 +2363,7 @@ def test_a_holder_that_appeared_after_the_plan_refuses_the_release(tmp_path, boo
                                statvfs_fn=lambda p: _vfs(20 * GIB),
                                allowed_roots=roots(tmp_path), now=NOW)
     assert res.ok is False and "fd aberto" in res.reason
+    assert res.reason.count("refused:") == 1, "o reason do classify já traz o prefixo"
     assert (src / "blob.bin").exists()
 
 
@@ -2374,6 +2375,7 @@ def test_a_mount_point_that_appeared_after_the_plan_refuses(tmp_path, book):
                                statvfs_fn=lambda p: _vfs(20 * GIB),
                                allowed_roots=roots(tmp_path), now=NOW)
     assert res.ok is False and "montagem" in res.reason
+    assert res.reason.count("refused:") == 1
     assert (src / "blob.bin").exists()
 
 
@@ -2559,6 +2561,57 @@ def test_a_destination_that_does_not_exist_yet_is_still_gravable(tmp_path, book)
     assert (tmp_path / "nova" / "retida").is_dir()
 
 
+def test_releasing_a_loose_file_verifies_the_bytes_it_clones(tmp_path, book):
+    """§6.5 num item que é ARQUIVO, não árvore — e `/tmp/tmp*` é `mktemp` da vida real.
+
+    `rglob("*")` não desce num arquivo: sem o ramo de arquivo, as duas pontas dão o
+    SHA-256 do vazio, a verificação vira tautologia, o clone é apagado sem conferido,
+    e o ledger grava `bytes: 0` — o teto de 3 GiB deixa de contar qualquer liberação
+    de arquivo. Este teste é a única execução do ramo `shutil.copy2`.
+    """
+    src = tmp_path / "solto.bin"
+    src.write_bytes(b"z" * 5000)
+    old = NOW - 10 * DAY
+    os.utime(src, (old, old))
+    entry = TmpfsEntry(path=str(src), name=src.name, volume="/tmp", kind="file",
+                       uid=os.getuid(), bytes=5000, files=1, age_days=10.0,
+                       is_mount_point=False, under_mount=False, holder_pids=())
+    plan = build_plan((VOL,), (entry,), Policy(allow_patterns=(str(src),)), now=NOW)
+    res = release.release_item(plan, plan.find(str(src)), ledger=book, confirm=True,
+                               dest_root=tmp_path / "retida",
+                               entry_fn=free(kind="file"),
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               allowed_roots=roots(tmp_path), now=NOW)
+    assert res.ok is True and res.freed_bytes == 5000
+    assert not src.exists()
+    assert Path(res.stored).read_bytes() == b"z" * 5000
+    assert book.retained_bytes() == 5000, "o ledger não pode contar 0"
+    # o SHA do vazio: se o digest não olhou o arquivo, é exatamente este
+    assert res.sha256 != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+
+def test_a_digest_that_cannot_be_read_leaves_no_orphan_clone(tmp_path, book, monkeypatch):
+    """A origem pode sumir entre a cópia e o digest; o clone órfão não pode ficar.
+
+    Clone sem linha de ledger é byte retido invisível: nem `retained_bytes()` nem a
+    T13 nunca vão contá-lo. O `try` em torno do par de digests é o que fecha isso.
+    """
+    plan, it, src = item(tmp_path)
+
+    def cega(path):
+        raise OSError(2, "No such file or directory")
+
+    monkeypatch.setattr(release, "tree_digest", cega)
+    res = release.release_item(plan, it, ledger=book, confirm=True,
+                               dest_root=tmp_path / "retida", entry_fn=free(),
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               allowed_roots=roots(tmp_path), now=NOW)
+    assert res.ok is False and "digest" in res.reason
+    assert (src / "blob.bin").exists()
+    assert not any((tmp_path / "retida").rglob("blob.bin")), "nenhum clone órfão"
+    assert book.retained_count() == 0
+
+
 def test_tree_digest_is_stable_and_order_independent(tmp_path):
     a = tmp_path / "a"
     (a / "sub").mkdir(parents=True)
@@ -2655,8 +2708,16 @@ def default_allowed_roots(home=None) -> list:
 
 
 def tree_digest(path: Path) -> tuple[str, int]:
-    """Conteúdo e tamanho, em ordem estável: mtime e donos não mudam o digest."""
+    """Conteúdo e tamanho, em ordem estável: mtime e donos não mudam o digest.
+
+    O ramo de arquivo não é decoração: `rglob("*")` não desce num arquivo, então sem
+    ele um item `kind == "file"` — e `/tmp/tmp*` está na allow-list default — daria o
+    SHA-256 do vazio nas duas pontas, a verificação viraria tautologia e o ledger
+    gravaria `bytes: 0`, furando o teto de retenção.
+    """
     root = Path(path)
+    if root.is_file():
+        return sha256_file(root), root.stat().st_size
     h = hashlib.sha256()
     total = 0
     for p in sorted(root.rglob("*")):
@@ -2703,13 +2764,18 @@ def release_item(plan, item, *, ledger, dest_root=None, audit=None, confirm=Fals
     fresh = entry_fn(str(src), volume=item.volume, proc_root=proc_root, now=now)
     verdict = classify(fresh, plan.policy)
     if not verdict.ok:
-        return _refuse(entry_id, f"refused: {verdict.reason}")
+        # o reason do classify JÁ vem prefixado com "refused: " — prefixar de novo é
+        # a mensagem que o usuário leria no stderr da T11/T12
+        return _refuse(entry_id, verdict.reason)
 
     roots = list(allowed_roots) if allowed_roots else default_allowed_roots()
     guard_verdict = guard.validate_target(src, roots)
     if not guard_verdict.ok:
         return _refuse(entry_id, guard_verdict.reason)
 
+    # o portão usa o MAIOR dos dois tamanhos: o plano pode estar superado e a cópia
+    # vai levar o que a árvore tem agora, não o que ela tinha quando o plano nasceu
+    gate = max(item.bytes, fresh.bytes)
     dest_root = Path(dest_root) if dest_root else paths.tmp_quarantine_dir()
     dest = dest_root / _stamp(now) / _sanitize(src.name)
     # o pai do destino, não o destino: num destino ainda inexistente o guard avaliaria
@@ -2718,8 +2784,8 @@ def release_item(plan, item, *, ledger, dest_root=None, audit=None, confirm=Fals
     probe = dest_root if dest_root.exists() else dest_root.parent
     dest_verdict = guard.validate_target(probe, roots)
     if not dest_verdict.ok:
-        return _refuse(entry_id, f"refused: o destino de retenção não é gravável "
-                                 f"em {probe}: {dest_verdict.reason}")
+        return _refuse(entry_id, f"{dest_verdict.reason} — o destino de retenção "
+                                 f"é {probe}")
 
     if dest.exists():
         return _refuse(entry_id, f"refused: {dest} já existe — itens homônimos "
@@ -2727,15 +2793,17 @@ def release_item(plan, item, *, ledger, dest_root=None, audit=None, confirm=Fals
                                  "seria pisado")
 
     vfs = statvfs_fn(str(probe))
-    if vfs.f_bavail * vfs.f_frsize < 2 * item.bytes:
+    if vfs.f_bavail * vfs.f_frsize < 2 * gate:
         return _refuse(entry_id, f"refused: o destino não tem folga para copiar "
-                                 f"{item.bytes} bytes antes de apagar a origem")
+                                 f"{gate} bytes antes de apagar a origem")
 
-    if ledger.retained_bytes() + item.bytes > MAX_RETAINED_BYTES:
+    restantes = MAX_RETAINED_BYTES - ledger.retained_bytes()
+    if gate > restantes:
         oldest = ledger.oldest()
-        return _refuse(entry_id, f"refused: reter mais {item.bytes} bytes estouraria "
-                                 f"o orçamento de {MAX_RETAINED_BYTES}; a candidata "
-                                 f"a expirar é {oldest.entry_id} ({oldest.src})")
+        cand = (f"a candidata a expirar é {oldest.entry_id} ({oldest.src})" if oldest
+                else "nada está retido — o item sozinho passa do teto")
+        return _refuse(entry_id, f"refused: reter mais {gate} bytes estouraria o "
+                                 f"orçamento de {MAX_RETAINED_BYTES}; {cand}")
 
     try:
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -2748,8 +2816,17 @@ def release_item(plan, item, *, ledger, dest_root=None, audit=None, confirm=Fals
         return _refuse(entry_id, f"refused: a cópia falhou ({err.strerror or err}); "
                                  "a origem está intacta")
 
-    source_digest, _ = tree_digest(src)
-    clone_digest, clone_bytes = tree_digest(dest)
+    # o digest relê a ORIGEM: entre o copy e aqui o agente pode ter apagado o que
+    # estava sendo copiado. Sem este try, o clone ficaria na SSD sem linha de ledger
+    # — byte retido que nem `retained_bytes()` nem a T13 jamais veriam.
+    try:
+        source_digest, _ = tree_digest(src)
+        clone_digest, clone_bytes = tree_digest(dest)
+    except OSError as err:
+        _quiet_remove(dest)
+        return _refuse(entry_id, f"refused: o digest não pôde ser lido "
+                                 f"({err.strerror or err}); nada foi apagado")
+
     if source_digest != clone_digest:
         _quiet_remove(dest)
         return _refuse(entry_id, "refused: o digest do clone difere da origem; "
@@ -2760,7 +2837,8 @@ def release_item(plan, item, *, ledger, dest_root=None, audit=None, confirm=Fals
                            plan_digest=plan.digest)
     ledger.append(**_fields(entry_id, item, fresh, dest, clone_digest, clone_bytes,
                             STATE_PARTIAL, partial_event))
-    _sync_dir(dest.parent)
+    _sync_tree(dest)
+    _sync_fd(dest.parent)
 
     remove = remove_fn or _remove
     try:
@@ -2773,24 +2851,37 @@ def release_item(plan, item, *, ledger, dest_root=None, audit=None, confirm=Fals
                              f"refused: o clone está em {dest} e registrado como "
                              f"partial; a origem não foi removida "
                              f"({err.strerror or err}); nada foi perdido",
-                             bytes=item.bytes, stored=str(dest), sha256=clone_digest,
+                             bytes=clone_bytes, stored=str(dest), sha256=clone_digest,
                              freed_bytes=0)
 
     released_event = _audit(audit, entry_id, STATE_RELEASED, [str(src), str(dest)],
                             plan_digest=plan.digest)
     ledger.append(**_fields(entry_id, item, fresh, dest, clone_digest, clone_bytes,
                             STATE_RELEASED, released_event))
-    return ReleaseResult(True, entry_id, "ok", bytes=item.bytes, stored=str(dest),
-                         sha256=clone_digest, freed_bytes=item.bytes)
+    return ReleaseResult(True, entry_id, "ok", bytes=clone_bytes, stored=str(dest),
+                         sha256=clone_digest, freed_bytes=clone_bytes)
 
 
-def _sync_dir(path: Path) -> None:
-    """fsync do diretório: é o que torna a linha `partial` verdadeira depois de um tombo."""
+def _sync_fd(path: Path) -> None:
+    """fsync de um caminho (arquivo OU diretório): O_RDONLY + fsync funciona nos dois."""
     fd = os.open(str(path), os.O_RDONLY)
     try:
         os.fsync(fd)
     finally:
         os.close(fd)
+
+
+def _sync_tree(path: Path) -> None:
+    """fsync de cada arquivo copiado, antes do fsync do diretório.
+
+    O `tree_digest` leu a cópia pela page cache, então "verificado igual" ainda não
+    quer dizer "chegou à SSD" — e é logo depois dele que a origem é apagada. O
+    fsync do diretório sozinho não fecha essa janela.
+    """
+    arquivos = [path] if path.is_file() else sorted(path.rglob("*"))
+    for p in arquivos:
+        if p.is_file():
+            _sync_fd(p)
 ```
 
 e os helpers de remoção/registro:
@@ -2831,9 +2922,10 @@ def _audit(audit, entry_id, outcome, targets, *, plan_digest=None,
 
 A ordem das chamadas é o contrato, em dois sentidos:
 
-- **mutação**: `_audit(..., STATE_PARTIAL)` → `ledger.append(partial)` → `fsync` do
-  diretório vêm **antes** de `remove(src)`; a linha `released` vem **depois**. Se o
-  processo tombar entre os dois, o disco tem o clone e o ledger diz `partial`.
+- **mutação**: `_audit(..., STATE_PARTIAL)` → `ledger.append(partial)` → `_sync_tree(dest)`
+  → `_sync_fd(dest.parent)` vêm **antes** de `remove(src)`; a linha `released` vem
+  **depois**. Se o processo tombar entre os dois, o disco tem o clone verificado e o
+  ledger diz `partial`.
 - **causalidade**: o evento de auditoria é escrito **primeiro** porque é ele que
   recebe o id, e a linha do ledger carrega `audit_event_id` apontando para um evento
   que já existe. O contrário (`tail(1)` antes de auditar) daria um id de um evento
@@ -2842,9 +2934,9 @@ A ordem das chamadas é o contrato, em dois sentidos:
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.venv/bin/python -m pytest tests/test_tmpfs_release.py -v` → PASS (15).
+Run: `.venv/bin/python -m pytest tests/test_tmpfs_release.py -v` → PASS (17).
 Run: `.venv/bin/python -m pytest -v 2>&1 | tail -2` → verde, e a linha de resumo tem
-de ler **476 passed** (461 da T8 + 15 daqui).
+de ler **478 passed** (461 da T8 + 17 daqui).
 
 **Coerção de mutação** — cada mutação abaixo mata o teste nomeado; guarde a saída no
 corpo do commit, como na T8:
@@ -2854,14 +2946,24 @@ corpo do commit, como na T8:
 | remover o `unlink`/`rmtree` da origem | `test_release_copies_verifies_and_frees_the_bytes` |
 | a linha `partial` escrita só depois do `remove(src)` | `test_a_failed_removal_leaves_the_clone_recorded_as_partial` |
 | trocar `f_bavail` por `f_bfree` | `test_release_refuses_when_the_destination_has_no_room` |
-| `2 * item.bytes` → `item.bytes` | idem (a folga deixaria de ser o dobro) |
+| `2 * gate` → `gate` | idem (a folga deixaria de ser o dobro) |
 | ignorar o digest do clone (`if False`) | `test_a_digest_mismatch_refuses_and_keeps_the_original` |
+| tirar o `if root.is_file()` do `tree_digest` | `test_releasing_a_loose_file_verifies_the_bytes_it_clones` (o digest do vazio, `bytes: 0`) |
 | pular a re-checagem (`if not verdict.ok` → `if False`) | os dois testes de "apareceu depois do plano" |
+| voltar a prefixar: `f"refused: {verdict.reason}"` | `test_a_holder_that_appeared_after_the_plan_refuses_the_release` (`count == 1`) |
+| tirar o `try` do par de digests | `test_a_digest_that_cannot_be_read_leaves_no_orphan_clone` (o `OSError` vaza) |
 | `held.state in ACTIVE_STATES` → `held is not None` | `test_an_item_already_restored_can_be_released_again` |
 | tirar a recusa de `dest.exists()` | `test_two_homonyms_in_the_same_second_do_not_collide` (e o clone anterior é pisado) |
 | validar o gravável no `dest` em vez do pai do destino | `test_a_destination_that_does_not_exist_yet_is_still_gravable` |
 | `audit_event_id` vazio na linha `released` | `test_the_ledger_line_points_at_its_own_audit_event` |
 | `total += p.stat().st_size` → `total += len(p.read_text())` | `test_tree_digest_is_stable_and_order_independent` (11 ≠ 12) |
+
+**Não coercível, declarado:** tirar `_sync_tree`/`_sync_fd` não mata teste nenhum —
+`fsync` não é observável de dentro do processo e a suíte inteira roda em tmpfs. É a
+mesma limitação do `_sync_dir` que a T8 legou; a defesa aqui é a chamada estar no lugar
+certo, não um teste. **Ao rodar a tabela:** a mutação do `2 * gate` faz o teste de 1 GiB
+copiar ~1 GiB de verdade **no tmpfs do host** (o `tmp_path` do pytest vive em `/tmp`).
+Rode as mutações com `--basetemp` apontando para a SSD e confira `df -h /tmp` depois.
 
 - [ ] **Step 5: Commit**
 
