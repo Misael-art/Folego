@@ -839,7 +839,8 @@ M7 T3: inventário de tmpfs — tipo, dono, idade real, monte e holder por item
 <corpo: RED, GREEN com total da suíte, e a saída -v das três coerções de mutação,
 uma por vez, com a linha revertida conferida byte a byte>
 MSG
-)"```
+)"
+```
 
 ---
 
