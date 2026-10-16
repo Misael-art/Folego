@@ -86,6 +86,10 @@ def inventory(volume, mounts, holders, *, now=None, deadline_s: float = 10.0,
     try:
         names = sorted(os.listdir(root))
     except OSError:
+        # Volume ilegível ou sumido devolve () — igual a volume vazio. A direção é
+        # fail-closed (sem item, nada é liberado), mas NÃO é prova de limpeza: quem
+        # apresenta (T11 `status`/`plan`, T13 aba) tem de dizer que leu o volume por
+        # `read_mounts`/`statvfs` e que a lista de itens pode estar vazia por permissão.
         return ()
     return tuple(entry_at(os.path.join(root, name), mounts, holders, volume=str(root),
                           now=now, deadline_s=deadline_s, **kw) for name in names)

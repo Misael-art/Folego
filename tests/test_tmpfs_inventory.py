@@ -43,6 +43,8 @@ def test_age_uses_the_newest_file_inside_the_tree(tmp_path):
     os.utime(fresh, (NOW - 60, NOW - 60))
     # escrever move o mtime do diretório para o relógio real de verdade; a cena do
     # docstring é mtime do diretório velho com escrita nova dentro — refaz o velho.
+    # (sem isto, measure_tree devolve o mtime do diretório como mais novo e a idade
+    # do pai sai 0.0: o teste não poderia passar, e a mutação não teria o que matar)
     os.utime(session, (NOW - 40 * 86_400, NOW - 40 * 86_400))
 
     entry = inventory.entry_at(str(fresh), (), EMPTY, volume=str(root), now=NOW)
@@ -89,8 +91,12 @@ def test_a_directory_that_contains_a_mount_is_flagged(tmp_path):
     nested = run / "user" / "1000" / "doc"
     nested.mkdir(parents=True)
 
+    def medido_ou_explodindo(p, **kw):
+        raise AssertionError(f"medida dentro de um monte: {p}")
+
     entry = inventory.entry_at(str(run), ((str(nested), "fuse.portal"),), EMPTY,
-                               volume=str(root), now=NOW)
+                               volume=str(root), now=NOW,
+                               measure_fn=medido_ou_explodindo)
     assert entry.is_mount_point is False and entry.under_mount is True
 
 
@@ -107,6 +113,22 @@ def test_inventory_lists_only_the_top_level_children(tmp_path):
     outer = child(root, "outer", is_dir=True)
     (outer / "inner" / "deep").mkdir(parents=True)
     assert [e.name for e in inventory.inventory(str(root), (), EMPTY, now=NOW)] == ["outer"]
+
+
+def test_an_unreadable_volume_reads_as_empty_not_as_clean(tmp_path):
+    """`inventory` não tem canal de erro: volume ilegível devolve () mesmo.
+
+    Pinar isto é o que obriga T11/T13 a dizer "pode estar vazio por permissão" em
+    vez de apresentar um volume EACCES como limpo.
+    """
+    root = volume_dir(tmp_path)
+    fechado = child(root, "fechado", is_dir=True)
+    (fechado / "dentro").write_text("x")
+    fechado.chmod(0o000)
+    try:
+        assert inventory.inventory(str(fechado), (), EMPTY, now=NOW) == ()
+    finally:
+        fechado.chmod(0o755)
 
 
 def test_symlinks_are_reported_as_symlinks(tmp_path):
