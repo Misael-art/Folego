@@ -85,6 +85,16 @@ def test_zero_sized_volume_does_not_divide_by_zero(fake_proc):
     assert got[0].used_frac == 0.0
 
 
+def test_to_dict_carries_the_rounded_used_pct(fake_mounts):
+    """/tmp a 14,2857 % vira 14,3 %: é isto que a aba e o `--json` mostram."""
+    got = tmpfs.watched_volumes(proc_root=str(fake_mounts),
+                                statvfs_fn=by_path(**{"/tmp": vfs(7, 1),
+                                                      "/run/user/1000": vfs(2, 1),
+                                                      "/dev/shm": vfs(8, 0)}))
+    assert got[0].to_dict()["used_pct"] == 14.3
+    assert got[1].to_dict()["used_pct"] == 50.0
+
+
 def test_missing_mounts_file_is_silence_not_an_exception(fake_proc):
     assert tmpfs.read_mounts(str(fake_proc)) == ()
     assert tmpfs.watched_volumes(proc_root=str(fake_proc),
