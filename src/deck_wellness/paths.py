@@ -35,6 +35,15 @@ def tmp_dir() -> Path:
     return data_dir() / "tmp"
 
 
+def tmp_quarantine_dir() -> Path:
+    """Retenção de tmpfs: o destino é a SSD, nunca um tmpfs (RAM)."""
+    return data_dir() / "tmp-quarantine"
+
+
+def tmp_ledger_path() -> Path:
+    return state_dir() / "tmp-ledger.jsonl"
+
+
 def audit_log_path() -> Path:
     return state_dir() / "audit.jsonl"
 

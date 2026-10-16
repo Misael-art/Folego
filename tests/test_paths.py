@@ -20,3 +20,10 @@ def test_proc_root_defaults_to_real_proc(fake_home):
 def test_proc_root_env_override(fake_home, monkeypatch, tmp_path):
     monkeypatch.setenv("DECKWELLNESS_PROC_ROOT", str(tmp_path / "proc"))
     assert paths.proc_root() == str(tmp_path / "proc")
+
+
+def test_tmp_retention_lands_on_the_ssd_not_in_ram(fake_home):
+    assert paths.tmp_ledger_path() == (
+        fake_home / ".local" / "state" / "deck-wellness" / "tmp-ledger.jsonl")
+    assert paths.tmp_quarantine_dir() == (
+        fake_home / ".local" / "share" / "deck-wellness" / "tmp-quarantine")
