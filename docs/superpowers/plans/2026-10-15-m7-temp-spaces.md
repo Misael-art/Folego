@@ -870,6 +870,11 @@ ganha ramo próprio: cai na R2 e a razão nomeia o tipo — `refused: missing n�
 árvore regular`. Um ramo dedicado a ele violaria a R2 da tabela e quebraria o próprio teste
 que enumera os tipos (`kind in verdict.reason` para `missing`).
 
+A R7 escreve os dois números com vírgula (`refused: 0,5 d, mais novo que o piso de 3 d`), como
+o resto do projeto (`actions/disk/planner.py:244`, `ui/title_signal.py:59`): essa string é a
+copy que o usuário lê no `plan`/`status` do Task 11, e ninguém formata por ela depois — o
+apresentador não reconta um número que já veio embutido no motivo.
+
 - [ ] **Step 1: Escrever o teste que falha**
 
 ```python
@@ -939,7 +944,8 @@ def test_a_live_holder_is_refused_and_named():
 
 
 def test_a_truncated_walk_is_not_evidence_enough_to_delete():
-    assert policy.classify(entry(truncated=True), policy.Policy()).ok is False
+    verdict = policy.classify(entry(truncated=True), policy.Policy())
+    assert verdict.ok is False and "incompleta (truncada)" in verdict.reason
 
 
 def test_a_walk_that_failed_to_read_a_child_is_not_evidence_enough_to_delete():
@@ -963,6 +969,7 @@ def test_a_volume_outside_the_watch_list_is_refused():
 def test_younger_than_the_floor_is_protected():
     verdict = policy.classify(entry(age_days=0.5), policy.Policy())
     assert verdict.ok is False and "piso" in verdict.reason
+    assert "0,5 d" in verdict.reason and ".5" not in verdict.reason
 
 
 def test_the_x11_socket_directory_is_never_eligible_with_the_default_list():
@@ -1081,8 +1088,10 @@ def classify(entry, policy: Policy) -> Eligibility:
     if entry.volume not in policy.volumes:
         return Eligibility(False, f"refused: volume {entry.volume} fora da watch-list")
     if entry.age_days < policy.min_age_days:
-        return Eligibility(False, f"refused: {entry.age_days:.1f} d, mais novo que o "
-                                  f"piso de {policy.min_age_days:g} d")
+        idade = f"{entry.age_days:.1f}".replace(".", ",")
+        piso = f"{policy.min_age_days:g}".replace(".", ",")
+        return Eligibility(False, f"refused: {idade} d, mais novo que o piso "
+                                  f"de {piso} d")
     matched = matches(entry.path, policy.allow_patterns)
     if matched is None:
         return Eligibility(False, "refused: fora da allow-list de sujeira de agente")
