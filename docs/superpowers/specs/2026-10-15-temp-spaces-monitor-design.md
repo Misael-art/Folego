@@ -71,9 +71,9 @@ Camada `actions/` — proibido importar PySide6 (`tests/test_layers.py`), então
 testável sem GUI. Nenhum leitura de `/proc` sai de `actions/`/`core/` para `ui/`.
 
 ```
+src/deck_wellness/core/tmpfs.py     ← leitura: capacidades dos volumes em watch-list
 src/deck_wellness/actions/tmpfs/
   __init__.py
-  volumes.py     capacidades e ocupação dos volumes em watch-list
   holders.py     quem está com fd aberto em cada caminho
   inventory.py   classificação dos filhos de nível-1 de um volume
   policy.py      duplo filtro + recusas, puro
@@ -83,7 +83,12 @@ src/deck_wellness/actions/tmpfs/
   trend.py       ETA até lotar a partir de amostras
 ```
 
-### `volumes.py`
+A leitura de capacidade mora em `core/` e não em `actions/` porque o `MetricsCollector`
+precisa dela para o sinal do título, e `core/` nunca importa `actions/` (a direção de
+dependência que o projeto já usa: `actions/` consome `core/`). O resto do módulo fica em
+`actions/tmpfs/`, onde `tests/test_layers.py` já exige ausência de Qt.
+
+### `core/tmpfs.py`
 
 ```python
 WATCHED = ("/tmp", "/run/user/1000", "/dev/shm")   # watch-list, não "todo tmpfs"
@@ -93,12 +98,15 @@ class TmpfsVolume:
     path: str
     fs_type: str
     total_bytes: int
-    used_bytes: int          # total - f_bfree*size
-    avail_bytes: int         # f_bavail*size — o que o nosso uid realmente consegue
-    used_frac: float         # used/total; 0,0 se total == 0
+    used_bytes: int          # (f_blocks - f_bfree) * f_frsize
+    avail_bytes: int         # f_bavail * f_frsize — o que o nosso uid realmente consegue
 
-def read_mounts(proc_root: str = paths.proc_root()) -> tuple[tuple[str, str], ...]
-def watched_volumes(*, proc_root=..., statvfs_fn=os.statvfs) -> tuple[TmpfsVolume, ...]
+    @property
+    def used_frac(self) -> float: ...        # 0,0 se total == 0
+    def to_dict(self) -> dict: ...
+
+def read_mounts(proc_root: str | None = None) -> tuple[tuple[str, str], ...]
+def watched_volumes(*, proc_root=None, statvfs_fn=os.statvfs, watched=WATCHED) -> tuple
 ```
 
 `watched_volumes` só emite caminho que `/proc/mounts` confirma como `tmpfs` **e** que está
@@ -159,7 +167,7 @@ idade antiga errada aqui é exatamente o tipo de acidente que estamos evitando.
 
 ```python
 DEFAULT_ALLOW_PATTERNS = (           # apenas /tmp; vazio para /run/user/1000 e /dev/shm
-    "/tmp/qoder-cli-1000/*",
+    "/tmp/qoder-cli-1000",
     "/tmp/node-compile-cache",
     "/tmp/tsx-1000",
     "/tmp/pytest-of-*",
@@ -168,7 +176,15 @@ DEFAULT_ALLOW_PATTERNS = (           # apenas /tmp; vazio para /run/user/1000 e 
 )
 MIN_AGE_DAYS = 3.0
 MAX_ITEM_BYTES = 2 * 1024**3
+```
 
+Os padrões são escritos na granularidade que o `inventory` mede — o **filho direto**
+do volume. `/tmp/qoder-cli-1000` é a unidade, e não a sessão lá dentro, porque a
+ferramenta recria o próprio diretório-raiz e a idade relevante é a do arquivo mais
+novo da árvore inteira: enquanto qualquer sessão for recente, o container fica
+protegido. Um padrão `/tmp/qoder-cli-1000/*` nunca casaria com um item inventariado.
+
+```python
 @dataclass(frozen=True)
 class Policy:
     allow_patterns: tuple[str, ...] = DEFAULT_ALLOW_PATTERNS
@@ -243,10 +259,12 @@ Sequência, com recusa antes de qualquer escrita:
 4. checar orçamento do ledger (§7).
 5. copiar (`copytree` com `symlinks=True`, preservando modo), `tree_digest` na origem e no
    destino, exigir igualdade.
-6. `fsync` do diretório destino, gravar a linha `released` no ledger **antes** de apagar.
-7. `rmtree`/`unlink` da origem, gravar `freed_bytes`.
-8. se qualquer passo após a cópia falhar: o original fica intacto e o clone órfão é
-   registrado como `partial` para o `ledger` reportar.
+6. `fsync` do diretório destino e uma linha `partial` no ledger **antes** de apagar — o
+   clone existe na SSD e o original ainda está lá; esse estado intermediário é registrado,
+   não inferido.
+7. `rmtree`/`unlink` da origem e uma segunda linha, `released`, com `freed_bytes`.
+8. se a remoção da origem falhar, o ledger fica em `partial`: nada é perdido, o `ledger`
+   mostra o par (clone + original) e o orçamento conta os bytes (eles ocupam a SSD).
 
 Uma liberação nunca é feita dentro do processo da GUI: vai como filho matável via
 `TuneJobs(argv_factory=…)` com `python -m deck_wellness tmpfs release <id> --confirmar`,
@@ -257,14 +275,15 @@ exatamente como `disk_tab.plan_argv`.
 ### `trend.py`
 
 ```python
-def eta_hours(samples: tuple[tuple[float, int], ...], *, now=None,
-              min_samples: int = 3, horizon_s: float = 15*60) -> float | None
+def eta_hours(samples: tuple[tuple[float, int], ...], capacity_bytes: int, *,
+              now=None, min_samples: int = 3, horizon_s: float = 15*60) -> float | None
 ```
 
 Regressão linear simples em `used_bytes × ts` sobre a janela; devolve `None` (nunca 0)
 quando há menos de `min_samples` amostras, quando a inclinação é ≤ 0, ou quando o volume
-já está cheio. O poller da aba guarda as amostras em memória; persistência de histórico
-não está nesta fase.
+já está cheio. A capacidade entra como argumento porque o ETA é sempre relativo ao teto do
+tmpfs, não à mostra anterior. O poller da aba guarda as amostras em memória; persistência
+de histórico não está nesta fase.
 
 ## 5. Recusas: o que impede a limpeza virar o acidente
 
@@ -311,7 +330,7 @@ append-only + `fsync`, com o mesmo mecanismo do `AuditLog` (`safely/audit.py:16`
 ```json
 {"ts": "...", "entry_id": "1728...-ab12cd34", "src": "/tmp/...", "volume": "/tmp",
  "stored": ".../tmp-quarantine/2026.../...", "bytes": 123, "sha256": "...",
- "age_days": 4.2, "matched_pattern": "/tmp/qoder-cli-1000/*",
+ "age_days": 4.2, "matched_pattern": "/tmp/qoder-cli-1000",
  "holder_pids": [], "state": "released", "action_id": "tmpfs.release",
  "audit_event_id": "..."}
 ```
@@ -410,7 +429,9 @@ Fixtures existentes: `fake_home`, `fake_proc`, `never_touch_real_edge_config`
 
 | arquivo | comportamento provado |
 |---|---|
-| `test_tmpfs_volumes.py` | parse de `/proc/mounts` fake; `used = total - avail_free` reconcilia; só a watch-list aparece (`/run`, `/run/credentials` ficam fora); volume sumido é omitido |
+| `test_core_tmpfs.py` | parse de `/proc/mounts` fake; `used = total - avail_free` reconcilia; só a watch-list aparece (`/run`, `/run/credentials` ficam fora); volume sumido é omitido |
+| `test_paths.py` (estender) | `tmp_quarantine_dir()` e `tmp_ledger_path()` caem sob XDG data/state, na SSD, e seguem o seam de `HOME` |
+| `test_collector.py` (estender) | o `Snapshot` traz os volumes lidos; um volume que falha não derruba a coleta nem vira número inventado |
 | `test_tmpfs_holders.py` | índice a partir de `/proc` fake com `fd/*` symlink; assertion **não-vazia**: com holder o item é recusado, sem holder o mesmo item é elegível |
 | `test_tmpfs_inventory.py` | `age_days` vem de `newest_ns`; socket/fifo/symlink classificados; `under_mount` detecta `/run/user/1000/doc`; truncado vira flag |
 | `test_tmpfs_policy.py` | uma recusa por R1…R8, na ordem; o padrão casado aparece no sucesso; `/tmp/.X11-unix` nunca é elegível com a allow-list default |
@@ -419,8 +440,12 @@ Fixtures existentes: `fake_home`, `fake_proc`, `never_touch_real_edge_config`
 | `test_tmpfs_ledger.py` | transições e estado vigente; a N-ésima liberação que estoura o orçamento é recusada; `over_budget` ordena da mais velha; `partial` conta como retido |
 | `test_tmpfs_trend.py` | ETA determinístico com relógio injetado; < 3 amostras → `None`; inclinação negativa → `None`; cheio → `None` |
 | `test_cli_tmpfs.py` | `plan` sem flag não muda nada e imprime recusas em stderr; `--json` stdout é uma linha parseável; `release` sem `--confirmar` sai recusado |
+| `test_ui_tmpfs_tab.py` | argv do filho igual ao do terminal; volumes e plano vindos de payload plano; `Liberar` repetindo caminho, bytes e pids; diálogo negado não chama o filho; recusa do filho exibida como recusa; ledger com `Restaurar`/`Expirar` por linha |
+| `test_ui_main_window_tabs.py` (estender) | quinta aba na ordem; o snapshot enche a aba sem nenhuma varredura própria; fechar a janela derruba os filhos do tmpfs |
+| `test_ui_tune_jobs.py` (estender) | `release`/`restore`/`expire` contam como mutação: a segunda é recusada enquanto a primeira está em voo |
 | `test_title_signal.py` (estender) | 🔴 por `/tmp` a 95 % com RAM folgada; 🟡 a 80 %; comportamento inalterado sem tmpfs no snapshot |
 | `test_layers.py` (estender) | `actions/tmpfs/*` não importam Qt; `ui/tmpfs_tab.py` não contém `open("/proc`, `procfs.`, `sysfs.`, `/mnt/` |
+| `test_tools_verify_tmpfs.py` | os comparadores do script de host provados fora do host: texto real do `df`, linha real de `mountinfo`, contagem que não fecha, proteção que virou elegível e ledger que mudou — nenhum deles toca `/tmp` real |
 
 Cobertura de mutação voluntária: inverter um comparador de idade, remover o teste de
 monte, trocar `f_bavail` por `f_bfree` — cada um desses tem de matar ao menos um teste.
@@ -429,9 +454,12 @@ monte, trocar `f_bavail` por `f_bfree` — cada um desses tem de matar ao menos 
 
 `tools/verify_tmpfs.py`, no mesmo espírito do `tools/verify_m3.py`:
 
-- `statvfs` dos três volumes cruzado com `findmnt -t tmpfs` (tolerância de amostragem);
-- reconcile de contagens: `candidatos + protegidos == filhos de nível-1` para `/tmp` (149
-  hoje) e `/run/user/1000` (34 hoje);
+- `statvfs` dos três volumes cruzado com `df -B1` (bytes exatos, com tolerância de
+  amostragem declarada) e `findmnt`/`/proc/self/mountinfo` para os montes — `/proc/mounts`
+  não serve de testemunha, é o mesmo arquivo que o app lê;
+- reconcile de contagens: `candidatos + protegidos == varridos` (fechamento interno,
+  asserção dura) e `varridos == filhos de nível-1` com tolerância declarada — filhos de
+  nível-1 nascem e morrem durante o walk de 317 itens;
 - tempo real da varredura de holders, com `proc_count`/`fd_count` impressos (a promessa de
   0,079 s é re-medida, não citada);
 - prova de proteção: `/run/user/1000/doc`, `/run/user/1000/bus` e o scratch da **nossa**
@@ -440,7 +468,16 @@ monte, trocar `f_bavail` por `f_bfree` — cada um desses tem de matar ao menos 
   sem holder, idade forçada — tem de sair elegível; o mesmo diretório com um fd aberto
   nosso tem de sair recusado R4;
 - um ciclo real `release → ledger → restore → ledger` nesse ítem sintético, com sha256
-  conferido nos dois lados, apagando a prova no fim;
+  conferido nos dois lados por `sha256sum` (programa de fora, não o digest da aplicação),
+  apagando a prova no fim;
+- o ledger e o audit do ciclo vão para um scratch sob XDG state, e um tripwire por hash de
+  `tmp-ledger.jsonl` e `audit.jsonl` prova que a execução não escreveu no registro do host;
+- o §13.2 pedia hash do conteúdo dos três volumes antes/depois das leituras: num tmpfs vivo
+  isso nunca fecha (outros processos escrevem o tempo todo), então a prova é um hash de
+  árvore de um diretório quieto (`/tmp/.X11-unix`) ao redor de `status` e `plan`, mais o
+  tripwire acima — a substituição é declarada, não escondida;
+- `--sem-ciclo` roda somente leitura, para que a evidência possa ser colhida sem escrever
+  um byte em tmpfs real;
 - **nunca** libera nada de scratch de agente vivo, e não roda `expire` contra o ledger real
   sem `--confirmar --irreversivel` explícitos.
 - saída em log estável `.scratch/m7-verify-tmpfs.log` para auditoria.
@@ -461,8 +498,9 @@ monte, trocar `f_bavail` por `f_bfree` — cada um desses tem de matar ao menos 
 ## 13. Critério de aceite do M7
 
 1. Suite completa verde com os testes de §10, cada um visto falhar antes de existir.
-2. `tmpfs status` e `tmpfs plan` sem flags não alteram um byte (verificado por hash do
-   conteúdo dos três volumes antes/depois).
+2. `tmpfs status` e `tmpfs plan` sem flags não alteram um byte (a prova é o hash de árvore
+   do diretório quieto antes/depois, o tripwire do ledger/audit do host e as asserções de
+   dry-run da suíte — ver §11).
 3. `tools/verify_tmpfs.py` roda no Deck e produz: contagens reconciliadas, custo medido de
    holders, proteções provadas (doc/bus/sessão), e um ciclo `release→restore` com sha256
    conferido — tudo registrado em log estável.
