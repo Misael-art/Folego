@@ -50,6 +50,50 @@ def test_digest_is_stable_for_the_same_plan_and_moves_with_age():
     assert older.digest != plan.build_plan((vol(),), entries, Policy(), now=NOW).digest
 
 
+def test_the_digest_pins_the_item_rows_and_not_the_capacity_echo():
+    """A fronteira, pinada: mudar a capacidade do volume NÃO muda o digest.
+
+    O digest é sha256 do conteúdo canônico das LINHAS DO PLANO (item, bytes, idade,
+    veredito, motivo), que é exatamente o conjunto "o que seria apagado" — o mesmo
+    escopo do digest do plano de disco do M5 (`actions/disk/planner.py:185`, que hashia
+    só `[[path, bytes], …]`; o daqui é mais rico). Echo de capacidade e de política entra
+    no JSON para o usuário ler, mas não no digest: uma política que não vira veredito
+    nenhum deixa as linhas idênticas, e o que protege de verdade é a releitura —
+    `release_item` (T9) re-classifica e re-digere a árvore do item antes de unlinkar, e
+    recusa quando o `tree_digest` difere. Se um dia o digest passar a cobrir capacidade e
+    política, este teste quebra de propósito e a troca é decisão, não acidente.
+    """
+    entries = [entry("qoder-cli-1000")]
+    same_rows = plan.build_plan((vol(used=7 * GIB),), entries, Policy(), now=NOW)
+    assert same_rows.digest == plan.build_plan((vol(),), entries, Policy(), now=NOW).digest
+
+
+def test_the_biggest_reclaimable_item_is_offered_first():
+    entries = [entry("qoder-cli-1000", bytes=700), entry("node-compile-cache", bytes=900)]
+    p = plan.build_plan((vol(),), entries, Policy(), now=NOW)
+    assert [i.path for i in p.reclaimable] == ["/tmp/node-compile-cache",
+                                               "/tmp/qoder-cli-1000"]
+
+
+def test_equal_sized_reclaimable_items_are_ordered_by_path():
+    entries = [entry("qoder-cli-1000"), entry("node-compile-cache")]
+    p = plan.build_plan((vol(),), entries, Policy(), now=NOW)
+    assert [i.path for i in p.reclaimable] == ["/tmp/node-compile-cache",
+                                               "/tmp/qoder-cli-1000"]
+
+
+def test_item_ids_distinguish_paths_and_are_stable():
+    """Um `item_id_for` que devolvesse constante passaria em todos os testes acima:
+    `find(item.item_id)` acha o primeiro item dos dois lados, e nenhum digest é fixado
+    por valor. Dois caminhos, dois ids — é o que o `--item` do CLI vai receber."""
+    assert plan.item_id_for("/tmp/a") != plan.item_id_for("/tmp/b")
+    assert plan.item_id_for("/tmp/a") == plan.item_id_for("/tmp/a")
+    assert len(plan.item_id_for("/tmp/a")) == 12
+    p = plan.build_plan((vol(),), [entry("qoder-cli-1000"), entry("node-compile-cache")],
+                        Policy(), now=NOW)
+    assert len({i.item_id for i in p.reclaimable}) == 2
+
+
 def test_json_round_trips_as_one_line_with_the_volume_attached():
     p = plan.build_plan((vol(),), [entry("qoder-cli-1000")], Policy(), now=NOW)
     text = p.to_json()
