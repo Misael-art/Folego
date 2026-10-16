@@ -1502,7 +1502,7 @@ def eta_hours(samples, capacity_bytes: int, *, now=None, min_samples: int = 3,
 - [ ] **Step 4: Rodar e ver passar**
 
 Run: `.venv/bin/python -m pytest tests/test_tmpfs_trend.py -v` → PASS (7).
-Run: `.venv/bin/python -m pytest -q` → verde.
+Run: `.venv/bin/python -m pytest -v 2>&1 | tail -2` → `437 passed` (430 + 7).
 
 - [ ] **Step 5: Commit**
 
