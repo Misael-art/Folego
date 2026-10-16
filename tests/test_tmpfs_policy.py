@@ -64,7 +64,8 @@ def test_a_live_holder_is_refused_and_named():
 
 
 def test_a_truncated_walk_is_not_evidence_enough_to_delete():
-    assert policy.classify(entry(truncated=True), policy.Policy()).ok is False
+    verdict = policy.classify(entry(truncated=True), policy.Policy())
+    assert verdict.ok is False and "incompleta (truncada)" in verdict.reason
 
 
 def test_a_walk_that_failed_to_read_a_child_is_not_evidence_enough_to_delete():
@@ -88,6 +89,7 @@ def test_a_volume_outside_the_watch_list_is_refused():
 def test_younger_than_the_floor_is_protected():
     verdict = policy.classify(entry(age_days=0.5), policy.Policy())
     assert verdict.ok is False and "piso" in verdict.reason
+    assert "0,5 d" in verdict.reason and ".5" not in verdict.reason
 
 
 def test_the_x11_socket_directory_is_never_eligible_with_the_default_list():

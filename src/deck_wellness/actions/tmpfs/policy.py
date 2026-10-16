@@ -81,8 +81,10 @@ def classify(entry, policy: Policy) -> Eligibility:
     if entry.volume not in policy.volumes:
         return Eligibility(False, f"refused: volume {entry.volume} fora da watch-list")
     if entry.age_days < policy.min_age_days:
-        return Eligibility(False, f"refused: {entry.age_days:.1f} d, mais novo que o "
-                                  f"piso de {policy.min_age_days:g} d")
+        idade = f"{entry.age_days:.1f}".replace(".", ",")
+        piso = f"{policy.min_age_days:g}".replace(".", ",")
+        return Eligibility(False, f"refused: {idade} d, mais novo que o piso "
+                                  f"de {piso} d")
     matched = matches(entry.path, policy.allow_patterns)
     if matched is None:
         return Eligibility(False, "refused: fora da allow-list de sujeira de agente")
