@@ -167,6 +167,16 @@ def test_zero_sized_volume_does_not_divide_by_zero(fake_proc):
     assert got[0].used_frac == 0.0
 
 
+def test_to_dict_carries_the_rounded_used_pct(fake_mounts):
+    """/tmp a 14,2857 % vira 14,3 %: é isto que a aba e o `--json` mostram."""
+    got = tmpfs.watched_volumes(proc_root=str(fake_mounts),
+                                statvfs_fn=by_path(**{"/tmp": vfs(7, 1),
+                                                      "/run/user/1000": vfs(2, 1),
+                                                      "/dev/shm": vfs(8, 0)}))
+    assert got[0].to_dict()["used_pct"] == 14.3
+    assert got[1].to_dict()["used_pct"] == 50.0
+
+
 def test_missing_mounts_file_is_silence_not_an_exception(fake_proc):
     assert tmpfs.read_mounts(str(fake_proc)) == ()
     assert tmpfs.watched_volumes(proc_root=str(fake_proc),
@@ -194,7 +204,7 @@ def test_the_document_portal_is_not_a_watched_volume(fake_proc):
 - [ ] **Step 2: Rodar e ver falhar**
 
 Run: `.venv/bin/python -m pytest tests/test_core_tmpfs.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'deck_wellness.core.tmpfs'` (erro de collection nos 8 testes).
+Expected: FAIL — `ModuleNotFoundError: No module named 'deck_wellness.core.tmpfs'` (erro de collection nos 9 testes).
 
 - [ ] **Step 3: Implementar o mínimo**
 
@@ -280,8 +290,8 @@ E `src/deck_wellness/actions/tmpfs/__init__.py`:
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.venv/bin/python -m pytest tests/test_core_tmpfs.py -v` → PASS (8).
-Run: `.venv/bin/python -m pytest -q` → suite inteira verde (372 + 8 = 380).
+Run: `.venv/bin/python -m pytest tests/test_core_tmpfs.py -v` → PASS (9).
+Run: `.venv/bin/python -m pytest -q` → suite inteira verde (372 + 9 = 381).
 
 - [ ] **Step 5: Commit**
 
