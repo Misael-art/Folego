@@ -595,8 +595,12 @@ def test_a_directory_that_contains_a_mount_is_flagged(tmp_path):
     nested = run / "user" / "1000" / "doc"
     nested.mkdir(parents=True)
 
+    def medido_ou_explodindo(p, **kw):
+        raise AssertionError(f"medida dentro de um monte: {p}")
+
     entry = inventory.entry_at(str(run), ((str(nested), "fuse.portal"),), EMPTY,
-                               volume=str(root), now=NOW)
+                               volume=str(root), now=NOW,
+                               measure_fn=medido_ou_explodindo)
     assert entry.is_mount_point is False and entry.under_mount is True
 
 
@@ -774,6 +778,10 @@ def inventory(volume, mounts, holders, *, now=None, deadline_s: float = 10.0,
     try:
         names = sorted(os.listdir(root))
     except OSError:
+        # Volume ilegível ou sumido devolve () — igual a volume vazio. A direção é
+        # fail-closed (sem item, nada é liberado), mas NÃO é prova de limpeza: quem
+        # apresenta (T11 `status`/`plan`, T13 aba) tem de dizer que leu o volume por
+        # `read_mounts`/`statvfs` e que a lista de itens pode estar vazia por permissão.
         return ()
     return tuple(entry_at(os.path.join(root, name), mounts, holders, volume=str(root),
                           now=now, deadline_s=deadline_s, **kw) for name in names)
