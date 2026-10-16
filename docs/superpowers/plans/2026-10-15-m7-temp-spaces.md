@@ -1136,8 +1136,7 @@ reclaimable + protected == scanned_entries é a mesma reconciliação que o M5 p
 (141 = 34+85+22+0). Sem ela, "protegi tudo" pode significar "perdi itens".
 """
 import json
-
-import pytest
+import os
 
 from deck_wellness.actions.tmpfs import plan
 from deck_wellness.actions.tmpfs.inventory import TmpfsEntry
@@ -1152,7 +1151,7 @@ def vol(path="/tmp", used=2 * GIB):
     return TmpfsVolume(path, "tmpfs", 8 * GIB, used, 8 * GIB - used)
 
 
-def entry(name, *, path=None, kind="dir", age_days=10.0, bytes=100, uid=1000,
+def entry(name, *, path=None, kind="dir", age_days=10.0, bytes=100, uid=os.getuid(),
           holder_pids=(), truncated=False):
     return TmpfsEntry(path or f"/tmp/{name}", name, "/tmp", kind, uid, bytes, 1,
                       age_days, False, False, holder_pids, truncated, ())
@@ -1346,8 +1345,9 @@ def build_plan(volumes, entries, policy, *, now=None) -> TmpfsPlan:
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.venv/bin/python -m pytest tests/test_tmpfs_plan.py -v` → PASS (9).
-Run: `.venv/bin/python -m pytest -q` → verde.
+Run: `.venv/bin/python -m pytest tests/test_tmpfs_plan.py -v` → PASS (8).
+Run: `.venv/bin/python -m pytest -v 2>&1 | tail -2` → `426 passed` (418 + 8). O `-q` extra
+empilhado com `addopts = "-q"` leva a verbosidade a −2 e suprime a linha de resumo.
 
 - [ ] **Step 5: Commit**
 
