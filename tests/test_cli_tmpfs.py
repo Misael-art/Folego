@@ -615,3 +615,34 @@ def test_tmpfs_plan_now_points_at_a_command_that_exists(fake_tmp, capsys):
     ns = cli.build_parser().parse_args(["tmpfs", "release", "/algum/lugar",
                                         "--confirmar"])
     assert ns.sub == "release", "o hint aponta para um nome que o argparse conhece"
+
+
+def test_release_json_is_one_line_and_restore_names_the_target(tmp_path, fake_tmp,
+                                                               monkeypatch, capsys):
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    target = str(root / "qoder-cli-1000")
+    code = main(["tmpfs", "release", target, "--confirmar", "--json"])
+    raw = capsys.readouterr().out
+    assert code == 0 and len(raw.strip().splitlines()) == 1
+    payload = json.loads(raw)
+    assert payload["ok"] is True and payload["freed_bytes"] == 4096
+    assert payload["entry_id"]
+    # o envelope dos três atos mutantes tem de nomear o ato: a T14 lê este stdout sem
+    # passar pelo TuneJobs, e dois payloads com `acao` contra um sem seria três formas
+    # de resposta para o mesmo tipo de pergunta
+    assert payload["acao"] == "release"
+
+    code = main(["tmpfs", "restore", payload["entry_id"], "--confirmar", "--json"])
+    got = json.loads(capsys.readouterr().out)
+    assert code == 0 and got["restored_to"] == target
+
+
+def test_a_mutation_refusal_keeps_stdout_empty_and_stderr_explains(tmp_path, fake_tmp,
+                                                                   monkeypatch, capsys):
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    code = main(["tmpfs", "release", str(root / "pytest-of-misael"), "--confirmar",
+                 "--json"])
+    captured = capsys.readouterr()
+    assert code == cli.EXIT_REFUSED
+    assert captured.out == "", "recusa é stderr: a linha --json tem de ser parseável"
+    assert "refused" in captured.err

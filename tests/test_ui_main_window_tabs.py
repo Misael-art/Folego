@@ -1,4 +1,4 @@
-"""M3 window: four tabs, one signal, and a deep link that actually lands.
+"""M3 window: five tabs, one signal, and a deep link that actually lands.
 
 The window is the only place that owns the polling and the jobs; the tabs receive
 data. These tests drive it offscreen with fake job layers — the real child path
@@ -53,17 +53,43 @@ def plan_answer(acao, tuning_id):
                        "reason": "ok", "errors": [], "truncated": False}]}
 
 
+def tmpfs_answer(acao, tuning_id):
+    return {"acao": acao, "ok": True, "exit": 0, "generated_at": "x", "volumes": [],
+            "policy": {}, "reclaimable": [], "protected": [], "total_bytes": 0,
+            "scanned_entries": 0, "scanned_bytes": 0, "digest": "d" * 64, "errors": [],
+            "records": [], "budget": {"retained_bytes": 0, "retained_count": 0,
+                                      "oldest_days": 0.0, "slack_bytes": 0,
+                                      "freed_bytes": 0, "by_volume": {},
+                                      "max_bytes": 0, "days": 14.0}}
+
+
 @pytest.fixture
 def window(qapp):
     win = MainWindow(collector_factory=lambda: snap,
-                     jobs=FakeJobs(detect_answer), disk_jobs=FakeJobs(plan_answer))
+                     jobs=FakeJobs(detect_answer), disk_jobs=FakeJobs(plan_answer),
+                     tmpfs_jobs=FakeJobs(tmpfs_answer))
     return win
 
 
-def test_the_window_offers_the_four_approved_tabs_in_order(window):
+def test_the_window_offers_the_five_approved_tabs_in_order(window):
     assert [window.tabs.tabText(i) for i in range(window.tabs.count())] == \
-        ["memória", "ajustes", "órfãos", "disco"]
-    assert window.tabs.widget(0) is window.dashboard
+        ["memória", "ajustes", "órfãos", "disco", "temporários"]
+    assert window.tabs.widget(4) is window.tmpfs
+
+
+def test_the_watched_volumes_land_on_the_tmpfs_tab(window):
+    from deck_wellness.core.tmpfs import TmpfsVolume
+    window.apply_snapshot(snap(tmpfs=(TmpfsVolume("/tmp", "tmpfs", 8 * GIB, 7 * GIB,
+                                                  GIB),)))
+    assert window.tmpfs.volume_rows[0]["path"] == "/tmp"
+
+
+def test_the_window_never_scans_tmpfs_by_itself(window):
+    """Abrir a janela não pode virar varredura: o plano é ato de quem está olhando."""
+    window.apply_snapshot(snap())
+    assert window._tmpfs_jobs.calls == []
+    window.tmpfs.refresh()
+    assert [c[0] for c in window._tmpfs_jobs.calls] == ["plan", "ledger"]
 
 
 def test_a_snapshot_lands_on_the_title_the_dashboard_and_the_orphans(window):
@@ -131,11 +157,12 @@ def test_sair_do_deckwellness_really_stops(window, qapp):
     assert poller.stopped is True
 
 
-def test_closing_the_window_takes_both_child_layers_down(window):
+def test_closing_the_window_takes_every_child_layer_down(window):
     """A child stuck in D-state must not outlive the window that spawned it."""
     window.close()
     assert window._jobs.calls == [("shutdown", "*", False)]
     assert window._disk_jobs.calls == [("shutdown", "*", False)]
+    assert window._tmpfs_jobs.calls == [("shutdown", "*", False)]
 
 
 def test_the_window_never_detects_tunings_by_itself(window):

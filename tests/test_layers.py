@@ -37,6 +37,15 @@ def test_non_ui_layers_do_not_import_qt():
     assert offenders == []
 
 
+def test_the_tmpfs_layers_are_actually_scanned():
+    """Se `actions/tmpfs` ou `ui/tmpfs_tab.py` ficassem de fora, `offenders == []`
+    seria verdade sobre nada. Esta é a não-vacuidade das duas regras acima."""
+    covered = {str(f.relative_to(SRC)) for f in py_files(NO_QT + ["ui"])}
+    for name in ("actions/tmpfs/release.py", "actions/tmpfs/ledger.py",
+                 "actions/tmpfs/policy.py", "ui/tmpfs_tab.py"):
+        assert name in covered, f"a regra de camadas não enxerga {name}"
+
+
 def test_disk_cli_imports_nothing_from_qt_at_runtime():
     """Hygiene has to work from a TTY when the desktop is the thing that broke."""
     import subprocess

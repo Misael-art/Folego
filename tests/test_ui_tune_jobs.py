@@ -149,3 +149,23 @@ def test_only_one_mutation_is_in_flight_at_a_time(qapp, sandbox):
     finally:
         layer.shutdown()
         pump(qapp, lambda: layer.in_flight == 0)
+
+
+def test_a_tmpfs_release_blocks_the_next_mutation(qapp, sandbox):
+    """Duas liberações simultâneas seriam duas cópias grandes ao mesmo tempo."""
+    from deck_wellness.ui.tune_jobs import TuneJobs
+
+    answers = []
+    layer = TuneJobs(env=sandbox, timeout_ms=6000,
+                     argv_factory=lambda acao, alvo, confirm:
+                     [sys.executable, "-c", "import time; time.sleep(2)"])
+    try:
+        layer.run("release", "/tmp/qoder-cli-1000", confirm=True, done=answers.append)
+        qapp.processEvents()
+        assert layer.in_flight == 1
+        layer.run("restore", "1700-abc", confirm=True, done=answers.append)
+        assert answers[-1]["ok"] is False and "em voo" in answers[-1]["reason"]
+        assert layer.in_flight == 1, "a recusa não abre um segundo filho"
+    finally:
+        layer.shutdown()
+        pump(qapp, lambda: layer.in_flight == 0)

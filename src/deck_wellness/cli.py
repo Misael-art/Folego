@@ -153,11 +153,15 @@ def build_parser() -> argparse.ArgumentParser:
     release.add_argument("--confirmar", action="store_true", help="aceita esta mutação")
     release.add_argument("--prazo", type=float, default=10.0,
                          help="segundos máximos de varredura por volume")
+    release.add_argument("--json", action="store_true",
+                         help="uma linha de saída para máquinas (a recusa segue no stderr)")
 
     restore = tmpfs_sub.add_parser("restore",
                                    help="devolver um item do ledger ao lugar original")
     restore.add_argument("target", help="id do ledger (sai na saída do release)")
     restore.add_argument("--confirmar", action="store_true", help="aceita esta mutação")
+    restore.add_argument("--json", action="store_true",
+                         help="uma linha de saída para máquinas (a recusa segue no stderr)")
 
     ledger = tmpfs_sub.add_parser("ledger", help="o que está retido e o orçamento")
     ledger.add_argument("--json", action="store_true", help="saída para máquinas")
@@ -170,6 +174,8 @@ def build_parser() -> argparse.ArgumentParser:
     expire.add_argument("--confirmar", action="store_true", help="apaga em vez de listar")
     expire.add_argument("--irreversivel", action="store_true",
                         help="aceita que o conteúdo retido não voltará")
+    expire.add_argument("--json", action="store_true",
+                        help="uma linha de saída para máquinas (a recusa segue no stderr)")
     return parser
 
 
@@ -657,6 +663,9 @@ def _cmd_tmpfs_release(args) -> int:
     if not result.ok:
         sys.stderr.write(f"{result.reason}\n")
         return EXIT_NEEDS_CONFIRM if not args.confirmar else EXIT_REFUSED
+    if args.json:
+        print(json.dumps({"acao": "release", **result.to_dict()}, ensure_ascii=False))
+        return EXIT_OK
     print(f"liberado: {planner.fmt_bytes(result.freed_bytes)} de RAM · "
           f"{item.path}")
     print(f"   retido em: {result.stored}")
@@ -667,10 +676,11 @@ def _cmd_tmpfs_release(args) -> int:
 
 
 def _cmd_tmpfs_restore(args) -> int:
-    # uma porta só: quem manda na confirmação é `restore_item`, que já tem a sua
-    # mensagem própria (`release.py:325-326`). Checar aqui e chamar com `confirm=True`
-    # seriam duas decisões para a mesma regra -- e a de cima passaria a ser a única
-    # que o resto do código nunca exercita.
+    # uma porta só: quem manda na confirmação é o portão `if not confirm` no topo do
+    # `restore_item` (citado por função para não apodrecer), que já tem a sua mensagem
+    # própria. Checar aqui e chamar com `confirm=True` seriam duas decisões para a
+    # mesma regra -- e a de cima passaria a ser a única que o resto do código nunca
+    # exercita.
     result = tmpfs_release.restore_item(
         args.target, ledger=_tmpfs_ledger(), audit=_tmpfs_audit(),
         confirm=args.confirmar, allowed_roots=_tmpfs_guard_roots(),
@@ -678,6 +688,11 @@ def _cmd_tmpfs_restore(args) -> int:
     if not result.ok:
         sys.stderr.write(f"{result.reason}\n")
         return EXIT_NEEDS_CONFIRM if not args.confirmar else EXIT_REFUSED
+    if args.json:
+        print(json.dumps({"acao": "restore", "ok": True, "entry_id": result.entry_id,
+                          "bytes": result.bytes, "restored_to": result.restored_to,
+                          "reason": "ok"}, ensure_ascii=False))
+        return EXIT_OK
     print(f"devolvido: {planner.fmt_bytes(result.bytes)} para {result.restored_to}")
     return EXIT_OK
 
@@ -721,6 +736,12 @@ def _cmd_tmpfs_expire(args) -> int:
     if not result.ok:
         sys.stderr.write(f"{result.reason}\n")
         return EXIT_NEEDS_CONFIRM
+    if args.json:
+        print(json.dumps({"acao": "expire", "ok": True, "reason": result.reason,
+                          "victims": list(result.victims),
+                          "freed_bytes": result.freed_bytes,
+                          "errors": list(result.errors)}, ensure_ascii=False))
+        return EXIT_OK
     print(result.reason)
     for line in result.errors:
         # a suspeita vai para o stderr, como em todo o resto desta CLI: o stdout do

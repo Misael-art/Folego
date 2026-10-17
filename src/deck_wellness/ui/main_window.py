@@ -1,10 +1,10 @@
-"""Main window: four tabs, one title-bar signal, and the polling that feeds them.
+"""Main window: five tabs, one title-bar signal, and the polling that feeds them.
 
-The window owns the poller, the orphan tracker and the two child-process layers
-(tunings and the disk plan); every tab receives plain data and calls back here
-when the user confirms an act. The Reaper stays lazy and the tunings tab is never
-consulted on its own: opening the window must never be enough to write a byte or
-signal a process.
+The window owns the poller, the orphan tracker and the three child-process layers
+(tunings, the disk plan and the tmpfs plan); every tab receives plain data and
+calls back here when the user confirms an act. The Reaper stays lazy and the
+tunings tab is never consulted on its own: opening the window must never be
+enough to write a byte or signal a process.
 """
 from PySide6.QtWidgets import QMainWindow, QTabWidget
 
@@ -12,6 +12,7 @@ from . import title_signal
 from .dashboard_tab import DashboardTab
 from .disk_tab import DiskTab, plan_argv
 from .orphans_panel import OrphansPanel
+from .tmpfs_tab import TmpfsTab, argv_for
 from .tray import Tray
 from .tune_jobs import TuneJobs
 from .tunings_tab import TuningsTab
@@ -19,17 +20,18 @@ from ..core.orphans import OrphanTracker, group_targets
 
 # tab title -> the attribute the dashboard's "Ir para …" jumps to
 TABS = (("memória", "dashboard"), ("ajustes", "tunings"),
-        ("órfãos", "orphans"), ("disco", "disk"))
+        ("órfãos", "orphans"), ("disco", "disk"), ("temporários", "tmpfs"))
 JUMPS = {"memoria": "dashboard", "ajustes": "tunings", "orfaos": "orphans",
          "disco": "disk"}
 DISK_TIMEOUT_MS = 120_000  # the real cache walk took 54,7 s on this Deck (M3 log)
+TMPFS_TIMEOUT_MS = 45_000  # três volumes × o prazo de varredura de 10 s, com folga
 
 
 class MainWindow(QMainWindow):
     def __init__(self, collector_factory=None,
                  thresholds: title_signal.Thresholds | None = None,
                  *, tracker: OrphanTracker | None = None, reaper_factory=None,
-                 confirm_fn=None, jobs=None, disk_jobs=None):
+                 confirm_fn=None, jobs=None, disk_jobs=None, tmpfs_jobs=None):
         super().__init__()
         self._thresholds = thresholds or title_signal.Thresholds()
         self.resize(900, 620)
@@ -43,6 +45,8 @@ class MainWindow(QMainWindow):
         self._jobs = jobs if jobs is not None else TuneJobs(parent=self)
         self._disk_jobs = disk_jobs if disk_jobs is not None else TuneJobs(
             parent=self, argv_factory=plan_argv, timeout_ms=DISK_TIMEOUT_MS)
+        self._tmpfs_jobs = tmpfs_jobs if tmpfs_jobs is not None else TuneJobs(
+            parent=self, argv_factory=argv_for, timeout_ms=TMPFS_TIMEOUT_MS)
 
         self.dashboard = DashboardTab(on_jump=self.jump_to, thresholds=self._thresholds)
         self.tunings = TuningsTab(jobs=self._jobs, confirm_fn=confirm_fn)
@@ -51,6 +55,7 @@ class MainWindow(QMainWindow):
                                     on_force=self._force,
                                     on_group=self._group)
         self.disk = DiskTab(jobs=self._disk_jobs)
+        self.tmpfs = TmpfsTab(jobs=self._tmpfs_jobs, confirm_fn=confirm_fn)
 
         self.tabs = QTabWidget()
         for title, attribute in TABS:
@@ -86,6 +91,7 @@ class MainWindow(QMainWindow):
         self.dashboard.show_snapshot(snapshot, orphan_count=len(candidates),
                                      thumbnails_kb=self.disk.thumbnails_kb,
                                      extra_notes=notes)
+        self.tmpfs.show_volumes(snapshot.tmpfs, ts=snapshot.ts)
         if self.tray.tray is not None:
             self.tray.show_snapshot(snapshot)
 
@@ -132,6 +138,7 @@ class MainWindow(QMainWindow):
                 self._poller.stop()
             self._jobs.shutdown()
             self._disk_jobs.shutdown()
+            self._tmpfs_jobs.shutdown()
             super().closeEvent(event)
             return
         # a live icon means the signal is resident: hide the window, keep watching
