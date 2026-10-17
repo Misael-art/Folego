@@ -4993,7 +4993,39 @@ MSG
 
 **Interfaces:**
 - Consumes: `TmpfsVolume` (T1), `trend.eta_hours` (T6), `TmpfsPlan.to_dict()`/`PlanItem.to_dict()` (T5), `Ledger.budget_view` via o payload JSON do T12, `release_item.to_dict()` (T9), `planner.fmt_bytes`, `TuneJobs.run(acao, alvo, confirm=, done=)` e `argv_factory(acao, alvo, confirm)`
-- Produces: `argv_for(acao, target="", confirm=False) -> list[str]`, `JSON_ACTIONS`, `VOLUME_COLUMNS`, `PLAN_COLUMNS`, `LEDGER_COLUMNS`, `TmpfsTab(jobs=…, confirm_fn=None, parent=None)` com `show_volumes(volumes, ts=None)`, `show_plan(payload)`, `show_ledger(payload)`, `refresh()`, `release_clicked(row)`, `restore_clicked(row)`, `expire_clicked()`, atributos `volume_rows/plan_rows/ledger_rows/budget/release_buttons/restore_buttons/pressure/summary/budget_label/status`; `MainWindow(..., tmpfs_jobs=None)` com atributo `.tmpfs`
+- Produces: `argv_for(acao, target="", confirm=False) -> list[str]`, `JSON_ACTIONS`, `VOLUME_COLUMNS`, `PLAN_COLUMNS`, `LEDGER_COLUMNS`, `TmpfsTab(jobs=…, confirm_fn=None, parent=None)` com `show_volumes(volumes, ts=None)`, `show_plan(payload)`, `show_ledger(payload)`, `refresh()`, `release_clicked(row)`, `restore_clicked(row)`, `expire_clicked()`, atributos `volume_rows/plan_rows/ledger_rows/budget/release_buttons/restore_buttons/expire_button/pressure/summary/budget_label/status`; `MainWindow(..., tmpfs_jobs=None)` com atributo `.tmpfs`
+
+**Este texto já carrega a pré-varredura do controlador, e os pontos (a)--(g) são dela, não
+do corte original.** (a) o `--json` do `release` ganha `"acao": "release"`: para a aba é
+irrelevante (`TuneJobs._payload:138` injeta `{"acao": job.acao}` antes do merge), mas o
+`tools/verify_tmpfs.py` da T14 lê o stdout sem o TuneJobs, e dois payloads nomeados contra um
+mudo seriam três envelopes para o mesmo tipo de ato. (b) o rótulo de orçamento tinha
+`f"{self.budget['oldest_days']:.1f} d"`, que imprime `30.0 d` com ponto contra a regra de cópia
+do projeto -- a mesma classe do ponto (k) da T12, e no mesmo arquivo cujo `_human_eta` já faz
+`.replace(".", ",")`; corrigido com o `mais_velho` da CLI humana, e o teste que antes pinava
+três substrings soltas passa a pinar a linha inteira por igualdade, que é o que prende a
+vírgula. (c) orçamento estourado não tinha nenhum sinal na aba: o aviso mora no stderr do
+`ledger` humano e o `--json` não o emite, e como o único canal da aba é o JSON ela deriva
+`retained_bytes > max_bytes` do payload -- com `max_bytes` ausente o marcador não aparece,
+porque adivinhar orçamento seria pior que calar. (d) o Passo 4 abre `_cmd_tmpfs_restore`, e é
+ali que mora o comentário que a T12 deixou torto: ele aponta a mensagem do portão para
+`release.py:325-326`, linha que a subida do portão moveu para `:316-318` (hoje `:325-326` é a
+recusa de **estado**). Corrigir aqui, por função e conteúdo, não por número. (e) `MUTATING`
+passando a listar release/restore/expire faz do mutex de mutação **um só entre as abas** -- um
+`release` em voo recusa um `apply`. É o comportamento que a spec pede ("uma mutação por vez"),
+a mensagem do refusal já é genérica (`tune_jobs.py:58-60`) e os únicos consumidores de
+`MUTATING` são `:42` e `:57`, ambos dentro de `tune_jobs.py`. (f) três riscos que a varredura
+abriu e **fechou como não-defeitos**, registrados para ninguém os reabrir: o roteamento por
+`acao` (ver (a)); `snapshot.tmpfs` existe (`core/snapshot.py:76`, default `()`) então
+`show_volumes` recebe tupla do poller; e `test_layers.py:15` usa `rglob`, com o pino novo
+assertando **pertencimento** dos quatro nomes, então a aba entra nas regras sozinha e sumir com
+o arquivo derruba o teste. A aba nunca chama `status`, o que torna nulo o `status` não estar em
+`JSON_ACTIONS`. (g) dois latentes aceitos e levados para a revisão ampla, sem guarda preditiva:
+com `record_or_id` sendo um `LedgerRecord` **e** `confirm=False` o `entry_id` devolvido é o repr
+do dataclass (nenhum chamador em `src/` ou `tests/` passa objeto; a linha é a que o plano da
+T12 prescreveu); e `show_ledger` indexa `self.budget[...]` sem guarda quando o payload trouxer
+`records` sem `budget` -- inacessível pelo CLI de hoje, que monta as duas chaves no mesmo
+`print`, e defendê-lo seria código para um cenário que não acontece.
 
 - [ ] **Step 1: Escrever os testes que falham — a aba**
 
@@ -5207,9 +5239,27 @@ def test_expiring_says_it_is_irreversible_before_running(qapp):
 
 def test_the_budget_line_shows_ram_freed_against_ssd_retained(tab):
     tab.show_ledger(ledger_payload())
-    assert "retido 4,0 KB" in tab.budget_label.text()
-    assert "RAM liberada 4,0 KB" in tab.budget_label.text()
-    assert "folga 5,0 GB" in tab.budget_label.text()
+    # a linha inteira, por igualdade, e não três substrings soltas: o dia com vírgula é
+    # regra de cópia do projeto (`policy.py:84-85`, e o `mais_velho` que a T12 acabou de
+    # corrigir no `ledger` humano) -- com `in` soltos um `30.0 d` passaria despercebido
+    assert tab.budget_label.text() == (
+        "retido 4,0 KB na SSD em 1 item(ns) · o mais velho 30,0 d · "
+        "RAM liberada 4,0 KB · folga 5,0 GB")
+
+
+def test_the_budget_line_marks_a_burst_retention(tab):
+    """Retenção acima do orçamento tem de aparecer na aba, não só no stderr do CLI."""
+    payload = ledger_payload()
+    payload["budget"].update(retained_bytes=4 * GIB, slack_bytes=0)
+    tab.show_ledger(payload)
+    assert tab.budget_label.text().startswith("retido 4,0 GB na SSD")
+    assert tab.budget_label.text().endswith("· a retenção estourou o orçamento")
+
+
+def test_the_budget_line_stays_quiet_inside_the_budget(tab):
+    """O marcador não pode virar ruído de fundo: dentro do orçamento, ele não existe."""
+    tab.show_ledger(ledger_payload())
+    assert "estourou" not in tab.budget_label.text()
 
 
 def test_a_child_that_answered_nothing_is_not_a_success(qapp):
@@ -5311,6 +5361,10 @@ def test_release_json_is_one_line_and_restore_names_the_target(tmp_path, fake_tm
     payload = json.loads(raw)
     assert payload["ok"] is True and payload["freed_bytes"] == 4096
     assert payload["entry_id"]
+    # o envelope dos três atos mutantes tem de nomear o ato: a T14 lê este stdout sem
+    # passar pelo TuneJobs, e dois payloads com `acao` contra um sem seria três formas
+    # de resposta para o mesmo tipo de pergunta
+    assert payload["acao"] == "release"
 
     code = main(["tmpfs", "restore", payload["entry_id"], "--confirmar", "--json"])
     got = json.loads(capsys.readouterr().out)
@@ -5369,9 +5423,16 @@ saindo pelo stderr com o código, porque é assim que `TuneJobs._payload` transf
         sys.stderr.write(f"{result.reason}\n")
         return EXIT_NEEDS_CONFIRM if not args.confirmar else EXIT_REFUSED
     if args.json:
-        print(json.dumps(result.to_dict(), ensure_ascii=False))
+        print(json.dumps({"acao": "release", **result.to_dict()}, ensure_ascii=False))
         return EXIT_OK
 ```
+
+O `"acao"` aqui é decisão da pré-varredura, não enfeite: `restore` e `expire` montam payloads
+que nomeiam o ato, e o `release` ia ser o único mudo. Para a **aba** isso não muda nada --
+`TuneJobs._payload` (`ui/tune_jobs.py:138`) injeta `{"acao": job.acao, ...}` antes do merge,
+então a aba recebe o nome do ato por fora em todos os três; o que muda é o `stdout` lido
+**sem** o TuneJobs, que é exatamente o caso do `tools/verify_tmpfs.py` da T14. Três atos, um
+envelope.
 
 e, em `_cmd_tmpfs_restore`:
 
@@ -5393,6 +5454,12 @@ e, em `_cmd_tmpfs_expire`, depois do `if not result.ok:`:
                           "errors": list(result.errors)}, ensure_ascii=False))
         return EXIT_OK
 ```
+
+Ainda no Passo 4, e por causa do ponto (d): o comentário dentro de `_cmd_tmpfs_restore` cita a
+mensagem do portão como `release.py:325-326`. Depois da rodada 1 da T12 essas linhas são a
+recusa de estado; reescreva a referência por **função e conteúdo** -- algo como "a recusa vem
+do portão `if not confirm`, no topo do `restore_item` (citado por função para não apodrecer)"
+-- e nada mais no handler muda.
 
 - [ ] **Step 5: A mutação passa a contar como mutação**
 
@@ -5601,12 +5668,19 @@ class TmpfsTab(QWidget):
         self.restore_buttons = _fill(self.ledger_table, LEDGER_COLUMNS,
                                      self.ledger_rows, action=self.restore_clicked,
                                      label="Restaurar")
+        mais_velho = f"{self.budget['oldest_days']:.1f}".replace(".", ",")
+        # o aviso de estouro do `ledger` humano sai pelo stderr, e o --json não o emite:
+        # a aba só fala por JSON, então quem tem de derivar o estouro é ela
+        max_bytes = self.budget.get("max_bytes")
+        estouro = (" · a retenção estourou o orçamento"
+                   if max_bytes is not None and
+                      self.budget.get("retained_bytes", 0) > max_bytes else "")
         self.budget_label.setText(
             f"retido {fmt_bytes(self.budget['retained_bytes'])} na SSD em "
             f"{self.budget['retained_count']} item(ns) · o mais velho "
-            f"{self.budget['oldest_days']:.1f} d · RAM liberada "
+            f"{mais_velho} d · RAM liberada "
             f"{fmt_bytes(self.budget['freed_bytes'])} · folga "
-            f"{fmt_bytes(self.budget['slack_bytes'])}")
+            f"{fmt_bytes(self.budget['slack_bytes'])}{estouro}")
 
     @staticmethod
     def _plan_row(item):
@@ -5735,6 +5809,20 @@ O tooltip da bandeja também não muda aqui — ele herda `title_signal.compute`
 Run: `.venv/bin/python -m pytest tests/test_ui_tmpfs_tab.py tests/test_ui_main_window_tabs.py tests/test_ui_tune_jobs.py tests/test_layers.py -v` → PASS.
 Run: `.venv/bin/python -m pytest -q` → verde.
 
+**Contagem de reconciliação** (medida sobre a árvore em `389eed3`, antes da tarefa):
+
+| arquivo | hoje | depois dos Passos 1 e 2 | por quê |
+|---|---|---|---|
+| `tests/test_ui_tmpfs_tab.py` | não existe | **16** | os dezesseis testes do Passo 1 |
+| `tests/test_ui_main_window_tabs.py` | 10 | **12** | quatro entram, dois saem por substituição (`..._four_approved_tabs...`, `..._takes_both_child_layers_down`) |
+| `tests/test_ui_tune_jobs.py` | 6 | **7** | o pino do mutex |
+| `tests/test_layers.py` | 3 | **4** | o pino de não-vacuidade do glob |
+| `tests/test_cli_tmpfs.py` | 31 | **33** | os dois do `--json` |
+| suíte completa | **527** | **549** | 527 + 16 + 2 + 1 + 1 + 2 |
+
+Se um número desses não bater, a tarefa não acabou -- o que discorda é a implementação ou o
+plano, e a divergência vai explicada no corpo do commit, nunca arrumada no teste.
+
 **Evidência de não-vacuidade:** `test_a_declined_dialog_moves_nothing` falha se
 `release_clicked` dispensar o `confirm_fn`; `test_the_volumes_come_from_the_poller_and_-
 nothing_is_scanned` falha se a aba chamar `refresh()` no `__init__` (ou se `show_volumes`
@@ -5743,7 +5831,13 @@ mutation` falha se `MUTATING` ficar em `("apply", "revert")`; `test_a_mutation_r
 keeps_stdout_empty_and_stderr_explains` falha se o `--json` de um ato impresso a recusa no
 stdout — seria lido como payload ok pelo `TuneJobs._payload`; e
 `test_the_tmpfs_layers_are_actually_scanned` falha se qualquer um dos quatro arquivos
-sair do conjunto que as regras de camada inspecionam.
+sair do conjunto que as regras de camada inspecionam; `test_the_budget_line_shows_ram_-
+freed_against_ssd_retained` falha se o `mais_velho` perder o `.replace(".", ",")` (é a
+igualdade de linha inteira que o prende, não um `in` solto -- com `in` o `30.0 d` teria
+passado); e `test_the_budget_line_marks_a_burst_retention` falha se a comparação
+`retained_bytes > max_bytes` for trocada por `pass`, enquanto
+`test_the_budget_line_stays_quiet_inside_the_budget` falha se o marcador for impresso sem
+condição -- os dois juntos são o que faz do marcador um aviso e não enfeite.
 
 - [ ] **Step 9: Commit**
 
