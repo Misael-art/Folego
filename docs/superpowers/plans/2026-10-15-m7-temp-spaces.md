@@ -4897,9 +4897,25 @@ costura; M16 a vírgula pt-BR do resumo trocada por ponto. As três do ponto (n)
 `release.py`: **M17** suprimir o ramo `record is None` (mata
 `test_restore_of_an_unknown_id_is_refused_and_says_so`); **M18** suprimir o ramo de estado
 (mata `test_restore_of_an_entry_that_is_already_back_is_refused`); **M19** devolver o portão
-para depois da busca (mata três: o pino da causa, o do id ignorado sem flag **e** o do id
-desconhecido com flag -- que é a medida de que o contrato é um só). A tabela com o resultado
-de cada uma vive em `.scratch/t12_mutate.py` e o rodapé dela vai no corpo do commit.
+para depois da busca. A tabela com o resultado de cada uma vive em `.scratch/t12_mutate.py`
+e o rodapé dela vai no corpo do commit.
+
+**Errata do M19, escrita depois de medir sobre o código commitado.** Este texto prometia que
+M19 mataria três -- o pino da causa, o do id ignorado sem flag e o do id desconhecido com
+flag. São **duas**. Repetido em `.scratch/t12m19` (cópia da árvore em `389eed3`, com
+`pyproject.toml`, rodando de dentro da cópia): verde `4 passed`; com o portão de volta depois
+da busca `2 failed, 2 passed`; revertida `4 passed`. Os dois que morrem são
+`test_the_confirm_gate_precedes_the_id_lookup_in_restore` e
+`test_restore_without_the_flag_asks_for_the_flag_even_for_an_unknown_id`. O terceiro
+(`..._unknown_id_is_refused_and_says_so`) roda **com** `--confirmar`: num fluxo confirmado o
+portão não executa em ordem nenhuma, então o ramo `record is None` devolve a mesma recusa nos
+dois ordenamentos e nenhuma troca de posição o alcança. Ele continua sendo o que sempre foi
+no desenho: pino de regressão do ramo desconhecido, preso por **M17** (medido: M17 mata
+`AttributeError` exatamente nele). A afirmação "que é a medida de que o contrato é um só"
+era minha e não tinha sido refeita sobre o código final -- o contrato de um só continua
+verdadeiro, mas quem o prova é M17 + M19 juntos, não M19 sozinho. Nada no código mudou por
+causa disto; o que estava errado era a previsão do plano, e ela vai no corpo do commit da
+rodada como divergência medida.
 
 - [ ] **Step 4: Rodar e ver passar**
 
