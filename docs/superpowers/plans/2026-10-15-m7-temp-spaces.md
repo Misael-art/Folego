@@ -3029,7 +3029,18 @@ git commit -m "M7 T9: liberação reversível — copy, verify, ledger partial, 
 
 - [ ] **Step 1: Escrever o teste que falha**
 
-Acrescentar a `tests/test_tmpfs_release.py`:
+Acrescentar a `tests/test_tmpfs_release.py`. Duas coisas antes do bloco, porque o
+arquivo ainda não as tem:
+
+1. `import shutil` e `import time` no bloco de imports do topo (`time.strftime` vai
+   no `stored()` logo abaixo; `shutil.rmtree` no teste de payload sumido). Sem
+   isso os três primeiros testes novos morrem com `NameError`, não com a falta de
+   `restore_item`, e o RED do Step 2 mente.
+2. O `stored()` abaixo escreve o payload com `write_bytes`, então **nenhum teste
+   passa tamanho grande por `size=`**: `size=6 * GIB` alocaria 6 GiB de verdade no
+   `tmp_path`, que neste host pode ser tmpfs de 7,3 G. O tamanho que o ledger
+   registra é o parâmetro `bytes=`, desacoplado do que está no disco — é por ele
+   que o teste de "volume sem espaço" injeta 6 GiB sem escrever 6 GiB.
 
 ```python
 """Devolver e expirar: os dois lados do ledger, com a mesma recusa primeiro.
@@ -3040,8 +3051,14 @@ duas flags.
 """
 
 
-def stored(tmp_path, book, *, name="sessao-velha", size=4096, days=1.0, entry_id=None):
-    """Coloca um item no ledger do jeito que release_item o deixaria."""
+def stored(tmp_path, book, *, name="sessao-velha", size=4096, days=1.0, entry_id=None,
+           bytes=None):
+    """Coloca um item no ledger do jeito que release_item o deixaria.
+
+    `bytes` corrige o que o ledger registra, sem mudar o que está no disco: é o
+    gancho dos testes que precisam de um registro grande (folga insuficiente,
+    excesso de orçamento) sem escrever gigabytes em `tmp_path`.
+    """
     payload = tmp_path / "retida" / "20261015T000000Z" / name
     payload.mkdir(parents=True)
     (payload / "blob.bin").write_bytes(b"a" * size)
@@ -3050,8 +3067,9 @@ def stored(tmp_path, book, *, name="sessao-velha", size=4096, days=1.0, entry_id
     # ts explícito: sem ele o "hoje" do relógio real deixaria a idade injetada sem efeito
     ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(NOW - days * DAY))
     book.append(ts=ts, entry_id=entry_id, src=str(tmp_path / name), volume="/tmp",
-                stored=str(payload), bytes=total, sha256=digest, age_days=days,
-                matched_pattern="/tmp/tmp*", holder_pids=(), state=STATE_RELEASED,
+                stored=str(payload), bytes=total if bytes is None else bytes,
+                sha256=digest, age_days=days, matched_pattern="/tmp/tmp*",
+                holder_pids=(), state=STATE_RELEASED,
                 action_id="tmpfs.release", audit_event_id="e")
     return entry_id, payload
 
@@ -3075,6 +3093,34 @@ def test_restore_copies_back_and_frees_the_budget(tmp_path, book, audit):
     assert not payload.exists(), "devolvido: o clone não pode ficar dos dois lados"
     assert book.records()[entry_id].state == "restored"
     assert book.retained_bytes() == 0
+
+
+def test_a_digest_mismatch_on_the_way_back_keeps_the_clone(tmp_path, book, monkeypatch):
+    """A verificação da volta é o que impede o `restore` de apagar a única cópia boa.
+
+    Sem o par de digests, `restore_item` apagaria o clone da SSD assim que a cópia
+    de volta terminasse — e se ela veio truncada, o item se perde nos dois lados.
+    A segunda leitura é a árvore que acabou de chegar à RAM: corrompê-la aqui é
+    exatamente o caso.
+    """
+    entry_id, payload = stored(tmp_path, book, size=8192)
+    verdadeiro = release.tree_digest
+    lidas = []
+
+    def duas_pontas(p):
+        digest, total = verdadeiro(p)
+        lidas.append(str(p))
+        return ("f" * 64 if len(lidas) == 2 else digest), total
+
+    monkeypatch.setattr(release, "tree_digest", duas_pontas)
+    res = release.restore_item(entry_id, ledger=book, confirm=True,
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               mounts_fn=lambda: (),
+                               allowed_roots=[tmp_path], now=NOW)
+    assert res.ok is False and "digest" in res.reason
+    assert payload.exists(), "o clone da SSD é a única cópia que restou, e ficou"
+    assert not (tmp_path / "sessao-velha").exists(), "a volta truncada foi desfeita"
+    assert book.records()[entry_id].state == STATE_RELEASED
 
 
 def test_restore_refuses_when_the_original_path_already_exists(tmp_path, book):
@@ -3101,7 +3147,8 @@ def test_restore_refuses_when_a_mount_appeared_in_the_way(tmp_path, book):
 
 
 def test_restore_refuses_when_the_volume_has_no_room(tmp_path, book):
-    entry_id, payload = stored(tmp_path, book, size=6 * GIB)
+    # bytes= e não size=: o payload real fica em 4096, o registro diz 6 GiB
+    entry_id, payload = stored(tmp_path, book, bytes=6 * GIB)
     res = release.restore_item(entry_id, ledger=book, confirm=True,
                                statvfs_fn=lambda p: _vfs(1 * GIB),
                                mounts_fn=lambda: (),
@@ -3138,6 +3185,22 @@ def test_expire_removes_oldest_first_and_audits_each(tmp_path, book, audit):
     assert book.records()[old].state == "expired"
     assert book.retained_bytes() == 1024
     assert [r["kind"] for r in audit.tail(4)][-1] == "tmpfs.expire"
+    # §7: a linha da transição aponta para o evento que a criou
+    assert book.records()[old].audit_event_id == audit.tail(4)[-1]["event_id"]
+
+
+def test_a_restore_line_points_at_its_own_audit_event(tmp_path, book, audit):
+    entry_id, payload = stored(tmp_path, book)
+    res = release.restore_item(entry_id, ledger=book, audit=audit, confirm=True,
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               mounts_fn=lambda: (),
+                               allowed_roots=[tmp_path], now=NOW)
+    assert res.ok is True
+    record = book.records()[entry_id]
+    assert record.state == "restored"
+    assert record.audit_event_id, "a linha da transição aponta para o evento"
+    assert [(e["event_id"], e["kind"]) for e in audit.tail(4)] == [
+        (record.audit_event_id, "tmpfs.restore")]
 
 
 def test_expire_reports_the_bytes_it_frees_even_when_a_path_is_already_gone(tmp_path, book):
@@ -3164,8 +3227,34 @@ máquina, e um `--basetemp` em outra partição inverteria o veredito sem bug ne
 
 - [ ] **Step 3: Escrever a implementação mínima**
 
-Acrescentar a `release.py` (e somar `STATE_RESTORED`, `STATE_EXPIRED`, `STATE_DROPPED`
-ao import de `.ledger` que já existe no topo do arquivo):
+Acrescentar a `release.py`. O import de `.ledger` que já existe no topo passa a ser
+**exatamente** esta linha — `LedgerRecord` e `RETENTION_DAYS` entram nela porque o
+código abaixo os usa no nível do módulo (`isinstance(record_or_id, LedgerRecord)` e
+o default `days=RETENTION_DAYS`), e nome ausente em default de função é `NameError`
+na importação do módulo, não no primeiro chamamento:
+
+```python
+from .ledger import (ACTIVE_STATES, LedgerRecord, MAX_RETAINED_BYTES, RETENTION_DAYS,
+                     STATE_DROPPED, STATE_EXPIRED, STATE_PARTIAL, STATE_RELEASED,
+                     STATE_RESTORED)
+```
+
+(`STATE_DROPPED` ainda não tem produtor neste marco; entra porque a spec §7 lista o
+estado e a T12 o alcança. Se o `--lint` do projeto reclamar de import não usado, o
+ruling é manter e citar aqui, não remover o estado da spec.)
+
+O `_audit` que a T9 deixou no arquivo passa a aceitar a família do evento, com
+default na assinatura de hoje para as quatro chamadas da liberação não se moverem:
+
+```python
+def _audit(audit, entry_id, outcome, targets, *, plan_digest=None, error=None,
+           kind=KIND, risk="reversible") -> str:
+    if audit is None:
+        return ""
+    return audit.append(kind=kind, action_id=entry_id, outcome=outcome,
+                        targets=targets, risk=risk,
+                        plan_digest=plan_digest, error=error)["event_id"]
+```
 
 ```python
 RESTORE_KIND = "tmpfs.restore"
@@ -3269,17 +3358,30 @@ def restore_item(record_or_id, *, ledger, audit=None, confirm=False,
                              "da SSD foi mantido")
 
     _quiet_remove(stored_path)
-    _transition(ledger, record, STATE_RESTORED, RESTORE_KIND, bytes=size)
-    if audit is not None:
-        audit.append(kind=RESTORE_KIND, action_id=entry_id, outcome="restored",
-                     targets=[record.stored, str(original)], risk="reversible")
+    # §7: a linha do ledger e o evento de auditoria são a mesma transição, e a
+    # linha aponta para o evento — o `_audit` da T9 já devolve o `event_id`.
+    # A ordem é apagar → auditar → registrar: no outro sentido, uma falha entre o
+    # registrar e o apagar deixaria clone na SSD com o ledger dizendo `restored`,
+    # ou seja, byte retido que nem `retained_bytes()` nem o `expire` jamais veem —
+    # o clone órfão do §6 espelhado. Assim como está, o pior caso é o orçamento
+    # contar de mais, e o `expire` já trata payload sumido como erro relatado.
+    event_id = _audit(audit, entry_id, STATE_RESTORED,
+                      [record.stored, str(original)], kind=RESTORE_KIND)
+    _transition(ledger, record, STATE_RESTORED, RESTORE_KIND, event_id, bytes=size)
     return RestoreResult(True, entry_id, "ok", bytes=size, restored_to=str(original))
 
 
-def _transition(ledger, record: LedgerRecord, state: str, action_id: str, **changes):
-    """Uma linha nova, com o relógio de agora: o `ts` do registro é a origem, não a transição."""
+def _transition(ledger, record: LedgerRecord, state: str, action_id: str,
+                event_id: str = "", **changes):
+    """Uma linha nova, com o relógio de agora: o `ts` do registro é a origem, não a transição.
+
+    O `audit_event_id` é o da *desta* transição, passado por quem chamou: a spec §7
+    quer o campo preenchido e foi exatamente isso que `test_the_ledger_line_points_at_its_own_audit_event`
+    pinou na T9. Deixar `""` aqui faria a linha `restored`/`expired` apontar para
+    nada enquanto o evento correspondente existe em `audit.jsonl`.
+    """
     ledger.append(**{**record.to_dict(), **changes, "ts": "", "state": state,
-                     "action_id": action_id, "audit_event_id": ""})
+                     "action_id": action_id, "audit_event_id": event_id or ""})
 
 
 def expire_over_budget(*, ledger, audit=None, days: float = RETENTION_DAYS,
@@ -3323,19 +3425,41 @@ def expire_over_budget(*, ledger, audit=None, days: float = RETENTION_DAYS,
             continue
         freed += record.bytes
         done.append(record.entry_id)
-        _transition(ledger, record, STATE_EXPIRED, EXPIRE_KIND)
-        if audit is not None:
-            audit.append(kind=EXPIRE_KIND, action_id=record.entry_id,
-                         outcome="expired", targets=[record.stored],
-                         risk="irreversible")
+        event_id = _audit(audit, record.entry_id, STATE_EXPIRED, [record.stored],
+                          kind=EXPIRE_KIND, risk="irreversible")
+        _transition(ledger, record, STATE_EXPIRED, EXPIRE_KIND, event_id)
     return ExpireResult(True, f"expiradas {len(done)} entrada(s), {freed} bytes "
                               f"liberados da SSD", tuple(done), freed, tuple(errors))
 ```
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.venv/bin/python -m pytest tests/test_tmpfs_release.py -v` → PASS (todos).
-Run: `.venv/bin/python -m pytest -q` → verde.
+Run: `.venv/bin/python -m pytest tests/test_tmpfs_release.py -v --basetemp=.scratch/basetemp9`
+→ PASS (**29** = 18 da T9 + 11 daqui).
+Run: `.venv/bin/python -m pytest -v --basetemp=.scratch/basetemp9 2>&1 | tail -2` →
+verde, e a linha de resumo tem de ler **490 passed** (479 da T9 + 11 daqui).
+
+`--basetemp` na SSD vale aqui pelo mesmo motivo da T9: o payload de
+`stored()` é escrito de verdade, e um teste que injeta 6 GiB **sem** escrevê-los
+só é barato porque `bytes=` desacopla o registro do disco.
+
+**Coerção de mutação** — cada mutação abaixo mata o teste nomeado; guarde a saída
+no corpo do commit, como nas T8 e T9:
+
+| Mutação | Teste que morre |
+|---|---|
+| `_foreign_mount` devolvendo `None` sempre (R1 afrouxada na volta) | `test_restore_refuses_when_a_mount_appeared_in_the_way` |
+| `if original.exists():` → `if False:` | `test_restore_refuses_when_the_original_path_already_exists` (a árvore retida é sobrescrita) |
+| `if clone_digest != back_digest:` → `if False:` | `test_a_digest_mismatch_on_the_way_back_keeps_the_clone` |
+| tirar o `_quiet_remove(original)` da recusa de digest | idem (fica a volta truncada no lugar, e a SSD também) |
+| `stat.f_bavail * stat.f_frsize < record.bytes` → `< 0` | `test_restore_refuses_when_the_volume_has_no_room` |
+| pular o `_transition(..., STATE_RESTORED, ...)` | `test_restore_copies_back_and_frees_the_budget` (`state` e `retained_bytes()`) |
+| `event_id` descartado no `_transition` da restauração (`""` no lugar) | `test_a_restore_line_points_at_its_own_audit_event` |
+| `event_id` descartado no `_transition` do `expire` | `test_expire_removes_oldest_first_and_audits_each` |
+| `if payload.exists():` → `if True:` (apagar às cegas) | `test_expire_reports_the_bytes_it_frees_even_when_a_path_is_already_gone` (`errors` fica vazio) |
+| `if confirm != irreversible:` → `if not confirm:` | `test_expire_needs_two_flags` (a segunda metade) |
+| `if not confirm:` do dry-run → `if False:` (a queda cai no laço e apaga) | `test_expire_dry_run_lists_exactly_what_it_would_delete` |
+| `tuple(r.entry_id for r in victims)` → `tuple(str(r.src) for r in victims)` | `test_expire_dry_run_lists_exactly_what_it_would_delete` (`victims` são ids) |
 
 - [ ] **Step 5: Commit**
 
