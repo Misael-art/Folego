@@ -3668,10 +3668,21 @@ git commit -m "M7 T10: restore e expire — devolver com digest, expirar com dua
   `policy.Policy`/`DEFAULT_ALLOW_PATTERNS`, `plan.build_plan`, `planner.fmt_bytes`
 - Produces: aliases monkeypatcháveis `_tmpfs_volumes = watched_volumes` e
   `_tmpfs_now = time.time`; `_tmpfs_roots(raiz=None) -> list[str]`;
-  `tmpfs_policy(permitir=(), dias=None, volumes=None) -> Policy`;
+  `_tmpfs_mounted_volumes(raiz=None) -> list[TmpfsVolume]` (o filtro com a recusa dita
+  uma vez só); `tmpfs_policy(permitir=(), dias=None, volumes=None) -> Policy`;
   `_scan_tmpfs(raiz=None, prazo=10.0) -> (volumes, entries)`;
   `_build_tmpfs_plan(raiz=None, permitir=(), dias=None, prazo=10.0) -> TmpfsPlan`;
-  `_TMPFS_HANDLERS` com `status`/`plan`
+  `_tmpfs_reconciles(result) -> bool`; `_TMPFS_HANDLERS` com `status`/`plan`
+
+**Este texto já carrega duas rodadas de emenda.** A pré-varredura do controlador somou
+os testes de subcomando nu, volume nenhum montado e contagem que não fecha, tirou o
+`required=True` e o hint de `tmpfs release` (argumentados abaixo). A rodada de revisão 1
+do revisor somou três correções que o primeiro corte não tinha: o guard de conciliação
+agora também fecha a face `--json` (um script é justamente quem confia no exit code), o
+filtro de `--raiz` sai da compreensão e vira `_tmpfs_mounted_volumes` (reavaliar
+`_tmpfs_roots` por volume escrevia a mesma recusa três vezes no host real), e o plano com
+zero itens lidos declara que lista vazia pode ser permissão — contrato que a T3 assinou
+em `inventory.py:89-93` e cobrou explicitamente de quem apresenta.
 
 - [ ] **Step 1: Escrever o teste que falha**
 
@@ -3856,12 +3867,82 @@ def test_tmpfs_plan_refuses_when_the_counts_do_not_reconcile(fake_tmp, monkeypat
                         lambda *a, **kw: quebrado)
     assert main(["tmpfs", "plan"]) == cli.EXIT_REFUSED
     assert "não fechou" in capsys.readouterr().err
+
+
+def test_tmpfs_plan_json_refuses_too_when_the_counts_do_not_reconcile(fake_tmp,
+                                                                      monkeypatch,
+                                                                      capsys):
+    """`--json` é a face em que a conta errada custa mais caro: ninguém lê o aviso.
+
+    Na primeira versão o guard de conciliação morava depois do `return EXIT_OK` do
+    `--json`: um script que rodasse `tmpfs plan --json` recebia exit 0 com um plano
+    parcial, e o consumidor que mais confia no código de saída era justamente o que
+    ficava sem nada. O payload continua saindo — um script precisa ler o que existe
+    para saber o que falta — mas o exit code passa a dizer a verdade nas duas faces.
+    """
+    volumes, entries = cli._scan_tmpfs()
+    politica = cli.tmpfs_policy(volumes=[v.path for v in volumes])
+    real = cli.tmpfs_plan.build_plan(volumes, entries, politica)
+    quebrado = replace(real, scanned_entries=real.scanned_entries + 1)
+    monkeypatch.setattr(cli, "_build_tmpfs_plan", lambda *a, **kw: quebrado)
+    assert main(["tmpfs", "plan", "--json"]) == cli.EXIT_REFUSED
+    captured = capsys.readouterr()
+    assert len(captured.out.strip().splitlines()) == 1
+    payload = json.loads(captured.out)
+    assert payload["scanned_entries"] != len(payload["reclaimable"]) + \
+        len(payload["protected"])
+    assert "não fechou" in captured.err
+
+
+def test_tmpfs_roots_refuses_once_even_with_three_volumes(fake_tmp, monkeypatch,
+                                                          capsys):
+    """A recusa de `--raiz` é uma linha, não uma linha por volume montado.
+
+    O filtro vivia dentro da compreensão `[v for v in _tmpfs_volumes() if v.path in
+    _tmpfs_roots(raiz)]`, que reavalia o lado direito a cada iteração: no host real,
+    com `/tmp`, `/run/user/1000` e `/dev/shm`, um `--raiz` fora da watch-list escrevia
+    a mesma frase três vezes. Aqui o chão falso ganha dois volumes extra só para
+    contar linhas — o que se pinha é o número de avisos, não o exit code.
+    """
+    root, volume = fake_tmp
+    extras = tuple(TmpfsVolume(f"{root}/outro-{i}", "tmpfs", 8 * GIB, 0, 8 * GIB)
+                   for i in range(2))
+    monkeypatch.setattr(cli, "_tmpfs_volumes", lambda **kw: (volume, *extras))
+    assert main(["tmpfs", "plan", "--raiz", "/home/misael"]) == cli.EXIT_REFUSED
+    err = capsys.readouterr().err
+    assert err.count("fora da watch-list") == 1, err
+    assert main(["tmpfs", "status", "--raiz", "/home/misael"]) == cli.EXIT_REFUSED
+    assert capsys.readouterr().err.count("fora da watch-list") == 1
+
+
+def test_tmpfs_plan_says_a_zero_item_scan_is_not_proof_of_cleanliness(fake_tmp,
+                                                                       capsys):
+    """O contrato que a T3 assinou e cobrou aqui: ilegível não é limpo.
+
+    `inventory.inventory` engole o `OSError` do `listdir` de propósito — fail-closed,
+    sem item nada é liberado — e o comentário da própria função diz que quem
+    apresenta (esta CLI, a aba da T13) tem de declarar que a lista pode estar vazia
+    por permissão. Sem essa linha, um `/tmp` com EACCES imprime `scanned 0 item(ns)`
+    seguido de `Dry-run comprovado`: a mesma ilusão de RAM limpa que a recusa de
+    volume não montado foi construída para evitar, um andar abaixo dela. Rodando como
+    root o `chmod 000` não nega leitura e este pino falha alto, igual aos dois pinos
+    de `shutil.Error` da T10 — decidido na T14, que roda no host.
+    """
+    root, _ = fake_tmp
+    root.chmod(0o000)
+    try:
+        assert main(["tmpfs", "plan"]) == cli.EXIT_OK
+        out = capsys.readouterr().out
+        assert "nenhum item lido" in out
+        assert "não é prova de limpeza" in out
+    finally:
+        root.chmod(0o755)
 ```
 
 - [ ] **Step 2: Rodar e ver falhar**
 
 Run: `.venv/bin/python -m pytest tests/test_cli_tmpfs.py -v`
-Expected: **9 de 10 falham** — `invalid choice: 'tmpfs'` (o argparse morre antes de
+Expected: **12 de 13 falham** — `invalid choice: 'tmpfs'` (o argparse morre antes de
 qualquer handler) e `AttributeError` nos que chamam as costuras. A exceção é
 `test_unknown_tmpfs_subcommand_is_refused`, que **já passa no vermelho**: ela não testa
 código nosso, testa o acordo entre o código de saída do argparse e `EXIT_NEEDS_CONFIRM`,
@@ -3933,8 +4014,21 @@ def tmpfs_policy(permitir=(), dias=None, volumes=None) -> tmpfs_policy_mod.Polic
         volumes=tuple(volumes) if volumes else tmpfs_policy_mod.WATCHED)
 
 
+def _tmpfs_mounted_volumes(raiz=None) -> list:
+    """Os volumes montados que a watch-list aceita, com a recusa dita **uma** vez.
+
+    O filtro vive aqui, e não dentro de uma compreensão: `[v for v in _tmpfs_volumes()
+    if v.path in _tmpfs_roots(raiz)]` reavalia `_tmpfs_roots` a cada iteração, e num
+    host com `/tmp`, `/run/user/1000` e `/dev/shm` isso escrevia a mesma recusa de
+    `--raiz` três vezes no stderr do usuário. Um volume por linha é o acordo; a
+    recusa é uma linha só.
+    """
+    roots = _tmpfs_roots(raiz)
+    return [v for v in _tmpfs_volumes() if v.path in roots]
+
+
 def _scan_tmpfs(raiz=None, prazo: float = 10.0):
-    volumes = [v for v in _tmpfs_volumes() if v.path in _tmpfs_roots(raiz)]
+    volumes = _tmpfs_mounted_volumes(raiz)
     entries = []
     for volume in volumes:
         _, _, found = inventory.scan_volume(volume, now=_tmpfs_now(),
@@ -3953,7 +4047,7 @@ def _build_tmpfs_plan(raiz=None, permitir=(), dias=None, prazo: float = 10.0):
 
 
 def _cmd_tmpfs_status(args) -> int:
-    volumes = [v for v in _tmpfs_volumes() if v.path in _tmpfs_roots(args.raiz)]
+    volumes = _tmpfs_mounted_volumes(args.raiz)
     if not volumes:
         sys.stderr.write("refused: nenhum volume da watch-list montado "
                          "(nem /tmp, nem /run/user/1000, nem /dev/shm)\n")
@@ -3975,13 +4069,22 @@ def _cmd_tmpfs_status(args) -> int:
     return EXIT_OK
 
 
+def _tmpfs_reconciles(result) -> bool:
+    return result.scanned_entries == len(result.reclaimable) + len(result.protected)
+
+
 def _cmd_tmpfs_plan(args) -> int:
     result = _build_tmpfs_plan(args.raiz, args.permitir, args.dias, args.prazo)
     if not result.volumes:
         sys.stderr.write("refused: nenhum volume da watch-list montado\n")
         return EXIT_REFUSED
     if args.json:
+        # o payload sai primeiro: um script precisa ler o plano parcial para saber o
+        # que falta; o que combina com a honestidade é o código de saída, não o silêncio
         print(result.to_json())
+        if not _tmpfs_reconciles(result):
+            sys.stderr.write("aviso: a contagem não fechou — o plano é incompleto\n")
+            return EXIT_REFUSED
         return EXIT_OK
     print("Plano de liberação (dry-run: nada foi movido):")
     print(f"volumes: {', '.join(v.path for v in result.volumes)}")
@@ -3995,7 +4098,14 @@ def _cmd_tmpfs_plan(args) -> int:
     print(f"\nscanned {result.scanned_entries} item(ns) · "
           f"{planner.fmt_bytes(result.scanned_bytes)} lidos · "
           f"impressão: {result.digest[:16]}")
-    if result.scanned_entries != len(result.reclaimable) + len(result.protected):
+    if not result.scanned_entries:
+        # o contrato que a T3 assinou e deixou para cá: `inventory` engole o OSError do
+        # `listdir` de propósito (fail-closed: sem item, nada é liberado) e diz que quem
+        # apresenta tem de declarar que a lista vazia pode ser permissão, não limpeza
+        print(f"\natenção: nenhum item lido em "
+              f"{', '.join(v.path for v in result.volumes)} — ilegível (permissão) ou "
+              f"de fato vazio; lista vazia aqui não é prova de limpeza")
+    if not _tmpfs_reconciles(result):
         sys.stderr.write("aviso: a contagem não fechou — o plano é incompleto\n")
         return EXIT_REFUSED
     print("\nDry-run comprovado: nenhum byte saiu do volume.")
@@ -4034,11 +4144,14 @@ mesma lógica, por isso ele também só entra lá.
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.venv/bin/python -m pytest tests/test_cli_tmpfs.py -v` → PASS (**10** = 7 do
-roteiro original + 3 da pré-varredura do controlador: subcomando nu, nenhum volume
-montado, contagem que não fecha; o `subcomando inexistente` já estava lá e ganhou corpo).
-Run: `.venv/bin/python -m pytest -q` → verde (o `test_layers` continua provando que
-importar `deck_wellness.cli` não carrega Qt).
+Run: `.venv/bin/python -m pytest tests/test_cli_tmpfs.py -v` → PASS (**13** = 7 do
+roteiro original + 3 da pré-varredura do controlador (subcomando nu, nenhum volume
+montado, contagem que não fecha; o `subcomando inexistente` já estava lá e ganhou corpo)
++ 3 da rodada de revisão 1 (`--json` com conta errada, recusa de `--raiz` dita uma vez,
+zero itens lidos ≠ limpeza)).
+Run: `.venv/bin/python -m pytest -q --basetemp .scratch/basetemp11full` → **508 passed**
+(495 antes da tarefa + 13), zero falhas, `test_layers` continuando provar que importar
+`deck_wellness.cli` não carrega Qt.
 
 - [ ] **Step 5: Commit**
 
