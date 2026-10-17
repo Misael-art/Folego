@@ -3684,6 +3684,7 @@ verdade, só o chão é falso. `fake_proc` garante montes vazios e nenhum holder
 import json
 import os
 import time
+from dataclasses import replace
 
 import pytest
 
@@ -3783,17 +3784,79 @@ def test_tmpfs_plan_permitira_adds_a_pattern_and_flips_the_item(fake_tmp, capsys
     assert f"· {stranger} ·" in out, "o item entrou na lista de liberáveis"
 
 
+def test_bare_tmpfs_subcommand_is_refused_in_pt_br(capsys):
+    """`tmpfs` sozinho é recusa nossa, não usage do argparse.
+
+    É o ramo do `main()`: sem `required=True` no subparser, `ns.sub` chega `None` e a
+    mensagem sai em pt-BR com o código de "precisa de confirmação". Trocar o `.get(None)`
+    por `_TMPFS_HANDLERS[ns.sub]` aqui vira `KeyError` no terminal do usuário.
+    """
+    code = main(["tmpfs"])
+    err = capsys.readouterr().err
+    assert code == cli.EXIT_NEEDS_CONFIRM
+    assert "desconhecido" in err
+    assert "(nenhum)" in err
+    assert "None" not in err, "a frase é de usuário, não do repr de Python"
+
+
 def test_unknown_tmpfs_subcommand_is_refused(capsys):
+    """Nome que não existe: quem recusa é o argparse, e o código coincide com o nosso.
+
+    A validação de `choices` acontece antes de qualquer handler, então a mensagem é a
+    dele (`invalid choice`, em inglês — como já é para `disk` e `tune`). O que se pinha
+    aqui é o acordo: argparse sai com 2 e `EXIT_NEEDS_CONFIRM` é 2. Se alguém mudar um
+    dos dois, este teste acorda.
+    """
     code = main(["tmpfs", "limpar-tudo"])
     assert code == cli.EXIT_NEEDS_CONFIRM
-    assert "desconhecido" in capsys.readouterr().err
+    assert "invalid choice" in capsys.readouterr().err
+
+
+def test_tmpfs_status_refuses_when_no_watched_volume_is_mounted(fake_tmp, monkeypatch,
+                                                                capsys):
+    """Host sem o volume montado não é host saudável: recusa, não tabela vazia.
+
+    É o caso real de um `/run/user/1000` que não existe (sessão sem systemd-user) ou de
+    um chroot: imprimir "Espaços temporários:" com zero linhas embaixo deixa o operador
+    achar que a RAM está limpa quando nada foi medido.
+    """
+    monkeypatch.setattr(cli, "_tmpfs_volumes", lambda **kw: ())
+    assert main(["tmpfs", "status"]) == cli.EXIT_REFUSED
+    assert "nenhum volume" in capsys.readouterr().err
+    assert main(["tmpfs", "plan"]) == cli.EXIT_REFUSED
+
+
+def test_tmpfs_plan_refuses_when_the_counts_do_not_reconcile(fake_tmp, monkeypatch,
+                                                             capsys):
+    """O CLI confere a própria conta antes de chamar o plano de completo.
+
+    Hoje `build_plan` particiona `entries` em `reclaimable` + `protected`, então a conta
+    fecha por construção e este ramo é inalcançável pelo caminho normal — exatamente
+    como o `partial` da T9. Continua sendo guarda: se um dia a varredura com prazo
+    descartar entradas, a CLI tem de dizer "incompleto" em vez de apresentar um plano
+    parcial como se fosse a verdade. Entra pela costura do módulo, não por um plano
+    inventado à mão: `scanned_entries` 4 contra duas listas de 1 é o que um descarte
+    produziria.
+    """
+    volumes, entries = cli._scan_tmpfs()
+    politica = cli.tmpfs_policy(volumes=[v.path for v in volumes])
+    real = cli.tmpfs_plan.build_plan(volumes, entries, politica)
+    quebrado = replace(real, scanned_entries=real.scanned_entries + 1)
+    monkeypatch.setattr(cli, "_build_tmpfs_plan",
+                        lambda *a, **kw: quebrado)
+    assert main(["tmpfs", "plan"]) == cli.EXIT_REFUSED
+    assert "não fechou" in capsys.readouterr().err
 ```
 
 - [ ] **Step 2: Rodar e ver falhar**
 
 Run: `.venv/bin/python -m pytest tests/test_cli_tmpfs.py -v`
-Expected: FAIL — `refused: comando desconhecido: tmpfs` / `SystemExit: 2`, porque o
-subcomando ainda não existe no parser.
+Expected: **9 de 10 falham** — `invalid choice: 'tmpfs'` (o argparse morre antes de
+qualquer handler) e `AttributeError` nos que chamam as costuras. A exceção é
+`test_unknown_tmpfs_subcommand_is_refused`, que **já passa no vermelho**: ela não testa
+código nosso, testa o acordo entre o código de saída do argparse e `EXIT_NEEDS_CONFIRM`,
+e esse acordo existe antes e depois do parser. Fica na suíte por isso e está dito aqui
+para ninguém confundir o vermelho verde com um teste fraco.
 
 - [ ] **Step 3: Escrever a implementação mínima**
 
@@ -3807,12 +3870,18 @@ _tmpfs_volumes = watched_volumes
 _tmpfs_now = time.time
 ```
 
-No `build_parser()`, depois do bloco `tune`:
+No `build_parser()`, depois do bloco `tune`. Uma diferença deliberada vs. `disk`/`tune`:
+**sem `required=True`** no subparser do `tmpfs`. Com `required=True`, `deck-wellness tmpfs`
+sozinho morre no usage em inglês do argparse e o ramo de recusa de `main()` fica
+inalcançável; sem ele, `ns.sub` chega `None`, a recusa é nossa (pt-BR, exit 2), e o
+`tmpfs limpar-tudo` continua sendo recusado pelo argparse — que sai com código 2, o mesmo
+de `EXIT_NEEDS_CONFIRM`. Os dois casos têm testes separados exatamente porque são dois
+mecanismos, e pinnar os códigos juntos é o que avisa se alguém mexer em um dos dois.
 
 ```python
     tmpfs = commands.add_parser(
         "tmpfs", help="espaços em RAM (/tmp, /run/user, /dev/shm): ver e liberar com confirmação")
-    tmpfs_sub = tmpfs.add_subparsers(dest="sub", required=True)
+    tmpfs_sub = tmpfs.add_subparsers(dest="sub")
 
     status = tmpfs_sub.add_parser("status", help="capacidade e pressão dos volumes (não escreve)")
     status.add_argument("--json", action="store_true", help="saída para máquinas")
@@ -3919,8 +3988,7 @@ def _cmd_tmpfs_plan(args) -> int:
     if result.scanned_entries != len(result.reclaimable) + len(result.protected):
         sys.stderr.write("aviso: a contagem não fechou — o plano é incompleto\n")
         return EXIT_REFUSED
-    print("\nPara liberar um item: deck-wellness tmpfs release <caminho> --confirmar "
-          "(vai para a SSD e volta com tmpfs restore)")
+    print("\nDry-run comprovado: nenhum byte saiu do volume.")
     return EXIT_OK
 
 
@@ -3936,17 +4004,29 @@ Em `main()`, ao lado do ramo do `tune`:
     if ns.command == "tmpfs":
         handler = _TMPFS_HANDLERS.get(ns.sub)
         if handler is None:
-            sys.stderr.write(f"refused: subcomando desconhecido: {ns.sub}\n")
+            sys.stderr.write(f"refused: subcomando desconhecido: "
+                             f"{ns.sub or '(nenhum)'}\n")
             return EXIT_NEEDS_CONFIRM
         return handler(ns)
 ```
 
-e a string de uso do `refused: comando desconhecido` passa a dizer
-`[disk …] [orphans] [groups] [tune …] [tmpfs status|plan|release|restore|ledger|expire]`.
+O `or "(nenhum)"` não é adorno: sem `required=True` no subparser, `deck-wellness tmpfs`
+sozinho chega aqui com `ns.sub is None`, e interpolá-lo puro escreveria
+`subcomando desconhecido: None` — uma palavra de programa em frase de usuário, exatamente
+o que a copy pt-BR proíbe. O ramo está pinado por teste.
+
+E a string de uso do `refused: comando desconhecido` passa a dizer
+`[disk …] [orphans] [groups] [tune …] [tmpfs status|plan]`. Só o que existe: a lista de
+T12 (com `release|restore|ledger|expire`) é a emenda daquela tarefa, porque anunciar no
+terminal um subcomando que o próprio argparse ainda recusa com `invalid choice` seria a
+CLI mentir sobre si mesma — e o `tmpfs plan` desta tarefa imprime o hint de liberação na
+mesma lógica, por isso ele também só entra lá.
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.venv/bin/python -m pytest tests/test_cli_tmpfs.py -v` → PASS (7).
+Run: `.venv/bin/python -m pytest tests/test_cli_tmpfs.py -v` → PASS (**10** = 7 do
+roteiro original + 3 da pré-varredura do controlador: subcomando nu, nenhum volume
+montado, contagem que não fecha; o `subcomando inexistente` já estava lá e ganhou corpo).
 Run: `.venv/bin/python -m pytest -q` → verde (o `test_layers` continua provando que
 importar `deck_wellness.cli` não carrega Qt).
 
@@ -4253,6 +4333,49 @@ _TMPFS_HANDLERS.update({
     "expire": _cmd_tmpfs_expire,
 })
 ```
+
+**A última linha do `tmpfs plan` e o usage deixam de ser promessa vazia.** A T11 encerra
+o plano com `Dry-run comprovado: nenhum byte saiu do volume.` porque anunciar
+`tmpfs release` enquanto o argparse ainda recusa aquele nome seria a CLI mentir sobre si
+mesma. Agora que os quatro handlers existem, troque:
+
+```python
+    print("\nDry-run comprovado: nenhum byte saiu do volume.")
+```
+
+por
+
+```python
+    print("\nPara liberar um item: deck-wellness tmpfs release <caminho> --confirmar "
+          "(vai para a SSD e volta com tmpfs restore)")
+```
+
+e estenda a string de uso de `main()` para
+`[tmpfs status|plan|release|restore|ledger|expire]` — ela é alcançável (`deck-wellness
+disk` sem subcomando cai nela), então o nome que falta nela é um erro de verdade. O pino
+em `tests/test_cli_tmpfs.py`:
+
+```python
+def test_tmpfs_plan_now_points_at_a_command_that_exists(fake_tmp, capsys):
+    """O hint do plano só vale depois do `release` existir no argparse.
+
+    A T11 não podia imprimi-lo: `tmpfs release` morria em `invalid choice`. Aqui ele é
+    um caminho real, e este teste é o que impede a regressão de voltar a apontar para
+    nada — a asserção cai sobre a saída do `plan`, não sobre uma redação solta.
+    """
+    assert main(["tmpfs", "plan"]) == cli.EXIT_OK
+    out = capsys.readouterr().out
+    assert "tmpfs release" in out and "--confirmar" in out
+    ns = cli.build_parser().parse_args(["tmpfs", "release", "/algum/lugar",
+                                        "--confirmar"])
+    assert ns.sub == "release", "o hint aponta para um nome que o argparse conhece"
+```
+
+O segundo bloco é o que torna o teste vivo: sem `release` no parser, `parse_args` levanta
+`SystemExit(2)` e o teste morre em erro — que é exatamente o estado da T11. Uma asserção
+do tipo `main(["tmpfs", "release"]) != EXIT_OK` **não** serviria: recusa por `invalid
+choice` e recusa por `target` ausente têm o mesmo código, então ela passaria nos dois
+mundos.
 
 **Evidência de não-vacuidade:** `test_release_moves_the_item_and_prints_the_entry_id`
 falha se o handler chamar `release_item` com `confirm=args.confirmar` invertido, e
