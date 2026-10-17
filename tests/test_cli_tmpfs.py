@@ -178,3 +178,73 @@ def test_tmpfs_plan_refuses_when_the_counts_do_not_reconcile(fake_tmp, monkeypat
                         lambda *a, **kw: quebrado)
     assert main(["tmpfs", "plan"]) == cli.EXIT_REFUSED
     assert "não fechou" in capsys.readouterr().err
+
+
+def test_tmpfs_plan_json_refuses_too_when_the_counts_do_not_reconcile(fake_tmp,
+                                                                      monkeypatch,
+                                                                      capsys):
+    """`--json` é a face em que a conta errada custa mais caro: ninguém lê o aviso.
+
+    Na primeira versão o guard de conciliação morava depois do `return EXIT_OK` do
+    `--json`: um script que rodasse `tmpfs plan --json` recebia exit 0 com um plano
+    parcial, e o consumidor que mais confia no código de saída era justamente o que
+    ficava sem nada. O payload continua saindo — um script precisa ler o que existe
+    para saber o que falta — mas o exit code passa a dizer a verdade nas duas faces.
+    """
+    volumes, entries = cli._scan_tmpfs()
+    politica = cli.tmpfs_policy(volumes=[v.path for v in volumes])
+    real = cli.tmpfs_plan.build_plan(volumes, entries, politica)
+    quebrado = replace(real, scanned_entries=real.scanned_entries + 1)
+    monkeypatch.setattr(cli, "_build_tmpfs_plan", lambda *a, **kw: quebrado)
+    assert main(["tmpfs", "plan", "--json"]) == cli.EXIT_REFUSED
+    captured = capsys.readouterr()
+    assert len(captured.out.strip().splitlines()) == 1
+    payload = json.loads(captured.out)
+    assert payload["scanned_entries"] != len(payload["reclaimable"]) + \
+        len(payload["protected"])
+    assert "não fechou" in captured.err
+
+
+def test_tmpfs_roots_refuses_once_even_with_three_volumes(fake_tmp, monkeypatch,
+                                                          capsys):
+    """A recusa de `--raiz` é uma linha, não uma linha por volume montado.
+
+    O filtro vivia dentro da compreensão `[v for v in _tmpfs_volumes() if v.path in
+    _tmpfs_roots(raiz)]`, que reavalia o lado direito a cada iteração: no host real,
+    com `/tmp`, `/run/user/1000` e `/dev/shm`, um `--raiz` fora da watch-list escrevia
+    a mesma frase três vezes. Aqui o chão falso ganha dois volumes extra só para
+    contar linhas — o que se pinha é o número de avisos, não o exit code.
+    """
+    root, volume = fake_tmp
+    extras = tuple(TmpfsVolume(f"{root}/outro-{i}", "tmpfs", 8 * GIB, 0, 8 * GIB)
+                   for i in range(2))
+    monkeypatch.setattr(cli, "_tmpfs_volumes", lambda **kw: (volume, *extras))
+    assert main(["tmpfs", "plan", "--raiz", "/home/misael"]) == cli.EXIT_REFUSED
+    err = capsys.readouterr().err
+    assert err.count("fora da watch-list") == 1, err
+    assert main(["tmpfs", "status", "--raiz", "/home/misael"]) == cli.EXIT_REFUSED
+    assert capsys.readouterr().err.count("fora da watch-list") == 1
+
+
+def test_tmpfs_plan_says_a_zero_item_scan_is_not_proof_of_cleanliness(fake_tmp,
+                                                                       capsys):
+    """O contrato que a T3 assinou e cobrou aqui: ilegível não é limpo.
+
+    `inventory.inventory` engole o `OSError` do `listdir` de propósito — fail-closed,
+    sem item nada é liberado — e o comentário da própria função diz que quem
+    apresenta (esta CLI, a aba da T13) tem de declarar que a lista pode estar vazia
+    por permissão. Sem essa linha, um `/tmp` com EACCES imprime `scanned 0 item(ns)`
+    seguido de `Dry-run comprovado`: a mesma ilusão de RAM limpa que a recusa de
+    volume não montado foi construída para evitar, um andar abaixo dela. Rodando como
+    root o `chmod 000` não nega leitura e este pino falha alto, igual aos dois pinos
+    de `shutil.Error` da T10 — decidido na T14, que roda no host.
+    """
+    root, _ = fake_tmp
+    root.chmod(0o000)
+    try:
+        assert main(["tmpfs", "plan"]) == cli.EXIT_OK
+        out = capsys.readouterr().out
+        assert "nenhum item lido" in out
+        assert "não é prova de limpeza" in out
+    finally:
+        root.chmod(0o755)

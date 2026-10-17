@@ -494,8 +494,21 @@ def tmpfs_policy(permitir=(), dias=None, volumes=None) -> tmpfs_policy_mod.Polic
         volumes=tuple(volumes) if volumes else tmpfs_policy_mod.WATCHED)
 
 
+def _tmpfs_mounted_volumes(raiz=None) -> list:
+    """Os volumes montados que a watch-list aceita, com a recusa dita **uma** vez.
+
+    O filtro vive aqui, e não dentro de uma compreensão: `[v for v in _tmpfs_volumes()
+    if v.path in _tmpfs_roots(raiz)]` reavalia `_tmpfs_roots` a cada iteração, e num
+    host com `/tmp`, `/run/user/1000` e `/dev/shm` isso escrevia a mesma recusa de
+    `--raiz` três vezes no stderr do usuário. Um volume por linha é o acordo; a
+    recusa é uma linha só.
+    """
+    roots = _tmpfs_roots(raiz)
+    return [v for v in _tmpfs_volumes() if v.path in roots]
+
+
 def _scan_tmpfs(raiz=None, prazo: float = 10.0):
-    volumes = [v for v in _tmpfs_volumes() if v.path in _tmpfs_roots(raiz)]
+    volumes = _tmpfs_mounted_volumes(raiz)
     entries = []
     for volume in volumes:
         _, _, found = inventory.scan_volume(volume, now=_tmpfs_now(),
@@ -514,7 +527,7 @@ def _build_tmpfs_plan(raiz=None, permitir=(), dias=None, prazo: float = 10.0):
 
 
 def _cmd_tmpfs_status(args) -> int:
-    volumes = [v for v in _tmpfs_volumes() if v.path in _tmpfs_roots(args.raiz)]
+    volumes = _tmpfs_mounted_volumes(args.raiz)
     if not volumes:
         sys.stderr.write("refused: nenhum volume da watch-list montado "
                          "(nem /tmp, nem /run/user/1000, nem /dev/shm)\n")
@@ -536,13 +549,22 @@ def _cmd_tmpfs_status(args) -> int:
     return EXIT_OK
 
 
+def _tmpfs_reconciles(result) -> bool:
+    return result.scanned_entries == len(result.reclaimable) + len(result.protected)
+
+
 def _cmd_tmpfs_plan(args) -> int:
     result = _build_tmpfs_plan(args.raiz, args.permitir, args.dias, args.prazo)
     if not result.volumes:
         sys.stderr.write("refused: nenhum volume da watch-list montado\n")
         return EXIT_REFUSED
     if args.json:
+        # o payload sai primeiro: um script precisa ler o plano parcial para saber o
+        # que falta; o que combina com a honestidade é o código de saída, não o silêncio
         print(result.to_json())
+        if not _tmpfs_reconciles(result):
+            sys.stderr.write("aviso: a contagem não fechou — o plano é incompleto\n")
+            return EXIT_REFUSED
         return EXIT_OK
     print("Plano de liberação (dry-run: nada foi movido):")
     print(f"volumes: {', '.join(v.path for v in result.volumes)}")
@@ -556,7 +578,14 @@ def _cmd_tmpfs_plan(args) -> int:
     print(f"\nscanned {result.scanned_entries} item(ns) · "
           f"{planner.fmt_bytes(result.scanned_bytes)} lidos · "
           f"impressão: {result.digest[:16]}")
-    if result.scanned_entries != len(result.reclaimable) + len(result.protected):
+    if not result.scanned_entries:
+        # o contrato que a T3 assinou e deixou para cá: `inventory` engole o OSError do
+        # `listdir` de propósito (fail-closed: sem item, nada é liberado) e diz que quem
+        # apresenta tem de declarar que a lista vazia pode ser permissão, não limpeza
+        print(f"\natenção: nenhum item lido em "
+              f"{', '.join(v.path for v in result.volumes)} — ilegível (permissão) ou "
+              f"de fato vazio; lista vazia aqui não é prova de limpeza")
+    if not _tmpfs_reconciles(result):
         sys.stderr.write("aviso: a contagem não fechou — o plano é incompleto\n")
         return EXIT_REFUSED
     print("\nDry-run comprovado: nenhum byte saiu do volume.")
