@@ -129,6 +129,7 @@ def test_a_holder_that_appeared_after_the_plan_refuses_the_release(tmp_path, boo
                                statvfs_fn=lambda p: _vfs(20 * GIB),
                                allowed_roots=roots(tmp_path), now=NOW)
     assert res.ok is False and "fd aberto" in res.reason
+    assert res.reason.count("refused:") == 1, "o reason do classify já traz o prefixo"
     assert (src / "blob.bin").exists()
 
 
@@ -140,6 +141,7 @@ def test_a_mount_point_that_appeared_after_the_plan_refuses(tmp_path, book):
                                statvfs_fn=lambda p: _vfs(20 * GIB),
                                allowed_roots=roots(tmp_path), now=NOW)
     assert res.ok is False and "montagem" in res.reason
+    assert res.reason.count("refused:") == 1
     assert (src / "blob.bin").exists()
 
 
@@ -323,6 +325,57 @@ def test_a_destination_that_does_not_exist_yet_is_still_gravable(tmp_path, book)
                                allowed_roots=roots(tmp_path), now=NOW)
     assert res.ok is True, res.reason
     assert (tmp_path / "nova" / "retida").is_dir()
+
+
+def test_releasing_a_loose_file_verifies_the_bytes_it_clones(tmp_path, book):
+    """§6.5 num item que é ARQUIVO, não árvore — e `/tmp/tmp*` é `mktemp` da vida real.
+
+    `rglob("*")` não desce num arquivo: sem o ramo de arquivo, as duas pontas dão o
+    SHA-256 do vazio, a verificação vira tautologia, o clone é apagado sem conferido,
+    e o ledger grava `bytes: 0` — o teto de 3 GiB deixa de contar qualquer liberação
+    de arquivo. Este teste é a única execução do ramo `shutil.copy2`.
+    """
+    src = tmp_path / "solto.bin"
+    src.write_bytes(b"z" * 5000)
+    old = NOW - 10 * DAY
+    os.utime(src, (old, old))
+    entry = TmpfsEntry(path=str(src), name=src.name, volume="/tmp", kind="file",
+                       uid=os.getuid(), bytes=5000, files=1, age_days=10.0,
+                       is_mount_point=False, under_mount=False, holder_pids=())
+    plan = build_plan((VOL,), (entry,), Policy(allow_patterns=(str(src),)), now=NOW)
+    res = release.release_item(plan, plan.find(str(src)), ledger=book, confirm=True,
+                               dest_root=tmp_path / "retida",
+                               entry_fn=free(kind="file"),
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               allowed_roots=roots(tmp_path), now=NOW)
+    assert res.ok is True and res.freed_bytes == 5000
+    assert not src.exists()
+    assert Path(res.stored).read_bytes() == b"z" * 5000
+    assert book.retained_bytes() == 5000, "o ledger não pode contar 0"
+    # o SHA do vazio: se o digest não olhou o arquivo, é exatamente este
+    assert res.sha256 != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+
+def test_a_digest_that_cannot_be_read_leaves_no_orphan_clone(tmp_path, book, monkeypatch):
+    """A origem pode sumir entre a cópia e o digest; o clone órfão não pode ficar.
+
+    Clone sem linha de ledger é byte retido invisível: nem `retained_bytes()` nem a
+    T13 nunca vão contá-lo. O `try` em torno do par de digests é o que fecha isso.
+    """
+    plan, it, src = item(tmp_path)
+
+    def cega(path):
+        raise OSError(2, "No such file or directory")
+
+    monkeypatch.setattr(release, "tree_digest", cega)
+    res = release.release_item(plan, it, ledger=book, confirm=True,
+                               dest_root=tmp_path / "retida", entry_fn=free(),
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               allowed_roots=roots(tmp_path), now=NOW)
+    assert res.ok is False and "digest" in res.reason
+    assert (src / "blob.bin").exists()
+    assert not any((tmp_path / "retida").rglob("blob.bin")), "nenhum clone órfão"
+    assert book.retained_count() == 0
 
 
 def test_tree_digest_is_stable_and_order_independent(tmp_path):
