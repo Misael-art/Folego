@@ -3043,12 +3043,15 @@ arquivo ainda não as tem:
    que o teste de "volume sem espaço" injeta 6 GiB sem escrever 6 GiB.
 
 ```python
-"""Devolver e expirar: os dois lados do ledger, com a mesma recusa primeiro.
-
-Restaurar volta a copiar (SSD → tmpfs é outro cross-device) e só apaga o clone
-depois do digest bater. Expirar é o único ato irreversível daqui, e por isso pede
-duas flags.
-"""
+# Devolver e expirar: os dois lados do ledger, com a mesma recusa primeiro.
+#
+# Restaurar volta a copiar (SSD → tmpfs é outro cross-device) e só apaga o clone
+# depois do digest bater. Expirar é o único ato irreversível daqui, e por isso pede
+# duas flags.
+#
+# Comentário e não docstring: este bloco é *acrescentado* a um arquivo que já tem a
+# sua docstring de módulo no topo. Uma string solta no meio do arquivo é uma
+# expressão que não declara nada — some do `__doc__` e fica mudando o AST à toa.
 
 
 def stored(tmp_path, book, *, name="sessao-velha", size=4096, days=1.0, entry_id=None,
@@ -3156,6 +3159,111 @@ def test_restore_refuses_when_the_volume_has_no_room(tmp_path, book):
     assert res.ok is False and "espaço" in res.reason
 
 
+def test_restore_refuses_when_the_destination_sits_under_a_foreign_mount(tmp_path, book):
+    """A outra direção de `_foreign_mount`: o monte que *contém* o destino não é o volume.
+
+    `test_restore_refuses_when_a_mount_appeared_in_the_way` exerce `m.startswith(path)`
+    — o monte que nasceu *dentro* do destino. Este exerce o `deepest != volume`: é ele
+    que recusa devolver para dentro de um `private/tmp` montado por cima do caminho.
+    Sem este teste, apagar o ramo do `covering` deixa a suíte inteira verde.
+    """
+    entry_id, payload = stored(tmp_path, book)
+    inside = str(Path(book.records()[entry_id].src).parent.resolve())
+    res = release.restore_item(entry_id, ledger=book, confirm=True,
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               mounts_fn=lambda: ((inside, "ext4"),),
+                               allowed_roots=[tmp_path], now=NOW)
+    assert res.ok is False and "monte" in res.reason
+    assert payload.exists(), "o retido continua na SSD"
+    assert not (tmp_path / "sessao-velha").exists()
+
+
+def test_restore_works_from_a_partial_record_whose_original_evaporated(tmp_path, book,
+                                                                       audit):
+    """`partial` + reboot: o clone na SSD passa a ser a única cópia que existe.
+
+    A liberação registra `partial` quando o `unlink` da origem falha. Se o tmpfs foi
+    esvaziado antes de o usuário pedir a volta, `restore` é a única saída — por isso a
+    guarda aceita os dois estados. Reduzi-la a `released` não descarta um caso teórico:
+    descarta o dado de quem teve a remoção recusada.
+    """
+    entry_id, payload = stored(tmp_path, book, size=8192)
+    record = book.records()[entry_id]
+    book.append(**{**record.to_dict(), "state": STATE_PARTIAL})
+    original = Path(record.src)
+    assert not original.exists()
+    res = release.restore_item(entry_id, ledger=book, audit=audit, confirm=True,
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               mounts_fn=lambda: (),
+                               allowed_roots=[tmp_path], now=NOW)
+    assert res.ok is True
+    assert (original / "blob.bin").read_bytes() == b"a" * 8192
+    assert book.records()[entry_id].state == "restored"
+    assert book.retained_bytes() == 0
+
+
+def test_a_restore_refuses_when_the_retained_payload_rotted_on_the_ssd(tmp_path, book):
+    """O `sha256` do ledger é a certidão do retido, e tem de ser lido antes de copiar.
+
+    Se o digest do clone fosse calculado só *depois* da cópia de volta, os dois lados
+    divergiriam juntos — payload podre na SSD, destino podre na RAM, digest batendo —
+    e o `restore` diria "ok" enquanto entregava corrupto. Aí o campo `sha256` do §7 é
+    decoração. A conferência acontece antes de qualquer byte escrito no volume.
+    """
+    entry_id, payload = stored(tmp_path, book, size=8192)
+    (payload / "blob.bin").write_bytes(b"b" * 8192)
+    res = release.restore_item(entry_id, ledger=book, confirm=True,
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               mounts_fn=lambda: (),
+                               allowed_roots=[tmp_path], now=NOW)
+    assert res.ok is False and "digest" in res.reason
+    assert payload.exists(), "o que apodreceu fica onde está, para inspeção"
+    assert not (tmp_path / "sessao-velha").exists(), "nada foi escrito no volume"
+    assert book.records()[entry_id].state == STATE_RELEASED
+
+
+def test_a_copytree_failure_on_the_way_back_leaves_no_half_restored_tree(tmp_path, book,
+                                                                         monkeypatch):
+    """A volta tem o mesmo hazard da liberação: metade na RAM, tudo na SSD, "já existe" eterno.
+
+    `copytree` não propaga o primeiro erro — ele ajunta os por-arquivo num
+    `shutil.Error`, que **herda de `OSError`** (conferido no `.venv`: `__mro__ =
+    [Error, OSError, Exception, …]`), então o `except OSError` da volta pega o
+    agregado e desfaz a árvore parcial. O `tree_digest` embrulhado só *agenda* o
+    hazard: a certificação lê o arquivo ainda legível e o chmod 000 acontece entre a
+    certidão e a cópia, que é a janela real (o agente mexe na quarentena). O erro em
+    si é do kernel, não de um stub.
+    """
+    entry_id, payload = stored(tmp_path, book, size=8192)
+    locked = payload / "travado.bin"
+    locked.write_bytes(b"z" * 512)
+    # A certidão tem de cobrir o arquivo novo ANTES do hazard: sem esta linha o
+    # `restore` recusaria por digest divergente (que é o teste de cima) e o
+    # `copytree` nunca seria chamado. Renovar o `sha256` no ledger é o que o
+    # `release_item` faria de verdade ao registrar o clone.
+    book.append(**{**book.records()[entry_id].to_dict(),
+                   "sha256": release.tree_digest(payload)[0]})
+    verdadeiro = release.tree_digest
+
+    def fecha_depois_da_certidao(p):
+        digest, total = verdadeiro(p)
+        locked.chmod(0o000)
+        return digest, total
+
+    monkeypatch.setattr(release, "tree_digest", fecha_depois_da_certidao)
+    try:
+        res = release.restore_item(entry_id, ledger=book, confirm=True,
+                                   statvfs_fn=lambda p: _vfs(20 * GIB),
+                                   mounts_fn=lambda: (),
+                                   allowed_roots=[tmp_path], now=NOW)
+    finally:
+        locked.chmod(0o644)
+    assert res.ok is False and "cópia" in res.reason
+    assert payload.exists(), "a SSD mantém o item"
+    assert not (tmp_path / "sessao-velha").exists(), "a metade devolvida foi desfeita"
+    assert book.records()[entry_id].state == STATE_RELEASED
+
+
 def test_expire_dry_run_lists_exactly_what_it_would_delete(tmp_path, book):
     old, old_payload = stored(tmp_path, book, name="antiga", days=40)
     fresh, fresh_payload = stored(tmp_path, book, name="nova", days=1)
@@ -3210,6 +3318,34 @@ def test_expire_reports_the_bytes_it_frees_even_when_a_path_is_already_gone(tmp_
                                      now=NOW, allowed_roots=[tmp_path])
     assert res.ok is True and res.victims == (gone,)
     assert res.errors, "o ledger sabia de um payload que não existe mais"
+
+
+def test_a_copytree_failure_on_the_release_side_refuses_without_a_traceback(tmp_path, book):
+    """A liberação no mesmo hazard, pelo mesmo motivo: resultado, não exceção.
+
+    Arquivo ilegível *dentro* do item faz `copytree` ajuntar o `PermissionError` num
+    `shutil.Error` — que é subclasse de `OSError`, e é isso que faz o `except OSError`
+    do bloco de cópia pegar o agregado, desfazer o clone parcial e devolver
+    `ReleaseResult`. Nada muda no código por este teste; ele existe porque a cláusula
+    é a fronteira entre "a CLI (T12) imprime uma recusa com exit 1" e "a CLI estoura um
+    traceback no terminal do usuário". Trocar o `except` por um tipo que não pega
+    `shutil.Error` faz este teste morrer de erro em vez de recusar.
+    """
+    plan, it, src = item(tmp_path)
+    locked = src / "travado.bin"
+    locked.write_bytes(b"z" * 512)
+    locked.chmod(0o000)
+    try:
+        res = release.release_item(plan, it, ledger=book, confirm=True,
+                                   dest_root=tmp_path / "retida", entry_fn=free(),
+                                   statvfs_fn=lambda p: _vfs(20 * GIB),
+                                   allowed_roots=roots(tmp_path), now=NOW)
+    finally:
+        locked.chmod(0o644)
+    assert res.ok is False and "cópia" in res.reason
+    assert locked.exists(), "a origem está intacta, inclusive o que não pôde ser lido"
+    assert not any((tmp_path / "retida").rglob("*.bin")), "a metade copiada foi desfeita"
+    assert book.retained_bytes() == 0
 ```
 
 - [ ] **Step 2: Rodar e ver falhar**
@@ -3217,6 +3353,14 @@ def test_expire_reports_the_bytes_it_frees_even_when_a_path_is_already_gone(tmp_
 Run: `.venv/bin/python -m pytest tests/test_tmpfs_release.py -v -k "restore or expire"`
 Expected: FAIL — `AttributeError: module 'deck_wellness.actions.tmpfs.release' has no
 attribute 'restore_item'`.
+
+Os nomes dos cinco testes novos foram escolhidos para cair no `-k` acima: `restore`,
+`restored`, `expire` aparecem em todos, menos em
+`test_a_copytree_failure_on_the_release_side_refuses_without_a_traceback`, que é da
+liberação e **já passa na primeira corrida de propósito** — ele não pede código novo,
+pinou o `except OSError` que a T9 deixou. Um pino de comportamento existente se prova
+pela mutação da tabela do Step 4, não pelo RED; confundi-lo com teste TDD seria
+escrever implementação para um `except` que já existe.
 
 **Evidência de não-vacuidade neste passo:** `test_restore_refuses_when_a_mount_appeared_in_the_way`
 é o que impede `_foreign_mount` de virar um `return None` confortável; se alguém
@@ -3244,7 +3388,8 @@ estado e a T12 o alcança. Se o `--lint` do projeto reclamar de import não usad
 ruling é manter e citar aqui, não remover o estado da spec.)
 
 O `_audit` que a T9 deixou no arquivo passa a aceitar a família do evento, com
-default na assinatura de hoje para as quatro chamadas da liberação não se moverem:
+default na assinatura de hoje para as três chamadas da liberação não se moverem
+(`release.py:189`, `:200`, `:210` — conferido por grep, não por memória).
 
 ```python
 def _audit(audit, entry_id, outcome, targets, *, plan_digest=None, error=None,
@@ -3338,6 +3483,23 @@ def restore_item(record_or_id, *, ledger, audit=None, confirm=False,
                              f"refused: {volume} não tem espaço para devolver "
                              f"{record.bytes} bytes")
 
+    # A certidão antes da escrita: `record.sha256` é o digest do clone tal como a
+    # liberação o certificou. Ler o retido só *depois* da cópia — como este plano
+    # fazia — torna a verificação da volta tautológica no único caso que importa:
+    # payload apodrecido na SSD produz destino apodrecido no volume, os dois digests
+    # batem, e o `restore` diz "ok" enquanto entrega lixo. Assim, a recusa vem antes
+    # de qualquer byte escrito no volume.
+    try:
+        stored_digest, _ = tree_digest(stored_path)
+    except OSError as err:
+        return RestoreResult(False, entry_id,
+                             f"refused: o retido não pôde ser lido "
+                             f"({err.strerror or err}); nada foi alterado")
+    if stored_digest != record.sha256:
+        return RestoreResult(False, entry_id,
+                             "refused: o digest do retido difere do certificado no "
+                             "ledger; nada foi devolvido")
+
     try:
         original.parent.mkdir(parents=True, exist_ok=True)
         if stored_path.is_dir():
@@ -3349,9 +3511,8 @@ def restore_item(record_or_id, *, ledger, audit=None, confirm=False,
         return RestoreResult(False, entry_id, f"refused: a cópia de volta falhou "
                                               f"({err.strerror or err}); a SSD mantém o item")
 
-    clone_digest, _ = tree_digest(stored_path)
     back_digest, size = tree_digest(original)
-    if clone_digest != back_digest:
+    if back_digest != stored_digest:
         _quiet_remove(original)
         return RestoreResult(False, entry_id,
                              "refused: o digest da volta difere do retido; o clone "
@@ -3434,10 +3595,10 @@ def expire_over_budget(*, ledger, audit=None, days: float = RETENTION_DAYS,
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.venv/bin/python -m pytest tests/test_tmpfs_release.py -v --basetemp=.scratch/basetemp9`
-→ PASS (**29** = 18 da T9 + 11 daqui).
-Run: `.venv/bin/python -m pytest -v --basetemp=.scratch/basetemp9 2>&1 | tail -2` →
-verde, e a linha de resumo tem de ler **490 passed** (479 da T9 + 11 daqui).
+Run: `.venv/bin/python -m pytest tests/test_tmpfs_release.py -v --basetemp=.scratch/basetemp10`
+→ PASS (**34** = 18 da T9 + 16 daqui: 11 da rodada 0 mais 5 da rodada de revisão).
+Run: `.venv/bin/python -m pytest -v --basetemp=.scratch/basetemp10 2>&1 | tail -2` →
+verde, e a linha de resumo tem de ler **495 passed** (479 da T9 + 16 daqui).
 
 `--basetemp` na SSD vale aqui pelo mesmo motivo da T9: o payload de
 `stored()` é escrito de verdade, e um teste que injeta 6 GiB **sem** escrevê-los
@@ -3449,17 +3610,42 @@ no corpo do commit, como nas T8 e T9:
 | Mutação | Teste que morre |
 |---|---|
 | `_foreign_mount` devolvendo `None` sempre (R1 afrouxada na volta) | `test_restore_refuses_when_a_mount_appeared_in_the_way` |
+| apagar o ramo `deepest != volume` (só olhar montes nascidos *dentro* do destino) | `test_restore_refuses_when_the_destination_sits_under_a_foreign_mount` |
 | `if original.exists():` → `if False:` | `test_restore_refuses_when_the_original_path_already_exists` (a árvore retida é sobrescrita) |
-| `if clone_digest != back_digest:` → `if False:` | `test_a_digest_mismatch_on_the_way_back_keeps_the_clone` |
+| `if back_digest != stored_digest:` → `if False:` | `test_a_digest_mismatch_on_the_way_back_keeps_the_clone` |
+| `if stored_digest != record.sha256:` → `if False:` (a certidão do ledger é ignorada) | `test_a_restore_refuses_when_the_retained_payload_rotted_on_the_ssd` |
 | tirar o `_quiet_remove(original)` da recusa de digest | idem (fica a volta truncada no lugar, e a SSD também) |
 | `stat.f_bavail * stat.f_frsize < record.bytes` → `< 0` | `test_restore_refuses_when_the_volume_has_no_room` |
+| `STATE_PARTIAL` fora da guarda de estado do `restore_item` | `test_restore_works_from_a_partial_record_whose_original_evaporated` |
+| `except OSError` → `except ZeroDivisionError` na cópia da volta | `test_a_copytree_failure_on_the_way_back_leaves_no_half_restored_tree` (estoura em vez de recusar) |
+| `except OSError` → `except ZeroDivisionError` na cópia da liberação | `test_a_copytree_failure_on_the_release_side_refuses_without_a_traceback` |
 | pular o `_transition(..., STATE_RESTORED, ...)` | `test_restore_copies_back_and_frees_the_budget` (`state` e `retained_bytes()`) |
 | `event_id` descartado no `_transition` da restauração (`""` no lugar) | `test_a_restore_line_points_at_its_own_audit_event` |
 | `event_id` descartado no `_transition` do `expire` | `test_expire_removes_oldest_first_and_audits_each` |
-| `if payload.exists():` → `if True:` (apagar às cegas) | `test_expire_reports_the_bytes_it_frees_even_when_a_path_is_already_gone` (`errors` fica vazio) |
+| `if payload.exists():` → `if True:` (apagar às cegas) | `test_expire_reports_the_bytes_it_frees_even_when_a_path_is_already_gone` — morre em `res.victims == (gone,)`: o `FileNotFoundError` do `_remove` cai no `except OSError` e faz `continue` antes do `done.append`. `errors` sai preenchido nas duas versões, então **não** é por ele que o teste pega |
 | `if confirm != irreversible:` → `if not confirm:` | `test_expire_needs_two_flags` (a segunda metade) |
 | `if not confirm:` do dry-run → `if False:` (a queda cai no laço e apaga) | `test_expire_dry_run_lists_exactly_what_it_would_delete` |
 | `tuple(r.entry_id for r in victims)` → `tuple(str(r.src) for r in victims)` | `test_expire_dry_run_lists_exactly_what_it_would_delete` (`victims` são ids) |
+
+**Nota sobre o `except OSError` das duas cópias (rodada de revisão 1).** O revisor
+pediu `except (OSError, shutil.Error)` alegando que `shutil.Error` herda de `Exception`,
+não de `OSError`. A premissa é falsa neste interpretador:
+
+```console
+$ .venv/bin/python -c "import shutil; print(shutil.Error.__mro__)"
+(<class 'shutil.Error'>, <class 'OSError'>, <class 'Exception'>, <class 'BaseException'>, <class 'object'>)
+```
+
+e reproduzido com arquivo `chmod 000` dentro da árvore, `copytree(symlinks=True)` levanta
+`shutil.Error([("…/travado.bin", "…/travado.bin", "[Errno 13] Permission denied: …")])`,
+`isinstance(err, OSError)` é `True`, a metade copiada existe em `dest` e o `except` já
+presente a desfaz via `_quiet_remove`. Ou seja: nenhum traceback vaza e nenhuma árvore
+paral fica para trás — os dois efeitos que o achado previa. Escrever
+`(OSError, shutil.Error)` seria redundância que ensina o leitor errado, então o ruling é
+**manter o `except OSError` e piná-lo com teste**, os dois últimos `except` da tabela. O
+`err.strerror or err` do f-string também deixa de ser enfeite: `shutil.Error.strerror` é
+`None`, e sem o fallback a razão da recusa sairia com o nome da exceção em vez da lista
+de erros por arquivo.
 
 - [ ] **Step 5: Commit**
 
