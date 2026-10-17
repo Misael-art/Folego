@@ -4175,21 +4175,99 @@ git commit -m "M7 T11: tmpfs status/plan na CLI — plano refusal-first num TTY"
 - Produces: seams `_tmpfs_ledger()`, `_tmpfs_audit()`, `_tmpfs_dest()`,
   `_tmpfs_guard_roots()`, e entradas em `_TMPFS_HANDLERS`
 
+**Este texto já carrega a pré-varredura do controlador, e os onze pontos abaixo são
+dele, não do corte original.** (a) `_tmpfs_audit()` é um `AuditLog()` puro, e `AuditLog`
+resolve `paths.audit_log_path()` em tempo de chamada: sem trocar a costura, os testes de
+mutação escreveriam no `~/.local/state/deck-wellness/audit.jsonl` **de verdade** (o
+caminho vem de `safely/audit.py:17-18` + `paths.py:47-48`), e o `tmpfs_env` agora troca
+também o audit — um handler que esquecesse o `audit=` não seria visto de outro jeito, e
+a contagem de eventos é o pino que prova a passagem. Não se resolve com `fake_home`: esse
+fixture limpa `DECKWELLNESS_PROC_ROOT` (conferido em `tests/conftest.py:36-45`) e a ordem
+de instanciação desfaria o `fake_proc` em que todo o chão falso se apóia. (b) `--prazo`
+em `restore` era flag anunciada para um caminho que não varre nada — `restore_item` só
+recebe `ledger`, `audit`, `allowed_roots` e `now` , e flag que não faz nada é convite
+para o operador confiar em algo inexistente; sai do laço e fica só em `release`. (c) O
+handler do `restore` checava `--confirmar` e depois chamava `restore_item(confirm=True)`:
+duas decisões para a mesma regra, e a de baixo já tem mensagem própria
+(`release.py:325-326`, `refused: restaurar exige --confirmar`). Fica uma porta só, com o
+mesmo mapeamento de exit code do `release`. (d) `test_expire_requires_both_flags` **não
+passaria**: `expire_over_budget` declara "nada vencido" antes de conferir as flags
+(`release.py:424-431`), então com ledger vazio o exit code legítimo é 0 e o teste pediria
+uma recusa sobre um caso que não existe. Entra a semente (liberar e voltar o `ts` 40
+dias), pelo mesmo motivo pelo qual `test_expire_dry_run_then_confirm` já semeara. (e) O
+XOR das duas flags é sutil demais para ficar sem pino: sem flag nenhuma o `expire` é um
+dry-run honesto, não uma recusa. (f)
+`test_release_of_a_protected_item_is_refused_with_its_reason` asserava só a palavra
+`refused`, que toda recusa contém; passa a nomear o motivo real (`piso`), igual ao pino
+de mensagem nomeada que a rodada 1 da T11 exigiu. (g) `test_restore_*` faziam `target /
+"blob.bin"` com `target` sendo `str` — `TypeError: unsupported operand type(s) for /`, e
+o teste morria antes de afirmar qualquer coisa. Agora `blob` é `Path` e `str(blob)` é o
+argumento da CLI. (h) `test_ledger_json_is_one_line_with_the_budget` tinha o nome de uma
+propriedade que não media: `json.loads(stdout)` aceita JSON **indentado** de várias
+linhas, e a restrição global diz que sob `--json` o stdout é uma linha parseável. Entra
+a contagem de linhas, igual ao pino que a T11 já usa para `status --json`. (i) Três
+ramos de produção que nenhum teste do corte original alcançava, e que a suíte aprovada
+não pode deixar órfãos: o `item is None` do `release` (caminho que o plano nunca
+classificou), o aviso de estouro do orçamento no `ledger`, e o laço `for line in
+result.errors` do `expire`. Três testes entram para cobri-los; no do estouro o ledger é
+semeado por uma linha direta (`bytes=MAX_RETAINED_BYTES + 1`), porque o `budget_view` lê
+o campo, não o disco — e 3 GiB de arquivo falso não caberiam em teste nenhum. A prova da
+coerção desses ramos está na tabela de mutações do Step 4 (M9, M10, M11). (j) Duas
+costuras não eram observadas por nada: `_tmpfs_guard_roots()` é trocada por `tmpfs_env`
+em todos os testes, então ninguém lia o **corpo** dela (um `return [paths.tmp_dir()]`
+sobreviveria à suíte inteira), e nenhum teste provava que o `release` **repassa** a lista
+ao guard — `release.py:137` faz `roots = list(allowed_roots) if allowed_roots else
+default_allowed_roots()`, de modo que passar `[]` restaura as raízes de produção e o
+mutante passaria pelo motivo errado. Por isso
+`test_release_uses_the_guard_roots_of_the_seam` troca a costura por uma raiz **errada mas
+não vazia**, e `test_the_mutation_seams_default_to_the_ssd_not_ram` (`fake_home`) pinha o
+corpo das quatro costuras no disco da SSD, não na RAM. (k) O resumo humano do `ledger` era
+afirmado por substring frouxa (`"retido" in out`, `"orçamento" in out`) e não media
+grandeza nenhuma: zerar o número ou omitir as duas linhas de resumo passava. Agora o pino
+é a linha inteira — o que expôs uma violação da regra de cópia no próprio texto do plano:
+`{view.oldest_days:.1f}` imprimia `0.0 d` com ponto, e vai pela vírgula, como
+`actions/tmpfs/policy.py:84-85` já faz.
+
 - [ ] **Step 1: Escrever o teste que falha**
 
-Somar ao topo de `tests/test_cli_tmpfs.py`:
-`from deck_wellness.actions.tmpfs.ledger import MAX_RETAINED_BYTES, Ledger`.
+Somar ao topo de `tests/test_cli_tmpfs.py`: `import shutil` (o arquivo ainda não o traz, e
+um teste que apaga o próprio chão falso precisa apagar de verdade),
+`from deck_wellness import paths`,
+`from deck_wellness.actions.tmpfs.ledger import MAX_RETAINED_BYTES, Ledger` e
+`from deck_wellness.safely.audit import AuditLog`.
 
 ```python
 def tmpfs_env(tmp_path, fake_tmp, monkeypatch):
-    """CLI e atos no mesmo chão falso: ledger, quarentena e raízes do guard."""
+    """CLI e atos no mesmo chão falso: ledger, quarentena, raízes do guard e auditoria.
+
+    As quatro costuras, não três: `AuditLog()` sem caminho escreve no
+    `~/.local/state/deck-wellness/audit.jsonl` do host, e uma suíte de mutação que só
+    troca ledger e destino deixaria rastro real fora do `tmp_path`. O arquivo de
+    auditoria também é onde se conta o evento por transição.
+    """
     root, volume = fake_tmp
     monkeypatch.setattr(cli, "_tmpfs_ledger",
                         lambda: Ledger(tmp_path / "state" / "tmp-ledger.jsonl"))
     monkeypatch.setattr(cli, "_tmpfs_dest", lambda: tmp_path / "retida")
     monkeypatch.setattr(cli, "_tmpfs_guard_roots", lambda: [tmp_path])
     monkeypatch.setattr(cli, "_tmpfs_now", lambda: time.time())
+    monkeypatch.setattr(cli, "_tmpfs_audit",
+                        lambda: AuditLog(tmp_path / "state" / "audit.jsonl"))
     return root, volume
+
+
+def backdate(tmp_path, days: float) -> None:
+    """Envelhece o `ts` de todas as linhas do ledger: é assim que se fabrica vencido.
+
+    O orçamento da T8 decide idade pelo `ts` da linha, então mover o relógio no arquivo
+    é exatamente o que o `expire` vai ver — sem tocar em relógio de processo.
+    """
+    old = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - days * DAY))
+    path = tmp_path / "state" / "tmp-ledger.jsonl"
+    rows = [json.loads(line) for line in path.read_text().splitlines()]
+    for row in rows:
+        row["ts"] = old
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows))
 
 
 def test_release_refuses_without_confirmation(tmp_path, fake_tmp, monkeypatch, capsys):
@@ -4211,37 +4289,56 @@ def test_release_moves_the_item_and_prints_the_entry_id(tmp_path, fake_tmp, monk
     assert not (root / "qoder-cli-1000").exists()
     assert any((tmp_path / "retida").rglob("blob.bin"))
     assert "tmpfs restore" in out, "a saída tem de dizer como desfazer"
+    # os dois livros do §7: a liberação é uma transição registrada, não um unlink mudo
+    assert _ledger_records(tmp_path)[-1]["state"] == "released"
+    assert _audit_events(tmp_path, "tmpfs.release") == ["partial", "released"]
 
 
 def test_release_of_a_protected_item_is_refused_with_its_reason(tmp_path, fake_tmp,
                                                                 monkeypatch, capsys):
+    """Protegido no plano é recusado no ato, e a recusa diz **por quê**.
+
+    O handler repassa o `reason` do `classify`, que re-mediu o item agora (não o que o
+    plano viu): `pytest-of-misael` está no chão há segundos e morre no piso de idade.
+    Pinar a palavra genérica `refused` não valeria nada — toda recusa a contém, inclusive
+    as erradas; o que se pinha é o motivo nomeado.
+    """
     root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
     code = main(["tmpfs", "release", str(root / "pytest-of-misael"), "--confirmar"])
     assert code == cli.EXIT_REFUSED
-    assert "refused" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "refused" in err and "piso" in err, err
 
 
 def test_restore_without_confirmation_moves_nothing(tmp_path, fake_tmp, monkeypatch,
                                                     capsys):
+    """`moves_nothing` é asserção sobre o chão, não sobre a saída: nada mudou."""
     root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
-    target = str(root / "qoder-cli-1000")
-    main(["tmpfs", "release", target, "--confirmar"])
+    blob = root / "qoder-cli-1000"
+    main(["tmpfs", "release", str(blob), "--confirmar"])
     entry_id = _ledger_records(tmp_path)[0]["entry_id"]
     code = main(["tmpfs", "restore", entry_id])
     assert code == cli.EXIT_NEEDS_CONFIRM
     assert "--confirmar" in capsys.readouterr().err
+    assert not (blob / "blob.bin").exists(), "sem flag nada volta para o volume"
+    assert any((tmp_path / "retida").rglob("blob.bin")), "e nada sai da SSD"
+    assert _audit_events(tmp_path, "tmpfs.restore") == []
 
 
 def test_restore_returns_the_item_to_its_original_path(tmp_path, fake_tmp, monkeypatch,
                                                        capsys):
     root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
-    target = str(root / "qoder-cli-1000")
-    main(["tmpfs", "release", target, "--confirmar"])
+    blob = root / "qoder-cli-1000"
+    main(["tmpfs", "release", str(blob), "--confirmar"])
     entry_id = _ledger_records(tmp_path)[0]["entry_id"]
     code = main(["tmpfs", "restore", entry_id, "--confirmar"])
     assert code == 0
-    assert (target / "blob.bin").read_bytes() == b"a" * 4096
+    assert (blob / "blob.bin").read_bytes() == b"a" * 4096
     assert not any((tmp_path / "retida").rglob("blob.bin"))
+    # a transição existe nos dois livros: a linha nova do ledger e o evento do mesmo nome
+    rows = _ledger_records(tmp_path)
+    assert [r["state"] for r in rows if r["entry_id"] == entry_id][-1] == "restored"
+    assert _audit_events(tmp_path, "tmpfs.restore") == ["restored"]
 
 
 def test_ledger_prints_ram_freed_against_ssd_retained(tmp_path, fake_tmp, monkeypatch,
@@ -4252,36 +4349,136 @@ def test_ledger_prints_ram_freed_against_ssd_retained(tmp_path, fake_tmp, monkey
     code = main(["tmpfs", "ledger"])
     out = capsys.readouterr().out
     assert code == 0
-    assert "retido" in out and "qoder-cli-1000" in out
+    assert "qoder-cli-1000" in out
+    # o nome do teste promete "RAM liberada contra SSD retida": as grandezas têm de aparecer,
+    # e a vírgula é a regra de cópia do projeto, não enfeite
+    assert "retido na SSD: 4,0 KB em 1 item(ns) · mais velho 0,0 d" in out
+    assert "RAM liberada de fato: 4,0 KB" in out
     assert "orçamento" in out
 
 
 def test_ledger_json_is_one_line_with_the_budget(tmp_path, fake_tmp, monkeypatch, capsys):
     tmpfs_env(tmp_path, fake_tmp, monkeypatch)
     main(["tmpfs", "ledger", "--json"])
-    payload = json.loads(capsys.readouterr().out)
+    raw = capsys.readouterr().out
+    assert len(raw.strip().splitlines()) == 1, "sob --json o stdout é UMA linha"
+    payload = json.loads(raw)
     assert payload["records"] == []
     assert payload["budget"]["retained_bytes"] == 0
     assert payload["budget"]["slack_bytes"] == MAX_RETAINED_BYTES
 
 
+def test_ledger_warns_when_the_retention_bursts_the_budget(tmp_path, fake_tmp,
+                                                           monkeypatch, capsys):
+    """O aviso de estouro é produção; produção sem teste é enfeite.
+
+    Semeado por uma linha direta do ledger: o `budget_view` lê o campo `bytes` do
+    registro, não o disco (`ledger.py:158-176`), então o estouro se fabrica sem os
+    3 GiB de arquivo falso que nenhum teste comportaria.
+    """
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    Ledger(tmp_path / "state" / "tmp-ledger.jsonl").append(
+        entry_id="estouro-1", src=str(root / "qoder-cli-1000"), volume=str(root),
+        stored=str(tmp_path / "retida" / "estouro-1"), bytes=MAX_RETAINED_BYTES + 1,
+        sha256="0" * 64, age_days=1.0, state="released", action_id="tmpfs.release")
+    assert main(["tmpfs", "ledger"]) == cli.EXIT_OK
+    captured = capsys.readouterr()
+    assert "estourou o orçamento" in captured.err
+    assert "tmpfs expire" in captured.err, "o aviso tem de dizer o que fazer"
+
+
+def test_release_refuses_a_path_the_plan_never_classified(tmp_path, fake_tmp,
+                                                          monkeypatch, capsys):
+    """O portão do plano vale também na mutação: nada é liberado por caminho avulso.
+
+    Sem este pino o ramo `item is None` do handler é código de produção órfão, e a
+    alternativa (chamar `release_item` com `None`) não é uma falha limpa -- é
+    `AttributeError` no meio de uma operação que apaga RAM.
+    """
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    code = main(["tmpfs", "release", str(root / "nao-esta-no-plano"), "--confirmar"])
+    assert code == cli.EXIT_REFUSED
+    err = capsys.readouterr().err
+    assert "não está no plano" in err and "tmpfs plan" in err, err
+
+
+def test_release_uses_the_guard_roots_of_the_seam(tmp_path, fake_tmp, monkeypatch,
+                                                  capsys):
+    """As raízes do guard vêm da costura, e o handler tem de repassá-las de verdade.
+
+    É o único modo de observar o repasse: se o handler chamar com `allowed_roots=None`,
+    `release_item` cai em `default_allowed_roots()` (`release.py:137`) -- e neste host,
+    onde o repo e portanto o `tmp_path` do pytest vivem sob `$HOME`, isso aceitaria a
+    liberação como se nada estivesse faltando. Um mutante invisível à suíte inteira é
+    exatamente o que um pino de costura existe para matar.
+
+    A raiz trocada é **errada mas não vazia**, e isso é o ponto: `roots = list(allowed_roots)
+    if allowed_roots else default_allowed_roots()` lê a lista vazia como "não passei nada"
+    e restaura os roots de produção, então `lambda: []` não mataria o mutante nenhum --
+    passaria o teste pelo motivo errado. A mensagem é o vocabulário do próprio
+    `safely/guard.py` (inglês desde o M0, precedentado em `test_tmpfs_release.py:225`); o
+    que se afirma aqui é o efeito: recusado, nada retido, o item ainda no volume.
+    """
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    monkeypatch.setattr(cli, "_tmpfs_guard_roots", lambda: [tmp_path / "guard-fora"])
+    code = main(["tmpfs", "release", str(root / "qoder-cli-1000"), "--confirmar"])
+    assert code == cli.EXIT_REFUSED
+    assert "allowed root" in capsys.readouterr().err
+    assert not (tmp_path / "retida").exists(), "nada foi retido"
+    assert (root / "qoder-cli-1000" / "blob.bin").exists(), "nada foi apagado"
+
+
+def test_the_mutation_seams_default_to_the_ssd_not_ram(fake_home):
+    """O corpo das costuras também é contrato, e nenhum teste de mutação o alcança.
+
+    Todos os testes desta tarefa trocam `_tmpfs_dest` por `tmp_path` -- que é o certo,
+    porque senão a suíte escreveria no host -- e por isso nenhum deles exercita o
+    default. O default É a frase do docstring de `paths.py:25-27` ("Retenção de tmpfs:
+    o destino é a SSD, nunca um tmpfs (RAM)"): trocar `tmp_quarantine_dir()` por
+    `tmp_dir()`, ou por um caminho sob `/tmp`, sobreviveria à suíte inteira e gravaria
+    a retenção no mesmo volume que se quer esvaziar. Sob `fake_home` os quatro caminhos
+    caem no chão falso, então a asserção é de nome e de raiz, não de host.
+    """
+    dest = cli._tmpfs_dest()
+    assert dest == paths.tmp_quarantine_dir()
+    assert str(paths.data_dir()) in str(dest), dest
+    assert not str(dest).startswith(("/tmp", "/run/user", "/dev/shm")), dest
+    assert cli._tmpfs_ledger().path == paths.tmp_ledger_path()
+    assert cli._tmpfs_audit().path == paths.audit_log_path()
+    assert cli._tmpfs_guard_roots(), "o guard precisa de raízes padrão, não vazias"
+
+
 def test_expire_requires_both_flags(tmp_path, fake_tmp, monkeypatch, capsys):
-    tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    """Semeado: a recusa tem de cair sobre uma vítima real, e o sem-flag é dry-run.
+
+    `expire_over_budget` declara "nada vencido" **antes** de conferir as flags
+    (`release.py:424-431`): com ledger vazio o exit 0 é o estado correto, e o corte
+    original do plano pedia ali uma recusa sobre um caso que não existe. A semente é o
+    mesmo truque do teste seguinte -- liberar e envelhecer o `ts`. O bloco de baixo é o
+    XOR: sem flag nenhuma `expire` não recusa, ele lista, que é o comportamento honesto
+    de uma ferramenta que mostra antes de apagar.
+    """
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    main(["tmpfs", "release", str(root / "qoder-cli-1000"), "--confirmar"])
+    backdate(tmp_path, 40)
+    capsys.readouterr()
+
     code = main(["tmpfs", "expire", "--confirmar"])
     assert code == cli.EXIT_NEEDS_CONFIRM
     assert "--irreversivel" in capsys.readouterr().err
+
+    assert any((tmp_path / "retida").rglob("blob.bin")), "a recusa não apaga"
+
+    code = main(["tmpfs", "expire", "--dias", "14"])
+    assert code == cli.EXIT_OK, "sem flag é dry-run, não recusa"
+    assert "dry-run" in capsys.readouterr().out
 
 
 def test_expire_dry_run_then_confirm(tmp_path, fake_tmp, monkeypatch, capsys):
     root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
     main(["tmpfs", "release", str(root / "qoder-cli-1000"), "--confirmar"])
     capsys.readouterr()
-    old = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 40 * DAY))
-    path = tmp_path / "state" / "tmp-ledger.jsonl"
-    rows = [json.loads(line) for line in path.read_text().splitlines()]
-    for row in rows:
-        row["ts"] = old
-    path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    backdate(tmp_path, 40)
 
     code = main(["tmpfs", "expire", "--dias", "14"])
     listed = capsys.readouterr().out
@@ -4291,6 +4488,34 @@ def test_expire_dry_run_then_confirm(tmp_path, fake_tmp, monkeypatch, capsys):
     code = main(["tmpfs", "expire", "--dias", "14", "--confirmar", "--irreversivel"])
     assert code == 0
     assert not any((tmp_path / "retida").rglob("blob.bin"))
+    assert _audit_events(tmp_path, "tmpfs.expire") == ["expired"]
+
+
+def test_expire_reports_a_payload_that_vanished(tmp_path, fake_tmp, monkeypatch, capsys):
+    """O laço `result.errors` do handler é produção, e a T10 enche essa lista.
+
+    `expire_over_budget` devolve o payload sumido em `errors` e não no `reason`
+    (`release.py:451`): sem o laço, a CLI anunciaria o ato como limpo enquanto o
+    ledger sabia de um byte que não está mais lá. O aviso vai para o stderr, que é para
+    onde toda suspeita desta CLI vai, e o stdout fica só com o veredito -- a aba da T13
+    lê o stdout. O que **não** se mexe aqui é a contagem de `freed_bytes` neste caso: a
+    T10 decidiu e nomeou a decisão
+    (`test_expire_reports_the_bytes_it_frees_even_when_a_path_is_already_gone`), e a
+    leitura dela é que um payload que já não existe devolveu esses bytes à SSD de todo
+    jeito. Mudar isso seria reabrir a T10 por um teste da T12.
+    """
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    main(["tmpfs", "release", str(root / "qoder-cli-1000"), "--confirmar"])
+    backdate(tmp_path, 40)
+    capsys.readouterr()
+    for carne in (tmp_path / "retida").rglob("qoder-cli-1000"):
+        shutil.rmtree(carne)
+
+    code = main(["tmpfs", "expire", "--dias", "14", "--confirmar", "--irreversivel"])
+    assert code == cli.EXIT_OK, "sem vítima apagada o ato não falhou, esvaziou"
+    captured = capsys.readouterr()
+    assert "aviso:" in captured.err and "já não existia" in captured.err, captured.err
+    assert "aviso:" not in captured.out, "a suspeita não divide linha com o veredito"
 
 
 def _ledger_records(tmp_path) -> list:
@@ -4299,12 +4524,42 @@ def _ledger_records(tmp_path) -> list:
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text().splitlines()]
+
+
+def _audit_events(tmp_path, kind: str) -> list:
+    """Os `outcome`s de um tipo de evento, na ordem em que foram escritos.
+
+    É a costura do ponto (a): sem trocar `_tmpfs_audit`, estes eventos iriam para o
+    `~/.local/state/deck-wellness/audit.jsonl` do host. Contá-los aqui prova que o
+    handler passou o audit de verdade -- um `audit=` esquecido daria lista vazia.
+    """
+    path = tmp_path / "state" / "audit.jsonl"
+    if not path.exists():
+        return []
+    out = []
+    for line in path.read_text().splitlines():
+        event = json.loads(line)
+        if event["kind"] == kind:
+            out.append(event["outcome"])
+    return out
 ```
 
 - [ ] **Step 2: Rodar e ver falhar**
 
-Run: `.venv/bin/python -m pytest tests/test_cli_tmpfs.py -v -k "release or restore or ledger or expire"`
-Expected: FAIL — `refused: subcomando desconhecido: release` (exit 2) em todos.
+Run: `.venv/bin/python -m pytest tests/test_cli_tmpfs.py -v -k "release or restore or ledger or expire or exists or seams"`
+Expected: **15 failed, 13 deselected** — e é preciso saber ler a falha, porque os quinze
+morrem por dois mecanismos diferentes:
+* os catorze que passam por `tmpfs_env` ou pelas costuras caem em `AttributeError: module
+  deck_wellness.cli has no attribute '_tmpfs_ledger'` (ou `_tmpfs_dest`, `_tmpfs_audit`,
+  `_tmpfs_guard_roots`) -- o `monkeypatch.setattr` da costura vem antes de qualquer
+  argparse, e é ele que prova que o handler ainda não existe;
+* `test_tmpfs_plan_now_points_at_a_command_that_exists` falha duas vezes sobre si mesma: a
+  última linha do `plan` ainda é `Dry-run comprovado: nenhum byte saiu do volume.`, e o
+  `parse_args(["tmpfs", "release", ...])` do segundo bloco morre em `argumento inválido`,
+  que é `SystemExit(2)` levantado dentro do teste.
+O `2` do argparse coincide com `EXIT_NEEDS_CONFIRM`, por isso nenhum pino desta tarefa
+asserta "recusa" por código de saída num comando que o parser não conhece: o que conta é a
+mensagem nomeada e o chão.
 
 - [ ] **Step 3: Escrever a implementação mínima**
 
@@ -4338,15 +4593,17 @@ precisa apontar para um nome com linha.
 Parser (dentro do bloco `tmpfs`, depois de `plan`):
 
 ```python
-    for name, help_text in (
-        ("release", "liberar um item para a SSD: copy → verify → unlink, com ledger"),
-        ("restore", "devolver um item do ledger ao lugar original"),
-    ):
-        sub = tmpfs_sub.add_parser(name, help=help_text)
-        sub.add_argument("target", help="caminho (release) ou id do ledger (restore)")
-        sub.add_argument("--confirmar", action="store_true", help="aceita esta mutação")
-        sub.add_argument("--prazo", type=float, default=10.0,
+    release = tmpfs_sub.add_parser(
+        "release", help="liberar um item para a SSD: copy → verify → unlink, com ledger")
+    release.add_argument("target", help="caminho do item, tal como o plano o mostrou")
+    release.add_argument("--confirmar", action="store_true", help="aceita esta mutação")
+    release.add_argument("--prazo", type=float, default=10.0,
                          help="segundos máximos de varredura por volume")
+
+    restore = tmpfs_sub.add_parser("restore",
+                                   help="devolver um item do ledger ao lugar original")
+    restore.add_argument("target", help="id do ledger (sai na saída do release)")
+    restore.add_argument("--confirmar", action="store_true", help="aceita esta mutação")
 
     ledger = tmpfs_sub.add_parser("ledger", help="o que está retido e o orçamento")
     ledger.add_argument("--json", action="store_true", help="saída para máquinas")
@@ -4360,6 +4617,10 @@ Parser (dentro do bloco `tmpfs`, depois de `plan`):
     expire.add_argument("--irreversivel", action="store_true",
                         help="aceita que o conteúdo retido não voltará")
 ```
+
+Dois parsers, não um laço: `--prazo` é o prazo da **varredura**, e o `restore` não varre
+nada -- `restore_item` recebe `ledger`, `audit`, `allowed_roots` e `now`. Uma flag que não
+faz nada na cara de uma mutação é o convite para o operador confiar num freio inexistente.
 
 Handlers:
 
@@ -4389,16 +4650,17 @@ def _cmd_tmpfs_release(args) -> int:
 
 
 def _cmd_tmpfs_restore(args) -> int:
-    if not args.confirmar:
-        sys.stderr.write("refused: restaurar regrava no tmpfs e exige --confirmar "
-                         "(nada foi alterado)\n")
-        return EXIT_NEEDS_CONFIRM
+    # uma porta só: quem manda na confirmação é `restore_item`, que já tem a sua
+    # mensagem própria (`release.py:325-326`). Checar aqui e chamar com `confirm=True`
+    # seriam duas decisões para a mesma regra -- e a de cima passaria a ser a única
+    # que o resto do código nunca exercita.
     result = tmpfs_release.restore_item(
-        args.target, ledger=_tmpfs_ledger(), audit=_tmpfs_audit(), confirm=True,
-        allowed_roots=_tmpfs_guard_roots(), now=_tmpfs_now())
+        args.target, ledger=_tmpfs_ledger(), audit=_tmpfs_audit(),
+        confirm=args.confirmar, allowed_roots=_tmpfs_guard_roots(),
+        now=_tmpfs_now())
     if not result.ok:
         sys.stderr.write(f"{result.reason}\n")
-        return EXIT_REFUSED
+        return EXIT_NEEDS_CONFIRM if not args.confirmar else EXIT_REFUSED
     print(f"devolvido: {planner.fmt_bytes(result.bytes)} para {result.restored_to}")
     return EXIT_OK
 
@@ -4421,8 +4683,9 @@ def _cmd_tmpfs_ledger(args) -> int:
     for record in sorted(records, key=lambda r: r["ts"]):
         print(f"{record['entry_id']} · {record['state']} · "
               f"{planner.fmt_bytes(record['bytes'])} · {record['src']}")
+    mais_velho = f"{view.oldest_days:.1f}".replace(".", ",")
     print(f"\nretido na SSD: {planner.fmt_bytes(view.retained_bytes)} em "
-          f"{view.retained_count} item(ns) · mais velho {view.oldest_days:.1f} d")
+          f"{view.retained_count} item(ns) · mais velho {mais_velho} d")
     print(f"RAM liberada de fato: {planner.fmt_bytes(view.freed_bytes)} · "
           f"folga do orçamento: {planner.fmt_bytes(view.slack_bytes)} "
           f"de {planner.fmt_bytes(MAX_RETAINED_BYTES)}")
@@ -4443,7 +4706,9 @@ def _cmd_tmpfs_expire(args) -> int:
         return EXIT_NEEDS_CONFIRM
     print(result.reason)
     for line in result.errors:
-        print(f"aviso: {line}")
+        # a suspeita vai para o stderr, como em todo o resto desta CLI: o stdout do
+        # `expire` tem de continuar legível pela aba da T13
+        sys.stderr.write(f"aviso: {line}\n")
     if result.freed_bytes:
         print(f"expirado: {planner.fmt_bytes(result.freed_bytes)} da SSD")
     return EXIT_OK
@@ -4500,22 +4765,71 @@ do tipo `main(["tmpfs", "release"]) != EXIT_OK` **não** serviria: recusa por `i
 choice` e recusa por `target` ausente têm o mesmo código, então ela passaria nos dois
 mundos.
 
-**Evidência de não-vacuidade:** `test_release_moves_the_item_and_prints_the_entry_id`
-falha se o handler chamar `release_item` com `confirm=args.confirmar` invertido, e
-`test_expire_requires_both_flags` falha se `expire_over_budget` aceitar uma flag só.
-Nenhum teste toca `/tmp`, `/run/user/1000` ou `/dev/shm` reais: `fake_tmp` troca o
-volume por `tmp_path` e `tmpfs_env` troca ledger, destino e raízes do guard.
+**Evidência de não-vacuidade (roda de coerção, não de leitura):** treze mutações no texto
+desta tarefa, cada uma sozinha, e as treze morrem. As que não estão numa tarefa anterior:
+M1 `confirm=args.confirmar` → `confirm=True` no `release` (mata
+`test_release_refuses_without_confirmation`); M2 tirar `audit=_tmpfs_audit()` (mata o pino
+de contagem `["partial", "released"]`); M3 `allowed_roots=_tmpfs_guard_roots()` → `None`
+(guard nega o chão de `tmp_path`, mata as três liberações bem-sucedidas); M4 idem no
+`restore`; M5 fixar o exit do `restore` em `EXIT_REFUSED` (mata o pin do `EXIT_NEEDS_CONFIRM`);
+M6 indentar o `json.dumps` do `ledger --json` (mata a contagem de linhas); M7
+`irreversible=args.irreversivel` → `True` (apaga no teste de recusa); M8 `confirm=args.confirmar`
+→ `True` no `expire` (o dry-run apaga); M9 apagar o ramo `item is None` (o `release_item`
+recebe `None` e morre em `AttributeError` -- que é a prova de que o portão existe); M10
+trocar o aviso do orçamento por `pass`; M11 o laço `result.errors` por `pass`. A tabela com o
+resultado de cada uma vive em `.scratch/t12_mutate.py` e o rodapé dela vai no corpo do commit.
+Nenhum teste toca `/tmp`, `/run/user/1000` ou `/dev/shm` reais: `fake_tmp` troca o volume por
+`tmp_path` e `tmpfs_env` troca ledger, destino, raízes do guard **e auditoria** -- os quatro,
+porque o terceiro ponto da pré-varredura é justamente este arquivo.
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.venv/bin/python -m pytest tests/test_cli_tmpfs.py -v` → PASS (todos).
-Run: `.venv/bin/python -m pytest -q` → verde.
+Run: `.venv/bin/python -m pytest tests/test_cli_tmpfs.py -v --basetemp .scratch/bt12`
+→ PASS — **28 passed** (os 13 da T11 + os 15 daqui).
+Run: `.venv/bin/python -m pytest -v --basetemp .scratch/bt12 2>&1 | tail -2` →
+**523 passed** (508 da T11 + 15).
+
+**Coerção de mutação** — rode cada uma sobre o `cli.py` **já commitado**, uma por vez, e
+reverta com `git checkout -- src/deck_wellness/cli.py` entre elas (a árvore limpa garante
+que não há trabalho alheio no arquivo). Estas são as mortes medidas pelo controlador antes
+da tarefa, na cópia de `.scratch/`; se a sua suíte matar menos, a implementação divergiu do
+plano e é preciso explicar no corpo do commit:
+
+| mutação | morre em |
+|---|---|
+| M1 `release` com `confirm=True` fixo | `test_release_refuses_without_confirmation` |
+| M2 `release` sem `audit=` | `test_release_moves_the_item_and_prints_the_entry_id` |
+| M3 `release` com `allowed_roots=None` | `test_release_uses_the_guard_roots_of_the_seam` |
+| M4 `restore` com `confirm=True` fixo | `test_restore_without_confirmation_moves_nothing` |
+| M5 `restore` sempre `EXIT_REFUSED` | `test_restore_without_confirmation_moves_nothing` |
+| M6 `ledger --json` com `indent=2` | `test_ledger_json_is_one_line_with_the_budget` |
+| M7 `expire` finge `--irreversivel` | `test_expire_dry_run_then_confirm`, `test_expire_requires_both_flags` |
+| M8 `expire` ignora `--confirmar` | as mesmas duas |
+| M9 portão do plano trocado por `if False` | `test_release_refuses_a_path_the_plan_never_classified` |
+| M10 aviso de orçamento removido | `test_ledger_warns_when_the_retention_bursts_the_budget` |
+| M11 `for line in result.errors: pass` | `test_expire_reports_a_payload_that_vanished` |
+| M12 hint do `plan` volta a ser seco | `test_tmpfs_plan_now_points_at_a_command_that_exists` |
+| M13 `_tmpfs_dest()` → `paths.tmp_dir()` | `test_the_mutation_seams_default_to_the_ssd_not_ram` |
+| M14 linhas de resumo do `ledger` omitidas | `test_ledger_prints_ram_freed_against_ssd_retained` |
+| M15 `restore` com `Ledger()` nu (costura ignorada) | `test_restore_returns_the_item_to_its_original_path`, `test_restore_without_confirmation_moves_nothing` |
+| M16 vírgula pt-BR trocada por ponto | `test_ledger_prints_ram_freed_against_ssd_retained` |
+
+**16/16 mortas**, e a árvore revertida volta a `15 passed, 13 deselected` no `-k` da
+tarefa. M14 e M16 não estavam no corte original: existiam mutações que o nome do teste
+prometia e a substring frouxa não media (ponto (k) do preâmbulo).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/deck_wellness/cli.py tests/test_cli_tmpfs.py
-git commit -m "M7 T12: tmpfs release/restore/ledger/expire na CLI — mutação com duas flags"
+git commit -m "$(cat <<'MSG'
+M7 T12: tmpfs release/restore/ledger/expire na CLI — mutação com duas flags
+
+<corpo: a linha do RED (15 failed, 13 deselected) com o mecanismo de cada queda, a
+linha do GREEN (28 no arquivo, 523 na suíte) e a tabela de coerção inteira, uma linha
+por mutação com o teste que morreu, mais a linha revertida conferida>
+MSG
+)"
 ```
 
 ---
