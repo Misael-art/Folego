@@ -4,9 +4,9 @@ import signal
 
 import pytest
 
-from deck_wellness.actions.orphans.reaper import Reaper
-from deck_wellness.cli import main
-from deck_wellness.safely.audit import AuditLog
+from folego.actions.orphans.reaper import Reaper
+from folego.cli import main
+from folego.safely.audit import AuditLog
 from fixtures_proc import build_proc
 
 UID = os.getuid()
@@ -51,7 +51,7 @@ def sent(monkeypatch, tmp_path):
         return Reaper(proc_root=tmp_path / "proc", kill_fn=kill_fn,
                       audit=AuditLog(tmp_path / "audit.jsonl"))
 
-    monkeypatch.setattr("deck_wellness.cli._reaper", factory)
+    monkeypatch.setattr("folego.cli._reaper", factory)
     return calls
 
 
@@ -105,7 +105,7 @@ def test_a_recycled_pid_is_refused_at_the_last_moment(proc_tree, tmp_path,
     build_proc(other, pids=[dict(pid=500, comm="esquecido", ppid=1, pgid=900,
                                  session=901, uid=UID, starttime=4_242)])
     monkeypatch.setattr(
-        "deck_wellness.cli._reaper",
+        "folego.cli._reaper",
         lambda: Reaper(proc_root=other, kill_fn=lambda pid, sig: calls.append(pid),
                        audit=AuditLog(tmp_path / "audit.jsonl")))
 

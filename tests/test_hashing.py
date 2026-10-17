@@ -1,4 +1,4 @@
-from deck_wellness.safely import hashing
+from folego.safely import hashing
 
 
 def test_sha256_bytes_matches_known_digest():

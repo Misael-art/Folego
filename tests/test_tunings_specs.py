@@ -11,12 +11,12 @@ from pathlib import Path
 
 import pytest
 
-from deck_wellness import paths
-from deck_wellness.actions.tunings.engine import TuningEngine
-from deck_wellness.actions.tunings.registry import TUNINGS, tuning_by_id
-from deck_wellness.actions.tunings.specs.background_mode import BACKGROUND_MODE
-from deck_wellness.actions.tunings.specs.startup_boost import STARTUP_BOOST
-from deck_wellness.safely.jsonedit import set_value
+from folego import paths
+from folego.actions.tunings.engine import TuningEngine
+from folego.actions.tunings.registry import TUNINGS, tuning_by_id
+from folego.actions.tunings.specs.background_mode import BACKGROUND_MODE
+from folego.actions.tunings.specs.startup_boost import STARTUP_BOOST
+from folego.safely.jsonedit import set_value
 
 REAL_LOCAL_STATE = Path.home() / ".config" / "microsoft-edge" / "Local State"
 

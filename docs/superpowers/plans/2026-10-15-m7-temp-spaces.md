@@ -14,12 +14,12 @@
 
 - **Nenhuma mutação sem `--confirmar`**; as destrutivas pedem também `--irreversivel`. Reusar os códigos de saída de `cli.py:23-25`: `EXIT_OK=0`, `EXIT_REFUSED=1`, `EXIT_NEEDS_CONFIRM=2`.
 - **Sem psutil e sem dependência nova**: `pyproject.toml` mantém `dependencies = []`.
-- **Camadas** (`tests/test_layers.py`): `core/`, `safely/`, `actions/`, `process/`, `store/`, `paths.py`, `cli.py` não importam PySide6; nada em `ui/` contém `open("/proc`, `procfs.`, `sysfs.` ou `/mnt/`; importar `deck_wellness.cli` não pode carregar Qt.
+- **Camadas** (`tests/test_layers.py`): `core/`, `safely/`, `actions/`, `process/`, `store/`, `paths.py`, `cli.py` não importam PySide6; nada em `ui/` contém `open("/proc`, `procfs.`, `sysfs.` ou `/mnt/`; importar `folego.cli` não pode carregar Qt.
 - **Direção de dependência**: `actions/` consome `core/`; `core/` nunca importa `actions/`. Por isso a leitura de capacidade está em `core/tmpfs.py` (o collector precisa dela).
 - **Copy pt-BR** em toda string vista pelo usuário, decimal com vírgula (`planner.fmt_bytes` devolve `1,5 GB`; `title_signal.fmt1` idem).
 - **Recusa vai para stderr**; stdout com `--json` continua sendo **uma** linha parseável (o `TuneJobs._payload` lê a última linha de stdout, `ui/tune_jobs.py:154`).
 - **Seam de `/proc`**: todo leitor recebe `proc_root` com default `paths.proc_root()`; usar as fixtures `fake_proc` e `fake_home` (`tests/conftest.py:34-54`).
-- **Contrato do filho**: `python -m deck_wellness …`, nunca `-m deck_wellness.cli`; `TuneJobs._environment()` pinna `PYTHONPATH` para `…/src`.
+- **Contrato do filho**: `python -m folego …`, nunca `-m folego.cli`; `TuneJobs._environment()` pinna `PYTHONPATH` para `…/src`.
 - **Proibido nos testes**: escrever em `/tmp`, `/run/user/1000` ou `/dev/shm` reais; tocar `~/.config/microsoft-edge` (o tripwire de sessão já existe em `conftest.py:25`); nada sob `/mnt` (EIO conhecida do cartão).
 - **O collector não estatiza device mount**: `statvfs` de tmpfs é syscall local; nenhum `stat`/`open` em `/mnt*` ou `/run/media*` (regra dura do docstring de `core/collector.py:1-6`).
 - **Git**: sem remote configurado — `git commit` local, **nunca** `git push`.
@@ -37,23 +37,23 @@ não é uma falha — é o motivo de o script imprimir a sua em vez de citar est
 
 | arquivo | papel | ação |
 |---|---|---|
-| `src/deck_wellness/core/tmpfs.py` | leitura de capacidade da watch-list | criar |
-| `src/deck_wellness/actions/tmpfs/__init__.py` | pacote | criar |
-| `src/deck_wellness/actions/tmpfs/holders.py` | índice de fd por caminho | criar |
-| `src/deck_wellness/actions/tmpfs/inventory.py` | classificação de nível-1 e de um item | criar |
-| `src/deck_wellness/actions/tmpfs/policy.py` | duplo filtro + recusas R1–R8 | criar |
-| `src/deck_wellness/actions/tmpfs/plan.py` | plano refusal-first + digest | criar |
-| `src/deck_wellness/actions/tmpfs/trend.py` | ETA até lotar | criar |
-| `src/deck_wellness/actions/tmpfs/ledger.py` | registro + orçamento de retenção | criar |
-| `src/deck_wellness/actions/tmpfs/release.py` | release / restore / expire | criar |
-| `src/deck_wellness/paths.py:34-39` | `tmp_quarantine_dir()`, `tmp_ledger_path()` | modificar |
-| `src/deck_wellness/core/snapshot.py:62-74` | campo `tmpfs` no `Snapshot` | modificar |
-| `src/deck_wellness/core/collector.py:24-61` | coletar volumes no snapshot | modificar |
-| `src/deck_wellness/ui/title_signal.py:15-59` | 🟡/🔴 por ocupação de tmpfs | modificar |
-| `src/deck_wellness/cli.py:14-21,38-105,228-235,459-486` | família `tmpfs` | modificar |
-| `src/deck_wellness/ui/tmpfs_tab.py` | aba "temporários" | criar |
-| `src/deck_wellness/ui/main_window.py:11-25,43-58,129-140` | quinta aba + shutdown do filho | modificar |
-| `src/deck_wellness/ui/tune_jobs.py:21` | `MUTATING` passa a incluir os atos do tmpfs | modificar |
+| `src/folego/core/tmpfs.py` | leitura de capacidade da watch-list | criar |
+| `src/folego/actions/tmpfs/__init__.py` | pacote | criar |
+| `src/folego/actions/tmpfs/holders.py` | índice de fd por caminho | criar |
+| `src/folego/actions/tmpfs/inventory.py` | classificação de nível-1 e de um item | criar |
+| `src/folego/actions/tmpfs/policy.py` | duplo filtro + recusas R1–R8 | criar |
+| `src/folego/actions/tmpfs/plan.py` | plano refusal-first + digest | criar |
+| `src/folego/actions/tmpfs/trend.py` | ETA até lotar | criar |
+| `src/folego/actions/tmpfs/ledger.py` | registro + orçamento de retenção | criar |
+| `src/folego/actions/tmpfs/release.py` | release / restore / expire | criar |
+| `src/folego/paths.py:34-39` | `tmp_quarantine_dir()`, `tmp_ledger_path()` | modificar |
+| `src/folego/core/snapshot.py:62-74` | campo `tmpfs` no `Snapshot` | modificar |
+| `src/folego/core/collector.py:24-61` | coletar volumes no snapshot | modificar |
+| `src/folego/ui/title_signal.py:15-59` | 🟡/🔴 por ocupação de tmpfs | modificar |
+| `src/folego/cli.py:14-21,38-105,228-235,459-486` | família `tmpfs` | modificar |
+| `src/folego/ui/tmpfs_tab.py` | aba "temporários" | criar |
+| `src/folego/ui/main_window.py:11-25,43-58,129-140` | quinta aba + shutdown do filho | modificar |
+| `src/folego/ui/tune_jobs.py:21` | `MUTATING` passa a incluir os atos do tmpfs | modificar |
 | `tools/verify_tmpfs.py` | evidência no host | criar |
 
 Testes novos: `tests/test_core_tmpfs.py`, `test_tmpfs_holders.py`, `test_tmpfs_inventory.py`, `test_tmpfs_policy.py`, `test_tmpfs_plan.py`, `test_tmpfs_trend.py`, `test_tmpfs_ledger.py`, `test_tmpfs_release.py`, `test_cli_tmpfs.py`, `test_ui_tmpfs_tab.py`, `test_tools_verify_tmpfs.py`. Estendem-se `test_paths.py`, `test_collector.py`, `test_title_signal.py`, `test_ui_tray.py`, `test_ui_main_window_tabs.py`, `test_ui_tune_jobs.py`, `test_layers.py`.
@@ -65,12 +65,12 @@ Testes novos: `tests/test_core_tmpfs.py`, `test_tmpfs_holders.py`, `test_tmpfs_i
 ### Task 1: Capacidade dos volumes em watch-list
 
 **Files:**
-- Create: `src/deck_wellness/core/tmpfs.py`
-- Create: `src/deck_wellness/actions/tmpfs/__init__.py`
+- Create: `src/folego/core/tmpfs.py`
+- Create: `src/folego/actions/tmpfs/__init__.py`
 - Test: `tests/test_core_tmpfs.py`
 
 **Interfaces:**
-- Consumes: `deck_wellness.paths.proc_root()`
+- Consumes: `folego.paths.proc_root()`
 - Produces: `WATCHED: tuple[str, ...] = ("/tmp", "/run/user/1000", "/dev/shm")`;
   `TmpfsVolume(path: str, fs_type: str, total_bytes: int, used_bytes: int, avail_bytes: int)` com
   propriedade `used_frac -> float` e `to_dict() -> dict` (chave `used_pct` já arredondada);
@@ -89,7 +89,7 @@ from collections import namedtuple
 
 import pytest
 
-from deck_wellness.core import tmpfs
+from folego.core import tmpfs
 
 GIB = 1024 ** 3
 Statvfs = namedtuple("Statvfs", "f_frsize f_bsize f_blocks f_bfree f_bavail")
@@ -204,7 +204,7 @@ def test_the_document_portal_is_not_a_watched_volume(fake_proc):
 - [ ] **Step 2: Rodar e ver falhar**
 
 Run: `.venv/bin/python -m pytest tests/test_core_tmpfs.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'deck_wellness.core.tmpfs'` (erro de collection nos 9 testes).
+Expected: FAIL — `ModuleNotFoundError: No module named 'folego.core.tmpfs'` (erro de collection nos 9 testes).
 
 - [ ] **Step 3: Implementar o mínimo**
 
@@ -282,7 +282,7 @@ def watched_volumes(*, proc_root: str | None = None, statvfs_fn=os.statvfs,
     return tuple(result)
 ```
 
-E `src/deck_wellness/actions/tmpfs/__init__.py`:
+E `src/folego/actions/tmpfs/__init__.py`:
 
 ```python
 """M7: gestão dos tmpfs onde o trabalho de agente mora."""
@@ -296,7 +296,7 @@ Run: `.venv/bin/python -m pytest -q` → suite inteira verde (372 + 9 = 381).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/deck_wellness/core/tmpfs.py src/deck_wellness/actions/tmpfs/__init__.py tests/test_core_tmpfs.py
+git add src/folego/core/tmpfs.py src/folego/actions/tmpfs/__init__.py tests/test_core_tmpfs.py
 git commit -m "M7 T1: capacidade dos tmpfs em watch-list — /tmp, /run/user/1000 e /dev/shm"
 ```
 
@@ -305,7 +305,7 @@ git commit -m "M7 T1: capacidade dos tmpfs em watch-list — /tmp, /run/user/100
 ### Task 2: Quem está com o arquivo aberto
 
 **Files:**
-- Create: `src/deck_wellness/actions/tmpfs/holders.py`
+- Create: `src/folego/actions/tmpfs/holders.py`
 - Test: `tests/test_tmpfs_holders.py`
 
 **Interfaces:**
@@ -324,7 +324,7 @@ Medido neste Deck: 492 processos, 9.862 fd, 192 refs sob /tmp ∪ /run/user/1000
 """
 import os
 
-from deck_wellness.actions.tmpfs import holders
+from folego.actions.tmpfs import holders
 
 
 def make_proc(root, pid: int, links: dict):
@@ -405,7 +405,7 @@ def test_the_explicit_pid_list_decides_what_is_looked_at(fake_proc):
 - [ ] **Step 2: Rodar e ver falhar**
 
 Run: `.venv/bin/python -m pytest tests/test_tmpfs_holders.py -v`
-Expected: FAIL — `ModuleNotFoundError: ... 'deck_wellness.actions.tmpfs.holders'`.
+Expected: FAIL — `ModuleNotFoundError: ... 'folego.actions.tmpfs.holders'`.
 
 - [ ] **Step 3: Implementar o mínimo**
 
@@ -484,7 +484,7 @@ Run: `.venv/bin/python -m pytest -q` → verde.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/deck_wellness/actions/tmpfs/holders.py tests/test_tmpfs_holders.py
+git add src/folego/actions/tmpfs/holders.py tests/test_tmpfs_holders.py
 git commit -m "M7 T2: índice de /proc/*/fd — provar que nada está aberto antes de liberar"
 ```
 
@@ -493,7 +493,7 @@ git commit -m "M7 T2: índice de /proc/*/fd — provar que nada está aberto ant
 ### Task 3: Inventário de um volume e de um item
 
 **Files:**
-- Create: `src/deck_wellness/actions/tmpfs/inventory.py`
+- Create: `src/folego/actions/tmpfs/inventory.py`
 - Test: `tests/test_tmpfs_inventory.py`
 
 **Interfaces:**
@@ -518,8 +518,8 @@ import socket
 
 import pytest
 
-from deck_wellness.actions.tmpfs import holders, inventory
-from deck_wellness.core.tmpfs import TmpfsVolume
+from folego.actions.tmpfs import holders, inventory
+from folego.core.tmpfs import TmpfsVolume
 
 NOW = 1_700_000_000.0
 EMPTY = holders.HolderIndex({}, 0, 0)
@@ -691,7 +691,7 @@ def test_truncated_measurement_is_carried_out(tmp_path):
 
 
 def test_scan_volume_brings_mounts_holders_and_entries_together(fake_proc, tmp_path):
-    from deck_wellness.core.tmpfs import TmpfsVolume as V
+    from folego.core.tmpfs import TmpfsVolume as V
 
     (fake_proc / "mounts").write_text(f"tmpfs {tmp_path}/tmp tmpfs rw 0 0\n")
     root = volume_dir(tmp_path)
@@ -832,7 +832,7 @@ a afirmação.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/deck_wellness/actions/tmpfs/inventory.py tests/test_tmpfs_inventory.py
+git add src/folego/actions/tmpfs/inventory.py tests/test_tmpfs_inventory.py
 git commit -m "$(cat <<'MSG'
 M7 T3: inventário de tmpfs — tipo, dono, idade real, monte e holder por item
 
@@ -847,7 +847,7 @@ MSG
 ### Task 4: A política de recusa (duplo filtro)
 
 **Files:**
-- Create: `src/deck_wellness/actions/tmpfs/policy.py`
+- Create: `src/folego/actions/tmpfs/policy.py`
 - Test: `tests/test_tmpfs_policy.py`
 
 **Interfaces:**
@@ -887,8 +887,8 @@ spec.
 """
 import os
 
-from deck_wellness.actions.tmpfs import policy
-from deck_wellness.actions.tmpfs.inventory import TmpfsEntry
+from folego.actions.tmpfs import policy
+from folego.actions.tmpfs.inventory import TmpfsEntry
 
 GIB = 1024 ** 3
 
@@ -1108,7 +1108,7 @@ conferir o total use `-v … | tail -2`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/deck_wellness/actions/tmpfs/policy.py tests/test_tmpfs_policy.py
+git add src/folego/actions/tmpfs/policy.py tests/test_tmpfs_policy.py
 git commit -m "M7 T4: política de recusa-primeiro — tipo + allow-list, com motivo por item"
 ```
 
@@ -1117,7 +1117,7 @@ git commit -m "M7 T4: política de recusa-primeiro — tipo + allow-list, com mo
 ### Task 5: O plano refusal-first
 
 **Files:**
-- Create: `src/deck_wellness/actions/tmpfs/plan.py`
+- Create: `src/folego/actions/tmpfs/plan.py`
 - Test: `tests/test_tmpfs_plan.py`
 
 **Interfaces:**
@@ -1138,10 +1138,10 @@ reclaimable + protected == scanned_entries é a mesma reconciliação que o M5 p
 import json
 import os
 
-from deck_wellness.actions.tmpfs import plan
-from deck_wellness.actions.tmpfs.inventory import TmpfsEntry
-from deck_wellness.actions.tmpfs.policy import Policy
-from deck_wellness.core.tmpfs import TmpfsVolume
+from folego.actions.tmpfs import plan
+from folego.actions.tmpfs.inventory import TmpfsEntry
+from folego.actions.tmpfs.policy import Policy
+from folego.core.tmpfs import TmpfsVolume
 
 NOW = 1_700_000_000.0
 GIB = 1024 ** 3
@@ -1396,7 +1396,7 @@ empilhado com `addopts = "-q"` leva a verbosidade a −2 e suprime a linha de re
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/deck_wellness/actions/tmpfs/plan.py tests/test_tmpfs_plan.py
+git add src/folego/actions/tmpfs/plan.py tests/test_tmpfs_plan.py
 git commit -m "M7 T5: plano refusal-first com digest e contagens reconciliáveis"
 ```
 
@@ -1405,7 +1405,7 @@ git commit -m "M7 T5: plano refusal-first com digest e contagens reconciliáveis
 ### Task 6: Tendência e ETA até lotar
 
 **Files:**
-- Create: `src/deck_wellness/actions/tmpfs/trend.py`
+- Create: `src/folego/actions/tmpfs/trend.py`
 - Test: `tests/test_tmpfs_trend.py`
 
 **Interfaces:**
@@ -1423,7 +1423,7 @@ de crescimento".
 """
 import pytest
 
-from deck_wellness.actions.tmpfs import trend
+from folego.actions.tmpfs import trend
 
 GIB = 1024 ** 3
 
@@ -1507,7 +1507,7 @@ Run: `.venv/bin/python -m pytest -v 2>&1 | tail -2` → `437 passed` (430 + 7).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/deck_wellness/actions/tmpfs/trend.py tests/test_tmpfs_trend.py
+git add src/folego/actions/tmpfs/trend.py tests/test_tmpfs_trend.py
 git commit -m "M7 T6: ETA até lotar — extrapolação que devolve None sem evidência"
 ```
 
@@ -1516,9 +1516,9 @@ git commit -m "M7 T6: ETA até lotar — extrapolação que devolve None sem evi
 ### Task 7: A pressão do tmpfs chega ao título da janela
 
 **Files:**
-- Modify: `src/deck_wellness/core/snapshot.py:61-74` (campo `tmpfs`)
-- Modify: `src/deck_wellness/core/collector.py:1-61` (ler volumes no `collect()`)
-- Modify: `src/deck_wellness/ui/title_signal.py:15-55`
+- Modify: `src/folego/core/snapshot.py:61-74` (campo `tmpfs`)
+- Modify: `src/folego/core/collector.py:1-61` (ler volumes no `collect()`)
+- Modify: `src/folego/ui/title_signal.py:15-55`
 - Test: `tests/test_title_signal.py`, `tests/test_collector.py`, `tests/test_ui_tray.py` (estender)
 
 **Interfaces:**
@@ -1552,7 +1552,7 @@ def snap(available_kb, total_kb=14_374_304, psi10=0.0, self_rss_kb=96_000, tmpfs
 E no fim do arquivo:
 
 ```python
-from deck_wellness.core.tmpfs import TmpfsVolume
+from folego.core.tmpfs import TmpfsVolume
 
 GIB = 1024 ** 3
 
@@ -1617,7 +1617,7 @@ Em `tests/test_collector.py` (o fixture `env` já existe):
 
 ```python
 def test_the_collector_carries_watched_volumes_into_the_snapshot(env):
-    from deck_wellness.core.tmpfs import TmpfsVolume
+    from folego.core.tmpfs import TmpfsVolume
     proc_root, sys_root = env
     volumes = (TmpfsVolume("/tmp", "tmpfs", 8 * 1024**3, 7 * 1024**3, 1024**3),)
     snap = collector.MetricsCollector(
@@ -1635,8 +1635,8 @@ def test_a_fake_proc_root_with_no_mounts_carries_no_tmpfs(env):
 Em `tests/test_ui_tray.py`, estender o `snap()` local (linha 23) com `tmpfs=()` e
 `tmpfs=tmpfs` no `Snapshot(...)`, e somar. O arquivo ainda não importa
 `TmpfsVolume` — a linha 10 hoje é
-`from deck_wellness.core.snapshot import MemInfo, Pressure, Snapshot` e precisa
-ganhar um `from deck_wellness.core.tmpfs import TmpfsVolume` junto: sem isso o
+`from folego.core.snapshot import MemInfo, Pressure, Snapshot` e precisa
+ganhar um `from folego.core.tmpfs import TmpfsVolume` junto: sem isso o
 vermelho do Step 2 seria `NameError`, que é defeito do teste e não evidência da
 funcionalidade ausente.
 
@@ -1754,8 +1754,8 @@ de cada mutação no corpo do commit — a spec (§10) pede a evidência, não a
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/deck_wellness/core/snapshot.py src/deck_wellness/core/collector.py \
-        src/deck_wellness/ui/title_signal.py tests/test_title_signal.py \
+git add src/folego/core/snapshot.py src/folego/core/collector.py \
+        src/folego/ui/title_signal.py tests/test_title_signal.py \
         tests/test_collector.py tests/test_ui_tray.py
 git commit -m "M7 T7: pressão de tmpfs no título — escala o sinal, nunca relaxa"
 ```
@@ -1765,8 +1765,8 @@ git commit -m "M7 T7: pressão de tmpfs no título — escala o sinal, nunca rel
 ### Task 8: Ledger append-only e orçamento de retenção
 
 **Files:**
-- Modify: `src/deck_wellness/paths.py:38-39` (antes de `audit_log_path`)
-- Create: `src/deck_wellness/actions/tmpfs/ledger.py`
+- Modify: `src/folego/paths.py:38-39` (antes de `audit_log_path`)
+- Create: `src/folego/actions/tmpfs/ledger.py`
 - Test: `tests/test_tmpfs_ledger.py`, `tests/test_paths.py` (estender)
 
 **Interfaces:**
@@ -1803,7 +1803,7 @@ import time
 
 import pytest
 
-from deck_wellness.actions.tmpfs import ledger as L
+from folego.actions.tmpfs import ledger as L
 
 DAY = 86_400
 NOW = 1_700_000_000.0
@@ -1817,7 +1817,7 @@ def book(tmp_path):
 
 def rec(**over):
     base = dict(entry_id="1700-a", src="/tmp/velho", volume="/tmp",
-                stored="/home/u/.local/share/deck-wellness/tmp-quarantine/x",
+                stored="/home/u/.local/share/folego/tmp-quarantine/x",
                 bytes=1024, sha256="ab" * 32, age_days=4.0,
                 matched_pattern="/tmp/tmp*", holder_pids=(), state=L.STATE_RELEASED,
                 action_id="tmpfs.release", audit_event_id="e1")
@@ -1954,23 +1954,23 @@ def test_find_accepts_entry_id_or_the_tail_of_a_path(book):
     assert book.find("inexistente") is None
 ```
 
-Em `tests/test_paths.py` (o arquivo já faz `from deck_wellness import paths` na linha 1 e
+Em `tests/test_paths.py` (o arquivo já faz `from folego import paths` na linha 1 e
 usa o fixture `fake_home` do `conftest.py` — os dois caminhos novos vão no fim dele, porque
 são da superfície de `paths.py`, não do ledger):
 
 ```python
 def test_tmp_retention_lands_on_the_ssd_not_in_ram(fake_home):
     assert paths.tmp_ledger_path() == (
-        fake_home / ".local" / "state" / "deck-wellness" / "tmp-ledger.jsonl")
+        fake_home / ".local" / "state" / "folego" / "tmp-ledger.jsonl")
     assert paths.tmp_quarantine_dir() == (
-        fake_home / ".local" / "share" / "deck-wellness" / "tmp-quarantine")
+        fake_home / ".local" / "share" / "folego" / "tmp-quarantine")
 ```
 
 - [ ] **Step 2: Rodar e ver falhar**
 
 Run: `.venv/bin/python -m pytest tests/test_tmpfs_ledger.py tests/test_paths.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'deck_wellness.actions.tmpfs.ledger'`
-e, em `tests/test_paths.py`, `AttributeError: module 'deck_wellness.paths' has no attribute
+Expected: FAIL — `ModuleNotFoundError: No module named 'folego.actions.tmpfs.ledger'`
+e, em `tests/test_paths.py`, `AttributeError: module 'folego.paths' has no attribute
 'tmp_ledger_path'` (a primeira asserção do teste novo).
 
 - [ ] **Step 3: Escrever a implementação mínima**
@@ -2205,7 +2205,7 @@ a evidência mora, a spec §10 pede a saída, não a afirmação):
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/deck_wellness/paths.py src/deck_wellness/actions/tmpfs/ledger.py \
+git add src/folego/paths.py src/folego/actions/tmpfs/ledger.py \
         tests/test_tmpfs_ledger.py tests/test_paths.py
 git commit -m "M7 T8: ledger de retenção com orçamento — a SSD não vira o lixo novo"
 ```
@@ -2215,7 +2215,7 @@ git commit -m "M7 T8: ledger de retenção com orçamento — a SSD não vira o 
 ### Task 9: Liberar RAM — copiar, verificar, então apagar
 
 **Files:**
-- Create: `src/deck_wellness/actions/tmpfs/release.py`
+- Create: `src/folego/actions/tmpfs/release.py`
 - Test: `tests/test_tmpfs_release.py`
 
 **Interfaces:**
@@ -2244,14 +2244,14 @@ from pathlib import Path
 
 import pytest
 
-from deck_wellness.actions.tmpfs import release
-from deck_wellness.actions.tmpfs.inventory import TmpfsEntry
-from deck_wellness.actions.tmpfs.ledger import (MAX_RETAINED_BYTES, STATE_PARTIAL,
+from folego.actions.tmpfs import release
+from folego.actions.tmpfs.inventory import TmpfsEntry
+from folego.actions.tmpfs.ledger import (MAX_RETAINED_BYTES, STATE_PARTIAL,
                                                  STATE_RELEASED, STATE_RESTORED, Ledger)
-from deck_wellness.actions.tmpfs.plan import build_plan
-from deck_wellness.actions.tmpfs.policy import Policy
-from deck_wellness.core.tmpfs import TmpfsVolume
-from deck_wellness.safely.audit import AuditLog
+from folego.actions.tmpfs.plan import build_plan
+from folego.actions.tmpfs.policy import Policy
+from folego.core.tmpfs import TmpfsVolume
+from folego.safely.audit import AuditLog
 
 DAY = 86_400
 NOW = 1_700_000_000.0
@@ -2664,7 +2664,7 @@ class _vfs:
 - [ ] **Step 2: Rodar e ver falhar**
 
 Run: `.venv/bin/python -m pytest tests/test_tmpfs_release.py -v`
-Expected: FAIL — `ImportError: cannot import name 'release' from 'deck_wellness.actions.tmpfs'`
+Expected: FAIL — `ImportError: cannot import name 'release' from 'folego.actions.tmpfs'`
 nas 15 coleções.
 Os testes de cima dependem de `PlanItem.matched` vir preenchido pelo `build_plan` (T5)
 e de `plan.find(caminho)` aceitar o caminho absoluto como alça.
@@ -3004,7 +3004,7 @@ Rode as mutações com `--basetemp` apontando para a SSD e confira `df -h /tmp` 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/deck_wellness/actions/tmpfs/release.py tests/test_tmpfs_release.py
+git add src/folego/actions/tmpfs/release.py tests/test_tmpfs_release.py
 git commit -m "M7 T9: liberação reversível — copy, verify, ledger partial, unlink"
 ```
 
@@ -3013,7 +3013,7 @@ git commit -m "M7 T9: liberação reversível — copy, verify, ledger partial, 
 ### Task 10: Devolver e expirar o que está retido
 
 **Files:**
-- Modify: `src/deck_wellness/actions/tmpfs/release.py` (acrescentar restore/expire)
+- Modify: `src/folego/actions/tmpfs/release.py` (acrescentar restore/expire)
 - Test: `tests/test_tmpfs_release.py` (estender)
 
 **Interfaces:**
@@ -3351,7 +3351,7 @@ def test_a_copytree_failure_on_the_release_side_refuses_without_a_traceback(tmp_
 - [ ] **Step 2: Rodar e ver falhar**
 
 Run: `.venv/bin/python -m pytest tests/test_tmpfs_release.py -v -k "restore or expire"`
-Expected: FAIL — `AttributeError: module 'deck_wellness.actions.tmpfs.release' has no
+Expected: FAIL — `AttributeError: module 'folego.actions.tmpfs.release' has no
 attribute 'restore_item'`.
 
 Os nomes dos cinco testes novos foram escolhidos para cair no `-k` acima: `restore`,
@@ -3650,7 +3650,7 @@ de erros por arquivo.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/deck_wellness/actions/tmpfs/release.py tests/test_tmpfs_release.py
+git add src/folego/actions/tmpfs/release.py tests/test_tmpfs_release.py
 git commit -m "M7 T10: restore e expire — devolver com digest, expirar com duas flags"
 ```
 
@@ -3659,7 +3659,7 @@ git commit -m "M7 T10: restore e expire — devolver com digest, expirar com dua
 ### Task 11: CLI de leitura — `tmpfs status` e `tmpfs plan`
 
 **Files:**
-- Modify: `src/deck_wellness/cli.py:14-30` (imports + seams), `:38-105` (parser),
+- Modify: `src/folego/cli.py:14-30` (imports + seams), `:38-105` (parser),
   antes de `_TUNE_HANDLERS` (handlers) e em `main()` (`ns.command == "tune"` é o vizinho)
 - Test: `tests/test_cli_tmpfs.py`
 
@@ -3699,9 +3699,9 @@ from dataclasses import replace
 
 import pytest
 
-from deck_wellness import cli
-from deck_wellness.cli import main
-from deck_wellness.core.tmpfs import TmpfsVolume
+from folego import cli
+from folego.cli import main
+from folego.core.tmpfs import TmpfsVolume
 
 DAY = 86_400
 GIB = 1024 ** 3
@@ -3962,7 +3962,7 @@ _tmpfs_now = time.time
 ```
 
 No `build_parser()`, depois do bloco `tune`. Uma diferença deliberada vs. `disk`/`tune`:
-**sem `required=True`** no subparser do `tmpfs`. Com `required=True`, `deck-wellness tmpfs`
+**sem `required=True`** no subparser do `tmpfs`. Com `required=True`, `folego tmpfs`
 sozinho morre no usage em inglês do argparse e o ramo de recusa de `main()` fica
 inalcançável; sem ele, `ns.sub` chega `None`, a recusa é nossa (pt-BR, exit 2), e o
 `tmpfs limpar-tudo` continua sendo recusado pelo argparse — que sai com código 2, o mesmo
@@ -4065,7 +4065,7 @@ def _cmd_tmpfs_status(args) -> int:
               f"{round(volume.used_frac * 100)}%")
     worst = max(volumes, key=lambda v: v.used_frac)
     print(f"\npior volume: {worst.path} a {round(worst.used_frac * 100)}%")
-    print("Para ver o plano: deck-wellness tmpfs plan (dry-run, nada muda)")
+    print("Para ver o plano: folego tmpfs plan (dry-run, nada muda)")
     return EXIT_OK
 
 
@@ -4130,7 +4130,7 @@ Em `main()`, ao lado do ramo do `tune`:
         return handler(ns)
 ```
 
-O `or "(nenhum)"` não é adorno: sem `required=True` no subparser, `deck-wellness tmpfs`
+O `or "(nenhum)"` não é adorno: sem `required=True` no subparser, `folego tmpfs`
 sozinho chega aqui com `ns.sub is None`, e interpolá-lo puro escreveria
 `subcomando desconhecido: None` — uma palavra de programa em frase de usuário, exatamente
 o que a copy pt-BR proíbe. O ramo está pinado por teste.
@@ -4151,12 +4151,12 @@ montado, contagem que não fecha; o `subcomando inexistente` já estava lá e ga
 zero itens lidos ≠ limpeza)).
 Run: `.venv/bin/python -m pytest -q --basetemp .scratch/basetemp11full` → **508 passed**
 (495 antes da tarefa + 13), zero falhas, `test_layers` continuando provar que importar
-`deck_wellness.cli` não carrega Qt.
+`folego.cli` não carrega Qt.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/deck_wellness/cli.py tests/test_cli_tmpfs.py
+git add src/folego/cli.py tests/test_cli_tmpfs.py
 git commit -m "M7 T11: tmpfs status/plan na CLI — plano refusal-first num TTY"
 ```
 
@@ -4165,8 +4165,8 @@ git commit -m "M7 T11: tmpfs status/plan na CLI — plano refusal-first num TTY"
 ### Task 12: CLI de mutação — `release`, `restore`, `ledger`, `expire`
 
 **Files:**
-- Modify: `src/deck_wellness/cli.py` (parser + 4 handlers + `_TMPFS_HANDLERS`)
-- Modify: `src/deck_wellness/actions/tmpfs/release.py` (só a ordem do portão de
+- Modify: `src/folego/cli.py` (parser + 4 handlers + `_TMPFS_HANDLERS`)
+- Modify: `src/folego/actions/tmpfs/release.py` (só a ordem do portão de
   confirmação em `restore_item` — ponto (n) do preâmbulo; nada mais naquele arquivo)
 - Test: `tests/test_cli_tmpfs.py` (estender), `tests/test_tmpfs_release.py` (estender)
 
@@ -4180,7 +4180,7 @@ git commit -m "M7 T11: tmpfs status/plan na CLI — plano refusal-first num TTY"
 **Este texto já carrega a pré-varredura do controlador, e os doze pontos abaixo são
 dele, não do corte original.** (a) `_tmpfs_audit()` é um `AuditLog()` puro, e `AuditLog`
 resolve `paths.audit_log_path()` em tempo de chamada: sem trocar a costura, os testes de
-mutação escreveriam no `~/.local/state/deck-wellness/audit.jsonl` **de verdade** (o
+mutação escreveriam no `~/.local/state/folego/audit.jsonl` **de verdade** (o
 caminho vem de `safely/audit.py:17-18` + `paths.py:47-48`), e o `tmpfs_env` agora troca
 também o audit — um handler que esquecesse o `audit=` não seria visto de outro jeito, e
 a contagem de eventos é o pino que prova a passagem. Não se resolve com `fake_home`: esse
@@ -4250,16 +4250,16 @@ adivinhar a causa) deixaria o contrato do exit code pendurado numa string de men
 
 Somar ao topo de `tests/test_cli_tmpfs.py`: `import shutil` (o arquivo ainda não o traz, e
 um teste que apaga o próprio chão falso precisa apagar de verdade),
-`from deck_wellness import paths`,
-`from deck_wellness.actions.tmpfs.ledger import MAX_RETAINED_BYTES, Ledger` e
-`from deck_wellness.safely.audit import AuditLog`.
+`from folego import paths`,
+`from folego.actions.tmpfs.ledger import MAX_RETAINED_BYTES, Ledger` e
+`from folego.safely.audit import AuditLog`.
 
 ```python
 def tmpfs_env(tmp_path, fake_tmp, monkeypatch):
     """CLI e atos no mesmo chão falso: ledger, quarentena, raízes do guard e auditoria.
 
     As quatro costuras, não três: `AuditLog()` sem caminho escreve no
-    `~/.local/state/deck-wellness/audit.jsonl` do host, e uma suíte de mutação que só
+    `~/.local/state/folego/audit.jsonl` do host, e uma suíte de mutação que só
     troca ledger e destino deixaria rastro real fora do `tmp_path`. O arquivo de
     auditoria também é onde se conta o evento por transição.
     """
@@ -4589,7 +4589,7 @@ def _audit_events(tmp_path, kind: str) -> list:
     """Os `outcome`s de um tipo de evento, na ordem em que foram escritos.
 
     É a costura do ponto (a): sem trocar `_tmpfs_audit`, estes eventos iriam para o
-    `~/.local/state/deck-wellness/audit.jsonl` do host. Contá-los aqui prova que o
+    `~/.local/state/folego/audit.jsonl` do host. Contá-los aqui prova que o
     handler passou o audit de verdade -- um `audit=` esquecido daria lista vazia.
     """
     path = tmp_path / "state" / "audit.jsonl"
@@ -4626,7 +4626,7 @@ Run: `.venv/bin/python -m pytest tests/test_cli_tmpfs.py -v --basetemp .scratch/
 Expected: **18 failed, 13 deselected** — e é preciso saber ler a falha, porque os dezoito
 morrem por dois mecanismos diferentes:
 * os dezessete que passam por `tmpfs_env` ou pelas costuras caem em `AttributeError: module
-  deck_wellness.cli has no attribute '_tmpfs_ledger'` (ou `_tmpfs_dest`, `_tmpfs_audit`,
+  folego.cli has no attribute '_tmpfs_ledger'` (ou `_tmpfs_dest`, `_tmpfs_audit`,
   `_tmpfs_guard_roots`) -- o `monkeypatch.setattr` da costura vem antes de qualquer
   argparse, e é ele que prova que o handler ainda não existe (a mesma queda alcança os três
   pinos do ponto (n), que por trás deles têm um `restore_item` da T10 mas não têm handler);
@@ -4724,7 +4724,7 @@ def _cmd_tmpfs_release(args) -> int:
     item = plan.find(args.target)
     if item is None:
         sys.stderr.write(f"refused: {args.target} não está no plano — só se libera o "
-                         "que o plano classificou (deck-wellness tmpfs plan)\n")
+                         "que o plano classificou (folego tmpfs plan)\n")
         return EXIT_REFUSED
     result = tmpfs_release.release_item(
         plan, item, ledger=_tmpfs_ledger(), audit=_tmpfs_audit(),
@@ -4738,7 +4738,7 @@ def _cmd_tmpfs_release(args) -> int:
     print(f"   retido em: {result.stored}")
     print(f"   sha256:    {result.sha256}")
     print(f"   id:        {result.entry_id}")
-    print(f"   devolve:   deck-wellness tmpfs restore {result.entry_id} --confirmar")
+    print(f"   devolve:   folego tmpfs restore {result.entry_id} --confirmar")
     return EXIT_OK
 
 
@@ -4784,7 +4784,7 @@ def _cmd_tmpfs_ledger(args) -> int:
           f"de {planner.fmt_bytes(MAX_RETAINED_BYTES)}")
     if view.retained_bytes > MAX_RETAINED_BYTES:
         sys.stderr.write("aviso: a retenção estourou o orçamento — rode "
-                         "deck-wellness tmpfs expire\n")
+                         "folego tmpfs expire\n")
     return EXIT_OK
 
 
@@ -4827,12 +4827,12 @@ mesma. Agora que os quatro handlers existem, troque:
 por
 
 ```python
-    print("\nPara liberar um item: deck-wellness tmpfs release <caminho> --confirmar "
+    print("\nPara liberar um item: folego tmpfs release <caminho> --confirmar "
           "(vai para a SSD e volta com tmpfs restore)")
 ```
 
 e estenda a string de uso de `main()` para
-`[tmpfs status|plan|release|restore|ledger|expire]` — ela é alcançável (`deck-wellness
+`[tmpfs status|plan|release|restore|ledger|expire]` — ela é alcançável (`folego
 disk` sem subcomando cai nela), então o nome que falta nela é um erro de verdade. O pino
 em `tests/test_cli_tmpfs.py`:
 
@@ -4967,7 +4967,7 @@ esta tarefa é o ponto (n): a ordem do portão no `restore_item` e os quatro pin
 Suba isso em commit próprio, com a evidência do Passo 2b e das M17–M19 no corpo:
 
 ```bash
-git add src/deck_wellness/actions/tmpfs/release.py tests/test_tmpfs_release.py \
+git add src/folego/actions/tmpfs/release.py tests/test_tmpfs_release.py \
         tests/test_cli_tmpfs.py
 git commit -m "$(cat <<'MSG'
 M7 T12 rodada 1: o portão do --confirmar do restore sobe para a porta
@@ -4985,10 +4985,10 @@ MSG
 ### Task 13: Quinta aba "temporários" — a janela só fala com o filho em JSON
 
 **Files:**
-- Create: `src/deck_wellness/ui/tmpfs_tab.py`
-- Modify: `src/deck_wellness/cli.py` (`--json` em release/restore/expire + um ramo de saída em cada handler)
-- Modify: `src/deck_wellness/ui/tune_jobs.py:21` (`MUTATING`)
-- Modify: `src/deck_wellness/ui/main_window.py` (docstring, imports, `TABS`, `TMPFS_TIMEOUT_MS`, `__init__`, `apply_snapshot`, `closeEvent`)
+- Create: `src/folego/ui/tmpfs_tab.py`
+- Modify: `src/folego/cli.py` (`--json` em release/restore/expire + um ramo de saída em cada handler)
+- Modify: `src/folego/ui/tune_jobs.py:21` (`MUTATING`)
+- Modify: `src/folego/ui/main_window.py` (docstring, imports, `TABS`, `TMPFS_TIMEOUT_MS`, `__init__`, `apply_snapshot`, `closeEvent`)
 - Test: `tests/test_ui_tmpfs_tab.py` (novo), `tests/test_ui_main_window_tabs.py` (estender), `tests/test_ui_tune_jobs.py` (estender), `tests/test_cli_tmpfs.py` (estender), `tests/test_layers.py` (estender)
 
 **Interfaces:**
@@ -5051,8 +5051,8 @@ import sys
 
 import pytest
 
-from deck_wellness.core.tmpfs import TmpfsVolume
-from deck_wellness.ui.tmpfs_tab import (LEDGER_COLUMNS, PLAN_COLUMNS, VOLUME_COLUMNS,
+from folego.core.tmpfs import TmpfsVolume
+from folego.ui.tmpfs_tab import (LEDGER_COLUMNS, PLAN_COLUMNS, VOLUME_COLUMNS,
                                         TmpfsTab, argv_for)
 
 pytest.importorskip("PySide6")
@@ -5103,7 +5103,7 @@ def ledger_payload(acao="ledger", target=""):
     return {"acao": acao, "ok": True, "exit": 0,
             "records": [{"ts": "2026-10-01T00:00:00Z", "entry_id": "1700-abc",
                          "src": "/tmp/qoder-cli-1000", "volume": "/tmp",
-                         "stored": "/home/u/.local/share/deck-wellness/tmp-quarantine/x",
+                         "stored": "/home/u/.local/share/folego/tmp-quarantine/x",
                          "bytes": 4096, "sha256": "a" * 64, "age_days": 30.0,
                          "matched_pattern": "/tmp/qoder-cli-1000", "holder_pids": [1234],
                          "state": "released", "action_id": "tmpfs.release",
@@ -5139,15 +5139,15 @@ def tab(qapp, jobs):
 
 
 def test_argv_is_the_same_headless_cli_a_tty_would_run():
-    assert argv_for("plan") == [sys.executable, "-m", "deck_wellness", "tmpfs", "plan",
+    assert argv_for("plan") == [sys.executable, "-m", "folego", "tmpfs", "plan",
                                  "--json"]
-    assert argv_for("ledger") == [sys.executable, "-m", "deck_wellness", "tmpfs",
+    assert argv_for("ledger") == [sys.executable, "-m", "folego", "tmpfs",
                                   "ledger", "--json"]
 
 
 def test_a_mutation_carries_the_target_and_the_right_flags():
     assert argv_for("release", "/tmp/qoder-cli-1000", True) == [
-        sys.executable, "-m", "deck_wellness", "tmpfs", "release", "/tmp/qoder-cli-1000",
+        sys.executable, "-m", "folego", "tmpfs", "release", "/tmp/qoder-cli-1000",
         "--json", "--confirmar"]
     assert argv_for("expire", "", True)[-2:] == ["--confirmar", "--irreversivel"]
     assert "--irreversivel" not in argv_for("expire", "", False)
@@ -5327,7 +5327,7 @@ def test_closing_the_window_takes_every_child_layer_down(window):
 
 
 def test_the_watched_volumes_land_on_the_tmpfs_tab(window):
-    from deck_wellness.core.tmpfs import TmpfsVolume
+    from folego.core.tmpfs import TmpfsVolume
     window.apply_snapshot(snap(tmpfs=(TmpfsVolume("/tmp", "tmpfs", 8 * GIB, 7 * GIB,
                                                   GIB),)))
     assert window.tmpfs.volume_rows[0]["path"] == "/tmp"
@@ -5346,7 +5346,7 @@ Somar a `tests/test_ui_tune_jobs.py` (usa `pump`, `sandbox` e `qapp` que já exi
 ```python
 def test_a_tmpfs_release_blocks_the_next_mutation(qapp, sandbox):
     """Duas liberações simultâneas seriam duas cópias grandes ao mesmo tempo."""
-    from deck_wellness.ui.tune_jobs import TuneJobs
+    from folego.ui.tune_jobs import TuneJobs
 
     answers = []
     layer = TuneJobs(env=sandbox, timeout_ms=6000,
@@ -5414,7 +5414,7 @@ def test_the_tmpfs_layers_are_actually_scanned():
 - [ ] **Step 3: Rodar e ver falhar**
 
 Run: `.venv/bin/python -m pytest tests/test_ui_tmpfs_tab.py tests/test_layers.py tests/test_cli_tmpfs.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'deck_wellness.ui.tmpfs_tab'`, e
+Expected: FAIL — `ModuleNotFoundError: No module named 'folego.ui.tmpfs_tab'`, e
 em `test_layers` o `FileNotFoundError`/`AssertionError` do arquivo que ainda não existe;
 as duas novas da CLI falham com `unrecognized arguments: --json`.
 Run: `.venv/bin/python -m pytest tests/test_ui_main_window_tabs.py -v`
@@ -5479,7 +5479,7 @@ do portão `if not confirm`, no topo do `restore_item` (citado por função para
 
 - [ ] **Step 5: A mutação passa a contar como mutação**
 
-`src/deck_wellness/ui/tune_jobs.py:21`:
+`src/folego/ui/tune_jobs.py:21`:
 
 ```python
 MUTATING = ("apply", "revert", "release", "restore", "expire")
@@ -5520,7 +5520,7 @@ LEDGER_COLUMNS = (("entry_id", "id"), ("state", "estado"), ("size", "tamanho"),
 
 
 def argv_for(acao: str, target: str = "", confirm: bool = False) -> list:
-    argv = [sys.executable, "-m", "deck_wellness", "tmpfs", acao]
+    argv = [sys.executable, "-m", "folego", "tmpfs", acao]
     if target:
         argv.append(str(target))
     if acao in JSON_ACTIONS:
@@ -5858,8 +5858,8 @@ condição -- os dois juntos são o que faz do marcador um aviso e não enfeite.
 - [ ] **Step 9: Commit**
 
 ```bash
-git add src/deck_wellness/ui/tmpfs_tab.py src/deck_wellness/ui/main_window.py \
-        src/deck_wellness/ui/tune_jobs.py src/deck_wellness/cli.py \
+git add src/folego/ui/tmpfs_tab.py src/folego/ui/main_window.py \
+        src/folego/ui/tune_jobs.py src/folego/cli.py \
         tests/test_ui_tmpfs_tab.py tests/test_ui_main_window_tabs.py \
         tests/test_ui_tune_jobs.py tests/test_layers.py tests/test_cli_tmpfs.py
 git commit -m "M7 T13: quinta aba temporários — a janela libera RAM pelo filho matável, com diálogo"
@@ -5912,7 +5912,7 @@ mudou têm de ser nomeados.
 import importlib.util
 from pathlib import Path
 
-from deck_wellness.core.tmpfs import TmpfsVolume
+from folego.core.tmpfs import TmpfsVolume
 
 ROOT = Path(__file__).resolve().parent.parent
 _spec = importlib.util.spec_from_file_location("verify_tmpfs", ROOT / "tools" / "verify_tmpfs.py")
@@ -6071,11 +6071,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from deck_wellness import cli, paths  # noqa: E402
-from deck_wellness.actions.disk.planner import fmt_bytes  # noqa: E402
-from deck_wellness.actions.tmpfs import holders, inventory, ledger as ledger_mod, policy, release  # noqa: E402
-from deck_wellness.core import tmpfs as tmpfs_mod  # noqa: E402
-from deck_wellness.safely.audit import AuditLog  # noqa: E402
+from folego import cli, paths  # noqa: E402
+from folego.actions.disk.planner import fmt_bytes  # noqa: E402
+from folego.actions.tmpfs import holders, inventory, ledger as ledger_mod, policy, release  # noqa: E402
+from folego.core import tmpfs as tmpfs_mod  # noqa: E402
+from folego.safely.audit import AuditLog  # noqa: E402
 
 USED_TOLERANCE = 64 * 1024 ** 2   # um tmpfs vivo se move entre as duas leituras
 TOTAL_TOLERANCE = 1024            # o tamanho do volume não muda sem `mount -o remount`
@@ -6531,7 +6531,7 @@ qualquer escrita: nada do que segue é evidência enquanto um comparador estiver
 
 ```bash
 .venv/bin/python tools/verify_tmpfs.py | tee .scratch/m7-verify-tmpfs.log
-echo "ledger real ainda igual?"; sha256sum ~/.local/state/deck-wellness/tmp-ledger.jsonl
+echo "ledger real ainda igual?"; sha256sum ~/.local/state/folego/tmp-ledger.jsonl
 ```
 
 Saída esperada acrescenta:

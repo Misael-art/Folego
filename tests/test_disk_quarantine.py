@@ -4,8 +4,8 @@ import os
 
 import pytest
 
-from deck_wellness.actions.disk.quarantine import Quarantine
-from deck_wellness.safely.audit import AuditLog
+from folego.actions.disk.quarantine import Quarantine
+from folego.safely.audit import AuditLog
 
 
 @pytest.fixture
@@ -19,7 +19,7 @@ def area(fake_home):
 
 
 def make_quarantine(fake_home, audit=None, stat_fn=os.stat):
-    root = fake_home / ".local" / "share" / "deck-wellness" / "quarantine"
+    root = fake_home / ".local" / "share" / "folego" / "quarantine"
     return Quarantine(root, allowed_roots=[fake_home], audit=audit, stat_fn=stat_fn)
 
 
@@ -128,7 +128,7 @@ def test_symlink_is_refused(fake_home, tmp_path):
 
 
 def test_every_move_is_audited(area, fake_home):
-    audit = AuditLog(fake_home / ".local" / "state" / "deck-wellness" / "audit.jsonl")
+    audit = AuditLog(fake_home / ".local" / "state" / "folego" / "audit.jsonl")
     q = make_quarantine(fake_home, audit=audit)
 
     entry = q.move_in(area)

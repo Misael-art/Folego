@@ -7,7 +7,7 @@ Autor: Misael + agente · Status: aprovado em chat, aguardando revisão deste ar
 
 O trabalho de agente neste Deck mora em tmpfs, e tmpfs é memória. Quando ele enche, o
 `ENOSPC` não atinge só o agente: atinge o histórico do bash, o git e o próprio
-DeckWellness — com a SSD tendo ~159 G livres para lado nenhum.
+Fôlego — com a SSD tendo ~159 G livres para lado nenhum.
 
 Baseline medido neste host nesta sessão (2026-10-15, fuso -03), dentro da sessão real do
 Plasma/Wayland:
@@ -71,8 +71,8 @@ Camada `actions/` — proibido importar PySide6 (`tests/test_layers.py`), então
 testável sem GUI. Nenhum leitura de `/proc` sai de `actions/`/`core/` para `ui/`.
 
 ```
-src/deck_wellness/core/tmpfs.py     ← leitura: capacidades dos volumes em watch-list
-src/deck_wellness/actions/tmpfs/
+src/folego/core/tmpfs.py     ← leitura: capacidades dos volumes em watch-list
+src/folego/actions/tmpfs/
   __init__.py
   holders.py     quem está com fd aberto em cada caminho
   inventory.py   classificação dos filhos de nível-1 de um volume
@@ -245,7 +245,7 @@ def release_item(plan, item, *, dest_root=None, ledger, audit, confirm=False,
 ```
 
 Destino: `paths.data_dir() / "tmp-quarantine" / <YYYYMMDDTHHMMSSZ> / <nome-sanitizado>` —
-`~/.local/share/deck-wellness/tmp-quarantine/`, ou seja, na `/` da SSD. Cross-device é o
+`~/.local/share/folego/tmp-quarantine/`, ou seja, na `/` da SSD. Cross-device é o
 ponto, não um bug: o `Quarantine.move_in` do M5 recusa rename entre dispositivos
 (`actions/disk/quarantine.py:131`) porque lá a promessa é zero-copy e instantânea; aqui a
 promessa é tirar bytes da RAM, então o movimento é explicitamente copy → verify → unlink.
@@ -267,7 +267,7 @@ Sequência, com recusa antes de qualquer escrita:
    mostra o par (clone + original) e o orçamento conta os bytes (eles ocupam a SSD).
 
 Uma liberação nunca é feita dentro do processo da GUI: vai como filho matável via
-`TuneJobs(argv_factory=…)` com `python -m deck_wellness tmpfs release <id> --confirmar`,
+`TuneJobs(argv_factory=…)` com `python -m folego tmpfs release <id> --confirmar`,
 exatamente como `disk_tab.plan_argv`.
 
 ### `ledger.py` — ver §7.
@@ -294,7 +294,7 @@ de histórico não está nesta fase.
 | R1 | `is_mount_point` ou `under_mount` | `refused: é ponto de montagem / contém montagem` | `/run/user/1000/doc` (`xdg-document-portal` FUSE, `dr-x------`, 29 G visíveis ao `du`) |
 | R2 | `kind` não é `dir`/`file` | `refused: tipo {kind} não é arquivo/árvore regular` | sockets de sessão (Wayland, PipeWire, D-Bus, `bus`, `gnupg`) |
 | R3 | `uid != os.getuid()` | `refused: dono {uid} não é este usuário` | `/tmp/pamac-root`, lixo de outro uid |
-| R4 | `holder_pids` não-vazio | `refused: {n} processo(s) com fd aberto: {pids}` | a sessão de agente em curso, o próprio DeckWellness |
+| R4 | `holder_pids` não-vazio | `refused: {n} processo(s) com fd aberto: {pids}` | a sessão de agente em curso, o próprio Fôlego |
 | R5 | `bytes > max_item_bytes` | `refused: {bytes} acima do limite por item` | cópia de 10 min travando a GUI |
 | R6 | volume não está em `policy.volumes` | `refused: volume fora da watch-list` | `/run`, `/run/credentials/*`, qualquer tmpfs de sistema |
 | R7 | `age_days < min_age_days` | `protegido: mais novo que {floor} dias` | scratch criado há 1 h por um agente vivo |
@@ -324,7 +324,7 @@ monte.
 
 ## 7. Registro, controle e gestão do que foi retido
 
-Sem orçamento, liberar RAM só empurra o lixo para a SSD. `~/.local/state/deck-wellness/tmp-ledger.jsonl`,
+Sem orçamento, liberar RAM só empurra o lixo para a SSD. `~/.local/state/folego/tmp-ledger.jsonl`,
 append-only + `fsync`, com o mesmo mecanismo do `AuditLog` (`safely/audit.py:16`):
 
 ```json
@@ -376,10 +376,10 @@ Regras de gestão, todas com dry-run antes:
 preenchido pelo collector com syscalls baratos (`statvfs` + leitura do `mounts`), sem walk
 de árvore nem varredura de fd no poller de 2 s. `ui/title_signal.py:31` acrescenta:
 🔴 se qualquer volume em watch tiver `used_frac ≥ 0,90`; 🟡 se `≥ 0,75`; o texto passa a
-trazer o pior volume, ex. `DeckWellness 🔴 · ... · /tmp 93%`. As regras existentes de RAM,
+trazer o pior volume, ex. `Fôlego 🔴 · ... · /tmp 93%`. As regras existentes de RAM,
 PSI e RSS próprio não mudam.
 
-**CLI** (`python -m deck_wellness tmpfs …`, recusando em stderr para o stdout `--json`
+**CLI** (`python -m folego tmpfs …`, recusando em stderr para o stdout `--json`
 continuar sendo uma linha parseável):
 
 ```

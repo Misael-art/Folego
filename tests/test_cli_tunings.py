@@ -12,11 +12,11 @@ import sys
 
 import pytest
 
-from deck_wellness.actions.tunings.registry import TUNINGS
-from deck_wellness.cli import main
-from deck_wellness.process.runner import RunResult
+from folego.actions.tunings.registry import TUNINGS
+from folego.cli import main
+from folego.process.runner import RunResult
 
-WORKER = "deck_wellness.actions.tunings.worker"
+WORKER = "folego.actions.tunings.worker"
 
 
 def detect_payload(tuning, **over):
@@ -45,7 +45,7 @@ def spy(monkeypatch):
         answer = box["answers"].pop(0) if box["answers"] else None
         return answer if not isinstance(answer, RunResult) else answer
 
-    monkeypatch.setattr("deck_wellness.cli.run_isolated", fake_run_isolated)
+    monkeypatch.setattr("folego.cli.run_isolated", fake_run_isolated)
     spy.calls, spy.box = calls, box
     return spy
 

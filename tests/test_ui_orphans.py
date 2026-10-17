@@ -6,9 +6,9 @@ risk of signalling a real process.
 """
 import pytest
 
-from deck_wellness.actions.orphans.reaper import TermResult
-from deck_wellness.core.orphans import GroupMember, GroupTarget, OrphanCandidate
-from deck_wellness.ui.orphans_panel import OrphansPanel
+from folego.actions.orphans.reaper import TermResult
+from folego.core.orphans import GroupMember, GroupTarget, OrphanCandidate
+from folego.ui.orphans_panel import OrphansPanel
 from fixtures_proc import proc_info, snapshot_of
 
 
@@ -262,12 +262,12 @@ def test_a_declined_group_dialog_signals_nothing(panel):
 # ------------------------------------------------------ wired into the window
 
 def a_window(**kw):
-    from deck_wellness.ui.main_window import MainWindow
+    from folego.ui.main_window import MainWindow
     return MainWindow(collector_factory=None, **kw)
 
 
 def test_the_window_feeds_the_panel_from_its_own_snapshots(qapp):
-    from deck_wellness.core.orphans import OrphanTracker
+    from folego.core.orphans import OrphanTracker
 
     procs = (proc_info(500, comm="esquecido", ppid=1, pgid=900, session=901,
                        uid=1000, starttime=777, rss_kb=250_000),)
@@ -293,7 +293,7 @@ def test_the_reaper_is_only_built_when_the_user_acts(qapp):
 
     procs = (proc_info(500, comm="esquecido", ppid=1, pgid=900, session=901,
                        uid=1000, starttime=777),)
-    from deck_wellness.core.orphans import OrphanTracker
+    from folego.core.orphans import OrphanTracker
 
     win = a_window(tracker=OrphanTracker(min_idle_s=0.0, uid=1000, self_pid=10),
                    reaper_factory=Factory(), confirm_fn=lambda text: True)

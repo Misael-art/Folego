@@ -5,8 +5,8 @@ import time
 
 import pytest
 
-from deck_wellness.actions.disk.quarantine import Quarantine
-from deck_wellness.cli import main
+from folego.actions.disk.quarantine import Quarantine
+from folego.cli import main
 
 DAY = 86_400
 
@@ -50,7 +50,7 @@ def test_disk_plan_reports_volume_usage(fake_home, user_tree, monkeypatch, capsy
             self.f_blocks, self.f_bavail, self.f_bfree = blocks, bavail, bfree
             self.f_frsize = 1024
 
-    monkeypatch.setattr("deck_wellness.actions.disk.planner.os.statvfs",
+    monkeypatch.setattr("folego.actions.disk.planner.os.statvfs",
                         lambda p: FakeVfs(1000, 900, 950))
 
     code = main(["disk", "plan"])
@@ -68,7 +68,7 @@ def test_disk_plan_flags_a_critical_volume(fake_home, user_tree, monkeypatch, ca
         f_bavail = 10
         f_bfree = 10
 
-    monkeypatch.setattr("deck_wellness.actions.disk.planner.os.statvfs",
+    monkeypatch.setattr("folego.actions.disk.planner.os.statvfs",
                         lambda p: FakeVfs())
 
     main(["disk", "plan"])
@@ -151,7 +151,7 @@ def test_refused_paths_are_reported_instead_of_crashing(fake_home, capsys):
     assert code == 1
     err = capsys.readouterr().err
     assert "refused" in err
-    assert not (fake_home / ".local" / "share" / "deck-wellness" / "quarantine").exists()
+    assert not (fake_home / ".local" / "share" / "folego" / "quarantine").exists()
 
 
 def test_tmp_dry_run_lists_expired_owned_entries(fake_home, tmp_path, capsys):
@@ -216,7 +216,7 @@ def test_no_arguments_starts_the_gui(fake_home, monkeypatch, capsys):
         started["argv"] = argv
         return 0
 
-    monkeypatch.setattr("deck_wellness.cli.run_gui", fake_gui)
+    monkeypatch.setattr("folego.cli.run_gui", fake_gui)
 
     assert main([]) == 0
     assert started["argv"] == []

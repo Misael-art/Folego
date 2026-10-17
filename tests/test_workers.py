@@ -2,8 +2,8 @@ import time
 
 from PySide6.QtCore import QObject, Qt, Slot
 
-from deck_wellness.core.snapshot import MemInfo, Snapshot
-from deck_wellness.ui import workers
+from folego.core.snapshot import MemInfo, Snapshot
+from folego.ui import workers
 
 
 def tiny_snap():

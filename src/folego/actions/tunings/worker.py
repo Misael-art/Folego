@@ -1,11 +1,11 @@
 """Child-process entry point for one tuning action.
 
-    python -m deck_wellness.actions.tunings.worker apply edge.startup_boost --confirmar
+    python -m folego.actions.tunings.worker apply edge.startup_boost --confirmar
 
 Answers with a single JSON line so the parent (tray or CLI) never has to parse
 prose, and exits 0 applied / 1 refused / 2 needs confirmation. Running here, in
 a process the parent can kill, is what keeps a stuck write from freezing the UI:
-see ``deck_wellness.process.runner``.
+see ``folego.process.runner``.
 """
 import argparse
 import json
@@ -21,7 +21,7 @@ EXIT_NEEDS_CONFIRM = 2
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
-        prog="deck-wellness-tune", description=__doc__,
+        prog="folego-tune", description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("acao", choices=("detect", "apply", "revert"))
     parser.add_argument("tuning", help="id do ajuste, ex. edge.startup_boost")

@@ -12,14 +12,14 @@ from pathlib import Path
 
 import pytest
 
-from deck_wellness.actions.tmpfs import release
-from deck_wellness.actions.tmpfs.inventory import TmpfsEntry
-from deck_wellness.actions.tmpfs.ledger import (MAX_RETAINED_BYTES, STATE_PARTIAL,
+from folego.actions.tmpfs import release
+from folego.actions.tmpfs.inventory import TmpfsEntry
+from folego.actions.tmpfs.ledger import (MAX_RETAINED_BYTES, STATE_PARTIAL,
                                                  STATE_RELEASED, STATE_RESTORED, Ledger)
-from deck_wellness.actions.tmpfs.plan import build_plan
-from deck_wellness.actions.tmpfs.policy import Policy
-from deck_wellness.core.tmpfs import TmpfsVolume
-from deck_wellness.safely.audit import AuditLog
+from folego.actions.tmpfs.plan import build_plan
+from folego.actions.tmpfs.policy import Policy
+from folego.core.tmpfs import TmpfsVolume
+from folego.safely.audit import AuditLog
 
 DAY = 86_400
 NOW = 1_700_000_000.0

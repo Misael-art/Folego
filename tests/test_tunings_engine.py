@@ -14,11 +14,11 @@ import json
 
 import pytest
 
-from deck_wellness import paths
-from deck_wellness.actions.tunings.engine import TuningEngine
-from deck_wellness.actions.tunings.specs.startup_boost import STARTUP_BOOST
-from deck_wellness.safely.audit import AuditLog
-from deck_wellness.safely.backup import BackupStore
+from folego import paths
+from folego.actions.tunings.engine import TuningEngine
+from folego.actions.tunings.specs.startup_boost import STARTUP_BOOST
+from folego.safely.audit import AuditLog
+from folego.safely.backup import BackupStore
 
 
 def minified(doc: dict) -> bytes:
@@ -151,7 +151,7 @@ def live(edge):
     """An engine with the real seams: audit trail, backup store, Edge probe."""
     from types import SimpleNamespace
 
-    from deck_wellness.safely.atomicfile import write_atomic
+    from folego.safely.atomicfile import write_atomic
 
     state = {"running": None, "write": write_atomic}
     engine = TuningEngine(backup=BackupStore(paths.backup_dir()), audit=AuditLog(),
@@ -251,7 +251,7 @@ def test_a_write_that_lands_wrong_is_reverted_from_the_backup(live):
 
 
 def write_half(path, data):
-    from deck_wellness.safely.atomicfile import WriteResult, write_atomic
+    from folego.safely.atomicfile import WriteResult, write_atomic
     result = write_atomic(path, data[: len(data) // 2])
     return WriteResult(sha256=result.sha256, size=result.size)
 

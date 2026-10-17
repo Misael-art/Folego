@@ -6,10 +6,10 @@ reclaimable + protected == scanned_entries é a mesma reconciliação que o M5 p
 import json
 import os
 
-from deck_wellness.actions.tmpfs import plan
-from deck_wellness.actions.tmpfs.inventory import TmpfsEntry
-from deck_wellness.actions.tmpfs.policy import Policy
-from deck_wellness.core.tmpfs import TmpfsVolume
+from folego.actions.tmpfs import plan
+from folego.actions.tmpfs.inventory import TmpfsEntry
+from folego.actions.tmpfs.policy import Policy
+from folego.core.tmpfs import TmpfsVolume
 
 NOW = 1_700_000_000.0
 GIB = 1024 ** 3

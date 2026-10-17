@@ -53,9 +53,9 @@ class Tray:
         # parentless on purpose: the window here is only duck-typed, and the Tray
         # itself keeps the menu alive (a tray does not take ownership of it)
         menu = QMenu()
-        open_action = QAction("Abrir DeckWellness", menu)
+        open_action = QAction("Abrir Fôlego", menu)
         open_action.triggered.connect(self._window.raise_to_user)
-        quit_action = QAction("Sair do DeckWellness", menu)
+        quit_action = QAction("Sair do Fôlego", menu)
         quit_action.triggered.connect(self._window.quit)
         menu.addAction(open_action)
         menu.addAction(quit_action)

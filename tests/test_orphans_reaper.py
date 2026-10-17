@@ -9,9 +9,9 @@ import signal
 
 import pytest
 
-from deck_wellness.actions.orphans.reaper import Reaper
-from deck_wellness.core.orphans import GroupMember, GroupTarget, OrphanCandidate
-from deck_wellness.safely.audit import AuditLog
+from folego.actions.orphans.reaper import Reaper
+from folego.core.orphans import GroupMember, GroupTarget, OrphanCandidate
+from folego.safely.audit import AuditLog
 from fixtures_proc import pid_dir
 
 TERM = signal.SIGTERM

@@ -5,7 +5,7 @@ minflt cminflt majflt cmajflt utime stime prio nice nthr itreal starttime
 """
 from pathlib import Path
 
-from deck_wellness.core.snapshot import ProcInfo, Snapshot
+from folego.core.snapshot import ProcInfo, Snapshot
 
 DEFAULT_MEMINFO = """MemTotal:       14374304 kB
 MemFree:          993972 kB

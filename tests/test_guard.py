@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from deck_wellness.safely import guard
+from folego.safely import guard
 
 MOUNT_BLACKLIST = ["/mnt/sdcard/file", "/run/media/misael/card/x", "/etc/passwd"]
 

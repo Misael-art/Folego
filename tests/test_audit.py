@@ -3,7 +3,7 @@ import stat
 
 import pytest
 
-from deck_wellness.safely import audit
+from folego.safely import audit
 
 
 def test_append_creates_jsonl_with_0600_and_uuid(fake_home):

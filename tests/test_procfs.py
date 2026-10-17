@@ -1,6 +1,6 @@
 import pytest
 
-from deck_wellness.core import procfs
+from folego.core import procfs
 
 
 @pytest.fixture

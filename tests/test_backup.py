@@ -4,12 +4,12 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from deck_wellness.safely import backup, hashing
+from folego.safely import backup, hashing
 
 
 @pytest.fixture
 def store(fake_home):
-    return backup.BackupStore(fake_home / ".local" / "share" / "deck-wellness" / "backups")
+    return backup.BackupStore(fake_home / ".local" / "share" / "folego" / "backups")
 
 
 @pytest.fixture

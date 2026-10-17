@@ -8,7 +8,7 @@ same lesson the orphan scanner learned the hard way.
 """
 import pytest
 
-from deck_wellness.core.browser import edge_running
+from folego.core.browser import edge_running
 from fixtures_proc import build_proc
 
 

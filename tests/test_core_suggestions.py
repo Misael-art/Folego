@@ -5,8 +5,8 @@ holding gigabytes, thumbnail cache over 1 GB, memory pressure, and proven
 orphans. A suggestion that cannot be acted on is noise, so every one of them
 carries the tab it deep-links to.
 """
-from deck_wellness.core.snapshot import AppRSS, MemInfo, Pressure, Snapshot
-from deck_wellness.core.suggestions import SuggestionThresholds, suggest
+from folego.core.snapshot import AppRSS, MemInfo, Pressure, Snapshot
+from folego.core.suggestions import SuggestionThresholds, suggest
 
 GB = 1024 * 1024  # kB
 

@@ -24,13 +24,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from deck_wellness import paths  # noqa: E402
-from deck_wellness.actions.tunings.registry import TUNINGS  # noqa: E402
-from deck_wellness.core import browser  # noqa: E402
-from deck_wellness.process.runner import run_isolated  # noqa: E402
+from folego import paths  # noqa: E402
+from folego.actions.tunings.registry import TUNINGS  # noqa: E402
+from folego.core import browser  # noqa: E402
+from folego.process.runner import run_isolated  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
-MODULE = "deck_wellness.actions.tunings.worker"
+MODULE = "folego.actions.tunings.worker"
 TIMEOUT_S = 15.0
 
 

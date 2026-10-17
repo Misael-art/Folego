@@ -130,7 +130,7 @@ class TuningsTab(QWidget):
         row = self.row_for(tuning.id)
         if not self._confirm(
                 "Reverter ajuste",
-                "Vou devolver este arquivo ao último backup feito pelo DeckWellness. "
+                "Vou devolver este arquivo ao último backup feito pelo Fôlego. "
                 "Alterações feitas depois disso pelo próprio Edge seriam descartadas."):
             row.verdict.setText("cancelado: nada foi restaurado")
             return

@@ -1,6 +1,6 @@
 """Sampling for the headless path: two observations minimum, window honoured."""
-from deck_wellness.actions.orphans.scan import scan_orphans
-from deck_wellness.core.orphans import OrphanTracker
+from folego.actions.orphans.scan import scan_orphans
+from folego.core.orphans import OrphanTracker
 from fixtures_proc import proc_info, snapshot_of
 
 IDLE = proc_info(500, comm="worker", ppid=1, pgid=900, session=901, uid=1000,

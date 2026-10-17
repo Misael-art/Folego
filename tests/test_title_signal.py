@@ -1,6 +1,6 @@
-from deck_wellness.core.snapshot import (AppRSS, MemInfo, Pressure, Snapshot,
+from folego.core.snapshot import (AppRSS, MemInfo, Pressure, Snapshot,
                                          LoadAvg)
-from deck_wellness.ui import title_signal
+from folego.ui import title_signal
 
 
 def snap(available_kb, total_kb=14_374_304, psi10=0.0, self_rss_kb=96_000, tmpfs=()):
@@ -57,13 +57,13 @@ def test_unknown_when_meminfo_missing():
 def test_text_has_brazilian_format_and_self_rss():
     s = title_signal.compute(snap(2_500_000, self_rss_kb=98_304))
     # total 14374304 kB -> 13,7 GB; avail 2500000 kB -> 2,4 GB; used -> 11,3 GB
-    assert s.text.startswith("DeckWellness 🟡 ·")
+    assert s.text.startswith("Fôlego 🟡 ·")
     assert "11,3/13,7 GB livre 2,4" in s.text
     assert "·" in s.text
     assert "96 MB" in s.text  # 98304 kB = 96 MB
 
 
-from deck_wellness.core.tmpfs import TmpfsVolume
+from folego.core.tmpfs import TmpfsVolume
 
 GIB = 1024 ** 3
 

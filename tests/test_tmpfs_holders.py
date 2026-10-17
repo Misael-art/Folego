@@ -5,7 +5,7 @@ Medido neste Deck: 492 processos, 9.862 fd, 192 refs sob /tmp ∪ /run/user/1000
 """
 import os
 
-from deck_wellness.actions.tmpfs import holders
+from folego.actions.tmpfs import holders
 
 
 def make_proc(root, pid: int, links: dict):

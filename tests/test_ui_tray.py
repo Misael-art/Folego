@@ -7,9 +7,9 @@ fell back to instead of pretending.
 """
 import pytest
 
-from deck_wellness.core.snapshot import MemInfo, Pressure, Snapshot
-from deck_wellness.core.tmpfs import TmpfsVolume
-from deck_wellness.ui.tray import Tray
+from folego.core.snapshot import MemInfo, Pressure, Snapshot
+from folego.core.tmpfs import TmpfsVolume
+from folego.ui.tray import Tray
 
 pytest.importorskip("PySide6")
 
@@ -111,7 +111,7 @@ def test_a_live_tray_shows_the_same_signal_as_the_title():
 def test_the_tray_menu_offers_only_viewing_actions():
     tray, window = build()
     tray.install()
-    assert "Abrir DeckWellness" in tray.tray.menu_items
+    assert "Abrir Fôlego" in tray.tray.menu_items
     assert not [item for item in tray.tray.menu_items
                 if any(word in item.lower() for word in
                        ("encerrar", "aplicar", "matar", "limpar"))]

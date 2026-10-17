@@ -2,7 +2,7 @@
 import pathlib
 import re
 
-SRC = pathlib.Path(__file__).resolve().parent.parent / "src" / "deck_wellness"
+SRC = pathlib.Path(__file__).resolve().parent.parent / "src" / "folego"
 
 NO_QT = ["core", "safely", "actions", "process", "store", "paths.py", "cli.py"]
 QT_RE = re.compile(r"\bPySide6\b")
@@ -55,7 +55,7 @@ def test_disk_cli_imports_nothing_from_qt_at_runtime():
     result = subprocess.run(
         [sys.executable, "-c",
          "import sys; sys.path.insert(0, 'src'); "
-         "import deck_wellness.cli; "
+         "import folego.cli; "
          "print(','.join(m for m in sys.modules if m.startswith('PySide6')) or 'none')"],
         cwd=root, capture_output=True, text=True)
 

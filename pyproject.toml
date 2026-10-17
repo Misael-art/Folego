@@ -1,5 +1,5 @@
 [project]
-name = "deck-wellness"
+name = "folego"
 version = "0.1.0"
 description = "Reversible RAM/CPU wellness tuner for the Steam Deck (BigLinux/KDE)"
 requires-python = ">=3.14"

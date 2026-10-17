@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QPushButton, QTableWidget,
 from ..actions.disk.planner import fmt_bytes
 
 PENDING = "consultando o disco (dry-run, nada é escrito)…"
-PLAN_ARGV = (sys.executable, "-m", "deck_wellness", "disk", "plan", "--json")
+PLAN_ARGV = (sys.executable, "-m", "folego", "disk", "plan", "--json")
 # (row key, column title); the last column is the state, derived per row
 COLUMNS = (("path", "caminho"), ("size", "tamanho"), ("files", "arquivos"))
 
@@ -98,7 +98,7 @@ class DiskTab(QWidget):
             f"lidos {fmt_bytes(payload.get('scanned_bytes', 0))}")
         self.status.setText(
             "isto é um plano: nada foi movido. Liberar de forma reversível é ato de "
-            "terminal, com confirmação — deck-wellness disk quarantine <caminho> "
+            "terminal, com confirmação — folego disk quarantine <caminho> "
             "--confirmar.")
         thumb = next((i for i in items if i.get("target_id") == "thumbnails"), None)
         self.thumbnails_kb = None if thumb is None else thumb.get("bytes", 0) // 1024

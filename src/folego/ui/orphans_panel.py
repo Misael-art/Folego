@@ -241,7 +241,7 @@ class OrphansPanel(QWidget):
     @staticmethod
     def _ask_dialog(text: str) -> bool:
         answer = QMessageBox.question(
-            None, "DeckWellness", text,
+            None, "Fôlego", text,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No)
         return answer == QMessageBox.StandardButton.Yes

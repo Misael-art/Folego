@@ -33,7 +33,7 @@ def never_touch_real_edge_config():
 
 @pytest.fixture
 def fake_home(tmp_path, monkeypatch):
-    """Isolated HOME + XDG dirs; every path resolved through deck_wellness.paths lands here."""
+    """Isolated HOME + XDG dirs; every path resolved through folego.paths lands here."""
     home = tmp_path / "home"
     (home / ".config").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(home))

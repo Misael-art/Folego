@@ -30,7 +30,7 @@ LEDGER_COLUMNS = (("entry_id", "id"), ("state", "estado"), ("size", "tamanho"),
 
 
 def argv_for(acao: str, target: str = "", confirm: bool = False) -> list:
-    argv = [sys.executable, "-m", "deck_wellness", "tmpfs", acao]
+    argv = [sys.executable, "-m", "folego", "tmpfs", acao]
     if target:
         argv.append(str(target))
     if acao in JSON_ACTIONS:

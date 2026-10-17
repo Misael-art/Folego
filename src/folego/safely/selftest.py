@@ -1,8 +1,8 @@
-"""Manual safety-kernel proof: python -m deck_wellness.safely.selftest
+"""Manual safety-kernel proof: python -m folego.safely.selftest
 
 Runs a full backup -> mutate -> restore roundtrip against a throwaway file in
 the real XDG data dir and prints independently checkable evidence (shas,
-paths, audit record). Touches nothing outside deck-wellness's own dirs.
+paths, audit record). Touches nothing outside folego's own dirs.
 """
 import hashlib
 import json

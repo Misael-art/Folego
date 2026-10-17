@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from deck_wellness.safely import atomicfile, hashing
+from folego.safely import atomicfile, hashing
 
 
 def test_write_atomic_creates_new_file_with_exact_bytes(tmp_path):

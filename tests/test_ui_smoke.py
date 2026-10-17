@@ -1,5 +1,5 @@
-from deck_wellness.core.snapshot import (MemInfo, Pressure, Snapshot)
-from deck_wellness.ui.main_window import MainWindow
+from folego.core.snapshot import (MemInfo, Pressure, Snapshot)
+from folego.ui.main_window import MainWindow
 
 
 def a_snapshot(available_kb=5_000_000, total_kb=14_374_304):
@@ -14,7 +14,7 @@ def a_snapshot(available_kb=5_000_000, total_kb=14_374_304):
 def test_main_window_shows_live_ram_in_title(qapp):
     win = MainWindow(collector_factory=lambda: a_snapshot())
     win.apply_snapshot(a_snapshot())
-    assert win.windowTitle().startswith("DeckWellness 🟢 ·")
+    assert win.windowTitle().startswith("Fôlego 🟢 ·")
     assert "app 87 MB" in win.windowTitle()  # 90000 kB -> 87 MB
 
 

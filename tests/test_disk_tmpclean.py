@@ -6,8 +6,8 @@ import time
 
 import pytest
 
-from deck_wellness.actions.disk import tmpclean
-from deck_wellness.safely.audit import AuditLog
+from folego.actions.disk import tmpclean
+from folego.safely.audit import AuditLog
 
 DAY = 86_400
 

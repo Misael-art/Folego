@@ -17,10 +17,10 @@ from pathlib import Path
 from PySide6.QtCore import QProcess, QProcessEnvironment, QTimer
 from shiboken6 import isValid
 
-WORKER_MODULE = "deck_wellness.actions.tunings.worker"
+WORKER_MODULE = "folego.actions.tunings.worker"
 MUTATING = ("apply", "revert", "release", "restore", "expire")
-# .../src — where deck_wellness lives for this process. A child started from a
-# .desktop file has no PYTHONPATH, and "-m deck_wellness.*" then dies on import.
+# .../src — where folego lives for this process. A child started from a
+# .desktop file has no PYTHONPATH, and "-m folego.*" then dies on import.
 PACKAGE_ROOT = str(Path(__file__).resolve().parents[2])
 
 

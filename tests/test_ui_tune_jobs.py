@@ -16,7 +16,7 @@ import pytest
 pytest.importorskip("PySide6")
 
 REPO = Path(__file__).resolve().parent.parent
-MODULE = "deck_wellness.actions.tunings.worker"
+MODULE = "folego.actions.tunings.worker"
 
 
 def pump(app, predicate, timeout_ms=4000):
@@ -52,7 +52,7 @@ def sandbox(tmp_path):
 
 @pytest.fixture
 def jobs(qapp, sandbox):
-    from deck_wellness.ui.tune_jobs import TuneJobs
+    from folego.ui.tune_jobs import TuneJobs
 
     layer = TuneJobs(env=sandbox, timeout_ms=4000)
     yield layer, []
@@ -60,7 +60,7 @@ def jobs(qapp, sandbox):
 
 
 def test_a_layer_that_shuts_down_leaves_no_child_running(qapp, sandbox):
-    from deck_wellness.ui.tune_jobs import TuneJobs
+    from folego.ui.tune_jobs import TuneJobs
 
     answers = []
     layer = TuneJobs(env=sandbox, timeout_ms=6000,
@@ -101,7 +101,7 @@ def test_a_child_finds_the_package_without_a_pythonpath_in_the_environment(qapp,
                                                                           monkeypatch):
     """Launched from a .desktop there is no PYTHONPATH at all: the layer has to
     tell the child where its own package lives, or every tab answers "no JSON"."""
-    from deck_wellness.ui.tune_jobs import TuneJobs
+    from folego.ui.tune_jobs import TuneJobs
 
     monkeypatch.delenv("PYTHONPATH", raising=False)
     env = {k: v for k, v in sandbox.items() if k != "PYTHONPATH"}
@@ -116,7 +116,7 @@ def test_a_child_finds_the_package_without_a_pythonpath_in_the_environment(qapp,
 
 
 def test_a_stalling_child_is_killed_and_reported(qapp, sandbox):
-    from deck_wellness.ui.tune_jobs import TuneJobs
+    from folego.ui.tune_jobs import TuneJobs
 
     stalled = []
     layer = TuneJobs(env=sandbox, timeout_ms=300,
@@ -132,7 +132,7 @@ def test_a_stalling_child_is_killed_and_reported(qapp, sandbox):
 
 
 def test_only_one_mutation_is_in_flight_at_a_time(qapp, sandbox):
-    from deck_wellness.ui.tune_jobs import TuneJobs
+    from folego.ui.tune_jobs import TuneJobs
 
     answers = []
     layer = TuneJobs(env=sandbox, timeout_ms=6000,
@@ -153,7 +153,7 @@ def test_only_one_mutation_is_in_flight_at_a_time(qapp, sandbox):
 
 def test_a_tmpfs_release_blocks_the_next_mutation(qapp, sandbox):
     """Duas liberações simultâneas seriam duas cópias grandes ao mesmo tempo."""
-    from deck_wellness.ui.tune_jobs import TuneJobs
+    from folego.ui.tune_jobs import TuneJobs
 
     answers = []
     layer = TuneJobs(env=sandbox, timeout_ms=6000,

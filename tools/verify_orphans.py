@@ -23,8 +23,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from deck_wellness.core.collector import MetricsCollector  # noqa: E402
-from deck_wellness.core.orphans import (OrphanTracker,  # noqa: E402
+from folego.core.collector import MetricsCollector  # noqa: E402
+from folego.core.orphans import (OrphanTracker,  # noqa: E402
                                         group_targets, is_adopted, is_tooling,
                                         under_automation_control)
 
@@ -85,7 +85,7 @@ def decoy_pids() -> set[int]:
 def end_to_end() -> int:
     from PySide6.QtWidgets import QApplication
 
-    from deck_wellness.ui.main_window import MainWindow
+    from folego.ui.main_window import MainWindow
 
     DECOY_BIN.mkdir(parents=True, exist_ok=True)
     for name in (ORPHAN, EDGE):

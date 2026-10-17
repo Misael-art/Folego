@@ -9,8 +9,8 @@ import socket
 
 import pytest
 
-from deck_wellness.actions.tmpfs import holders, inventory
-from deck_wellness.core.tmpfs import TmpfsVolume
+from folego.actions.tmpfs import holders, inventory
+from folego.core.tmpfs import TmpfsVolume
 
 NOW = 1_700_000_000.0
 EMPTY = holders.HolderIndex({}, 0, 0)
@@ -182,7 +182,7 @@ def test_truncated_measurement_is_carried_out(tmp_path):
 
 
 def test_scan_volume_brings_mounts_holders_and_entries_together(fake_proc, tmp_path):
-    from deck_wellness.core.tmpfs import TmpfsVolume as V
+    from folego.core.tmpfs import TmpfsVolume as V
 
     (fake_proc / "mounts").write_text(f"tmpfs {tmp_path}/tmp tmpfs rw 0 0\n")
     root = volume_dir(tmp_path)

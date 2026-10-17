@@ -32,16 +32,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from deck_wellness.core.collector import MetricsCollector  # noqa: E402
-from deck_wellness.core.snapshot import AppRSS, MemInfo, Pressure, Snapshot  # noqa: E402
-from deck_wellness.ui.main_window import MainWindow  # noqa: E402
+from folego.core.collector import MetricsCollector  # noqa: E402
+from folego.core.snapshot import AppRSS, MemInfo, Pressure, Snapshot  # noqa: E402
+from folego.ui.main_window import MainWindow  # noqa: E402
 
 PROC_ROOT = Path(os.environ.get("DECKWELLNESS_PROC_ROOT", "/proc"))
 DISK_DEADLINE_S = 150.0  # above the tab's 120 s child timeout; the walk took 54,7 s here
 SNI_DEADLINE_S = 8.0  # the DBus registration landed in well under 1 s on this Deck
 SNI_WATCHER = "org.kde.StatusNotifierWatcher"
 SNI_WATCHER_PATH = "/StatusNotifierWatcher"
-TITLE_NUMBERS = re.compile(r"DeckWellness (🟢|🟡|🔴|⚪) · ([\d,]+)/([\d,]+) GB "
+TITLE_NUMBERS = re.compile(r"Fôlego (🟢|🟡|🔴|⚪) · ([\d,]+)/([\d,]+) GB "
                            r"livre ([\d,]+) · app (\d+) MB")
 LEVELS = {"critico": 0, "alto": 1, "medio": 2}
 

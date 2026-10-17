@@ -7,7 +7,7 @@ from collections import namedtuple
 
 import pytest
 
-from deck_wellness.core import tmpfs
+from folego.core import tmpfs
 
 GIB = 1024 ** 3
 Statvfs = namedtuple("Statvfs", "f_frsize f_bsize f_blocks f_bfree f_bavail")

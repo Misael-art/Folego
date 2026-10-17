@@ -1,12 +1,12 @@
-from deck_wellness import paths
+from folego import paths
 
 
 def test_data_dir_follows_xdg_data_home(fake_home):
-    assert paths.data_dir() == fake_home / ".local" / "share" / "deck-wellness"
+    assert paths.data_dir() == fake_home / ".local" / "share" / "folego"
 
 
 def test_config_dir_follows_xdg_config_home(fake_home):
-    assert paths.config_dir() == fake_home / ".config" / "deck-wellness"
+    assert paths.config_dir() == fake_home / ".config" / "folego"
 
 
 def test_backup_dir_is_under_data_dir(fake_home):
@@ -24,6 +24,6 @@ def test_proc_root_env_override(fake_home, monkeypatch, tmp_path):
 
 def test_tmp_retention_lands_on_the_ssd_not_in_ram(fake_home):
     assert paths.tmp_ledger_path() == (
-        fake_home / ".local" / "state" / "deck-wellness" / "tmp-ledger.jsonl")
+        fake_home / ".local" / "state" / "folego" / "tmp-ledger.jsonl")
     assert paths.tmp_quarantine_dir() == (
-        fake_home / ".local" / "share" / "deck-wellness" / "tmp-quarantine")
+        fake_home / ".local" / "share" / "folego" / "tmp-quarantine")

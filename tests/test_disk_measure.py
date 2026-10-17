@@ -4,7 +4,7 @@ import subprocess
 from contextlib import nullcontext
 from types import SimpleNamespace
 
-from deck_wellness.actions.disk.measure import measure_tree
+from folego.actions.disk.measure import measure_tree
 
 
 def _write(path, size: int):

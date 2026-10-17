@@ -1,4 +1,4 @@
-"""DeckWellness command line.
+"""Fôlego command line.
 
 `disk`, `orphans`, `groups` and `tune` run headless (no display, no Qt import) so
 the toolbox still works when the desktop session is the thing that is broken.
@@ -29,7 +29,7 @@ EXIT_OK = 0
 EXIT_REFUSED = 1
 EXIT_NEEDS_CONFIRM = 2
 
-WORKER_MODULE = "deck_wellness.actions.tunings.worker"
+WORKER_MODULE = "folego.actions.tunings.worker"
 TUNE_TIMEOUT_S = 15.0
 
 _sleep = time.sleep
@@ -61,7 +61,7 @@ def run_gui(argv=None) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="deck-wellness",
+        prog="folego",
         description="Bem-estar do Steam Deck: diagnóstico e higiene com confirmação.")
     commands = parser.add_subparsers(dest="command")
 
@@ -201,7 +201,7 @@ def _cmd_plan(args) -> int:
     print("Candidatos a liberação (dry-run, nada foi alterado):")
     print(planner.format_report(plan))
     print("")
-    print("Para liberar de forma reversível: deck-wellness disk quarantine <caminho> --confirmar")
+    print("Para liberar de forma reversível: folego disk quarantine <caminho> --confirmar")
     return EXIT_OK
 
 
@@ -218,7 +218,7 @@ def _cmd_quarantine(args) -> int:
     print(f"   de:   {entry.original}")
     print(f"   para: {entry.stored}")
     print(f"   {planner.fmt_bytes(entry.bytes)} recuperáveis · reverta com "
-          f"deck-wellness disk restore {entry.entry_id} --confirmar")
+          f"folego disk restore {entry.entry_id} --confirmar")
     return EXIT_OK
 
 
@@ -372,7 +372,7 @@ def _cmd_groups(args) -> int:
             print(f"  · pid {member.pid} · {member.comm} · {_rss(member.rss_kb)}")
     if not args.confirmar:
         sys.stderr.write("\ndry-run: nenhum processo foi encerrado. Para encerrar use "
-                         "deck-wellness groups --grupo edge --confirmar\n")
+                         "folego groups --grupo edge --confirmar\n")
         return EXIT_OK
     reaper = _reaper()
     refused = 0
@@ -469,7 +469,7 @@ def _cmd_tune_status(args) -> int:
     if failures:
         print(f"\n{failures} ajuste(s) sem leitura confiável — o arquivo pode estar "
               "em um disco travado")
-    print("\nPara aplicar: deck-wellness tune apply <id> --confirmar "
+    print("\nPara aplicar: folego tune apply <id> --confirmar "
           "(o Edge precisa estar fechado)")
     return EXIT_REFUSED if failures else EXIT_OK
 
@@ -497,12 +497,12 @@ def _report_mutation(res, acao: str, tuning_id: str) -> int:
         if payload.get("backup_id"):
             print(f"   backup:  {payload['backup_id']}")
         if acao == "apply":
-            print(f"   reverta: deck-wellness tune revert {tuning_id} --confirmar")
+            print(f"   reverta: folego tune revert {tuning_id} --confirmar")
         return EXIT_OK
 
     if exit_code == EXIT_NEEDS_CONFIRM:
         sys.stderr.write(f"dry-run: nada foi escrito ({payload.get('reason')}).\n")
-        sys.stderr.write(f"        para aplicar: deck-wellness tune apply "
+        sys.stderr.write(f"        para aplicar: folego tune apply "
                          f"{tuning_id} --confirmar\n")
         return EXIT_NEEDS_CONFIRM
     sys.stderr.write(f"refused: {payload.get('reason')}\n")
@@ -594,7 +594,7 @@ def _cmd_tmpfs_status(args) -> int:
               f"{round(volume.used_frac * 100)}%")
     worst = max(volumes, key=lambda v: v.used_frac)
     print(f"\npior volume: {worst.path} a {round(worst.used_frac * 100)}%")
-    print("Para ver o plano: deck-wellness tmpfs plan (dry-run, nada muda)")
+    print("Para ver o plano: folego tmpfs plan (dry-run, nada muda)")
     return EXIT_OK
 
 
@@ -637,7 +637,7 @@ def _cmd_tmpfs_plan(args) -> int:
     if not _tmpfs_reconciles(result):
         sys.stderr.write("aviso: a contagem não fechou — o plano é incompleto\n")
         return EXIT_REFUSED
-    print("\nPara liberar um item: deck-wellness tmpfs release <caminho> --confirmar "
+    print("\nPara liberar um item: folego tmpfs release <caminho> --confirmar "
           "(vai para a SSD e volta com tmpfs restore)")
     return EXIT_OK
 
@@ -654,7 +654,7 @@ def _cmd_tmpfs_release(args) -> int:
     item = plan.find(args.target)
     if item is None:
         sys.stderr.write(f"refused: {args.target} não está no plano — só se libera o "
-                         "que o plano classificou (deck-wellness tmpfs plan)\n")
+                         "que o plano classificou (folego tmpfs plan)\n")
         return EXIT_REFUSED
     result = tmpfs_release.release_item(
         plan, item, ledger=_tmpfs_ledger(), audit=_tmpfs_audit(),
@@ -671,7 +671,7 @@ def _cmd_tmpfs_release(args) -> int:
     print(f"   retido em: {result.stored}")
     print(f"   sha256:    {result.sha256}")
     print(f"   id:        {result.entry_id}")
-    print(f"   devolve:   deck-wellness tmpfs restore {result.entry_id} --confirmar")
+    print(f"   devolve:   folego tmpfs restore {result.entry_id} --confirmar")
     return EXIT_OK
 
 
@@ -723,7 +723,7 @@ def _cmd_tmpfs_ledger(args) -> int:
           f"de {planner.fmt_bytes(MAX_RETAINED_BYTES)}")
     if view.retained_bytes > MAX_RETAINED_BYTES:
         sys.stderr.write("aviso: a retenção estourou o orçamento — rode "
-                         "deck-wellness tmpfs expire\n")
+                         "folego tmpfs expire\n")
     return EXIT_OK
 
 
@@ -797,7 +797,7 @@ def main(argv=None) -> int:
     if handler is None:
         sys.stderr.write(
             f"refused: comando desconhecido: {ns.command or ''} {ns.sub or ''}\n"
-            f"usage: deck-wellness [disk plan|quarantine|restore|purge|list|tmp] "
+            f"usage: folego [disk plan|quarantine|restore|purge|list|tmp] "
             f"[orphans] [groups] [tune status|apply|revert] "
             f"[tmpfs status|plan|release|restore|ledger|expire]\n")
         return EXIT_NEEDS_CONFIRM

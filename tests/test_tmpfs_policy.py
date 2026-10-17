@@ -7,8 +7,8 @@ spec.
 """
 import os
 
-from deck_wellness.actions.tmpfs import policy
-from deck_wellness.actions.tmpfs.inventory import TmpfsEntry
+from folego.actions.tmpfs import policy
+from folego.actions.tmpfs.inventory import TmpfsEntry
 
 GIB = 1024 ** 3
 

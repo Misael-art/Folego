@@ -7,7 +7,7 @@ from dataclasses import replace
 
 import pytest
 
-from deck_wellness.core.orphans import OrphanTracker, group_targets, is_protected
+from folego.core.orphans import OrphanTracker, group_targets, is_protected
 from fixtures_proc import proc_info, snapshot_of
 
 MIN_IDLE = 300.0
@@ -197,7 +197,7 @@ def test_reused_pid_starts_the_idle_clock_over():
 PROTECTED = ["systemd", "systemd-userd", "plasmashell", "kwin_x11", "pipewire",
              "wireplumber", "dbus-daemon", "xdg-dbus-proxy", "bwrap",
              "chrome_crashpad", "xsettingsd", "polkitd", "Xwayland", "sddm",
-             "konsole", "yakuake", "yad", "deck-wellness",
+             "konsole", "yakuake", "yad", "folego",
              # seen orphaned on the real Deck (census 2026-10-14): a D-Bus-activated
              # session service that respawned nothing and whose loss breaks the wallet
              "ksecretd", "kwalletd6", "kded5"]
@@ -217,7 +217,7 @@ def test_our_own_ancestors_are_protected():
     init = proc_info(1, comm="systemd", ppid=0, uid=0)
     session = proc_info(10, comm="systemd-userd", ppid=1, uid=1000, pgid=10, session=10)
     shell = proc_info(20, comm="bash", ppid=10, uid=1000, pgid=20, session=20)
-    app = proc_info(30, comm="deck-wellness", ppid=20, uid=1000, pgid=30, session=30)
+    app = proc_info(30, comm="folego", ppid=20, uid=1000, pgid=30, session=30)
     tracker = OrphanTracker(min_idle_s=0.0, uid=1000, self_pid=30)
     tracker.observe(snapshot_of(init, session, shell, app, ts=1_000.0))
 

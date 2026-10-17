@@ -6,8 +6,8 @@ is covered in test_ui_tune_jobs.py.
 """
 import pytest
 
-from deck_wellness.core.snapshot import AppRSS, MemInfo, Pressure, Snapshot
-from deck_wellness.ui.main_window import MainWindow
+from folego.core.snapshot import AppRSS, MemInfo, Pressure, Snapshot
+from folego.ui.main_window import MainWindow
 
 pytest.importorskip("PySide6")
 
@@ -79,7 +79,7 @@ def test_the_window_offers_the_five_approved_tabs_in_order(window):
 
 
 def test_the_watched_volumes_land_on_the_tmpfs_tab(window):
-    from deck_wellness.core.tmpfs import TmpfsVolume
+    from folego.core.tmpfs import TmpfsVolume
     window.apply_snapshot(snap(tmpfs=(TmpfsVolume("/tmp", "tmpfs", 8 * GIB, 7 * GIB,
                                                   GIB),)))
     assert window.tmpfs.volume_rows[0]["path"] == "/tmp"
@@ -95,7 +95,7 @@ def test_the_window_never_scans_tmpfs_by_itself(window):
 
 def test_a_snapshot_lands_on_the_title_the_dashboard_and_the_orphans(window):
     window.apply_snapshot(snap())
-    assert window.windowTitle().startswith("DeckWellness 🟢 ·")
+    assert window.windowTitle().startswith("Fôlego 🟢 ·")
     assert [row.target for row in window.dashboard.rows] == ["ajustes"]
 
 
@@ -139,7 +139,7 @@ class FakePoller:
 
 
 def test_a_live_tray_makes_closing_the_window_a_hide(window, qapp):
-    """The menu promises "Abrir DeckWellness": closing must keep the signal alive."""
+    """The menu promises "Abrir Fôlego": closing must keep the signal alive."""
     poller = FakePoller()
     window._poller = poller
     window.tray.tray = object()

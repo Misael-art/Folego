@@ -1,6 +1,6 @@
 import pytest
 
-from deck_wellness.core import collector, sysfs
+from folego.core import collector, sysfs
 
 
 @pytest.fixture
@@ -77,7 +77,7 @@ def test_missing_pressure_degrades_not_crashes(fake_proc, syszram):
 
 
 def test_the_collector_carries_watched_volumes_into_the_snapshot(env):
-    from deck_wellness.core.tmpfs import TmpfsVolume
+    from folego.core.tmpfs import TmpfsVolume
     proc_root, sys_root = env
     volumes = (TmpfsVolume("/tmp", "tmpfs", 8 * 1024**3, 7 * 1024**3, 1024**3),)
     snap = collector.MetricsCollector(

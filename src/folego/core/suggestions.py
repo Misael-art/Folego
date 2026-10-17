@@ -79,7 +79,7 @@ def suggest(snapshot: Snapshot, *, orphan_count: int = 0,
     if snapshot.self_rss_kb > thresholds.self_rss_kb:
         out.append(Suggestion(
             "app", MEDIO,
-            f"O próprio DeckWellness está em {fmt_gb(snapshot.self_rss_kb)} GB",
+            f"O próprio Fôlego está em {fmt_gb(snapshot.self_rss_kb)} GB",
             "Acima do orçamento medido no M1: fechar a janela libera a UI e a "
             "bandeja continua monitorando.",
             "memoria"))

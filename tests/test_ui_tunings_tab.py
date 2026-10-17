@@ -6,8 +6,8 @@ object can answer with exactly the payloads the real worker produces.
 """
 import pytest
 
-from deck_wellness.actions.tunings.registry import TUNINGS
-from deck_wellness.ui.tunings_tab import TuningsTab
+from folego.actions.tunings.registry import TUNINGS
+from folego.ui.tunings_tab import TuningsTab
 
 pytest.importorskip("PySide6")
 

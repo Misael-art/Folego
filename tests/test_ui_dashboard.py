@@ -6,8 +6,8 @@ only changes which tab is visible.
 """
 import pytest
 
-from deck_wellness.core.snapshot import AppRSS, MemInfo, Pressure, Snapshot
-from deck_wellness.ui.dashboard_tab import DashboardTab
+from folego.core.snapshot import AppRSS, MemInfo, Pressure, Snapshot
+from folego.ui.dashboard_tab import DashboardTab
 
 pytest.importorskip("PySide6")
 

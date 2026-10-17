@@ -1,4 +1,4 @@
-"""App bootstrap: python -m deck_wellness."""
+"""App bootstrap: python -m folego."""
 import sys
 
 from PySide6.QtWidgets import QApplication
@@ -9,7 +9,7 @@ from .ui.main_window import MainWindow
 
 def main() -> int:
     app = QApplication(sys.argv)
-    app.setApplicationName("deck-wellness")
+    app.setApplicationName("folego")
     win = MainWindow(collector_factory=MetricsCollector)
     win.show()
     win.start()

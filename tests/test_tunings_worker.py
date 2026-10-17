@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
-MODULE = "deck_wellness.actions.tunings.worker"
+MODULE = "folego.actions.tunings.worker"
 
 
 @pytest.fixture
@@ -111,7 +111,7 @@ def test_the_audit_line_lands_in_the_sandbox_state_dir(sandbox):
 
     answer(sandbox, "apply", "edge.startup_boost", "--confirmar")
 
-    audit = sandbox["home"] / ".local" / "state" / "deck-wellness" / "audit.jsonl"
+    audit = sandbox["home"] / ".local" / "state" / "folego" / "audit.jsonl"
     records = [json.loads(line) for line in audit.read_text().splitlines()]
     assert records[-1]["kind"] == "tuning.apply"
     assert records[-1]["action_id"] == "tunings.edge.startup_boost"

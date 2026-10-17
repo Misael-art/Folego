@@ -6,7 +6,7 @@ de crescimento".
 """
 import pytest
 
-from deck_wellness.actions.tmpfs import trend
+from folego.actions.tmpfs import trend
 
 GIB = 1024 ** 3
 

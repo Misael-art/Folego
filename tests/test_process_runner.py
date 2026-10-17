@@ -12,7 +12,7 @@ import time
 
 import pytest
 
-from deck_wellness.process.runner import run_isolated
+from folego.process.runner import run_isolated
 
 PYTHON = sys.executable
 

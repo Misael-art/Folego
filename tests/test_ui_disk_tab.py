@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-from deck_wellness.ui.disk_tab import DiskTab, plan_argv
+from folego.ui.disk_tab import DiskTab, plan_argv
 
 pytest.importorskip("PySide6")
 
@@ -143,7 +143,7 @@ def test_the_argv_the_tab_spawns_answers_with_one_json_line(fake_home):
     """A module without a main guard exits 0 and prints nothing — the deployed
     tab would then say "sem plano" forever. This runs the real command."""
     argv = plan_argv("plan", "disk", False)
-    assert argv[:3] == [sys.executable, "-m", "deck_wellness"], argv
+    assert argv[:3] == [sys.executable, "-m", "folego"], argv
 
     result = subprocess.run(argv, capture_output=True, text=True, timeout=60,
                             env=dict(os.environ, PYTHONPATH=str(REPO / "src")))

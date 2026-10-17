@@ -3,7 +3,7 @@ so tests can monkeypatch HOME/XDG without reimporting."""
 import os
 from pathlib import Path
 
-APP_NAME = "deck-wellness"
+APP_NAME = "folego"
 
 
 def _env_dir(var: str, fallback: Path) -> Path:

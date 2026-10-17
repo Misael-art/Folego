@@ -9,7 +9,7 @@ import time
 
 import pytest
 
-from deck_wellness.actions.tmpfs import ledger as L
+from folego.actions.tmpfs import ledger as L
 
 DAY = 86_400
 NOW = 1_700_000_000.0
@@ -23,7 +23,7 @@ def book(tmp_path):
 
 def rec(**over):
     base = dict(entry_id="1700-a", src="/tmp/velho", volume="/tmp",
-                stored="/home/u/.local/share/deck-wellness/tmp-quarantine/x",
+                stored="/home/u/.local/share/folego/tmp-quarantine/x",
                 bytes=1024, sha256="ab" * 32, age_days=4.0,
                 matched_pattern="/tmp/tmp*", holder_pids=(), state=L.STATE_RELEASED,
                 action_id="tmpfs.release", audit_event_id="e1")

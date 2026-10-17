@@ -39,7 +39,7 @@ def worst_tmpfs(snapshot: Snapshot, thresholds: Thresholds) -> TmpfsVolume | Non
 
 def compute(snapshot: Snapshot, thresholds: Thresholds = Thresholds()) -> TitleSignal:
     if snapshot.mem is None:
-        return TitleSignal("unknown", EMOJI["unknown"], "DeckWellness ⚪ · meminfo indisponível")
+        return TitleSignal("unknown", EMOJI["unknown"], "Fôlego ⚪ · meminfo indisponível")
 
     total = snapshot.mem.mem_total_kb
     avail = snapshot.mem.mem_available_kb
@@ -66,7 +66,7 @@ def compute(snapshot: Snapshot, thresholds: Thresholds = Thresholds()) -> TitleS
     emoji = EMOJI[level]
     self_mb = snapshot.self_rss_kb // KB
     # values are in kB: kB->MB = /KB, kB->GB = /MB
-    text = (f"DeckWellness {emoji} · {fmt1(used / MB)}/{fmt1(total / MB)} GB "
+    text = (f"Fôlego {emoji} · {fmt1(used / MB)}/{fmt1(total / MB)} GB "
             f"livre {fmt1(avail / MB)} · app {self_mb} MB")
     if worst is not None:
         text += f" · {worst.path} {round(worst.used_frac * 100)}%"

@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from deck_wellness.safely.jsonedit import KeyConflict, MalformedDocument, set_value
+from folego.safely.jsonedit import KeyConflict, MalformedDocument, set_value
 
 
 def minified(doc: dict) -> bytes:

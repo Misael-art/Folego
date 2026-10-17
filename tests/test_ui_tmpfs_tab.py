@@ -8,8 +8,8 @@ import sys
 
 import pytest
 
-from deck_wellness.core.tmpfs import TmpfsVolume
-from deck_wellness.ui.tmpfs_tab import (LEDGER_COLUMNS, PLAN_COLUMNS, SAMPLES_KEPT,
+from folego.core.tmpfs import TmpfsVolume
+from folego.ui.tmpfs_tab import (LEDGER_COLUMNS, PLAN_COLUMNS, SAMPLES_KEPT,
                                         TmpfsTab, VOLUME_COLUMNS, argv_for)
 
 pytest.importorskip("PySide6")
@@ -65,7 +65,7 @@ def ledger_payload(acao="ledger", target=""):
     return {"acao": acao, "ok": True, "exit": 0,
             "records": [{"ts": "2026-10-01T00:00:00Z", "entry_id": "1700-abc",
                          "src": "/tmp/qoder-cli-1000", "volume": "/tmp",
-                         "stored": "/home/u/.local/share/deck-wellness/tmp-quarantine/x",
+                         "stored": "/home/u/.local/share/folego/tmp-quarantine/x",
                          "bytes": 4096, "sha256": "a" * 64, "age_days": 30.0,
                          "matched_pattern": "/tmp/qoder-cli-1000", "holder_pids": [1234],
                          "state": "released", "action_id": "tmpfs.release",
@@ -101,15 +101,15 @@ def tab(qapp, jobs):
 
 
 def test_argv_is_the_same_headless_cli_a_tty_would_run():
-    assert argv_for("plan") == [sys.executable, "-m", "deck_wellness", "tmpfs", "plan",
+    assert argv_for("plan") == [sys.executable, "-m", "folego", "tmpfs", "plan",
                                  "--json"]
-    assert argv_for("ledger") == [sys.executable, "-m", "deck_wellness", "tmpfs",
+    assert argv_for("ledger") == [sys.executable, "-m", "folego", "tmpfs",
                                   "ledger", "--json"]
 
 
 def test_a_mutation_carries_the_target_and_the_right_flags():
     assert argv_for("release", "/tmp/qoder-cli-1000", True) == [
-        sys.executable, "-m", "deck_wellness", "tmpfs", "release", "/tmp/qoder-cli-1000",
+        sys.executable, "-m", "folego", "tmpfs", "release", "/tmp/qoder-cli-1000",
         "--json", "--confirmar"]
     assert argv_for("expire", "", True)[-2:] == ["--confirmar", "--irreversivel"]
     assert "--irreversivel" not in argv_for("expire", "", False)

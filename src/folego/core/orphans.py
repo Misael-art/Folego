@@ -30,7 +30,7 @@ PROTECTED_PREFIXES = (
     "bwrap", "chrome_crashpad", "edge_crashpad", "crashpad", "xsettingsd",
     "polkit", "xwayland", "wayland", "sddm", "sshd", "cron", "akonadi",
     "gpg-agent", "ssh-agent", "konsole", "yakuake", "dolphin",
-    "yad", "deck-wellness", "notify", "gvfsd", "kscreen", "kglobalaccels",
+    "yad", "folego", "notify", "gvfsd", "kscreen", "kglobalaccels",
     "ksecretd", "kwallet", "kded",
 )
 

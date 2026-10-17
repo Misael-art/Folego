@@ -11,11 +11,11 @@ from dataclasses import replace
 
 import pytest
 
-from deck_wellness import cli, paths
-from deck_wellness.actions.tmpfs.ledger import MAX_RETAINED_BYTES, Ledger
-from deck_wellness.cli import main
-from deck_wellness.core.tmpfs import TmpfsVolume
-from deck_wellness.safely.audit import AuditLog
+from folego import cli, paths
+from folego.actions.tmpfs.ledger import MAX_RETAINED_BYTES, Ledger
+from folego.cli import main
+from folego.core.tmpfs import TmpfsVolume
+from folego.safely.audit import AuditLog
 
 DAY = 86_400
 GIB = 1024 ** 3
@@ -257,7 +257,7 @@ def tmpfs_env(tmp_path, fake_tmp, monkeypatch):
     """CLI e atos no mesmo chão falso: ledger, quarentena, raízes do guard e auditoria.
 
     As quatro costuras, não três: `AuditLog()` sem caminho escreve no
-    `~/.local/state/deck-wellness/audit.jsonl` do host, e uma suíte de mutação que só
+    `~/.local/state/folego/audit.jsonl` do host, e uma suíte de mutação que só
     troca ledger e destino deixaria rastro real fora do `tmp_path`. O arquivo de
     auditoria também é onde se conta o evento por transição.
     """
@@ -588,7 +588,7 @@ def _audit_events(tmp_path, kind: str) -> list:
     """Os `outcome`s de um tipo de evento, na ordem em que foram escritos.
 
     É a costura do ponto (a): sem trocar `_tmpfs_audit`, estes eventos iriam para o
-    `~/.local/state/deck-wellness/audit.jsonl` do host. Contá-los aqui prova que o
+    `~/.local/state/folego/audit.jsonl` do host. Contá-los aqui prova que o
     handler passou o audit de verdade -- um `audit=` esquecido daria lista vazia.
     """
     path = tmp_path / "state" / "audit.jsonl"

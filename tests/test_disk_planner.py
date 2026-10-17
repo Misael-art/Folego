@@ -3,7 +3,7 @@ import json
 import os
 import time
 
-from deck_wellness.actions.disk.planner import DiskTarget, build_plan, format_report
+from folego.actions.disk.planner import DiskTarget, build_plan, format_report
 
 DAY = 86_400
 
@@ -74,7 +74,7 @@ def test_target_under_mnt_sdcard_is_refused_and_never_walked(tmp_path):
 
     def spy_measure(path, **kw):
         calls.append(str(path))
-        from deck_wellness.actions.disk.measure import TreeStat
+        from folego.actions.disk.measure import TreeStat
         return TreeStat(str(path), 1, 1, int(time.time() * 10**9), (), False)
 
     plan = build_plan(
@@ -210,7 +210,7 @@ def test_walk_errors_are_surfaced_in_the_item(tmp_path):
 
 
 def test_default_targets_never_point_outside_home(tmp_path):
-    from deck_wellness.actions.disk.planner import default_targets
+    from folego.actions.disk.planner import default_targets
 
     home = _home(tmp_path)
     plan = build_plan(default_targets(), home=home, now=time.time())
