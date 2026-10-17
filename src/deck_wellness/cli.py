@@ -11,11 +11,14 @@ import sys
 import time
 from pathlib import Path
 
+from . import paths
 from .actions.disk import planner, tmpclean
 from .actions.disk.measure import measure_tree
 from .actions.disk.quarantine import Quarantine
 from .actions.orphans import scan
 from .actions.tmpfs import inventory, plan as tmpfs_plan, policy as tmpfs_policy_mod
+from .actions.tmpfs import release as tmpfs_release
+from .actions.tmpfs.ledger import MAX_RETAINED_BYTES, RETENTION_DAYS, Ledger
 from .actions.tunings.registry import TUNINGS
 from .core.orphans import GROUP_LABELS, KILLABLE_GROUPS, OrphanTracker, group_targets
 from .core.tmpfs import WATCHED, watched_volumes
@@ -33,6 +36,22 @@ _sleep = time.sleep
 
 _tmpfs_volumes = watched_volumes
 _tmpfs_now = time.time
+
+
+def _tmpfs_ledger() -> Ledger:
+    return Ledger()
+
+
+def _tmpfs_audit() -> AuditLog:
+    return AuditLog()
+
+
+def _tmpfs_dest() -> Path:
+    return paths.tmp_quarantine_dir()
+
+
+def _tmpfs_guard_roots() -> list:
+    return tmpfs_release.default_allowed_roots()
 
 
 def run_gui(argv=None) -> int:
@@ -127,6 +146,30 @@ def build_parser() -> argparse.ArgumentParser:
                       help="padrão extra de allow-list, item por item")
     plan.add_argument("--prazo", type=float, default=10.0,
                       help="segundos máximos de varredura por volume")
+
+    release = tmpfs_sub.add_parser(
+        "release", help="liberar um item para a SSD: copy → verify → unlink, com ledger")
+    release.add_argument("target", help="caminho do item, tal como o plano o mostrou")
+    release.add_argument("--confirmar", action="store_true", help="aceita esta mutação")
+    release.add_argument("--prazo", type=float, default=10.0,
+                         help="segundos máximos de varredura por volume")
+
+    restore = tmpfs_sub.add_parser("restore",
+                                   help="devolver um item do ledger ao lugar original")
+    restore.add_argument("target", help="id do ledger (sai na saída do release)")
+    restore.add_argument("--confirmar", action="store_true", help="aceita esta mutação")
+
+    ledger = tmpfs_sub.add_parser("ledger", help="o que está retido e o orçamento")
+    ledger.add_argument("--json", action="store_true", help="saída para máquinas")
+
+    expire = tmpfs_sub.add_parser("expire", help="seca a retenção que estourou o orçamento")
+    expire.add_argument("--dias", type=float, default=RETENTION_DAYS,
+                        help="idade acima da qual a retenção vence")
+    expire.add_argument("--max-bytes", type=int, default=MAX_RETAINED_BYTES,
+                        help="teto de bytes retidos na SSD")
+    expire.add_argument("--confirmar", action="store_true", help="apaga em vez de listar")
+    expire.add_argument("--irreversivel", action="store_true",
+                        help="aceita que o conteúdo retido não voltará")
     return parser
 
 
@@ -588,7 +631,8 @@ def _cmd_tmpfs_plan(args) -> int:
     if not _tmpfs_reconciles(result):
         sys.stderr.write("aviso: a contagem não fechou — o plano é incompleto\n")
         return EXIT_REFUSED
-    print("\nDry-run comprovado: nenhum byte saiu do volume.")
+    print("\nPara liberar um item: deck-wellness tmpfs release <caminho> --confirmar "
+          "(vai para a SSD e volta com tmpfs restore)")
     return EXIT_OK
 
 
@@ -596,6 +640,103 @@ _TMPFS_HANDLERS = {
     "status": _cmd_tmpfs_status,
     "plan": _cmd_tmpfs_plan,
 }
+
+
+def _cmd_tmpfs_release(args) -> int:
+    # o plano é refeito no ato: só se libera o que a política classificou agora
+    plan = _build_tmpfs_plan(prazo=args.prazo)
+    item = plan.find(args.target)
+    if item is None:
+        sys.stderr.write(f"refused: {args.target} não está no plano — só se libera o "
+                         "que o plano classificou (deck-wellness tmpfs plan)\n")
+        return EXIT_REFUSED
+    result = tmpfs_release.release_item(
+        plan, item, ledger=_tmpfs_ledger(), audit=_tmpfs_audit(),
+        confirm=args.confirmar, dest_root=_tmpfs_dest(),
+        allowed_roots=_tmpfs_guard_roots(), now=_tmpfs_now())
+    if not result.ok:
+        sys.stderr.write(f"{result.reason}\n")
+        return EXIT_NEEDS_CONFIRM if not args.confirmar else EXIT_REFUSED
+    print(f"liberado: {planner.fmt_bytes(result.freed_bytes)} de RAM · "
+          f"{item.path}")
+    print(f"   retido em: {result.stored}")
+    print(f"   sha256:    {result.sha256}")
+    print(f"   id:        {result.entry_id}")
+    print(f"   devolve:   deck-wellness tmpfs restore {result.entry_id} --confirmar")
+    return EXIT_OK
+
+
+def _cmd_tmpfs_restore(args) -> int:
+    # uma porta só: quem manda na confirmação é `restore_item`, que já tem a sua
+    # mensagem própria (`release.py:325-326`). Checar aqui e chamar com `confirm=True`
+    # seriam duas decisões para a mesma regra -- e a de cima passaria a ser a única
+    # que o resto do código nunca exercita.
+    result = tmpfs_release.restore_item(
+        args.target, ledger=_tmpfs_ledger(), audit=_tmpfs_audit(),
+        confirm=args.confirmar, allowed_roots=_tmpfs_guard_roots(),
+        now=_tmpfs_now())
+    if not result.ok:
+        sys.stderr.write(f"{result.reason}\n")
+        return EXIT_NEEDS_CONFIRM if not args.confirmar else EXIT_REFUSED
+    print(f"devolvido: {planner.fmt_bytes(result.bytes)} para {result.restored_to}")
+    return EXIT_OK
+
+
+def _cmd_tmpfs_ledger(args) -> int:
+    book = _tmpfs_ledger()
+    view = book.budget_view(now=_tmpfs_now())
+    records = [r.to_dict() for r in book.records().values()]
+    if args.json:
+        print(json.dumps({"records": records, "budget": {
+            "retained_bytes": view.retained_bytes, "retained_count": view.retained_count,
+            "oldest_days": round(view.oldest_days, 1), "slack_bytes": view.slack_bytes,
+            "freed_bytes": view.freed_bytes, "by_volume": view.by_volume,
+            "max_bytes": MAX_RETAINED_BYTES, "days": RETENTION_DAYS}},
+            ensure_ascii=False))
+        return EXIT_OK
+    if not records:
+        print("ledger vazio: nada retido na SSD")
+        return EXIT_OK
+    for record in sorted(records, key=lambda r: r["ts"]):
+        print(f"{record['entry_id']} · {record['state']} · "
+              f"{planner.fmt_bytes(record['bytes'])} · {record['src']}")
+    mais_velho = f"{view.oldest_days:.1f}".replace(".", ",")
+    print(f"\nretido na SSD: {planner.fmt_bytes(view.retained_bytes)} em "
+          f"{view.retained_count} item(ns) · mais velho {mais_velho} d")
+    print(f"RAM liberada de fato: {planner.fmt_bytes(view.freed_bytes)} · "
+          f"folga do orçamento: {planner.fmt_bytes(view.slack_bytes)} "
+          f"de {planner.fmt_bytes(MAX_RETAINED_BYTES)}")
+    if view.retained_bytes > MAX_RETAINED_BYTES:
+        sys.stderr.write("aviso: a retenção estourou o orçamento — rode "
+                         "deck-wellness tmpfs expire\n")
+    return EXIT_OK
+
+
+def _cmd_tmpfs_expire(args) -> int:
+    result = tmpfs_release.expire_over_budget(
+        ledger=_tmpfs_ledger(), audit=_tmpfs_audit(), days=args.dias,
+        max_bytes=args.max_bytes, confirm=args.confirmar,
+        irreversible=args.irreversivel, now=_tmpfs_now(),
+        allowed_roots=_tmpfs_guard_roots())
+    if not result.ok:
+        sys.stderr.write(f"{result.reason}\n")
+        return EXIT_NEEDS_CONFIRM
+    print(result.reason)
+    for line in result.errors:
+        # a suspeita vai para o stderr, como em todo o resto desta CLI: o stdout do
+        # `expire` tem de continuar legível pela aba da T13
+        sys.stderr.write(f"aviso: {line}\n")
+    if result.freed_bytes:
+        print(f"expirado: {planner.fmt_bytes(result.freed_bytes)} da SSD")
+    return EXIT_OK
+
+
+_TMPFS_HANDLERS.update({
+    "release": _cmd_tmpfs_release,
+    "restore": _cmd_tmpfs_restore,
+    "ledger": _cmd_tmpfs_ledger,
+    "expire": _cmd_tmpfs_expire,
+})
 
 
 _TUNE_HANDLERS = {
@@ -636,6 +777,7 @@ def main(argv=None) -> int:
         sys.stderr.write(
             f"refused: comando desconhecido: {ns.command or ''} {ns.sub or ''}\n"
             f"usage: deck-wellness [disk plan|quarantine|restore|purge|list|tmp] "
-            f"[orphans] [groups] [tune status|apply|revert] [tmpfs status|plan]\n")
+            f"[orphans] [groups] [tune status|apply|revert] "
+            f"[tmpfs status|plan|release|restore|ledger|expire]\n")
         return EXIT_NEEDS_CONFIRM
     return handler(ns)
