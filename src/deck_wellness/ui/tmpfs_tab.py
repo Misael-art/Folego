@@ -136,7 +136,8 @@ class TmpfsTab(QWidget):
             hours = trend.eta_hours(tuple(series), volume.total_bytes, now=ts)
             self.volume_rows.append({
                 "path": volume.path, "fs_type": volume.fs_type,
-                "total": fmt_bytes(volume.total_bytes), "used": fmt_bytes(volume.used_bytes),
+                "total": fmt_bytes(volume.total_bytes),
+                "used": fmt_bytes(volume.used_bytes),
                 "avail": fmt_bytes(volume.avail_bytes),
                 "pct": round(volume.used_frac * 100),
                 "eta": "—" if hours is None else _human_eta(hours)})

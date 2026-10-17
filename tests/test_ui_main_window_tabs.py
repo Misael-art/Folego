@@ -74,6 +74,7 @@ def window(qapp):
 def test_the_window_offers_the_five_approved_tabs_in_order(window):
     assert [window.tabs.tabText(i) for i in range(window.tabs.count())] == \
         ["memória", "ajustes", "órfãos", "disco", "temporários"]
+    assert window.tabs.widget(0) is window.dashboard
     assert window.tabs.widget(4) is window.tmpfs
 
 

@@ -9,16 +9,21 @@ import sys
 import pytest
 
 from deck_wellness.core.tmpfs import TmpfsVolume
-from deck_wellness.ui.tmpfs_tab import (LEDGER_COLUMNS, PLAN_COLUMNS, VOLUME_COLUMNS,
-                                        TmpfsTab, argv_for)
+from deck_wellness.ui.tmpfs_tab import (LEDGER_COLUMNS, PLAN_COLUMNS, SAMPLES_KEPT,
+                                        TmpfsTab, VOLUME_COLUMNS, argv_for)
 
 pytest.importorskip("PySide6")
 
 GIB = 1024 ** 3
+MIB = GIB // 1024
 
 
 def col(columns, key):
     return [k for k, _ in columns].index(key)
+
+
+def headers(table):
+    return [table.horizontalHeaderItem(i).text() for i in range(table.columnCount())]
 
 
 class FakeJobs:
@@ -129,6 +134,61 @@ def test_the_eta_column_extrapolates_the_samples_this_tab_collected(qapp, jobs):
     assert t.volume_rows[0]["eta"] == "5 min"
     assert t.volume_table.item(0, col(VOLUME_COLUMNS, "eta")).text() == "5 min"
     assert "5 min" in t.pressure.text()
+
+
+def test_a_fill_that_would_take_hours_is_read_in_hours(qapp, jobs):
+    """Ramo `>= 1` de `_human_eta`: três horas não são lidas como 180 minutos."""
+    t = TmpfsTab(jobs=jobs, confirm_fn=lambda *a: True)
+    for ts, used in ((0.0, 8010 * MIB), (60.0, 8011 * MIB), (120.0, 8012 * MIB)):
+        t.show_volumes((TmpfsVolume("/tmp", "tmpfs", 8 * GIB, used, 8 * GIB - used),),
+                       ts=ts)
+    assert t.volume_rows[0]["eta"] == "3,0 h"
+    assert t.volume_table.item(0, col(VOLUME_COLUMNS, "eta")).text() == "3,0 h"
+    assert "3,0 h" in t.pressure.text()
+
+
+def test_a_fill_that_would_take_days_is_read_in_days(qapp, jobs):
+    """Ramo `>= 24` de `_human_eta`: a régua de minutos passa a ser absurda em 48 h."""
+    t = TmpfsTab(jobs=jobs, confirm_fn=lambda *a: True)
+    for ts, used in ((0.0, 5310 * MIB), (60.0, 5311 * MIB), (120.0, 5312 * MIB)):
+        t.show_volumes((TmpfsVolume("/tmp", "tmpfs", 8 * GIB, used, 8 * GIB - used),),
+                       ts=ts)
+    assert t.volume_rows[0]["eta"] == "2 dias"
+    assert t.volume_table.item(0, col(VOLUME_COLUMNS, "eta")).text() == "2 dias"
+    assert "2 dias" in t.pressure.text()
+
+
+def test_the_sample_series_keeps_only_the_window_the_eta_can_use(qapp, jobs):
+    """O trim `del series[:-SAMPLES_KEPT]` é o único teto da série: sem ele ela cresce
+    para sempre e nada neste arquivo avisa. Lê-se pelo `self._samples` que a aba já é;
+    acrescentar um getter ao produto para satisfazer o teste é que não pode ser."""
+    t = TmpfsTab(jobs=jobs, confirm_fn=lambda *a: True)
+    fed = SAMPLES_KEPT + 50
+
+    def sample(i):
+        return float(i * 2), GIB + i * MIB  # o poller de 2 s da casa
+
+    for i in range(fed):
+        ts, used = sample(i)
+        t.show_volumes((TmpfsVolume("/tmp", "tmpfs", 8 * GIB, used, 8 * GIB - used),),
+                       ts=ts)
+    series = t._samples["/tmp"]
+    assert len(series) == SAMPLES_KEPT
+    assert series[0] == sample(50), "o trim corta pela ponta errada"
+    assert series[-1] == sample(fed - 1)
+
+
+def test_the_three_tables_pin_their_header_on_their_own_declaration(tab):
+    """`*_COLUMNS` não é enfeite de import: ela É a fonte do cabeçalho, e a cópia pt-BR
+    fica presa por literal — mexer num título na produção quebra este teste."""
+    for table, columns, copy in (
+        (tab.volume_table, VOLUME_COLUMNS,
+         ["volume", "tipo", "total", "usado", "livre", "ocupação", "lotar em"]),
+        (tab.plan_table, PLAN_COLUMNS,
+         ["item", "tamanho", "idade", "donos", "estado", ""]),
+        (tab.ledger_table, LEDGER_COLUMNS, ["id", "estado", "tamanho", "origem", ""]),
+    ):
+        assert headers(table) == [title for _, title in columns] == copy
 
 
 def test_refresh_asks_the_child_for_plan_and_ledger_only(tab, jobs):
