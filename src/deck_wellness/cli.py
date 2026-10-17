@@ -15,8 +15,10 @@ from .actions.disk import planner, tmpclean
 from .actions.disk.measure import measure_tree
 from .actions.disk.quarantine import Quarantine
 from .actions.orphans import scan
+from .actions.tmpfs import inventory, plan as tmpfs_plan, policy as tmpfs_policy_mod
 from .actions.tunings.registry import TUNINGS
 from .core.orphans import GROUP_LABELS, KILLABLE_GROUPS, OrphanTracker, group_targets
+from .core.tmpfs import WATCHED, watched_volumes
 from .process.runner import run_isolated
 from .safely.audit import AuditLog
 
@@ -28,6 +30,9 @@ WORKER_MODULE = "deck_wellness.actions.tunings.worker"
 TUNE_TIMEOUT_S = 15.0
 
 _sleep = time.sleep
+
+_tmpfs_volumes = watched_volumes
+_tmpfs_now = time.time
 
 
 def run_gui(argv=None) -> int:
@@ -102,6 +107,26 @@ def build_parser() -> argparse.ArgumentParser:
         sub = tune_sub.add_parser(name, help=help_text)
         sub.add_argument("tuning", help="id do ajuste, ex. edge.startup_boost")
         sub.add_argument("--confirmar", action="store_true", help="aceita esta mutação")
+
+    tmpfs = commands.add_parser(
+        "tmpfs", help="espaços em RAM (/tmp, /run/user, /dev/shm): ver e liberar com confirmação")
+    tmpfs_sub = tmpfs.add_subparsers(dest="sub")
+
+    status = tmpfs_sub.add_parser("status", help="capacidade e pressão dos volumes (não escreve)")
+    status.add_argument("--json", action="store_true", help="saída para máquinas")
+    status.add_argument("--raiz", action="append", default=None,
+                        help="restringe a um volume da watch-list (repetível)")
+
+    plan = tmpfs_sub.add_parser("plan", help="dry-run: elegíveis e protegidos (nada muda)")
+    plan.add_argument("--json", action="store_true", help="saída para máquinas")
+    plan.add_argument("--raiz", action="append", default=None,
+                      help="restringe a um volume da watch-list (repetível)")
+    plan.add_argument("--dias", type=float, default=None,
+                      help=f"idade mínima em dias (padrão {tmpfs_policy_mod.MIN_AGE_DAYS:g})")
+    plan.add_argument("--permitir", action="append", default=[], dest="permitir",
+                      help="padrão extra de allow-list, item por item")
+    plan.add_argument("--prazo", type=float, default=10.0,
+                      help="segundos máximos de varredura por volume")
     return parser
 
 
@@ -449,6 +474,101 @@ def _cmd_tune_revert(args) -> int:
                             "revert", args.tuning)
 
 
+def _tmpfs_roots(raiz=None) -> list:
+    """`--raiz` só aceita o que a watch-list conhece: /run e /run/credentials não."""
+    wanted = list(raiz or WATCHED)
+    outside = [w for w in wanted if w not in WATCHED]
+    if outside:
+        sys.stderr.write("refused: fora da watch-list: " + ", ".join(outside) +
+                         " (o que não medimos não mutamos)\n")
+    return [w for w in wanted if w in WATCHED]
+
+
+def tmpfs_policy(permitir=(), dias=None, volumes=None) -> tmpfs_policy_mod.Policy:
+    """O escopo de volume segue o que foi medido: em produção `_tmpfs_roots` já
+    garantiu que é watch-list, e num teste o chão falso é o próprio volume."""
+    allow = tuple(tmpfs_policy_mod.DEFAULT_ALLOW_PATTERNS) + tuple(permitir or ())
+    return tmpfs_policy_mod.Policy(
+        allow_patterns=allow,
+        min_age_days=tmpfs_policy_mod.MIN_AGE_DAYS if dias is None else dias,
+        volumes=tuple(volumes) if volumes else tmpfs_policy_mod.WATCHED)
+
+
+def _scan_tmpfs(raiz=None, prazo: float = 10.0):
+    volumes = [v for v in _tmpfs_volumes() if v.path in _tmpfs_roots(raiz)]
+    entries = []
+    for volume in volumes:
+        _, _, found = inventory.scan_volume(volume, now=_tmpfs_now(),
+                                            deadline_s=prazo)
+        entries.extend(found)
+    return volumes, entries
+
+
+def _build_tmpfs_plan(raiz=None, permitir=(), dias=None, prazo: float = 10.0):
+    """A única porta para um plano: leitura + política, sem mutação nenhuma."""
+    volumes, entries = _scan_tmpfs(raiz, prazo)
+    plan = tmpfs_plan.build_plan(volumes, entries,
+                                 tmpfs_policy(permitir, dias, [v.path for v in volumes]),
+                                 now=_tmpfs_now())
+    return plan
+
+
+def _cmd_tmpfs_status(args) -> int:
+    volumes = [v for v in _tmpfs_volumes() if v.path in _tmpfs_roots(args.raiz)]
+    if not volumes:
+        sys.stderr.write("refused: nenhum volume da watch-list montado "
+                         "(nem /tmp, nem /run/user/1000, nem /dev/shm)\n")
+        return EXIT_REFUSED
+    if args.json:
+        print(json.dumps({"volumes": [v.to_dict() for v in volumes],
+                          "worst": max(volumes, key=lambda v: v.used_frac).to_dict()},
+                         ensure_ascii=False))
+        return EXIT_OK
+    print("Espaços temporários (são RAM; seco aqui = ENOSPC no agente):")
+    for volume in sorted(volumes, key=lambda v: v.used_frac, reverse=True):
+        print(f"{volume.path} · {volume.fs_type} · {planner.fmt_bytes(volume.total_bytes)} · "
+              f"usado {planner.fmt_bytes(volume.used_bytes)} · "
+              f"livre {planner.fmt_bytes(volume.avail_bytes)} · "
+              f"{round(volume.used_frac * 100)}%")
+    worst = max(volumes, key=lambda v: v.used_frac)
+    print(f"\npior volume: {worst.path} a {round(worst.used_frac * 100)}%")
+    print("Para ver o plano: deck-wellness tmpfs plan (dry-run, nada muda)")
+    return EXIT_OK
+
+
+def _cmd_tmpfs_plan(args) -> int:
+    result = _build_tmpfs_plan(args.raiz, args.permitir, args.dias, args.prazo)
+    if not result.volumes:
+        sys.stderr.write("refused: nenhum volume da watch-list montado\n")
+        return EXIT_REFUSED
+    if args.json:
+        print(result.to_json())
+        return EXIT_OK
+    print("Plano de liberação (dry-run: nada foi movido):")
+    print(f"volumes: {', '.join(v.path for v in result.volumes)}")
+    print(f"recuperáveis {planner.fmt_bytes(result.total_bytes)} em "
+          f"{len(result.reclaimable)} item(ns); protegidos {len(result.protected)}")
+    for item in result.reclaimable:
+        print(f"  · {item.path} · {planner.fmt_bytes(item.bytes)} · "
+              f"{item.age_days:.0f} d · padrão {item.matched}")
+    for item in result.protected:
+        print(f"  protegido: {item.path} · {item.reason}")
+    print(f"\nscanned {result.scanned_entries} item(ns) · "
+          f"{planner.fmt_bytes(result.scanned_bytes)} lidos · "
+          f"impressão: {result.digest[:16]}")
+    if result.scanned_entries != len(result.reclaimable) + len(result.protected):
+        sys.stderr.write("aviso: a contagem não fechou — o plano é incompleto\n")
+        return EXIT_REFUSED
+    print("\nDry-run comprovado: nenhum byte saiu do volume.")
+    return EXIT_OK
+
+
+_TMPFS_HANDLERS = {
+    "status": _cmd_tmpfs_status,
+    "plan": _cmd_tmpfs_plan,
+}
+
+
 _TUNE_HANDLERS = {
     "status": _cmd_tune_status,
     "apply": _cmd_tune_apply,
@@ -475,11 +595,18 @@ def main(argv=None) -> int:
             sys.stderr.write(f"refused: subcomando desconhecido: {ns.sub}\n")
             return EXIT_NEEDS_CONFIRM
         return handler(ns)
+    if ns.command == "tmpfs":
+        handler = _TMPFS_HANDLERS.get(ns.sub)
+        if handler is None:
+            sys.stderr.write(f"refused: subcomando desconhecido: "
+                             f"{ns.sub or '(nenhum)'}\n")
+            return EXIT_NEEDS_CONFIRM
+        return handler(ns)
     handler = _HANDLERS.get(ns.sub) if ns.command == "disk" else None
     if handler is None:
         sys.stderr.write(
             f"refused: comando desconhecido: {ns.command or ''} {ns.sub or ''}\n"
             f"usage: deck-wellness [disk plan|quarantine|restore|purge|list|tmp] "
-            f"[orphans] [groups] [tune status|apply|revert]\n")
+            f"[orphans] [groups] [tune status|apply|revert] [tmpfs status|plan]\n")
         return EXIT_NEEDS_CONFIRM
     return handler(ns)
