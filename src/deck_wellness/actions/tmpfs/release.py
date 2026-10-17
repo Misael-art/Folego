@@ -313,6 +313,9 @@ def restore_item(record_or_id, *, ledger, audit=None, confirm=False,
                  statvfs_fn=os.statvfs, allowed_roots=None,
                  now: float | None = None, mounts_fn=read_mounts) -> RestoreResult:
     now = time.time() if now is None else now
+    if not confirm:
+        return RestoreResult(False, str(record_or_id),
+                             "refused: restaurar exige --confirmar; nada foi alterado")
     record = record_or_id if isinstance(record_or_id, LedgerRecord) \
         else ledger.find(str(record_or_id))
     if record is None:
@@ -322,9 +325,6 @@ def restore_item(record_or_id, *, ledger, audit=None, confirm=False,
         return RestoreResult(False, record.entry_id,
                              f"refused: a entrada está {record.state}")
     entry_id = record.entry_id
-    if not confirm:
-        return RestoreResult(False, entry_id, "refused: restaurar exige --confirmar; "
-                                              "nada foi alterado")
 
     original = Path(record.src)
     stored_path = Path(record.stored)

@@ -11,8 +11,7 @@ from dataclasses import replace
 
 import pytest
 
-from deck_wellness import cli
-from deck_wellness import paths
+from deck_wellness import cli, paths
 from deck_wellness.actions.tmpfs.ledger import MAX_RETAINED_BYTES, Ledger
 from deck_wellness.cli import main
 from deck_wellness.core.tmpfs import TmpfsVolume
@@ -424,7 +423,8 @@ def test_release_uses_the_guard_roots_of_the_seam(tmp_path, fake_tmp, monkeypatc
     """As raízes do guard vêm da costura, e o handler tem de repassá-las de verdade.
 
     É o único modo de observar o repasse: se o handler chamar com `allowed_roots=None`,
-    `release_item` cai em `default_allowed_roots()` (`release.py:137`) -- e neste host,
+    `release_item` cai na linha `roots = list(allowed_roots) if allowed_roots else
+    default_allowed_roots()` (citada por função para não apodrecer) -- e neste host,
     onde o repo e portanto o `tmp_path` do pytest vivem sob `$HOME`, isso aceitaria a
     liberação como se nada estivesse faltando. Um mutante invisível à suíte inteira é
     exatamente o que um pino de costura existe para matar.
@@ -533,6 +533,47 @@ def test_expire_reports_a_payload_that_vanished(tmp_path, fake_tmp, monkeypatch,
     captured = capsys.readouterr()
     assert "aviso:" in captured.err and "já não existia" in captured.err, captured.err
     assert "aviso:" not in captured.out, "a suspeita não divide linha com o veredito"
+
+
+def test_restore_of_an_unknown_id_is_refused_and_says_so(tmp_path, fake_tmp, monkeypatch,
+                                                         capsys):
+    """Pino de comportamento que já existe na T10 e nunca foi exercitado por nada.
+
+    Verde no ato em que entra: o que o prende é a coerção (M17 -- suprimir o ramo faz o
+    teste morrer), não a ordem de escrita.
+    """
+    tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    assert main(["tmpfs", "restore", "id-que-nao-existe",
+                 "--confirmar"]) == cli.EXIT_REFUSED
+    assert "desconhecida" in capsys.readouterr().err
+
+
+def test_restore_of_an_entry_that_is_already_back_is_refused(tmp_path, fake_tmp,
+                                                             monkeypatch, capsys):
+    """O segundo ramo órfão da T10: `a entrada está restored` também não tinha teste."""
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    main(["tmpfs", "release", str(root / "qoder-cli-1000"), "--confirmar"])
+    entry_id = _ledger_records(tmp_path)[-1]["entry_id"]
+    assert main(["tmpfs", "restore", entry_id, "--confirmar"]) == cli.EXIT_OK
+    capsys.readouterr()
+    assert main(["tmpfs", "restore", entry_id, "--confirmar"]) == cli.EXIT_REFUSED
+    assert "restored" in capsys.readouterr().err
+
+
+def test_restore_without_the_flag_asks_for_the_flag_even_for_an_unknown_id(tmp_path,
+                                                                          fake_tmp,
+                                                                          monkeypatch,
+                                                                          capsys):
+    """(n): o exit code 2 promete que a flag resolve; a mensagem tem de prometer o mesmo.
+
+    Vermelho antes da correção: `restore_item` olhava o ledger antes do portão, então um
+    id inexistente sem flag devolvia `entrada desconhecida` **com** código 2 -- e o
+    operador que acrescentasse a flag receberia exatamente a mesma recusa, agora com 1.
+    """
+    tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    assert main(["tmpfs", "restore", "id-que-nao-existe"]) == cli.EXIT_NEEDS_CONFIRM
+    err = capsys.readouterr().err
+    assert "--confirmar" in err and "desconhecida" not in err, err
 
 
 def _ledger_records(tmp_path) -> list:

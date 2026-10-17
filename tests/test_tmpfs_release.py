@@ -470,6 +470,19 @@ def test_restore_without_confirmation_moves_nothing(tmp_path, book):
     assert payload.exists()
 
 
+def test_the_confirm_gate_precedes_the_id_lookup_in_restore(tmp_path, book):
+    """Sem a flag, a única recusa que o `restore` pode devolver é a de confirmação.
+
+    É o contrato que o exit code 2 da CLI vende. `release_item` já tinha a confirmação
+    em primeiro lugar (`release.py:107-109`); o `restore_item` olhava o ledger antes, e
+    isso fazia a mensagem discordar do código.
+    """
+    res = release.restore_item("id-que-nao-existe", ledger=book,
+                               allowed_roots=[tmp_path])
+    assert res.ok is False
+    assert "--confirmar" in res.reason and "desconhecida" not in res.reason, res.reason
+
+
 def test_restore_copies_back_and_frees_the_budget(tmp_path, book, audit):
     entry_id, payload = stored(tmp_path, book, size=8192)
     original = Path(book.records()[entry_id].src)
