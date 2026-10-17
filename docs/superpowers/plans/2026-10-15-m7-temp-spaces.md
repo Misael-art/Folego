@@ -4166,7 +4166,9 @@ git commit -m "M7 T11: tmpfs status/plan na CLI — plano refusal-first num TTY"
 
 **Files:**
 - Modify: `src/deck_wellness/cli.py` (parser + 4 handlers + `_TMPFS_HANDLERS`)
-- Test: `tests/test_cli_tmpfs.py` (estender)
+- Modify: `src/deck_wellness/actions/tmpfs/release.py` (só a ordem do portão de
+  confirmação em `restore_item` — ponto (n) do preâmbulo; nada mais naquele arquivo)
+- Test: `tests/test_cli_tmpfs.py` (estender), `tests/test_tmpfs_release.py` (estender)
 
 **Interfaces:**
 - Consumes: `tmpfs_plan.build_plan`/`_scan_tmpfs` (T11), `release.release_item`,
@@ -4175,7 +4177,7 @@ git commit -m "M7 T11: tmpfs status/plan na CLI — plano refusal-first num TTY"
 - Produces: seams `_tmpfs_ledger()`, `_tmpfs_audit()`, `_tmpfs_dest()`,
   `_tmpfs_guard_roots()`, e entradas em `_TMPFS_HANDLERS`
 
-**Este texto já carrega a pré-varredura do controlador, e os onze pontos abaixo são
+**Este texto já carrega a pré-varredura do controlador, e os doze pontos abaixo são
 dele, não do corte original.** (a) `_tmpfs_audit()` é um `AuditLog()` puro, e `AuditLog`
 resolve `paths.audit_log_path()` em tempo de chamada: sem trocar a costura, os testes de
 mutação escreveriam no `~/.local/state/deck-wellness/audit.jsonl` **de verdade** (o
@@ -4216,9 +4218,10 @@ coerção desses ramos está na tabela de mutações do Step 4 (M9, M10, M11). (
 costuras não eram observadas por nada: `_tmpfs_guard_roots()` é trocada por `tmpfs_env`
 em todos os testes, então ninguém lia o **corpo** dela (um `return [paths.tmp_dir()]`
 sobreviveria à suíte inteira), e nenhum teste provava que o `release` **repassa** a lista
-ao guard — `release.py:137` faz `roots = list(allowed_roots) if allowed_roots else
+ao guard — a linha `roots = list(allowed_roots) if allowed_roots else` em `release_item`
 default_allowed_roots()`, de modo que passar `[]` restaura as raízes de produção e o
-mutante passaria pelo motivo errado. Por isso
+mutante passaria pelo motivo errado (linha verificada na árvore, e citada por função
+para não apodrecer). Por isso
 `test_release_uses_the_guard_roots_of_the_seam` troca a costura por uma raiz **errada mas
 não vazia**, e `test_the_mutation_seams_default_to_the_ssd_not_ram` (`fake_home`) pinha o
 corpo das quatro costuras no disco da SSD, não na RAM. (k) O resumo humano do `ledger` era
@@ -4226,7 +4229,22 @@ afirmado por substring frouxa (`"retido" in out`, `"orçamento" in out`) e não 
 grandeza nenhuma: zerar o número ou omitir as duas linhas de resumo passava. Agora o pino
 é a linha inteira — o que expôs uma violação da regra de cópia no próprio texto do plano:
 `{view.oldest_days:.1f}` imprimia `0.0 d` com ponto, e vai pela vírgula, como
-`actions/tmpfs/policy.py:84-85` já faz.
+`actions/tmpfs/policy.py:84-85` já faz. (l) A porta do `restore` **mentia no exit code**,
+e a culpa é do ponto (c), não de quem o executou: `restore_item` olha o ledger
+(`release.py:317-323`) **antes** do portão de confirmação (`:325-327`), então
+`tmpfs restore <id-desconhecido>` sem flag devolvia `EXIT_NEEDS_CONFIRM` para uma falha
+que `--confirmar` nunca resolvesse -- exatamente a forma que o ponto (c) do `--prazo`
+proibiu em outro lugar: um freio anunciado que não existe. Medido antes de decidir, numa
+cópia da árvore (`.scratch/t12fixcheck`, com o `pyproject.toml` do lado para o rootdir
+importar o `src` copiado): com o portão subido para antes da busca, a suíte fica
+**523 passed** -- nenhum pino da T10 exercita o id ignorado **sem** a flag (só
+`test_restore_without_confirmation_moves_nothing`, com id válido), e as três recusas de
+estado que a T10 deixou órfãs (`entrada desconhecida`, `a entrada está restored`) somem da
+lista de órfãos com os pinos novos. `release_item` já tem a confirmação em primeiro lugar
+(`release.py:107-109`); a ordem do `restore_item` era a única assimetria entre os dois
+atos, e a porta única do (c) só é uma porta se ela for a **primeira**. Decisão: reordenar
+o portão no ato, não remapear o código no handler -- a alternativa (ler o `reason` para
+adivinhar a causa) deixaria o contrato do exit code pendurado numa string de mensagem.
 
 - [ ] **Step 1: Escrever o teste que falha**
 
@@ -4407,7 +4425,7 @@ def test_release_uses_the_guard_roots_of_the_seam(tmp_path, fake_tmp, monkeypatc
     """As raízes do guard vêm da costura, e o handler tem de repassá-las de verdade.
 
     É o único modo de observar o repasse: se o handler chamar com `allowed_roots=None`,
-    `release_item` cai em `default_allowed_roots()` (`release.py:137`) -- e neste host,
+    `release_item` cai em `default_allowed_roots()` -- e neste host,
     onde o repo e portanto o `tmp_path` do pytest vivem sob `$HOME`, isso aceitaria a
     liberação como se nada estivesse faltando. Um mutante invisível à suíte inteira é
     exatamente o que um pino de costura existe para matar.
@@ -4518,6 +4536,47 @@ def test_expire_reports_a_payload_that_vanished(tmp_path, fake_tmp, monkeypatch,
     assert "aviso:" not in captured.out, "a suspeita não divide linha com o veredito"
 
 
+def test_restore_of_an_unknown_id_is_refused_and_says_so(tmp_path, fake_tmp, monkeypatch,
+                                                         capsys):
+    """Pino de comportamento que já existe na T10 e nunca foi exercitado por nada.
+
+    Verde no ato em que entra: o que o prende é a coerção (M17 -- suprimir o ramo faz o
+    teste morrer), não a ordem de escrita.
+    """
+    tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    assert main(["tmpfs", "restore", "id-que-nao-existe",
+                 "--confirmar"]) == cli.EXIT_REFUSED
+    assert "desconhecida" in capsys.readouterr().err
+
+
+def test_restore_of_an_entry_that_is_already_back_is_refused(tmp_path, fake_tmp,
+                                                             monkeypatch, capsys):
+    """O segundo ramo órfão da T10: `a entrada está restored` também não tinha teste."""
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    main(["tmpfs", "release", str(root / "qoder-cli-1000"), "--confirmar"])
+    entry_id = _ledger_records(tmp_path)[-1]["entry_id"]
+    assert main(["tmpfs", "restore", entry_id, "--confirmar"]) == cli.EXIT_OK
+    capsys.readouterr()
+    assert main(["tmpfs", "restore", entry_id, "--confirmar"]) == cli.EXIT_REFUSED
+    assert "restored" in capsys.readouterr().err
+
+
+def test_restore_without_the_flag_asks_for_the_flag_even_for_an_unknown_id(tmp_path,
+                                                                          fake_tmp,
+                                                                          monkeypatch,
+                                                                          capsys):
+    """(n): o exit code 2 promete que a flag resolve; a mensagem tem de prometer o mesmo.
+
+    Vermelho antes da correção: `restore_item` olhava o ledger antes do portão, então um
+    id inexistente sem flag devolvia `entrada desconhecida` **com** código 2 -- e o
+    operador que acrescentasse a flag receberia exatamente a mesma recusa, agora com 1.
+    """
+    tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    assert main(["tmpfs", "restore", "id-que-nao-existe"]) == cli.EXIT_NEEDS_CONFIRM
+    err = capsys.readouterr().err
+    assert "--confirmar" in err and "desconhecida" not in err, err
+
+
 def _ledger_records(tmp_path) -> list:
     """Lê o registro: a asserção cai sobre o arquivo, não sobre uma redação do teste."""
     path = tmp_path / "state" / "tmp-ledger.jsonl"
@@ -4544,15 +4603,33 @@ def _audit_events(tmp_path, kind: str) -> list:
     return out
 ```
 
+E em `tests/test_tmpfs_release.py` (mesmo Passo 1, mesmo vermelho antes de qualquer
+implementação) — o pino da **causa**, que é a razão de o portão subir:
+
+```python
+def test_the_confirm_gate_precedes_the_id_lookup_in_restore(tmp_path, book):
+    """Sem a flag, a única recusa que o `restore` pode devolver é a de confirmação.
+
+    É o contrato que o exit code 2 da CLI vende. `release_item` já tinha a confirmação
+    em primeiro lugar (`release.py:107-109`); o `restore_item` olhava o ledger antes, e
+    isso fazia a mensagem discordar do código.
+    """
+    res = release.restore_item("id-que-nao-existe", ledger=book,
+                               allowed_roots=[tmp_path])
+    assert res.ok is False
+    assert "--confirmar" in res.reason and "desconhecida" not in res.reason, res.reason
+```
+
 - [ ] **Step 2: Rodar e ver falhar**
 
-Run: `.venv/bin/python -m pytest tests/test_cli_tmpfs.py -v -k "release or restore or ledger or expire or exists or seams"`
-Expected: **15 failed, 13 deselected** — e é preciso saber ler a falha, porque os quinze
+Run: `.venv/bin/python -m pytest tests/test_cli_tmpfs.py -v --basetemp .scratch/bt12 -k "release or restore or ledger or expire or exists or seams"`
+Expected: **18 failed, 13 deselected** — e é preciso saber ler a falha, porque os dezoito
 morrem por dois mecanismos diferentes:
-* os catorze que passam por `tmpfs_env` ou pelas costuras caem em `AttributeError: module
+* os dezessete que passam por `tmpfs_env` ou pelas costuras caem em `AttributeError: module
   deck_wellness.cli has no attribute '_tmpfs_ledger'` (ou `_tmpfs_dest`, `_tmpfs_audit`,
   `_tmpfs_guard_roots`) -- o `monkeypatch.setattr` da costura vem antes de qualquer
-  argparse, e é ele que prova que o handler ainda não existe;
+  argparse, e é ele que prova que o handler ainda não existe (a mesma queda alcança os três
+  pinos do ponto (n), que por trás deles têm um `restore_item` da T10 mas não têm handler);
 * `test_tmpfs_plan_now_points_at_a_command_that_exists` falha duas vezes sobre si mesma: a
   última linha do `plan` ainda é `Dry-run comprovado: nenhum byte saiu do volume.`, e o
   `parse_args(["tmpfs", "release", ...])` do segundo bloco morre em `argumento inválido`,
@@ -4560,6 +4637,22 @@ morrem por dois mecanismos diferentes:
 O `2` do argparse coincide com `EXIT_NEEDS_CONFIRM`, por isso nenhum pino desta tarefa
 asserta "recusa" por código de saída num comando que o parser não conhece: o que conta é a
 mensagem nomeada e o chão.
+
+- [ ] **Step 2b: O vermelho do ponto (n), visto separadamente**
+
+Um pino por cima: `test_the_confirm_gate_precedes_the_id_lookup_in_restore`, em
+`tests/test_tmpfs_release.py`, cai sobre uma produção que **já existe** (a T10 escreveu
+`restore_item`), então o vermelho dele não é "falta o handler" -- é o contrato do exit code
+2 sendo vendido com a mensagem errada. Medido pelo controlador numa cópia da árvore já com
+a CLI desta tarefa, **antes** de subir o portão:
+
+Run: `.venv/bin/python -m pytest tests/test_tmpfs_release.py tests/test_cli_tmpfs.py -v --basetemp .scratch/bt12 -k "confirm_gate or (restore and unknown_id) or (restore and without_the_flag) or already_back"`
+Expected: **2 failed, 2 passed** — `test_the_confirm_gate_precedes_the_id_lookup_in_restore` e
+`test_restore_without_the_flag_asks_for_the_flag_even_for_an_unknown_id`, ambos com
+`refused: entrada desconhecida no ledger` onde o contrato pede a mensagem da flag. Os
+outros dois (`..._is_refused_and_says_so`, `..._already_back_is_refused`) já passam: são
+pinos de ramos que a T10 deixou sem teste, e o que os prende é a coerção M17/M18, não a
+ordem de escrita — dizer que eles "falharam" seria fabricar evidência.
 
 - [ ] **Step 3: Escrever a implementação mínima**
 
@@ -4765,8 +4858,29 @@ do tipo `main(["tmpfs", "release"]) != EXIT_OK` **não** serviria: recusa por `i
 choice` e recusa por `target` ausente têm o mesmo código, então ela passaria nos dois
 mundos.
 
-**Evidência de não-vacuidade (roda de coerção, não de leitura):** treze mutações no texto
-desta tarefa, cada uma sozinha, e as treze morrem. As que não estão numa tarefa anterior:
+Nenhum teste toca `/tmp`, `/run/user/1000` ou `/dev/shm` reais: `fake_tmp` troca o volume por
+`tmp_path` e `tmpfs_env` troca ledger, destino, raízes do guard **e auditoria** -- os quatro,
+porque o terceiro ponto da pré-varredura é justamente este arquivo.
+
+**A produção que o ponto (n) muda**, em `restore_item`, é mover o portão para o topo e
+devolver o id que chegou (o registro ainda não foi lido, e `record.entry_id` é o mesmo
+`str` que o `find` recebeu):
+
+```python
+    now = time.time() if now is None else now
+    if not confirm:
+        return RestoreResult(False, str(record_or_id),
+                             "refused: restaurar exige --confirmar; nada foi alterado")
+    record = record_or_id if isinstance(record_or_id, LedgerRecord) \
+        else ledger.find(str(record_or_id))
+```
+
+e o bloco que estava em `release.py:324-327` sai, ficando só `entry_id = record.entry_id`
+no lugar. O handler da CLI **não** muda: a porta continua uma, e a primeira.
+
+**Evidência de não-vacuidade (roda de coerção, não de leitura):** dezenove mutações no
+texto desta tarefa, cada uma sozinha, e as dezenove morrem. As que não estão numa tarefa
+anterior:
 M1 `confirm=args.confirmar` → `confirm=True` no `release` (mata
 `test_release_refuses_without_confirmation`); M2 tirar `audit=_tmpfs_audit()` (mata o pino
 de contagem `["partial", "released"]`); M3 `allowed_roots=_tmpfs_guard_roots()` → `None`
@@ -4776,23 +4890,32 @@ M6 indentar o `json.dumps` do `ledger --json` (mata a contagem de linhas); M7
 `irreversible=args.irreversivel` → `True` (apaga no teste de recusa); M8 `confirm=args.confirmar`
 → `True` no `expire` (o dry-run apaga); M9 apagar o ramo `item is None` (o `release_item`
 recebe `None` e morre em `AttributeError` -- que é a prova de que o portão existe); M10
-trocar o aviso do orçamento por `pass`; M11 o laço `result.errors` por `pass`. A tabela com o
-resultado de cada uma vive em `.scratch/t12_mutate.py` e o rodapé dela vai no corpo do commit.
-Nenhum teste toca `/tmp`, `/run/user/1000` ou `/dev/shm` reais: `fake_tmp` troca o volume por
-`tmp_path` e `tmpfs_env` troca ledger, destino, raízes do guard **e auditoria** -- os quatro,
-porque o terceiro ponto da pré-varredura é justamente este arquivo.
+trocar o aviso do orçamento por `pass`; M11 o laço `result.errors` por `pass`; M12 o hint do
+`plan` de volta à linha seca; M13 `_tmpfs_dest()` apontando para `paths.tmp_dir()`; M14 as
+duas linhas de resumo do `ledger` omitidas; M15 o `restore` com `Ledger()` nu em vez da
+costura; M16 a vírgula pt-BR do resumo trocada por ponto. As três do ponto (n), medidas no
+`release.py`: **M17** suprimir o ramo `record is None` (mata
+`test_restore_of_an_unknown_id_is_refused_and_says_so`); **M18** suprimir o ramo de estado
+(mata `test_restore_of_an_entry_that_is_already_back_is_refused`); **M19** devolver o portão
+para depois da busca (mata três: o pino da causa, o do id ignorado sem flag **e** o do id
+desconhecido com flag -- que é a medida de que o contrato é um só). A tabela com o resultado
+de cada uma vive em `.scratch/t12_mutate.py` e o rodapé dela vai no corpo do commit.
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.venv/bin/python -m pytest tests/test_cli_tmpfs.py -v --basetemp .scratch/bt12`
-→ PASS — **28 passed** (os 13 da T11 + os 15 daqui).
+Run: `.venv/bin/python -m pytest tests/test_cli_tmpfs.py tests/test_tmpfs_release.py -v --basetemp .scratch/bt12`
+→ PASS — **31 + 35 passed** (os 13 da T11 + os 18 daqui; e os 34 da T10 + o pino da causa).
 Run: `.venv/bin/python -m pytest -v --basetemp .scratch/bt12 2>&1 | tail -2` →
-**523 passed** (508 da T11 + 15).
+**527 passed** (508 da T11 + 19).
 
-**Coerção de mutação** — rode cada uma sobre o `cli.py` **já commitado**, uma por vez, e
-reverta com `git checkout -- src/deck_wellness/cli.py` entre elas (a árvore limpa garante
-que não há trabalho alheio no arquivo). Estas são as mortes medidas pelo controlador antes
-da tarefa, na cópia de `.scratch/`; se a sua suíte matar menos, a implementação divergiu do
+**Coerção de mutação** — rode cada mutação sobre o arquivo **ainda não commitado** (o
+rodapé da tabela vai dentro do commit único desta tarefa, então a coerção tem de caber
+antes dele), uma por vez. Guarde os bytes originais antes (`cp` + `sha256sum`) e devolva-os
+por escrita, conferindo que o hash voltou a bater; **não** use `git checkout` aqui: os
+arquivos ainda têm trabalho não commitado seu, e `checkout` apagaria esse trabalho junto com
+a mutação. As três últimas (M17–M19) são do `release.py` e se revertem pelos mesmos
+passos — guardado antes, hash depois. Estas são as mortes medidas pelo controlador antes da
+tarefa, em cópias de `.scratch/`; se a sua suíte matar menos, a implementação divergiu do
 plano e é preciso explicar no corpo do commit:
 
 | mutação | morre em |
@@ -4814,20 +4937,29 @@ plano e é preciso explicar no corpo do commit:
 | M15 `restore` com `Ledger()` nu (costura ignorada) | `test_restore_returns_the_item_to_its_original_path`, `test_restore_without_confirmation_moves_nothing` |
 | M16 vírgula pt-BR trocada por ponto | `test_ledger_prints_ram_freed_against_ssd_retained` |
 
-**16/16 mortas**, e a árvore revertida volta a `15 passed, 13 deselected` no `-k` da
-tarefa. M14 e M16 não estavam no corte original: existiam mutações que o nome do teste
-prometia e a substring frouxa não media (ponto (k) do preâmbulo).
+**16/16 mortas**, e a árvore revertida volta a zero falhas no `-k` da tarefa. O número de
+passes dessa reversão é `15 passed, 13 deselected` no `cli.py` da T12 sem os três pinos do
+ponto (n); com eles, o `-k` seleciona mais testes e os passes sobem -- o que importa é a
+ausência de `failed`, não a contagem. M14 e M16 não estavam no corte original: existiam
+mutações que o nome do teste prometia e a substring frouxa não media (ponto (k) do
+preâmbulo).
 
 - [ ] **Step 5: Commit**
 
-```bash
-git add src/deck_wellness/cli.py tests/test_cli_tmpfs.py
-git commit -m "$(cat <<'MSG'
-M7 T12: tmpfs release/restore/ledger/expire na CLI — mutação com duas flags
+A CLI e os doze testes dela já subiram em `a139053` (rodada 0, revisada). O que sobra para
+esta tarefa é o ponto (n): a ordem do portão no `restore_item` e os quatro pinos novos.
+Suba isso em commit próprio, com a evidência do Passo 2b e das M17–M19 no corpo:
 
-<corpo: a linha do RED (15 failed, 13 deselected) com o mecanismo de cada queda, a
-linha do GREEN (28 no arquivo, 523 na suíte) e a tabela de coerção inteira, uma linha
-por mutação com o teste que morreu, mais a linha revertida conferida>
+```bash
+git add src/deck_wellness/actions/tmpfs/release.py tests/test_tmpfs_release.py \
+        tests/test_cli_tmpfs.py
+git commit -m "$(cat <<'MSG'
+M7 T12 rodada 1: o portão do --confirmar do restore sobe para a porta
+
+<corpo: a linha do RED do Passo 2b (2 failed, 2 passed -- e por que os dois pinos de
+regressão passam de cara, em vez de fabricar um vermelho para eles), a linha do GREEN
+(31 no arquivo da CLI, 35 no do release, 527 na suíte), as três mutações do `release.py`
+com o teste que cada uma mata e a reversão conferida por hash>
 MSG
 )"
 ```
