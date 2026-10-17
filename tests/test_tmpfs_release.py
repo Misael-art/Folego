@@ -36,14 +36,16 @@ def sandbox_policy(tmp_path):
                                   str(tmp_path / "qoder-cli-1000" / "*")))
 
 
-def item(tmp_path, name="qoder-cli-1000", size=4096, *, under=None, allow=None):
+def item(tmp_path, name="qoder-cli-1000", size=4096, *, under=None, allow=None,
+         policy=None):
     """Um diretório real na SSD-emulada do tmp_path, velho e sem dono aberto.
 
     O blob é **esparso** (`touch` + `truncate`): estes testes precisam de um item de
     1 GiB aparente para a checagem de folga, e `write_bytes(b"a" * 1GiB)` alocaria
     isso de verdade — em `/tmp`, que neste host é tmpfs de 7,3 G e já viu ENOSPC.
     `under`/`allow` existem para o caso dos homônimos: um segundo item com o mesmo
-    nome, em outro pai, com a própria allow-list.
+    nome, em outro pai, com a própria allow-list. `policy` existe para o caso do
+    portão de orçamento: abrir `max_item_bytes` é o que torna aquele ramo vivo.
     """
     src = (Path(under) if under is not None else tmp_path) / name
     src.mkdir(parents=True, exist_ok=True)
@@ -56,7 +58,9 @@ def item(tmp_path, name="qoder-cli-1000", size=4096, *, under=None, allow=None):
     entry = TmpfsEntry(path=str(src), name=src.name, volume="/tmp", kind="dir",
                        uid=os.getuid(), bytes=size, files=1, age_days=10.0,
                        is_mount_point=False, under_mount=False, holder_pids=())
-    policy = Policy(allow_patterns=tuple(allow)) if allow else sandbox_policy(tmp_path)
+    if policy is None:
+        policy = (Policy(allow_patterns=tuple(allow)) if allow
+                  else sandbox_policy(tmp_path))
     plan = build_plan((VOL,), (entry,), policy, now=NOW)
     return plan, plan.find(str(src)), src
 
@@ -169,6 +173,32 @@ def test_release_refuses_when_retention_would_exceed_the_budget(tmp_path, book):
                                allowed_roots=roots(tmp_path), now=NOW)
     assert res.ok is False and "orçamento" in res.reason
     assert "velha" in res.reason, "a recusa tem de apontar a candidata a expire"
+
+
+def test_an_item_bigger_than_the_ceiling_refuses_without_a_candidate(tmp_path, book):
+    """O outro lado do portão de orçamento: `oldest()` devolve `None` e ainda recusa.
+
+    A recusa com candidata existe acima; esta cobre o ledger vazio — o lugar onde a
+    versão antiga lia `oldest.entry_id` às cegas e estourava `AttributeError` no
+    caminho da recusa. Com a `max_item_bytes` default (2 GiB) o caminho é
+    inalcançável: 2 GiB nunca passam dos 3 GiB de orçamento livre. A política aqui
+    abre o teto por item de propósito, porque é assim que o portão fica vivo para
+    quem configurar a política — e é isso que o teste pinar, não a default.
+    """
+    policy = Policy(allow_patterns=sandbox_policy(tmp_path).allow_patterns,
+                    max_item_bytes=6 * GIB)
+    plan, it, src = item(tmp_path, size=4096, policy=policy)
+    res = release.release_item(plan, it, ledger=book, confirm=True,
+                               dest_root=tmp_path / "retida",
+                               entry_fn=free(bytes=4 * GIB),
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               allowed_roots=roots(tmp_path), now=NOW)
+    assert res.ok is False and "orçamento" in res.reason
+    assert "nada está retido" in res.reason, "sem candidata, a recusa diz o porquê"
+    assert res.reason.count("refused:") == 1
+    assert (src / "blob.bin").exists()
+    assert not (tmp_path / "retida").exists(), "nada foi copiado"
+    assert book.retained_count() == 0
 
 
 def test_dev_shm_is_measured_never_mutated(tmp_path, book):

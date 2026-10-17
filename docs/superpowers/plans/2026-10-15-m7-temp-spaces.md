@@ -2278,7 +2278,8 @@ def item(tmp_path, name="qoder-cli-1000", size=4096, *, under=None, allow=None,
     1 GiB aparente para a checagem de folga, e `write_bytes(b"a" * 1GiB)` alocaria
     isso de verdade — em `/tmp`, que neste host é tmpfs de 7,3 G e já viu ENOSPC.
     `under`/`allow` existem para o caso dos homônimos: um segundo item com o mesmo
-    nome, em outro pai, com a própria allow-list.
+    nome, em outro pai, com a própria allow-list. `policy` existe para o caso do
+    portão de orçamento: abrir `max_item_bytes` é o que torna aquele ramo vivo.
     """
     src = (Path(under) if under is not None else tmp_path) / name
     src.mkdir(parents=True, exist_ok=True)
