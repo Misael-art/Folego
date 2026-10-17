@@ -5011,10 +5011,21 @@ porque adivinhar orçamento seria pior que calar. (d) o Passo 4 abre `_cmd_tmpfs
 ali que mora o comentário que a T12 deixou torto: ele aponta a mensagem do portão para
 `release.py:325-326`, linha que a subida do portão moveu para `:316-318` (hoje `:325-326` é a
 recusa de **estado**). Corrigir aqui, por função e conteúdo, não por número. (e) `MUTATING`
-passando a listar release/restore/expire faz do mutex de mutação **um só entre as abas** -- um
-`release` em voo recusa um `apply`. É o comportamento que a spec pede ("uma mutação por vez"),
-a mensagem do refusal já é genérica (`tune_jobs.py:58-60`) e os únicos consumidores de
-`MUTATING` são `:42` e `:57`, ambos dentro de `tune_jobs.py`. (f) três riscos que a varredura
+passando a listar release/restore/expire faz as três ações do tmpfs **contarem como mutação
+dentro da camada do tmpfs**: um `release` em voo recusa o `restore` seguinte, com a mensagem
+genérica de `tune_jobs.py:58-60`. **Errata desta cláusula, escrita depois de medir contra a
+spec e o `main_window.py`.** O texto original dizia "um só entre as abas -- um `release` em voo
+recusa um `apply`", e citava a spec como se ela pedisse isso. Não pede, e não é o que acontece:
+o estado do mutex é de instância (`in_flight` criado em `tune_jobs.py:53`, lido em `:57`,
+aumentado em `:77-78`) e a janela monta **três** `TuneJobs` (`main_window.py:45-49`: `_jobs`,
+`_disk_jobs`, `_tmpfs_jobs`), então `release` e `apply` em voo ao mesmo tempo é o comportamento
+de hoje. O que a spec exige está na sua linha de testes (`specs/…:445`): "`release`/`restore`/
+`expire` contam como mutação: a segunda é recusada enquanto a primeira está em voo" -- serialização
+**por camada**, que é exatamente o que o Passo 7 pinava. Geralizar para um mutex da janela custa
+um objeto compartilhado injetado nos três construtores; é uma decisão da revisão ampla, não desta
+tarefa, e quem a tomar precisa de um teste que atravesse as duas camadas. Registrar o limite
+aqui vale para a cláusula não ser lida como garantia: **a janela não impede duas mutações de
+camadas diferentes.** (f) três riscos que a varredura
 abriu e **fechou como não-defeitos**, registrados para ninguém os reabrir: o roteamento por
 `acao` (ver (a)); `snapshot.tmpfs` existe (`core/snapshot.py:76`, default `()`) então
 `show_volumes` recebe tupla do poller; e `test_layers.py:15` usa `rglob`, com o pino novo
@@ -5276,6 +5287,10 @@ def test_a_child_that_answered_nothing_is_not_a_success(qapp):
 Em `tests/test_ui_main_window_tabs.py`: atualize o docstring para cinco abas, acrescente o
 fixture de resposta e os casos abaixo, e **substitua** `test_the_window_offers_the_four_
 approved_tabs_in_order` e `test_closing_the_window_takes_both_child_layers_down`.
+A substituição reescreve o corpo, mas **não encolhe o que ele pinava**: a linha
+`assert window.tabs.widget(0) is window.dashboard` existia antes desta tarefa e continua na
+versão de cinco abas (errata da rodada 1 -- o texto original desta cláusula produziu um teste
+que afirmava *menos* do que o anterior, e um pino perdido não se conserta depois).
 
 ```python
 def tmpfs_answer(acao, tuning_id):
@@ -5299,6 +5314,7 @@ def window(qapp):
 def test_the_window_offers_the_five_approved_tabs_in_order(window):
     assert [window.tabs.tabText(i) for i in range(window.tabs.count())] == \
         ["memória", "ajustes", "órfãos", "disco", "temporários"]
+    assert window.tabs.widget(0) is window.dashboard
     assert window.tabs.widget(4) is window.tmpfs
 
 
