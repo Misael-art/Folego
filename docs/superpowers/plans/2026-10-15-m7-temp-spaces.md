@@ -2270,7 +2270,8 @@ def sandbox_policy(tmp_path):
                                   str(tmp_path / "qoder-cli-1000" / "*")))
 
 
-def item(tmp_path, name="qoder-cli-1000", size=4096, *, under=None, allow=None):
+def item(tmp_path, name="qoder-cli-1000", size=4096, *, under=None, allow=None,
+         policy=None):
     """Um diretório real na SSD-emulada do tmp_path, velho e sem dono aberto.
 
     O blob é **esparso** (`touch` + `truncate`): estes testes precisam de um item de
@@ -2290,7 +2291,9 @@ def item(tmp_path, name="qoder-cli-1000", size=4096, *, under=None, allow=None):
     entry = TmpfsEntry(path=str(src), name=src.name, volume="/tmp", kind="dir",
                        uid=os.getuid(), bytes=size, files=1, age_days=10.0,
                        is_mount_point=False, under_mount=False, holder_pids=())
-    policy = Policy(allow_patterns=tuple(allow)) if allow else sandbox_policy(tmp_path)
+    if policy is None:
+        policy = (Policy(allow_patterns=tuple(allow)) if allow
+                  else sandbox_policy(tmp_path))
     plan = build_plan((VOL,), (entry,), policy, now=NOW)
     return plan, plan.find(str(src)), src
 
@@ -2403,6 +2406,32 @@ def test_release_refuses_when_retention_would_exceed_the_budget(tmp_path, book):
                                allowed_roots=roots(tmp_path), now=NOW)
     assert res.ok is False and "orçamento" in res.reason
     assert "velha" in res.reason, "a recusa tem de apontar a candidata a expire"
+
+
+def test_an_item_bigger_than_the_ceiling_refuses_without_a_candidate(tmp_path, book):
+    """O outro lado do portão de orçamento: `oldest()` devolve `None` e ainda recusa.
+
+    A recusa com candidata existe acima; esta cobre o ledger vazio — o lugar onde a
+    versão antiga lia `oldest.entry_id` às cegas e estourava `AttributeError` no
+    caminho da recusa. Com a `max_item_bytes` default (2 GiB) o caminho é
+    inalcançável: 2 GiB nunca passam dos 3 GiB de orçamento livre. A política aqui
+    abre o teto por item de propósito, porque é assim que o portão fica vivo para
+    quem configurar a política — e é isso que o teste pinar, não a default.
+    """
+    policy = Policy(allow_patterns=sandbox_policy(tmp_path).allow_patterns,
+                    max_item_bytes=6 * GIB)
+    plan, it, src = item(tmp_path, size=4096, policy=policy)
+    res = release.release_item(plan, it, ledger=book, confirm=True,
+                               dest_root=tmp_path / "retida",
+                               entry_fn=free(bytes=4 * GIB),
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               allowed_roots=roots(tmp_path), now=NOW)
+    assert res.ok is False and "orçamento" in res.reason
+    assert "nada está retido" in res.reason, "sem candidata, a recusa diz o porquê"
+    assert res.reason.count("refused:") == 1
+    assert (src / "blob.bin").exists()
+    assert not (tmp_path / "retida").exists(), "nada foi copiado"
+    assert book.retained_count() == 0
 
 
 def test_dev_shm_is_measured_never_mutated(tmp_path, book):
@@ -2934,9 +2963,14 @@ A ordem das chamadas é o contrato, em dois sentidos:
 
 - [ ] **Step 4: Rodar e ver passar**
 
-Run: `.venv/bin/python -m pytest tests/test_tmpfs_release.py -v` → PASS (17).
+Run: `.venv/bin/python -m pytest tests/test_tmpfs_release.py -v` → PASS (18).
 Run: `.venv/bin/python -m pytest -v 2>&1 | tail -2` → verde, e a linha de resumo tem
-de ler **478 passed** (461 da T8 + 17 daqui).
+de ler **479 passed** (461 da T8 + 18 daqui).
+
+Na coerção de mutação abaixo, rode com `--basetemp` apontando para um diretório da
+SSD (`.scratch/`): a mutação `2 * gate` → `gate` faz o teste de 1 GiB copiar ~1 GiB
+de verdade, e neste host `/tmp` é tmpfs — o lixo iria para a RAM que este módulo
+existe para proteger.
 
 **Coerção de mutação** — cada mutação abaixo mata o teste nomeado; guarde a saída no
 corpo do commit, como na T8:
@@ -2952,6 +2986,7 @@ corpo do commit, como na T8:
 | pular a re-checagem (`if not verdict.ok` → `if False`) | os dois testes de "apareceu depois do plano" |
 | voltar a prefixar: `f"refused: {verdict.reason}"` | `test_a_holder_that_appeared_after_the_plan_refuses_the_release` (`count == 1`) |
 | tirar o `try` do par de digests | `test_a_digest_that_cannot_be_read_leaves_no_orphan_clone` (o `OSError` vaza) |
+| jogar fora o `else` do portão de orçamento (ler `oldest.entry_id` às cegas) | `test_an_item_bigger_than_the_ceiling_refuses_without_a_candidate` (`AttributeError` no lugar da recusa) |
 | `held.state in ACTIVE_STATES` → `held is not None` | `test_an_item_already_restored_can_be_released_again` |
 | tirar a recusa de `dest.exists()` | `test_two_homonyms_in_the_same_second_do_not_collide` (e o clone anterior é pisado) |
 | validar o gravável no `dest` em vez do pai do destino | `test_a_destination_that_does_not_exist_yet_is_still_gravable` |
