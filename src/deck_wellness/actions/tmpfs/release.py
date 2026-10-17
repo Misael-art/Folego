@@ -351,6 +351,23 @@ def restore_item(record_or_id, *, ledger, audit=None, confirm=False,
                              f"refused: {volume} não tem espaço para devolver "
                              f"{record.bytes} bytes")
 
+    # A certidão antes da escrita: `record.sha256` é o digest do clone tal como a
+    # liberação o certificou. Ler o retido só *depois* da cópia — como este plano
+    # fazia — torna a verificação da volta tautológica no único caso que importa:
+    # payload apodrecido na SSD produz destino apodrecido no volume, os dois digests
+    # batem, e o `restore` diz "ok" enquanto entrega lixo. Assim, a recusa vem antes
+    # de qualquer byte escrito no volume.
+    try:
+        stored_digest, _ = tree_digest(stored_path)
+    except OSError as err:
+        return RestoreResult(False, entry_id,
+                             f"refused: o retido não pôde ser lido "
+                             f"({err.strerror or err}); nada foi alterado")
+    if stored_digest != record.sha256:
+        return RestoreResult(False, entry_id,
+                             "refused: o digest do retido difere do certificado no "
+                             "ledger; nada foi devolvido")
+
     try:
         original.parent.mkdir(parents=True, exist_ok=True)
         if stored_path.is_dir():
@@ -362,9 +379,8 @@ def restore_item(record_or_id, *, ledger, audit=None, confirm=False,
         return RestoreResult(False, entry_id, f"refused: a cópia de volta falhou "
                                               f"({err.strerror or err}); a SSD mantém o item")
 
-    clone_digest, _ = tree_digest(stored_path)
     back_digest, size = tree_digest(original)
-    if clone_digest != back_digest:
+    if back_digest != stored_digest:
         _quiet_remove(original)
         return RestoreResult(False, entry_id,
                              "refused: o digest da volta difere do retido; o clone "
