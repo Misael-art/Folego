@@ -6,6 +6,8 @@ memória, então o movimento é explicitamente copy → verify → unlink, e o l
 registra o meio do caminho.
 """
 import os
+import shutil
+import time
 from pathlib import Path
 
 import pytest
@@ -425,3 +427,172 @@ class _vfs:
     def __init__(self, avail):
         self.f_frsize = 4096
         self.f_bavail = avail // 4096
+
+
+"""Devolver e expirar: os dois lados do ledger, com a mesma recusa primeiro.
+
+Restaurar volta a copiar (SSD → tmpfs é outro cross-device) e só apaga o clone
+depois do digest bater. Expirar é o único ato irreversível daqui, e por isso pede
+duas flags.
+"""
+
+
+def stored(tmp_path, book, *, name="sessao-velha", size=4096, days=1.0, entry_id=None,
+           bytes=None):
+    """Coloca um item no ledger do jeito que release_item o deixaria.
+
+    `bytes` corrige o que o ledger registra, sem mudar o que está no disco: é o
+    gancho dos testes que precisam de um registro grande (folga insuficiente,
+    excesso de orçamento) sem escrever gigabytes em `tmp_path`.
+    """
+    payload = tmp_path / "retida" / "20261015T000000Z" / name
+    payload.mkdir(parents=True)
+    (payload / "blob.bin").write_bytes(b"a" * size)
+    digest, total = release.tree_digest(payload)
+    entry_id = entry_id or f"1700-{name}"
+    # ts explícito: sem ele o "hoje" do relógio real deixaria a idade injetada sem efeito
+    ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(NOW - days * DAY))
+    book.append(ts=ts, entry_id=entry_id, src=str(tmp_path / name), volume="/tmp",
+                stored=str(payload), bytes=total if bytes is None else bytes,
+                sha256=digest, age_days=days, matched_pattern="/tmp/tmp*",
+                holder_pids=(), state=STATE_RELEASED,
+                action_id="tmpfs.release", audit_event_id="e")
+    return entry_id, payload
+
+
+def test_restore_without_confirmation_moves_nothing(tmp_path, book):
+    entry_id, payload = stored(tmp_path, book)
+    res = release.restore_item(entry_id, ledger=book, allowed_roots=[tmp_path])
+    assert res.ok is False and "--confirmar" in res.reason
+    assert payload.exists()
+
+
+def test_restore_copies_back_and_frees_the_budget(tmp_path, book, audit):
+    entry_id, payload = stored(tmp_path, book, size=8192)
+    original = Path(book.records()[entry_id].src)
+    res = release.restore_item(entry_id, ledger=book, audit=audit, confirm=True,
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               mounts_fn=lambda: (),
+                               allowed_roots=[tmp_path], now=NOW)
+    assert res.ok is True
+    assert (original / "blob.bin").read_bytes() == b"a" * 8192
+    assert not payload.exists(), "devolvido: o clone não pode ficar dos dois lados"
+    assert book.records()[entry_id].state == "restored"
+    assert book.retained_bytes() == 0
+
+
+def test_a_digest_mismatch_on_the_way_back_keeps_the_clone(tmp_path, book, monkeypatch):
+    """A verificação da volta é o que impede o `restore` de apagar a única cópia boa.
+
+    Sem o par de digests, `restore_item` apagaria o clone da SSD assim que a cópia
+    de volta terminasse — e se ela veio truncada, o item se perde nos dois lados.
+    A segunda leitura é a árvore que acabou de chegar à RAM: corrompê-la aqui é
+    exatamente o caso.
+    """
+    entry_id, payload = stored(tmp_path, book, size=8192)
+    verdadeiro = release.tree_digest
+    lidas = []
+
+    def duas_pontas(p):
+        digest, total = verdadeiro(p)
+        lidas.append(str(p))
+        return ("f" * 64 if len(lidas) == 2 else digest), total
+
+    monkeypatch.setattr(release, "tree_digest", duas_pontas)
+    res = release.restore_item(entry_id, ledger=book, confirm=True,
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               mounts_fn=lambda: (),
+                               allowed_roots=[tmp_path], now=NOW)
+    assert res.ok is False and "digest" in res.reason
+    assert payload.exists(), "o clone da SSD é a única cópia que restou, e ficou"
+    assert not (tmp_path / "sessao-velha").exists(), "a volta truncada foi desfeita"
+    assert book.records()[entry_id].state == STATE_RELEASED
+
+
+def test_restore_refuses_when_the_original_path_already_exists(tmp_path, book):
+    entry_id, payload = stored(tmp_path, book)
+    Path(book.records()[entry_id].src).mkdir(parents=True)
+    res = release.restore_item(entry_id, ledger=book, confirm=True,
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               mounts_fn=lambda: (),
+                               allowed_roots=[tmp_path], now=NOW)
+    assert res.ok is False and "já existe" in res.reason
+    assert payload.exists(), "nada é sobrescrito"
+
+
+def test_restore_refuses_when_a_mount_appeared_in_the_way(tmp_path, book):
+    """R1 vale nas duas direções: devolver para dentro de um monte é recusado."""
+    entry_id, payload = stored(tmp_path, book)
+    mounted = f"{tmp_path}/sessao-velha/novo-monte"
+    res = release.restore_item(entry_id, ledger=book, confirm=True,
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               mounts_fn=lambda: ((mounted, "fuse.portal"),),
+                               allowed_roots=[tmp_path], now=NOW)
+    assert res.ok is False and "monte" in res.reason
+    assert payload.exists(), "o retido continua na SSD"
+
+
+def test_restore_refuses_when_the_volume_has_no_room(tmp_path, book):
+    # bytes= e não size=: o payload real fica em 4096, o registro diz 6 GiB
+    entry_id, payload = stored(tmp_path, book, bytes=6 * GIB)
+    res = release.restore_item(entry_id, ledger=book, confirm=True,
+                               statvfs_fn=lambda p: _vfs(1 * GIB),
+                               mounts_fn=lambda: (),
+                               allowed_roots=[tmp_path], now=NOW)
+    assert res.ok is False and "espaço" in res.reason
+
+
+def test_expire_dry_run_lists_exactly_what_it_would_delete(tmp_path, book):
+    old, old_payload = stored(tmp_path, book, name="antiga", days=40)
+    fresh, fresh_payload = stored(tmp_path, book, name="nova", days=1)
+    res = release.expire_over_budget(ledger=book, now=NOW)
+    assert res.ok is True
+    assert res.victims == (old,)
+    assert "antiga" in res.reason and "nova" not in res.reason
+    assert old_payload.exists(), "dry-run não apaga nada"
+
+
+def test_expire_needs_two_flags(tmp_path, book):
+    stored(tmp_path, book, name="antiga", days=40)
+    half = release.expire_over_budget(ledger=book, confirm=True, now=NOW)
+    assert half.ok is False and "--irreversivel" in half.reason
+    other = release.expire_over_budget(ledger=book, irreversible=True, now=NOW)
+    assert other.ok is False and "--confirmar" in other.reason
+
+
+def test_expire_removes_oldest_first_and_audits_each(tmp_path, book, audit):
+    old, old_payload = stored(tmp_path, book, name="antiga", days=40, size=2048)
+    fresh, fresh_payload = stored(tmp_path, book, name="nova", days=1, size=1024)
+    res = release.expire_over_budget(ledger=book, audit=audit, confirm=True,
+                                     irreversible=True, now=NOW,
+                                     allowed_roots=[tmp_path])
+    assert res.ok is True and res.victims == (old,)
+    assert not old_payload.exists() and fresh_payload.exists()
+    assert book.records()[old].state == "expired"
+    assert book.retained_bytes() == 1024
+    assert [r["kind"] for r in audit.tail(4)][-1] == "tmpfs.expire"
+    # §7: a linha da transição aponta para o evento que a criou
+    assert book.records()[old].audit_event_id == audit.tail(4)[-1]["event_id"]
+
+
+def test_a_restore_line_points_at_its_own_audit_event(tmp_path, book, audit):
+    entry_id, payload = stored(tmp_path, book)
+    res = release.restore_item(entry_id, ledger=book, audit=audit, confirm=True,
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               mounts_fn=lambda: (),
+                               allowed_roots=[tmp_path], now=NOW)
+    assert res.ok is True
+    record = book.records()[entry_id]
+    assert record.state == "restored"
+    assert record.audit_event_id, "a linha da transição aponta para o evento"
+    assert [(e["event_id"], e["kind"]) for e in audit.tail(4)] == [
+        (record.audit_event_id, "tmpfs.restore")]
+
+
+def test_expire_reports_the_bytes_it_frees_even_when_a_path_is_already_gone(tmp_path, book):
+    gone, payload = stored(tmp_path, book, name="sumida", days=40, size=4096)
+    shutil.rmtree(payload)
+    res = release.expire_over_budget(ledger=book, confirm=True, irreversible=True,
+                                     now=NOW, allowed_roots=[tmp_path])
+    assert res.ok is True and res.victims == (gone,)
+    assert res.errors, "o ledger sabia de um payload que não existe mais"

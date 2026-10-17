@@ -19,7 +19,9 @@ from ...safely.hashing import sha256_file
 from ..disk import planner
 from .inventory import TmpfsEntry, entry_at
 from .holders import holder_index
-from .ledger import (ACTIVE_STATES, MAX_RETAINED_BYTES, STATE_PARTIAL, STATE_RELEASED)
+from .ledger import (ACTIVE_STATES, LedgerRecord, MAX_RETAINED_BYTES, RETENTION_DAYS,
+                     STATE_DROPPED, STATE_EXPIRED, STATE_PARTIAL, STATE_RELEASED,
+                     STATE_RESTORED)
 from .policy import classify
 from ...core.tmpfs import read_mounts
 
@@ -259,10 +261,185 @@ def _fields(entry_id, item, fresh, dest, digest, size, state, event_id) -> dict:
     }
 
 
-def _audit(audit, entry_id, outcome, targets, *, plan_digest=None,
-           error=None) -> str:
+def _audit(audit, entry_id, outcome, targets, *, plan_digest=None, error=None,
+           kind=KIND, risk="reversible") -> str:
     if audit is None:
         return ""
-    return audit.append(kind=KIND, action_id=entry_id, outcome=outcome,
-                        targets=targets, risk="reversible",
+    return audit.append(kind=kind, action_id=entry_id, outcome=outcome,
+                        targets=targets, risk=risk,
                         plan_digest=plan_digest, error=error)["event_id"]
+
+
+RESTORE_KIND = "tmpfs.restore"
+EXPIRE_KIND = "tmpfs.expire"
+
+
+@dataclass(frozen=True)
+class RestoreResult:
+    ok: bool
+    entry_id: str
+    reason: str
+    bytes: int = 0
+    restored_to: str = ""
+
+
+@dataclass(frozen=True)
+class ExpireResult:
+    ok: bool
+    reason: str
+    victims: tuple[str, ...] = ()
+    freed_bytes: int = 0
+    errors: tuple[str, ...] = ()
+
+
+def _foreign_mount(path: str, mounts, volume: str) -> str | None:
+    """O monte que *contém* o destino tem de ser o próprio volume, e nada pode
+    estar montado *dentro* dele.
+
+    É a R1 lida ao contrário: `/run` e `/run/user/1000` são ambos tmpfs montados, e
+    um destino dentro do volume é legítimo; o que não é legítimo é o caminho cair
+    sob um monte que não é o volume medido (um `private/tmp` de systemd, um portal
+    novo) ou escrever por cima de um monte que apareceu dentro dele.
+    """
+    points = [m for m, _ in mounts]
+    covering = [m for m in points if path == m or path.startswith(m + os.sep)]
+    deepest = max(covering, key=len, default=None)
+    if deepest is not None and deepest != volume:
+        return deepest
+    return next((m for m in points if m.startswith(path + os.sep)), None)
+
+
+def restore_item(record_or_id, *, ledger, audit=None, confirm=False,
+                 statvfs_fn=os.statvfs, allowed_roots=None,
+                 now: float | None = None, mounts_fn=read_mounts) -> RestoreResult:
+    now = time.time() if now is None else now
+    record = record_or_id if isinstance(record_or_id, LedgerRecord) \
+        else ledger.find(str(record_or_id))
+    if record is None:
+        return RestoreResult(False, str(record_or_id), "refused: entrada desconhecida "
+                                                       "no ledger")
+    if record.state not in (STATE_RELEASED, STATE_PARTIAL):
+        return RestoreResult(False, record.entry_id,
+                             f"refused: a entrada está {record.state}")
+    entry_id = record.entry_id
+    if not confirm:
+        return RestoreResult(False, entry_id, "refused: restaurar exige --confirmar; "
+                                              "nada foi alterado")
+
+    original = Path(record.src)
+    stored_path = Path(record.stored)
+    if original.exists():
+        return RestoreResult(False, entry_id,
+                             f"refused: {original} já existe, nada é sobrescrito")
+    if not stored_path.exists():
+        return RestoreResult(False, entry_id, "refused: o payload retido sumiu da SSD")
+
+    roots = list(allowed_roots) if allowed_roots else default_allowed_roots()
+    verdict = guard.validate_target(original, roots)
+    if not verdict.ok:
+        return RestoreResult(False, entry_id, verdict.reason)
+    mount = _foreign_mount(str(original.resolve()), mounts_fn(), record.volume)
+    if mount is not None:
+        return RestoreResult(False, entry_id,
+                             f"refused: {original} cruza o monte {mount}, que não é "
+                             f"o volume {record.volume}")
+
+    volume = Path(record.volume)
+    stat = statvfs_fn(str(volume))
+    if stat.f_bavail * stat.f_frsize < record.bytes:
+        return RestoreResult(False, entry_id,
+                             f"refused: {volume} não tem espaço para devolver "
+                             f"{record.bytes} bytes")
+
+    try:
+        original.parent.mkdir(parents=True, exist_ok=True)
+        if stored_path.is_dir():
+            shutil.copytree(stored_path, original, symlinks=True)
+        else:
+            shutil.copy2(stored_path, original)
+    except OSError as err:
+        _quiet_remove(original)
+        return RestoreResult(False, entry_id, f"refused: a cópia de volta falhou "
+                                              f"({err.strerror or err}); a SSD mantém o item")
+
+    clone_digest, _ = tree_digest(stored_path)
+    back_digest, size = tree_digest(original)
+    if clone_digest != back_digest:
+        _quiet_remove(original)
+        return RestoreResult(False, entry_id,
+                             "refused: o digest da volta difere do retido; o clone "
+                             "da SSD foi mantido")
+
+    _quiet_remove(stored_path)
+    # §7: a linha do ledger e o evento de auditoria são a mesma transição, e a
+    # linha aponta para o evento — o `_audit` da T9 já devolve o `event_id`.
+    # A ordem é apagar → auditar → registrar: no outro sentido, uma falha entre o
+    # registrar e o apagar deixaria clone na SSD com o ledger dizendo `restored`,
+    # ou seja, byte retido que nem `retained_bytes()` nem o `expire` jamais veem —
+    # o clone órfão do §6 espelhado. Assim como está, o pior caso é o orçamento
+    # contar de mais, e o `expire` já trata payload sumido como erro relatado.
+    event_id = _audit(audit, entry_id, STATE_RESTORED,
+                      [record.stored, str(original)], kind=RESTORE_KIND)
+    _transition(ledger, record, STATE_RESTORED, RESTORE_KIND, event_id, bytes=size)
+    return RestoreResult(True, entry_id, "ok", bytes=size, restored_to=str(original))
+
+
+def _transition(ledger, record: LedgerRecord, state: str, action_id: str,
+                event_id: str = "", **changes):
+    """Uma linha nova, com o relógio de agora: o `ts` do registro é a origem, não a transição.
+
+    O `audit_event_id` é o da *desta* transição, passado por quem chamou: a spec §7
+    quer o campo preenchido e foi exatamente isso que `test_the_ledger_line_points_at_its_own_audit_event`
+    pinou na T9. Deixar `""` aqui faria a linha `restored`/`expired` apontar para
+    nada enquanto o evento correspondente existe em `audit.jsonl`.
+    """
+    ledger.append(**{**record.to_dict(), **changes, "ts": "", "state": state,
+                     "action_id": action_id, "audit_event_id": event_id or ""})
+
+
+def expire_over_budget(*, ledger, audit=None, days: float = RETENTION_DAYS,
+                       max_bytes: int = MAX_RETAINED_BYTES, confirm=False,
+                       irreversible=False, now: float | None = None,
+                       allowed_roots=None, remove_fn=_remove) -> ExpireResult:
+    now = time.time() if now is None else now
+    victims = ledger.over_budget(days=days, max_bytes=max_bytes, now=now)
+    listed = ", ".join(f"{r.entry_id} ({r.bytes} bytes, {r.src})" for r in victims)
+
+    if not victims:
+        return ExpireResult(True, "nada vencido: a retenção cabe no orçamento "
+                                  f"({days:g} d / {max_bytes} bytes)")
+    if confirm != irreversible:
+        missing = "--irreversivel" if confirm else "--confirmar"
+        return ExpireResult(False, f"refused: expirar é irreversível e exige "
+                                   f"--confirmar e --irreversivel (faltou {missing}); "
+                                   f"nada foi alterado")
+    if not confirm:
+        # o dry-run devolve a lista que um --confirmar --irreversivel apagaria, no
+        # mesmo formato: é assim que o usuário audita antes de confiar no ato
+        return ExpireResult(True, f"dry-run: expiraria {len(victims)} entrada(s): "
+                                  f"{listed}; nada foi alterado",
+                                  tuple(r.entry_id for r in victims))
+
+    roots = list(allowed_roots) if allowed_roots else default_allowed_roots()
+    freed, errors, done = 0, [], []
+    for record in victims:
+        payload = Path(record.stored)
+        verdict = guard.validate_target(payload, roots)
+        if not verdict.ok:
+            errors.append(f"{record.entry_id}: {verdict.reason}")
+            continue
+        try:
+            if payload.exists():
+                remove_fn(payload)
+            else:
+                errors.append(f"{record.entry_id}: o payload {payload} já não existia")
+        except OSError as err:
+            errors.append(f"{record.entry_id}: {err.strerror or err}")
+            continue
+        freed += record.bytes
+        done.append(record.entry_id)
+        event_id = _audit(audit, record.entry_id, STATE_EXPIRED, [record.stored],
+                          kind=EXPIRE_KIND, risk="irreversible")
+        _transition(ledger, record, STATE_EXPIRED, EXPIRE_KIND, event_id)
+    return ExpireResult(True, f"expiradas {len(done)} entrada(s), {freed} bytes "
+                              f"liberados da SSD", tuple(done), freed, tuple(errors))
