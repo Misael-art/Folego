@@ -3768,9 +3768,19 @@ def test_tmpfs_plan_json_reconciles_and_carries_a_digest(fake_tmp, capsys):
 
 
 def test_tmpfs_plan_only_takes_roots_from_the_watch_list(capsys):
+    """`--raiz` fora da watch-list é recusa **nomeada**, não tabela vazia.
+
+    A asserção tem de cair sobre a mensagem que diz *o que* está errado
+    (`fora da watch-list: /home/misael`), e não sobre a substring genérica
+    `watch-list`: a recusa valleira — `nenhum volume da watch-list montado` — contém a
+    mesma palavra, então pinar só a palavra deixaria sobreviver à mutação que apaga o
+    filtro de `_tmpfs_roots`. O código de saída pinnado embaixo é o acordo do exit code.
+    """
     code = main(["tmpfs", "plan", "--raiz", "/home/misael"])
+    err = capsys.readouterr().err
     assert code == cli.EXIT_REFUSED
-    assert "watch-list" in capsys.readouterr().err
+    assert "fora da watch-list" in err
+    assert "/home/misael" in err, "a recusa diz qual caminho recusou"
 
 
 def test_tmpfs_plan_permitira_adds_a_pattern_and_flips_the_item(fake_tmp, capsys):
