@@ -1,0 +1,28 @@
+{
+  "pid": 304327,
+  "start_ticks": "610127",
+  "boot_id": "f26a67f7-9775-4416-a4ce-8eb3afed2448",
+  "launched_utc": "2026-10-18T13:19:01.137355+00:00",
+  "wheel_sha256": "fb3b1d38ef2cb14218eb55695cd6cdeff76a6d510a3b4efe3d9b9b711ea67607",
+  "harness_sha256": "524fdeccf4e91d70deddc0d43c5055b27b6861b21539847717c7a565efb3c1e4",
+  "argv": [
+    "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/bin/python",
+    "-I",
+    "/home/misael/Projects/Folego/tools/soak_session.py",
+    "--state",
+    "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/soak-controlled-wayland",
+    "--output",
+    "/home/misael/Projects/Folego/docs/reviews/2026-10-18/desktop-validation/soak-controlled-wayland",
+    "--duration",
+    "7200",
+    "--warmup",
+    "120",
+    "--job-interval",
+    "60",
+    "--sample-interval",
+    "10",
+    "--platform",
+    "wayland"
+  ],
+  "detached_session": true
+}

@@ -1,0 +1,10 @@
+{
+  "observed_utc": "2026-10-18T12:44:01.335719+00:00",
+  "current_boot_id": "f26a67f7-9775-4416-a4ce-8eb3afed2448",
+  "previous_processes_absent": {
+    "2726534": true,
+    "2741508": true,
+    "2744616": true
+  },
+  "note": "Previous boot ended. No signal sent to any current compositor or service."
+}

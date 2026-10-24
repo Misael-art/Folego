@@ -1,0 +1,61 @@
+{
+  "status": "failed",
+  "scope": "wayland GUI; synthetic collector; real owned tuning/cancellation children; input isolated: True",
+  "values": {
+    "elapsed_s": 6440.424947884,
+    "cpu_ui_and_reaped_children_percent": 0.9221802003843447,
+    "rss_peak_growth_mib": 3.2734375,
+    "rss_trend_mib_per_hour": -41.88555885878698,
+    "fd_peak_growth": 5,
+    "widget_peak_growth": 8,
+    "heartbeat_p99_upper_ms": 5,
+    "heartbeat_max_delay_ms": 69.31190399991465,
+    "read_mib_per_hour": 46.25034487792079,
+    "write_mib_per_hour": 25.784643691028542
+  },
+  "checks": {
+    "completed_for_requested_duration": false,
+    "warmup_observed": true,
+    "harness_no_failures": false,
+    "cpu_ui_and_reaped_children_percent": true,
+    "rss_peak_growth_mib": true,
+    "rss_trend_mib_per_hour": true,
+    "fd_peak_growth": true,
+    "widget_peak_growth": true,
+    "heartbeat_p99_upper_ms": true,
+    "heartbeat_max_delay_ms": true,
+    "read_mib_per_hour": true,
+    "write_mib_per_hour": true,
+    "no_owned_child_after_shutdown": false,
+    "all_worker_results_delivered": true,
+    "all_cancellations_delivered": true,
+    "sample_buffer_bounded": true,
+    "queues_bounded": true,
+    "fixed_workload_input_isolated": true,
+    "no_unplanned_inventory": true
+  },
+  "policy": {
+    "recorded_before_final_completion": true,
+    "minimum_duration_s": 7200,
+    "warmup_s": 120,
+    "maximums": {
+      "cpu_ui_and_reaped_children_percent": 5,
+      "rss_peak_growth_mib": 64,
+      "rss_trend_mib_per_hour": 4,
+      "fd_peak_growth": 16,
+      "widget_peak_growth": 32,
+      "heartbeat_p99_upper_ms": 50,
+      "heartbeat_max_delay_ms": 500,
+      "read_mib_per_hour": 512,
+      "write_mib_per_hour": 64
+    },
+    "notes": "CPU is percent of one logical CPU; I/O fields are Linux /proc/PID/io counters; heartbeat is event dispatch delay, not compositor frame latency. Budget applies to this fixture workload, not all host inventories."
+  },
+  "source_report": "/home/misael/Projects/Folego/docs/reviews/2026-10-18/desktop-validation/soak-controlled-wayland/report.json",
+  "job_counters": {
+    "worker_started": 108,
+    "worker_completed": 108,
+    "cancel_started": 18,
+    "cancel_completed": 18
+  }
+}

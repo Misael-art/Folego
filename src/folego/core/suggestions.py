@@ -96,9 +96,10 @@ def suggest(snapshot: Snapshot, *, orphan_count: int = 0,
     if orphan_count:
         out.append(Suggestion(
             "orfaos", MEDIO,
-            f"{orphan_count} processo(s) órfão(ãos) comprovado(s)",
+            f"{orphan_count} processo(s) possivelmente abandonado(s)",
             "Adotados pelo supervisor da sessão, sem filhos vivos e sem consumir "
-            "CPU: encerrar devolve a RAM sem risco.",
+            "CPU: a decisão é sua — encerrar exige confirmação, e a próxima "
+            "leitura confirma (ou não) o efeito.",
             "orfaos"))
 
     if thumbnails_kb and thumbnails_kb > thresholds.thumbnails_kb:

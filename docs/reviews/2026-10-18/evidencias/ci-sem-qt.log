@@ -1,0 +1,32 @@
+Selected 63 files using CI literal selection
+[lista de testes coletados omitida; coleta sem executar os testes]
+==================================== ERRORS ====================================
+__________________ ERROR collecting tests/test_ui_orphans.py ___________________
+ImportError while importing test module '/home/misael/Projects/Folego/tests/test_ui_orphans.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_ui_orphans.py:11: in <module>
+    from folego.ui.orphans_panel import OrphansPanel
+src/folego/ui/orphans_panel.py:8: in <module>
+    from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QMessageBox,
+E   ModuleNotFoundError: Qt deliberately unavailable in review: PySide6
+___________________ ERROR collecting tests/test_ui_smoke.py ____________________
+ImportError while importing test module '/home/misael/Projects/Folego/tests/test_ui_smoke.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_ui_smoke.py:2: in <module>
+    from folego.ui.main_window import MainWindow
+src/folego/ui/main_window.py:12: in <module>
+    from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
+E   ModuleNotFoundError: Qt deliberately unavailable in review: PySide6
+=========================== short test summary info ============================
+ERROR tests/test_ui_orphans.py
+ERROR tests/test_ui_smoke.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
+819 tests collected, 2 errors in 1.78s

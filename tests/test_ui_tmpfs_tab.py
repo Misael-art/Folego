@@ -72,18 +72,47 @@ def ledger_payload(acao="ledger", target=""):
                          "audit_event_id": "e" * 32}],
             "budget": {"retained_bytes": 4096, "retained_count": 1, "oldest_days": 30.0,
                        "slack_bytes": 5 * GIB, "freed_bytes": 4096,
-                       "by_volume": {"/tmp": 4096}, "max_bytes": 3 * GIB, "days": 14.0}}
+                       "by_volume": {"/tmp": 4096}, "max_bytes": 3 * GIB, "days": 14.0},
+            "victims": [{"entry_id": "1700-abc", "bytes": 4096,
+                         "src": "/tmp/qoder-cli-1000"}]}
 
 
 def mutation_payload(acao="release", target=""):
-    return {"acao": acao, "ok": True, "exit": 0, "entry_id": "1700-abc", "reason": "ok",
+    return {"acao": acao, "ok": True, "exit": 0, "outcome": "sucesso",
+            "entry_id": "1700-abc", "reason": "ok",
             "bytes": 4096, "stored": "/ssd/1700-abc", "sha256": "a" * 64,
-            "freed_bytes": 4096, "restored_to": "/tmp/qoder-cli-1000", "victims": [],
-            "errors": []}
+            "freed_bytes": 4096, "allocated_bytes": 4096,
+            "ram_observed_bytes": 4096,
+            "restored_to": "/tmp/qoder-cli-1000", "victims": [], "errors": []}
+
+
+def recover_payload(acao="recover", target=""):
+    return {"acao": acao, "ok": True, "exit": 0, "outcome": "sucesso",
+            "reason": "recuperação: 1 clone descartado, 0 mantido",
+            "dropped": ["1700-abc"], "kept": [], "notes": [], "errors": []}
 
 
 ANSWERS = {"plan": plan_payload, "ledger": ledger_payload, "release": mutation_payload,
-           "restore": mutation_payload, "expire": mutation_payload}
+           "restore": mutation_payload, "expire": mutation_payload,
+           "recover": recover_payload}
+
+
+def test_unknown_tmpfs_result_remains_unknown_after_refresh_and_blocks_retry(qapp):
+    layer = FakeJobs(answers)
+    view = TmpfsTab(jobs=layer, confirm_fn=lambda *args: True)
+    view.show_mutation({"ok": False, "outcome": "desconhecido",
+                        "operation_id": "uncertain-tmpfs", "reason": "diário falhou"})
+    view.refresh()
+    before = len(layer.calls)
+    view.release_clicked(view.plan_rows[0])
+    view.restore_clicked(view.ledger_rows[0])
+    view.expire_clicked()
+    view.recover_clicked()
+    assert len(layer.calls) == before
+    assert "uncertain-tmpfs" in view.status.text() and "desconhecido" in view.status.text()
+    assert "recusado" not in view.status.text()
+    assert all(not button.isEnabled() for button in
+        (*view.release_buttons, *view.restore_buttons, view.expire_button, view.recover_button))
 
 
 def answers(acao, target):
@@ -113,6 +142,9 @@ def test_a_mutation_carries_the_target_and_the_right_flags():
         "--json", "--confirmar"]
     assert argv_for("expire", "", True)[-2:] == ["--confirmar", "--irreversivel"]
     assert "--irreversivel" not in argv_for("expire", "", False)
+    assert argv_for("recover", "", True) == [
+        sys.executable, "-m", "folego", "tmpfs", "recover", "--json",
+        "--confirmar"]
 
 
 def test_the_volumes_come_from_the_poller_and_nothing_is_scanned(qapp, jobs):
@@ -178,6 +210,43 @@ def test_the_sample_series_keeps_only_the_window_the_eta_can_use(qapp, jobs):
     assert series[-1] == sample(fed - 1)
 
 
+def test_repeated_volume_polls_reuse_the_same_bar_instead_of_orphaning_widgets(qapp, jobs):
+    """Ensaio F8: `QProgressBar` novo a cada amostra deixava um widget órfão por
+    volume (20 mil amostras → milhares de widgets e RSS crescendo)."""
+    t = TmpfsTab(jobs=jobs, confirm_fn=lambda *a: True)
+    first = TmpfsVolume("/tmp", "tmpfs", 8 * GIB, 2 * GIB, 6 * GIB)
+    second = TmpfsVolume("/tmp", "tmpfs", 8 * GIB, 4 * GIB, 4 * GIB)
+
+    t.show_volumes((first,), ts=0.0)
+    bar = t.volume_table.cellWidget(0, col(VOLUME_COLUMNS, "bar"))
+    t.show_volumes((second,), ts=2.0)
+
+    assert t.volume_table.cellWidget(0, col(VOLUME_COLUMNS, "bar")) is bar
+    assert bar.value() == 50
+
+
+def test_a_new_plan_reuses_the_release_button_and_rebinds_it_to_the_new_row(tab, jobs):
+    """O botão guarda linha/ação atuais em atributos: o callback não reconecta o
+    sinal a cada atualização nem aponta para a linha antiga."""
+    tab.show_plan(plan_payload())
+    button = tab.release_buttons[0]
+
+    item = plan_item(path="/tmp/codex-cli-1000", name="codex-cli-1000",
+                     bytes=8192, matched="/tmp/codex-cli-1000")
+    payload = plan_payload()
+    payload["reclaimable"] = [item]
+    payload["protected"] = []
+    payload["scanned_entries"] = 1
+    payload["total_bytes"] = 8192
+    payload["scanned_bytes"] = 8192
+    tab.show_plan(payload)
+
+    assert tab.release_buttons[0] is button, (
+        "recriar o botão a cada poll vaza um QPushButton por linha")
+    button.click()
+    assert jobs.calls[-1] == ("release", "/tmp/codex-cli-1000", True)
+
+
 def test_the_three_tables_pin_their_header_on_their_own_declaration(tab):
     """`*_COLUMNS` não é enfeite de import: ela É a fonte do cabeçalho, e a cópia pt-BR
     fica presa por literal — mexer num título na produção quebra este teste."""
@@ -215,6 +284,34 @@ def test_an_unreconciled_count_is_announced_not_hidden(tab):
     assert "não fechou" in tab.status.text()
 
 
+def test_a_protected_item_has_no_enabled_release_button(tab):
+    """R07: a interface não oferece uma ação que o executor já sabe bloquear."""
+    tab.show_plan(plan_payload())
+
+    assert tab.release_buttons[0].isEnabled(), "o candidato segue liberável"
+    blocked = tab.release_buttons[1]
+    assert not blocked.isEnabled()
+    assert "fora da allow-list" in blocked.toolTip()
+
+
+def test_an_unreconciled_plan_disables_every_release(tab):
+    """Leitura inconsistente bloqueia a execução do plano inteiro."""
+    payload = plan_payload()
+    payload["scanned_entries"] = 9
+    tab.show_plan(payload)
+
+    assert all(not b.isEnabled() for b in tab.release_buttons)
+    assert all(b.toolTip() for b in tab.release_buttons if not b.isEnabled())
+
+
+def test_a_protected_row_clicked_directly_does_not_call_the_child(tab, jobs):
+    tab.show_plan(plan_payload())
+    tab.release_clicked(tab.plan_rows[1])
+
+    assert jobs.calls == []
+    assert "bloqueado" in tab.status.text().lower()
+
+
 def test_releasing_asks_with_path_bytes_and_holder_pids(qapp, jobs):
     seen = []
     t = TmpfsTab(jobs=jobs,
@@ -226,6 +323,26 @@ def test_releasing_asks_with_path_bytes_and_holder_pids(qapp, jobs):
     assert "4,0 KB" in text and "1234" in text
     assert jobs.calls[-1] == ("release", "/tmp/qoder-cli-1000", True)
     assert "1700-abc" in t.status.text()
+    # R15: "liberado" (saiu da RAM) e "transferidos" (ocupa na SSD) são medidas
+    # diferentes — o veredito do ato nomeia as duas, e a 6b acrescenta o alocado
+    # real e a variação observada quando o payload os traz
+    assert "transferidos 4,0 KB" in t.status.text()
+    assert "4,0 KB alocados" in t.status.text()
+    assert "RAM +4096 bytes" in t.status.text()
+
+
+def test_a_partial_release_is_shown_as_parcial_with_its_numbers(tab):
+    """Entrega 7: parcial não é recusa — parte do efeito existe e tem números."""
+    tab.show_mutation({**mutation_payload(), "ok": False, "exit": 3,
+                       "outcome": "parcial", "freed_bytes": 0,
+                       "ram_observed_bytes": None,
+                       "reason": "parcial: o clone ficou e a origem não foi removida"})
+
+    text = tab.status.text()
+    assert text.startswith("parcial: ")
+    assert "recusado" not in text, "clone na SSD não é uma recusa"
+    assert "transferidos 4,0 KB" in text and "4,0 KB alocados" in text
+    assert "RAM" not in text, "sem observação não se inventa a linha de RAM"
 
 
 def test_a_declined_dialog_moves_nothing(qapp, jobs):
@@ -254,25 +371,89 @@ def test_restoring_is_per_entry_and_needs_confirmation(qapp, jobs):
     assert "devolvido" in t.status.text()
 
 
-def test_expiring_says_it_is_irreversible_before_running(qapp):
+def test_a_staging_entry_enables_recovery_and_names_the_risk(qapp, jobs):
+    payload = ledger_payload()
+    payload["records"][0]["state"] = "staging"
     seen = []
-    jobs = FakeJobs(answers)
     t = TmpfsTab(jobs=jobs,
                  confirm_fn=lambda title, text: seen.append(text) or True)
+    t.show_ledger(payload)
+
+    assert t.recover_button.isEnabled()
+    t.recover_button.click()
+
+    assert "staging" in seen[0]
+    assert "/tmp/qoder-cli-1000" in seen[0]
+    assert "origem sumiu" in seen[0]
+    assert jobs.calls[-1] == ("recover", "", True)
+    assert "descartados: 1" in t.status.text()
+    assert "mantidos: 0" in t.status.text()
+
+
+def test_recovery_stays_disabled_without_a_staging_record(qapp, jobs):
+    t = TmpfsTab(jobs=jobs, confirm_fn=lambda *a: True)
+    t.show_ledger(ledger_payload())
+    assert not t.recover_button.isEnabled()
+    t.recover_clicked()  # chamada direta também recusa, sem depender do enabled
+    assert jobs.calls == []
+    assert "nada a recuperar" in t.status.text()
+
+
+def test_a_kept_staging_clone_is_named_for_manual_decision(tab):
+    payload = recover_payload()
+    payload.update(ok=False, exit=3, outcome="parcial",
+                   dropped=[], kept=["1700-abc"],
+                   notes=["1700-abc: a origem sumiu; o clone não foi tocado"])
+    tab.show_mutation(payload)
+
+    text = tab.status.text()
+    assert text.startswith("parcial: ")
+    assert "mantidos: 1" in text
+    assert "manual:" in text and "única" not in text
+
+
+def test_expiring_lists_the_effective_victims_not_the_retained_total(qapp):
+    """R07: a confirmação de expiração diz *o que* será apagado — o registro que
+    passou do orçamento —, não apenas o total retido."""
+    seen = []
+    jobs = FakeJobs(answers)
+    t = TmpfsTab(jobs=jobs, confirm_fn=lambda title, text: seen.append(text) or True)
     t.show_ledger(ledger_payload())
     t.expire_button.click()
-    assert "irreversível" in seen[0] and "4,0 KB" in seen[0]
+    assert "irreversível" in seen[0]
+    assert "1700-abc" in seen[0] and "4,0 KB" in seen[0]
+    assert "/tmp/qoder-cli-1000" in seen[0]
     assert jobs.calls[-1] == ("expire", "", True)
 
 
-def test_the_budget_line_shows_ram_freed_against_ssd_retained(tab):
+def test_expiring_without_victims_asks_nothing_and_calls_nothing(qapp, jobs):
+    payload = ledger_payload()
+    payload["victims"] = []
+    t = TmpfsTab(jobs=jobs, confirm_fn=lambda *a: True)
+    t.show_ledger(payload)
+    t.expire_button.click()
+    assert jobs.calls == []
+    assert "nada a expirar" in t.status.text()
+
+
+def test_a_failed_ledger_read_clears_stale_victims(qapp, jobs):
+    """Leitura que falha não é leitura antiga: sem ledger fresco, o expire não age."""
+    t = TmpfsTab(jobs=jobs, confirm_fn=lambda *a: True)
+    t.show_ledger(ledger_payload())
+    t.show_ledger(None)
+    t.expire_button.click()
+    assert jobs.calls == []
+    assert "sem leitura do ledger" in t.status.text()
+
+
+def test_the_budget_line_separates_ssd_retained_from_bytes_that_left_ram(tab):
     tab.show_ledger(ledger_payload())
     # a linha inteira, por igualdade, e não três substrings soltas: o dia com vírgula é
     # regra de cópia do projeto (`policy.py:84-85`, e o `mais_velho` que a T12 acabou de
     # corrigir no `ledger` humano) -- com `in` soltos um `30.0 d` passaria despercebido
     assert tab.budget_label.text() == (
         "retido 4,0 KB na SSD em 1 item(ns) · o mais velho 30,0 d · "
-        "RAM liberada 4,0 KB · folga 5,0 GB")
+        "saiu da RAM e não voltou 4,0 KB · folga 5,0 GB")
 
 
 def test_the_budget_line_marks_a_burst_retention(tab):

@@ -1,0 +1,20 @@
+{
+  "scope": "read-only memory accounting of identified QA PID; no baseline for swap/total allocations",
+  "observed_utc": "2026-10-18T14:49:14.357597+00:00",
+  "pid": 304327,
+  "soak_elapsed_s": 5410.425081311,
+  "status_kib": {
+    "VmSize": "540824 kB",
+    "VmHWM": "95624 kB",
+    "VmRSS": "52104 kB",
+    "VmData": "73740 kB",
+    "VmSwap": "18104 kB"
+  },
+  "smaps_rollup_kib": {
+    "Rss": "52104 kB",
+    "Pss": "32403 kB",
+    "Anonymous": "14540 kB",
+    "Swap": "18104 kB",
+    "SwapPss": "18104 kB"
+  }
+}

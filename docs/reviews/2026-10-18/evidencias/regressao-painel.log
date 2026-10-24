@@ -1,0 +1,36 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________ test_a_removed_suggestion_row_returns_hidden_to_the_pool ___________
+
+panel = (<folego.ui.dashboard_tab.DashboardTab(0x555c26c305f0) at 0x7f53e73c9a80>, [])
+qapp = <PySide6.QtWidgets.QApplication(0x555c26c7ca40) at 0x7f53e73c9a40>
+
+    def test_a_removed_suggestion_row_returns_hidden_to_the_pool(panel, qapp):
+        """Ensaio F8: destruir a linha com `deleteLater` derrubava o processo quando
+        haviam conexões Python pendentes. A linha sai do layout, fica oculta e volta
+        no próximo poll — nada de C++/Python é destruído em pleno loop."""
+        view, _ = panel
+        view.show_snapshot(snap(psi10=14.0, apps=()))
+        row = view.rows[0]
+        before = view.list_box.count()
+    
+        view.show_snapshot(snap(psi10=0.0, apps=()))
+    
+        assert view.rows == []
+        assert view.list_box.count() == before - 1
+        assert row.parent() is not None and row.isHidden()
+        assert view._hidden_rows == [row]
+    
+        view.show_snapshot(snap(psi10=14.0, apps=()))
+        assert view.rows[0] is row
+        assert view._hidden_rows == []
+>       assert not row.isHidden(), "a linha do pool volta visível, sem recriação"
+E       AssertionError: a linha do pool volta visível, sem recriação
+E       assert not True
+E        +  where True = <built-in method isHidden of SuggestionRow object at 0x7f53ebcd29c0>()
+E        +    where <built-in method isHidden of SuggestionRow object at 0x7f53ebcd29c0> = <folego.ui.dashboard_tab.SuggestionRow(0x555c26bc5930) at 0x7f53ebcd29c0>.isHidden
+
+tests/test_ui_dashboard.py:151: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_ui_dashboard.py::test_a_removed_suggestion_row_returns_hidden_to_the_pool
+1 failed in 0.66s

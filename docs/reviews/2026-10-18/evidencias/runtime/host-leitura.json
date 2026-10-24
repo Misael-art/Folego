@@ -1,0 +1,83 @@
+{
+  "captured_at": "2026-10-18T09:10:07.398695+00:00",
+  "read_only": true,
+  "uid": 1000,
+  "environment": {
+    "XDG_RUNTIME_DIR": "/run/user/1000",
+    "TMPDIR": "/run/user/1000/codex-desktop/tmp",
+    "PYTEST_DEBUG_TEMPROOT": null
+  },
+  "volumes": [
+    {
+      "path": "/run/user/1000",
+      "mount": "/run/user/1000 tmpfs",
+      "total_bytes": 1554046976,
+      "avail_bytes": 45977600,
+      "used_percent": 97.04,
+      "inodes_total": 379406,
+      "inodes_avail": 356750
+    },
+    {
+      "path": "/home/misael/.cache/phasezero/agent-tmp",
+      "mount": "/home btrfs",
+      "total_bytes": 999888179200,
+      "avail_bytes": 58821099520,
+      "used_percent": 93.98,
+      "inodes_total": 0,
+      "inodes_avail": 0
+    },
+    {
+      "path": "/home/misael/.local/state/phasezero/terminal-repair",
+      "mount": "/home btrfs",
+      "total_bytes": 999888179200,
+      "avail_bytes": 58821099520,
+      "used_percent": 93.98,
+      "inodes_total": 0,
+      "inodes_avail": 0
+    }
+  ],
+  "manager_query_exit": 0,
+  "manager_environment": {
+    "PYTEST_DEBUG_TEMPROOT": "/home/misael/.cache/phasezero/agent-tmp/pytest",
+    "TMPDIR": "/home/misael/.cache/phasezero/agent-tmp"
+  },
+  "repair_source": {
+    "path": "/mnt/sdcard/Projects/pz-ashyterm-repair/linux/repairs/terminal.py",
+    "sha256": "ca70da4c7166b2f0223dac2a04c9db6ce8093e1ea0bd4bbec6bd47d4822146aa"
+  },
+  "previous_repair_receipt": {
+    "ok": true,
+    "before": {
+      "schemaVersion": 1,
+      "runtime": "/run/user/1000",
+      "freeBytes": 0,
+      "totalBytes": 1554046976,
+      "full": true,
+      "terminalInstalled": true,
+      "reason": "runtime-full"
+    },
+    "after": {
+      "schemaVersion": 1,
+      "runtime": "/run/user/1000",
+      "freeBytes": 46239744,
+      "totalBytes": 1554046976,
+      "full": false,
+      "terminalInstalled": true,
+      "reason": "runtime-writable-check-required"
+    },
+    "archived": 4,
+    "backup": "/home/misael/.local/state/phasezero/terminal-repair/20261018-055318-2161652",
+    "restartRequired": false,
+    "nextStep": "Abra novamente o terminal. Agentes já abertos preservam ambiente antigo; use TMPDIR/PYTEST_DEBUG_TEMPROOT em disco nos próximos testes."
+  },
+  "reviewed_source_sha256": {
+    "src/folego/core/tmpfs.py": "77fb3ebf491e67887a745520de38a2225c4eb7c307e659a11ed5a99edef37ce6",
+    "src/folego/core/health.py": "3dfb4212d7d330346111a432f95eee363c0810d47ce4922a9bf96bbc9992540d",
+    "src/folego/core/collector.py": "8ff0610fb1d3702eb6bd4d570978537de7134a16d0a57a9ce3bfa7c9b97af796",
+    "src/folego/actions/tmpfs/holders.py": "fc3bc95ccd67af11f52624de584b4a2de7d5eaf3090eb82fa7c9cdf8cd2cbe05",
+    "src/folego/actions/tmpfs/policy.py": "2283ae93b58adf200b4e8b369012aa80208d72ccf2d40771d7a35e67656f7382",
+    "src/folego/actions/tmpfs/inventory.py": "260649dc89f9fb5379e1a08ac5b1efdcfcd110cb22c3080a1ec168b21d4945b3",
+    "src/folego/actions/tmpfs/release.py": "df613ae3874716eb0a066291a24c3414b81f6d3b60d1804895a61102bc8e5269",
+    "src/folego/orchestration/automation.py": "58e659ff1960b0a43e36c762197b3965524e03e695645c562cae98a41efd6499"
+  }
+}

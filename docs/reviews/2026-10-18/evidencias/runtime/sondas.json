@@ -1,0 +1,31 @@
+{
+  "fixture_runtime_na_politica_atual": {
+    "eligible": false,
+    "reason": "refused: fora da allow-list de sujeira de agente"
+  },
+  "inodes_esgotados_com_bytes_livres": {
+    "level": "green",
+    "reasons": []
+  },
+  "runtime_outro_uid_na_watchlist_padrao": {
+    "volumes": 0,
+    "paths_consulted": []
+  },
+  "statvfs_recusado": {
+    "volumes": 0,
+    "error_propagated": false
+  },
+  "fd_individual_ilegivel": {
+    "state": "complete",
+    "refs": {},
+    "errors": []
+  },
+  "pytest_current_mudou_apos_selecao": {
+    "source": "/mnt/sdcard/Projects/pz-ashyterm-repair/linux/repairs/terminal.py",
+    "source_sha256": "ca70da4c7166b2f0223dac2a04c9db6ce8093e1ea0bd4bbec6bd47d4822146aa",
+    "fixture_original_exists": false,
+    "current_is_symlink": true,
+    "current_target_exists": false,
+    "backup_exists": true
+  }
+}

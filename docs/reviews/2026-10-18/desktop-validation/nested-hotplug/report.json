@@ -1,0 +1,154 @@
+{
+  "status": "passed",
+  "scope": "isolated KWin virtual outputs; no physical display changed",
+  "before": {
+    "pid": 2744616,
+    "qt": "6.12.0",
+    "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/lib/python3.14/site-packages/folego/__init__.py",
+    "platform": "wayland",
+    "elapsed_s": 100.89098200399894,
+    "central": {
+      "visible": true,
+      "active": false,
+      "geometry": [
+        0,
+        0,
+        800,
+        600
+      ],
+      "client": [
+        800,
+        600
+      ],
+      "decorated": true,
+      "fullscreen": false,
+      "minimized": false,
+      "pixel_ratio": 1.0,
+      "screen": "Virtual-0",
+      "exposed": true,
+      "title": "Fôlego 🟢 · 9,7/14,5 GB livre 4,8 · app 89 MB"
+    },
+    "compact": {
+      "visible": true,
+      "active": true,
+      "geometry": [
+        2048,
+        0,
+        420,
+        380
+      ],
+      "client": [
+        420,
+        380
+      ],
+      "decorated": true,
+      "fullscreen": false,
+      "minimized": false,
+      "pixel_ratio": 1.0,
+      "screen": "Virtual-1",
+      "exposed": true,
+      "title": "Fôlego — controle compacto"
+    },
+    "paused": false,
+    "tab": 0,
+    "poller_stopped": false,
+    "tray": false,
+    "screens": [
+      {
+        "name": "Virtual-0",
+        "ratio": 1.0,
+        "geometry": [
+          0,
+          0,
+          2048,
+          1536
+        ]
+      },
+      {
+        "name": "Virtual-1",
+        "ratio": 1.0,
+        "geometry": [
+          2048,
+          0,
+          2048,
+          1536
+        ]
+      }
+    ],
+    "last_command": {
+      "action": "compact"
+    },
+    "errors": []
+  },
+  "after": {
+    "pid": 2744616,
+    "qt": "6.12.0",
+    "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/lib/python3.14/site-packages/folego/__init__.py",
+    "platform": "wayland",
+    "elapsed_s": 101.15567360100249,
+    "central": {
+      "visible": true,
+      "active": false,
+      "geometry": [
+        0,
+        0,
+        800,
+        600
+      ],
+      "client": [
+        800,
+        600
+      ],
+      "decorated": true,
+      "fullscreen": false,
+      "minimized": false,
+      "pixel_ratio": 1.0,
+      "screen": "Virtual-0",
+      "exposed": true,
+      "title": "Fôlego 🟢 · 9,7/14,5 GB livre 4,8 · app 89 MB"
+    },
+    "compact": {
+      "visible": true,
+      "active": true,
+      "geometry": [
+        2048,
+        0,
+        420,
+        380
+      ],
+      "client": [
+        420,
+        380
+      ],
+      "decorated": true,
+      "fullscreen": false,
+      "minimized": false,
+      "pixel_ratio": 1.0,
+      "screen": "Virtual-0",
+      "exposed": true,
+      "title": "Fôlego — controle compacto"
+    },
+    "paused": false,
+    "tab": 0,
+    "poller_stopped": false,
+    "tray": false,
+    "screens": [
+      {
+        "name": "Virtual-0",
+        "ratio": 1.0,
+        "geometry": [
+          0,
+          0,
+          2048,
+          1536
+        ]
+      }
+    ],
+    "last_command": {
+      "action": "capture",
+      "target": "compact",
+      "name": "before-hotplug.png"
+    },
+    "errors": []
+  }
+}

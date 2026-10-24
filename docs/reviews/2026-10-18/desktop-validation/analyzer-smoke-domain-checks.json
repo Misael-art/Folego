@@ -1,0 +1,12 @@
+{
+  "scope": "10-second harness smoke only; not the 7200-second acceptance",
+  "resource_budget_status": "failed",
+  "checks": {
+    "fixture_original_bytes_restored": true,
+    "journal_complete_and_valid": true,
+    "journal_effects_verified_successfully": true,
+    "no_owned_child_after_shutdown": true,
+    "fixed_workload_input_isolated": true,
+    "no_unplanned_inventory": true
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "pid": 598732,
+  "start_ticks": "1264810",
+  "boot_id": "f26a67f7-9775-4416-a4ce-8eb3afed2448",
+  "launched_utc": "2026-10-18T15:08:07.964528+00:00",
+  "wheel_sha256": "fb3b1d38ef2cb14218eb55695cd6cdeff76a6d510a3b4efe3d9b9b711ea67607",
+  "harness_sha256": "4ac02e45c3eedc5fdf1b36eb6713bfbf4116ccf880e2f12c0fd92739e8a8bcf6",
+  "analyzer_sha256": "71b080abf4ffdb376c567c1b7da6cfcb16599ba0501e0e564534e1393e1bff0a",
+  "argv": [
+    "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/bin/python",
+    "-I",
+    "/home/misael/Projects/Folego/tools/soak_session.py",
+    "--state",
+    "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/soak-private-wayland",
+    "--output",
+    "/home/misael/Projects/Folego/docs/reviews/2026-10-18/desktop-validation/soak-private-wayland",
+    "--duration",
+    "7200",
+    "--warmup",
+    "120",
+    "--job-interval",
+    "60",
+    "--sample-interval",
+    "10",
+    "--platform",
+    "wayland"
+  ],
+  "detached_session": true,
+  "maximum_planned_retained_runs": 141,
+  "product_retained_run_cap": 256
+}

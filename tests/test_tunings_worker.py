@@ -104,6 +104,28 @@ def test_apply_through_the_worker_writes_the_planned_value(sandbox):
     assert doc["startup_boost"] == {"enabled": False, "x": "y"}
     assert payload["sha"] == hashlib.sha256(
         (sandbox["edge"] / "Local State").read_bytes()).hexdigest()
+    journal = sandbox["home"] / ".local/state/folego/operations.jsonl"
+    records = [json.loads(line) for line in journal.read_text().splitlines()]
+    assert [r["kind"] for r in records] == ["intent", "result"]
+    assert records[0]["plan"]["action"] == "tuning.apply"
+    assert records[0]["operation_id"] == payload["operation_id"]
+
+
+def test_tuning_effect_remains_unknown_if_final_journal_write_fails(sandbox, monkeypatch):
+    from folego.actions.tunings import worker as entry
+    from folego.orchestration import Journal
+    write_local_state(sandbox, {"startup_boost": {"enabled": True}})
+    for key, value in sandbox["env"].items():
+        monkeypatch.setenv(key, value)
+    def denied(self, result):
+        raise PermissionError("result write denied")
+    monkeypatch.setattr(Journal, "append_result", denied)
+    result = entry.run("apply", "edge.startup_boost", confirm=True)
+    assert result["exit"] == 5 and result["outcome"] == "desconhecido"
+    assert result["ok"] is False and result["backup_id"]
+    assert json.loads((sandbox["edge"] / "Local State").read_bytes())["startup_boost"]["enabled"] is False
+    state = Journal().state_of(result["operation_id"])
+    assert state.intent is not None and state.result is None
 
 
 def test_the_audit_line_lands_in_the_sandbox_state_dir(sandbox):
@@ -122,7 +144,7 @@ def test_revert_after_apply_restores_the_original_bytes_exactly(sandbox):
     original = write_local_state(sandbox, {"startup_boost": {"enabled": True, "x": "y"}})
     applied, _ = answer(sandbox, "apply", "edge.startup_boost", "--confirmar")
 
-    payload, run = answer(sandbox, "revert", "edge.startup_boost")
+    payload, run = answer(sandbox, "revert", "edge.startup_boost", "--confirmar")
 
     assert run.returncode == 0 and payload["ok"] is True
     path = sandbox["edge"] / "Local State"
@@ -130,10 +152,24 @@ def test_revert_after_apply_restores_the_original_bytes_exactly(sandbox):
     assert hashlib.sha256(path.read_bytes()).hexdigest() != applied["sha"]
 
 
+def test_revert_without_the_flag_is_refused_and_touches_nothing(sandbox):
+    """R18: a entrada direta do worker não pode ser mais permissiva que o CLI."""
+    original = write_local_state(sandbox, {"startup_boost": {"enabled": True, "x": "y"}})
+    answer(sandbox, "apply", "edge.startup_boost", "--confirmar")
+    path = sandbox["edge"] / "Local State"
+    applied_bytes = path.read_bytes()
+
+    payload, run = answer(sandbox, "revert", "edge.startup_boost")
+
+    assert run.returncode == 2 and payload["ok"] is False
+    assert "confirma" in payload["reason"].lower()
+    assert path.read_bytes() == applied_bytes != original
+
+
 def test_revert_without_any_backup_says_so(sandbox):
     write_local_state(sandbox, {"startup_boost": {"enabled": False}})
 
-    payload, run = answer(sandbox, "revert", "edge.startup_boost")
+    payload, run = answer(sandbox, "revert", "edge.startup_boost", "--confirmar")
 
     assert run.returncode == 1 and payload["ok"] is False
     assert "backup" in payload["reason"]
@@ -154,3 +190,20 @@ def test_the_worker_refuses_while_an_edge_process_is_running(sandbox):
     assert "Edge está aberto" in payload["reason"] and "4321" in payload["reason"]
     assert (sandbox["edge"] / "Local State").read_bytes() == original
     assert json.loads(run.stdout)["backup_id"] is None, "recusa não cria backup"
+
+
+def test_the_worker_refuses_revert_while_an_edge_process_is_running(sandbox):
+    from fixtures_proc import pid_dir
+
+    write_local_state(sandbox, {"startup_boost": {"enabled": True, "x": "y"}})
+    answer(sandbox, "apply", "edge.startup_boost", "--confirmar")
+    path = sandbox["edge"] / "Local State"
+    applied_bytes = path.read_bytes()
+    pid_dir(sandbox["proc"], 4321, comm="msedge",
+            cmdline=["/opt/microsoft/msedge/msedge", "--profile-directory=Default"])
+
+    payload, run = answer(sandbox, "revert", "edge.startup_boost", "--confirmar")
+
+    assert run.returncode == 1 and payload["ok"] is False
+    assert "Edge está aberto" in payload["reason"] and "4321" in payload["reason"]
+    assert path.read_bytes() == applied_bytes, "o Edge aberto regravaria por cima"

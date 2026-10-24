@@ -52,6 +52,11 @@ def test_proven_orphans_are_suggested_with_their_count():
     found = [x for x in suggest(snap(), orphan_count=3) if x.id == "orfaos"]
     assert found and "3" in found[0].text
     assert found[0].target == "orfaos"
+    # R09: o abandono não é "comprovado" e encerrar não é "sem risco" — a heurística
+    # sozinha não prova que o processo morreu, e quem decide é o usuário.
+    assert "possivelmente abandonado" in found[0].text.lower()
+    assert "comprovado" not in found[0].text.lower()
+    assert "sem risco" not in found[0].why.lower()
 
 
 def test_the_app_itself_is_only_flagged_when_it_grows():

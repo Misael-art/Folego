@@ -7,7 +7,8 @@ from folego.core import collector, sysfs
 def syszram(tmp_path):
     z = tmp_path / "block" / "zram0"
     z.mkdir(parents=True)
-    # orig comp same mem_used max_comp mem_limit freed uncomp pages_comp priority
+    # ABI do kernel (admin-guide/blockdev/zram): orig comp mem_used_total mem_limit
+    # mem_used_max same_pages pages_compacted ... — o quarto campo é o limite, não o usado.
     (z / "mm_stat").write_text("4081590272 811380737 104857600 893075456 0 0 0 995723 995723 0\n")
     return tmp_path
 
@@ -16,7 +17,7 @@ def test_zram_mm_stat_reads_orig_comp_and_used(syszram):
     m = sysfs.read_zram_mm_stat(syszram)
     assert m.orig_data_kb == 3985928  # 4081590272 // 1024
     assert m.compr_data_kb == 792364
-    assert m.mem_used_total_kb == 872144
+    assert m.mem_used_total_kb == 102400  # 104857600 // 1024, o TERCEIRO campo
 
 
 def test_zram_missing_gives_none(tmp_path):

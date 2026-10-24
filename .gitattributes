@@ -1,0 +1,14 @@
+*.py text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+dev text eol=lf
+uv.lock text eol=lf
+
+# Preserve raw diagnostic bytes. KWin uses seven '=' as section separators,
+# not merge conflicts; the larger marker size applies only to these captures.
+docs/reviews/**/*.log -text -whitespace linguist-generated=true
+docs/reviews/**/kwin*-support.txt -text -whitespace conflict-marker-size=32 linguist-generated=true
+docs/reviews/**/support.txt -text -whitespace conflict-marker-size=32 linguist-generated=true
+docs/reviews/**/screens.txt -text -whitespace linguist-generated=true
+docs/reviews/**/samples.jsonl -text linguist-generated=true
+docs/handoff/validation/*.log -text -whitespace linguist-generated=true

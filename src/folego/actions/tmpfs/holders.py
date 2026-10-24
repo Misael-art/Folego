@@ -6,7 +6,11 @@ pulado — a varredura tem de terminar mesmo quando metade da sessão é opaca.
 
 Sem /proc legível o índice chega com proc_count == 0, que quer dizer "não sabemos":
 refs vazio nesse caso não prova nada, e quem vai mutar trata o índice como não provado.
+Desde R02 esse "não sabemos" é nomeado: `state` vale `complete` (varremos tudo o que
+existia), `partial` (algum /proc/<pid>/fd não pôde ser lido) ou `unavailable` (nem a
+lista de pids pôde ser lida). `errors` carrega o porquê.
 """
+import errno
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +24,8 @@ class HolderIndex:
     refs: dict
     proc_count: int
     fd_count: int
+    state: str = "complete"
+    errors: tuple = ()
 
     def pids_holding(self, path: str) -> frozenset:
         prefix = str(path).rstrip(os.sep) or os.sep
@@ -30,38 +36,68 @@ class HolderIndex:
         return frozenset(found)
 
 
-def _pid_dirs(root: Path, scandir_fn) -> list:
+def _pid_dirs(root: Path, scandir_fn) -> tuple[list, tuple]:
     try:
         with scandir_fn(root) as it:
-            return sorted(int(e.name) for e in it if e.name.isdigit())
-    except OSError:
-        return []
+            return sorted(int(e.name) for e in it if e.name.isdigit()), ()
+    except OSError as err:
+        return [], (f"{root}: {err.strerror or err}",)
 
 
 def holder_index(*, proc_root: str | None = None, prefixes=WATCHED, pids=None,
-                 scandir_fn=os.scandir, readlink_fn=os.readlink) -> HolderIndex:
+                 scandir_fn=os.scandir, readlink_fn=os.readlink,
+                 include_process_refs=False) -> HolderIndex:
     root = Path(proc_root or paths.proc_root())
-    seen = (sorted(int(p) for p in pids) if pids is not None
-            else _pid_dirs(root, scandir_fn))
+    errors: list = []
+    unavailable = False
+    if pids is not None:
+        seen = sorted(int(p) for p in pids)
+    else:
+        seen, list_errors = _pid_dirs(root, scandir_fn)
+        if list_errors:
+            unavailable = True
+            errors.extend(list_errors)
     refs: dict[str, set[int]] = {}
     fd_count = 0
+    def remember(target, pid):
+        target = target.removesuffix(" (deleted)")
+        for prefix in prefixes:
+            base = prefix.rstrip(os.sep) or os.sep
+            if target == base or target.startswith(base + os.sep):
+                refs.setdefault(target, set()).add(pid)
+                break
+
     for pid in seen:
+        if include_process_refs:
+            try:
+                remember(readlink_fn(root / str(pid) / "cwd"), pid)
+                for line in (root / str(pid) / "maps").read_text().splitlines():
+                    fields = line.split(maxsplit=5)
+                    if len(fields) == 6 and fields[5].startswith("/"):
+                        remember(fields[5], pid)
+            except OSError as err:
+                # A disappearing PID is benign only once its directory is gone.
+                if (root / str(pid)).exists():
+                    errors.append(f"{root}/{pid}/cwd,maps: {err}")
         fd_dir = root / str(pid) / "fd"
         try:
             with scandir_fn(fd_dir) as it:
                 names = sorted(e.name for e in it)
-        except OSError:
+        except OSError as err:
+            # ENOENT = o processo sumiu entre a lista e a leitura: não havia fd
+            # aberto para provar. Qualquer outra falha deixa o índice parcial.
+            if err.errno != errno.ENOENT:
+                errors.append(f"{fd_dir}: {err.strerror or err}")
             continue
         for name in names:
             try:
                 target = readlink_fn(os.path.join(str(fd_dir), name))
-            except OSError:
+            except OSError as err:
+                if err.errno != errno.ENOENT:
+                    errors.append(f"{fd_dir}/{name}: {err}")
                 continue
             fd_count += 1
-            for prefix in prefixes:
-                base = prefix.rstrip(os.sep) or os.sep
-                if target == base or target.startswith(base + os.sep):
-                    refs.setdefault(target, set()).add(pid)
-                    break
+            remember(target, pid)
+    state = "unavailable" if unavailable else ("partial" if errors else "complete")
     return HolderIndex({k: tuple(sorted(v)) for k, v in sorted(refs.items())},
-                       len(seen), fd_count)
+                       len(seen), fd_count, state, tuple(errors))

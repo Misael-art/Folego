@@ -63,6 +63,21 @@ def test_a_live_holder_is_refused_and_named():
     assert "4242" in verdict.reason and "4243" in verdict.reason
 
 
+def test_a_holder_index_that_could_not_be_read_blocks_eligibility():
+    """R02: sem prova de ausência de uso, o item não é liberável."""
+    verdict = policy.classify(entry(holder_state="unavailable"), policy.Policy())
+    assert verdict.ok is False
+    assert "holder" in verdict.reason.lower() or "uso" in verdict.reason.lower()
+
+
+def test_a_partial_holder_index_also_blocks_eligibility():
+    verdict = policy.classify(entry(holder_state="partial",
+                                    holder_errors=("800: permissão negada",)),
+                              policy.Policy())
+    assert verdict.ok is False
+    assert verdict.reason.startswith("refused")
+
+
 def test_a_truncated_walk_is_not_evidence_enough_to_delete():
     verdict = policy.classify(entry(truncated=True), policy.Policy())
     assert verdict.ok is False and "incompleta (truncada)" in verdict.reason

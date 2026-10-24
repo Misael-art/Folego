@@ -167,3 +167,22 @@ def test_refresh_mutates_nothing(built):
     tab, jobs, _ = built()
     tab.refresh()
     assert set(c[0] for c in jobs.calls) == {"detect"}
+
+
+def test_unknown_tuning_result_keeps_id_and_blocks_retry_after_detect(built):
+    tab, jobs, _ = built()
+    tab.show_mutation("aplicado", TUNINGS[0], {
+        "ok": False, "outcome": "desconhecido", "operation_id": "uncertain-tuning",
+        "reason": "registro final falhou"})
+    tab.refresh()
+    for tuning in TUNINGS:
+        tab.show_detect(tuning, jobs.payload(tuning))
+    before = len(jobs.calls)
+    tab.apply_clicked(TUNINGS[0])
+    tab.revert_clicked(TUNINGS[0])
+    assert len(jobs.calls) == before
+    assert "uncertain-tuning" in tab.rows[0].verdict.text()
+    assert "desconhecido" in tab.rows[0].verdict.text()
+    assert "recusado" not in tab.rows[0].verdict.text()
+    assert all(not row.apply_button.isEnabled() and not row.revert_button.isEnabled()
+               for row in tab.rows)

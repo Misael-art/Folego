@@ -1,0 +1,416 @@
+{
+  "status": "passed",
+  "platform": "wayland",
+  "cases": [
+    {
+      "case": "open-with-tray",
+      "state": {
+        "pid": 2719461,
+        "qt": "6.12.0",
+        "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/lib/python3.14/site-packages/folego/__init__.py",
+        "platform": "wayland",
+        "elapsed_s": 0.00017299799947068095,
+        "central": {
+          "visible": true,
+          "active": false,
+          "geometry": [
+            0,
+            0,
+            800,
+            600
+          ],
+          "client": [
+            800,
+            600
+          ],
+          "decorated": true,
+          "fullscreen": false,
+          "minimized": false,
+          "pixel_ratio": 2.0,
+          "screen": "eDP-1",
+          "exposed": false,
+          "title": "Fôlego · aguardando primeira leitura"
+        },
+        "compact": null,
+        "paused": false,
+        "tab": 0,
+        "poller_stopped": false,
+        "tray": true,
+        "screens": [
+          {
+            "name": "eDP-1",
+            "ratio": 2.0,
+            "geometry": [
+              0,
+              0,
+              948,
+              593
+            ]
+          }
+        ],
+        "last_command": null,
+        "errors": []
+      }
+    },
+    {
+      "case": "close-central-keeps-compact-and-workers",
+      "state": {
+        "pid": 2719461,
+        "qt": "6.12.0",
+        "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/lib/python3.14/site-packages/folego/__init__.py",
+        "platform": "wayland",
+        "elapsed_s": 0.49969405499723507,
+        "central": {
+          "visible": false,
+          "active": false,
+          "geometry": [
+            0,
+            0,
+            800,
+            565
+          ],
+          "client": [
+            800,
+            565
+          ],
+          "decorated": true,
+          "fullscreen": false,
+          "minimized": false,
+          "pixel_ratio": 1.35,
+          "screen": "eDP-1",
+          "exposed": false,
+          "title": "Fôlego · aguardando primeira leitura"
+        },
+        "compact": {
+          "visible": true,
+          "active": true,
+          "geometry": [
+            0,
+            0,
+            420,
+            380
+          ],
+          "client": [
+            420,
+            380
+          ],
+          "decorated": true,
+          "fullscreen": false,
+          "minimized": false,
+          "pixel_ratio": 1.35,
+          "screen": "eDP-1",
+          "exposed": true,
+          "title": "Fôlego — controle compacto"
+        },
+        "paused": false,
+        "tab": 0,
+        "poller_stopped": false,
+        "tray": true,
+        "screens": [
+          {
+            "name": "eDP-1",
+            "ratio": 2.0,
+            "geometry": [
+              0,
+              0,
+              948,
+              593
+            ]
+          }
+        ],
+        "last_command": {
+          "action": "close-central"
+        },
+        "errors": []
+      }
+    },
+    {
+      "case": "owned-SNI-activation-restores-central",
+      "state": {
+        "pid": 2719461,
+        "qt": "6.12.0",
+        "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/lib/python3.14/site-packages/folego/__init__.py",
+        "platform": "wayland",
+        "elapsed_s": 0.9972274119936628,
+        "central": {
+          "visible": true,
+          "active": true,
+          "geometry": [
+            0,
+            0,
+            800,
+            565
+          ],
+          "client": [
+            800,
+            565
+          ],
+          "decorated": true,
+          "fullscreen": false,
+          "minimized": false,
+          "pixel_ratio": 1.35,
+          "screen": "eDP-1",
+          "exposed": true,
+          "title": "Fôlego · aguardando primeira leitura"
+        },
+        "compact": {
+          "visible": false,
+          "active": false,
+          "geometry": [
+            0,
+            0,
+            420,
+            380
+          ],
+          "client": [
+            420,
+            380
+          ],
+          "decorated": true,
+          "fullscreen": false,
+          "minimized": false,
+          "pixel_ratio": 1.35,
+          "screen": "eDP-1",
+          "exposed": false,
+          "title": "Fôlego — controle compacto"
+        },
+        "paused": false,
+        "tab": 0,
+        "poller_stopped": false,
+        "tray": true,
+        "screens": [
+          {
+            "name": "eDP-1",
+            "ratio": 2.0,
+            "geometry": [
+              0,
+              0,
+              948,
+              593
+            ]
+          }
+        ],
+        "last_command": {
+          "action": "hide-compact"
+        },
+        "errors": []
+      }
+    },
+    {
+      "case": "pause-invalidates-health",
+      "state": {
+        "pid": 2719461,
+        "qt": "6.12.0",
+        "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/lib/python3.14/site-packages/folego/__init__.py",
+        "platform": "wayland",
+        "elapsed_s": 1.2476394639961654,
+        "central": {
+          "visible": true,
+          "active": true,
+          "geometry": [
+            0,
+            0,
+            800,
+            565
+          ],
+          "client": [
+            800,
+            565
+          ],
+          "decorated": true,
+          "fullscreen": false,
+          "minimized": false,
+          "pixel_ratio": 1.35,
+          "screen": "eDP-1",
+          "exposed": true,
+          "title": "Fôlego ⚪ · monitoramento pausado; saúde não comprovada"
+        },
+        "compact": {
+          "visible": false,
+          "active": false,
+          "geometry": [
+            0,
+            0,
+            420,
+            380
+          ],
+          "client": [
+            420,
+            380
+          ],
+          "decorated": true,
+          "fullscreen": false,
+          "minimized": false,
+          "pixel_ratio": 1.35,
+          "screen": "eDP-1",
+          "exposed": false,
+          "title": "Fôlego — controle compacto"
+        },
+        "paused": true,
+        "tab": 0,
+        "poller_stopped": false,
+        "tray": true,
+        "screens": [
+          {
+            "name": "eDP-1",
+            "ratio": 2.0,
+            "geometry": [
+              0,
+              0,
+              948,
+              593
+            ]
+          }
+        ],
+        "last_command": {
+          "action": "pause"
+        },
+        "errors": []
+      }
+    },
+    {
+      "case": "fullscreen",
+      "state": {
+        "pid": 2719461,
+        "qt": "6.12.0",
+        "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/lib/python3.14/site-packages/folego/__init__.py",
+        "platform": "wayland",
+        "elapsed_s": 4.248505871997622,
+        "central": {
+          "visible": true,
+          "active": true,
+          "geometry": [
+            0,
+            0,
+            800,
+            565
+          ],
+          "client": [
+            800,
+            565
+          ],
+          "decorated": true,
+          "fullscreen": true,
+          "minimized": false,
+          "pixel_ratio": 1.35,
+          "screen": "eDP-1",
+          "exposed": true,
+          "title": "Fôlego 🔴 · 10,0/14,5 GB livre 4,5 · app 106 MB · Runtime da sessão crítico — aplicativos podem não abrir · /run/user/1000 98%"
+        },
+        "compact": {
+          "visible": false,
+          "active": false,
+          "geometry": [
+            0,
+            0,
+            420,
+            380
+          ],
+          "client": [
+            420,
+            380
+          ],
+          "decorated": true,
+          "fullscreen": false,
+          "minimized": false,
+          "pixel_ratio": 1.35,
+          "screen": "eDP-1",
+          "exposed": false,
+          "title": "Fôlego — controle compacto"
+        },
+        "paused": false,
+        "tab": 0,
+        "poller_stopped": false,
+        "tray": true,
+        "screens": [
+          {
+            "name": "eDP-1",
+            "ratio": 2.0,
+            "geometry": [
+              0,
+              0,
+              948,
+              593
+            ]
+          }
+        ],
+        "last_command": {
+          "action": "fullscreen"
+        },
+        "errors": []
+      }
+    },
+    {
+      "case": "quit-stops-workers",
+      "state": {
+        "pid": 2719461,
+        "qt": "6.12.0",
+        "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/lib/python3.14/site-packages/folego/__init__.py",
+        "platform": "wayland",
+        "elapsed_s": 4.998673472997325,
+        "central": {
+          "visible": false,
+          "active": false,
+          "geometry": [
+            0,
+            0,
+            800,
+            565
+          ],
+          "client": [
+            800,
+            565
+          ],
+          "decorated": true,
+          "fullscreen": false,
+          "minimized": false,
+          "pixel_ratio": 1.35,
+          "screen": "eDP-1",
+          "exposed": false,
+          "title": "Fôlego 🔴 · 10,0/14,5 GB livre 4,5 · app 106 MB · Runtime da sessão crítico — aplicativos podem não abrir · /run/user/1000 98%"
+        },
+        "compact": {
+          "visible": false,
+          "active": false,
+          "geometry": [
+            0,
+            0,
+            420,
+            380
+          ],
+          "client": [
+            420,
+            380
+          ],
+          "decorated": true,
+          "fullscreen": false,
+          "minimized": false,
+          "pixel_ratio": 1.35,
+          "screen": "eDP-1",
+          "exposed": false,
+          "title": "Fôlego — controle compacto"
+        },
+        "paused": false,
+        "tab": 0,
+        "poller_stopped": true,
+        "tray": true,
+        "screens": [
+          {
+            "name": "eDP-1",
+            "ratio": 2.0,
+            "geometry": [
+              0,
+              0,
+              948,
+              593
+            ]
+          }
+        ],
+        "last_command": {
+          "action": "quit"
+        },
+        "errors": []
+      }
+    }
+  ]
+}

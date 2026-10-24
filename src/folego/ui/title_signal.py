@@ -1,9 +1,12 @@
 """Pure function: Snapshot -> window-title text + colored traffic signal.
 
-No Qt here so it is unit-testable and reusable by the tray tooltip.
+No Qt here so it is unit-testable and reusable by the tray tooltip. The verdict
+itself lives in ``core.health``; this module only renders it and keeps the
+legacy stateless entry point for callers that do not own an engine.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
+from ..core import health
 from ..core.snapshot import Snapshot
 from ..core.tmpfs import TmpfsVolume
 
@@ -12,16 +15,7 @@ KB = 1024
 MB = 1024 * KB
 GB = 1024 * MB
 
-
-@dataclass(frozen=True)
-class Thresholds:
-    yellow_available_frac: float = 0.20
-    red_available_frac: float = 0.10
-    psi_memory_yellow: float = 5.0
-    psi_memory_red: float = 10.0
-    self_rss_yellow_kb: int = 300_000
-    tmpfs_yellow_frac: float = 0.75
-    tmpfs_red_frac: float = 0.90
+Thresholds = health.HealthThresholds
 
 
 @dataclass(frozen=True)
@@ -29,6 +23,7 @@ class TitleSignal:
     level: str
     emoji: str
     text: str
+    report: health.HealthReport | None = None
 
 
 def worst_tmpfs(snapshot: Snapshot, thresholds: Thresholds) -> TmpfsVolume | None:
@@ -37,40 +32,38 @@ def worst_tmpfs(snapshot: Snapshot, thresholds: Thresholds) -> TmpfsVolume | Non
     return max(flagged, key=lambda v: v.used_frac) if flagged else None
 
 
-def compute(snapshot: Snapshot, thresholds: Thresholds = Thresholds()) -> TitleSignal:
-    if snapshot.mem is None:
-        return TitleSignal("unknown", EMOJI["unknown"], "Fôlego ⚪ · meminfo indisponível")
+def compute(snapshot: Snapshot, thresholds: Thresholds = Thresholds(), *,
+            engine: health.HealthEngine | None = None,
+            now_mono: float | None = None) -> TitleSignal:
+    if engine is None:
+        # Chamada avulsa não tem histórico: um único juízo, sem histerese.
+        engine = health.HealthEngine(
+            thresholds=replace(thresholds, recovery_samples=1))
+    report = engine.evaluate(snapshot, now_mono)
+    level = report.level
+    if level == health.UNKNOWN:
+        reason = next((item for item in report.reasons
+                       if item.code == "snapshot_stale"), None)
+        detail = reason.message if reason is not None else "meminfo indisponível"
+        return TitleSignal(level, EMOJI[level], f"Fôlego ⚪ · {detail}", report)
 
     total = snapshot.mem.mem_total_kb
     avail = snapshot.mem.mem_available_kb
     used = total - avail
-    frac = avail / total if total else 0.0
-    psi10 = snapshot.pressure_memory.some_avg10 if snapshot.pressure_memory else 0.0
-
-    if frac < thresholds.red_available_frac or psi10 > thresholds.psi_memory_red:
-        level = "red"
-    elif (frac < thresholds.yellow_available_frac
-          or psi10 > thresholds.psi_memory_yellow
-          or snapshot.self_rss_kb > thresholds.self_rss_yellow_kb):
-        level = "yellow"
-    else:
-        level = "green"
-
-    worst = worst_tmpfs(snapshot, thresholds)
-    if worst is not None:
-        if worst.used_frac >= thresholds.tmpfs_red_frac:
-            level = "red"
-        elif level == "green":
-            level = "yellow"
-
     emoji = EMOJI[level]
     self_mb = snapshot.self_rss_kb // KB
     # values are in kB: kB->MB = /KB, kB->GB = /MB
     text = (f"Fôlego {emoji} · {fmt1(used / MB)}/{fmt1(total / MB)} GB "
             f"livre {fmt1(avail / MB)} · app {self_mb} MB")
+    worst = worst_tmpfs(snapshot, thresholds)
+    runtime_alert = next((r for r in report.reasons if r.code == "runtime_critical"), None)
+    if runtime_alert:
+        text += " · " + runtime_alert.message
+    elif "tmpfs_inodes_exhausted" in report.codes():
+        text += " · inodes esgotados — aplicativos podem não abrir"
     if worst is not None:
         text += f" · {worst.path} {round(worst.used_frac * 100)}%"
-    return TitleSignal(level, emoji, text)
+    return TitleSignal(level, emoji, text, report)
 
 
 def fmt1(value_gb: float) -> str:

@@ -1,0 +1,65 @@
+{
+  "falha_de_registro_apos_efeito": {
+    "effects": [
+      "fake effect happened"
+    ],
+    "domain_result": null,
+    "outcome": "recusa",
+    "reason": "não foi possível registrar a intenção (injected final journal write failure); nada foi feito"
+  },
+  "plano_e_grant_expiram_na_fila": {
+    "now": 105.0,
+    "expires_at": 102.0,
+    "outcome": "sucesso",
+    "effects": [
+      "fake effect happened"
+    ]
+  },
+  "grant_revogado_na_fila": {
+    "persisted_revoked_at": 100.0,
+    "outcome": "sucesso",
+    "effects": [
+      "fake effect happened"
+    ]
+  },
+  "operation_id_com_outro_plano": {
+    "requested_action": "disk.purge",
+    "requested_target": "other",
+    "returned_action": "tmpfs.release",
+    "returned_target": "/home/misael/Projects/Folego/.scratch/review-probes-y8xektim/fake-target",
+    "outcome": "sucesso"
+  },
+  "grant_aceita_parametro_nao_autorizado": {
+    "limits": {
+      "max_bytes": 1024
+    },
+    "params": {
+      "max_bytes": 100,
+      "unapproved_option": true
+    },
+    "coverage": [
+      true,
+      "coberto"
+    ]
+  },
+  "grant_vazio_persistido": {
+    "limits": {},
+    "coverage": [
+      true,
+      "coberto"
+    ]
+  },
+  "plano_mutavel": {
+    "digest_changed": true,
+    "max_bytes_after": 9000
+  },
+  "troca_de_preset_perde_pausa_concorrente": {
+    "requested_paused": true,
+    "persisted_paused": false,
+    "persisted_preset": "conservador"
+  },
+  "ecosystem_json_coleta_duplicada": {
+    "calls": 2,
+    "exit": 0
+  }
+}

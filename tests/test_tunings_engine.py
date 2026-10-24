@@ -262,12 +262,52 @@ def test_revert_restores_the_original_bytes_byte_for_byte(live):
     plan = a_planned_tuning(live)
     applied = live.engine.apply(plan, confirm=True)
 
-    back = live.engine.revert(STARTUP_BOOST)
+    back = live.engine.revert(STARTUP_BOOST, confirm=True)
 
     assert back.ok and back.sha == plan.before_sha
     assert plan.target.read_bytes() == minified(
         {"startup_boost": {"enabled": True, "last_browser_open_time": "1"}})
     assert applied.backup_id == back.backup_id
+
+
+def test_revert_writes_nothing_without_an_explicit_confirmation(live):
+    plan = a_planned_tuning(live)
+    live.engine.apply(plan, confirm=True)
+    after_apply = plan.target.read_bytes()
+
+    back = live.engine.revert(STARTUP_BOOST)
+
+    assert back.ok is False and "confirma" in back.reason.lower()
+    assert plan.target.read_bytes() == after_apply
+
+
+def test_revert_refuses_while_the_browser_is_open_and_says_why(live):
+    plan = a_planned_tuning(live)
+    live.engine.apply(plan, confirm=True)
+    after_apply = plan.target.read_bytes()
+    live.state["running"] = OPEN_EDGE
+
+    back = live.engine.revert(STARTUP_BOOST, confirm=True)
+
+    assert back.ok is False
+    assert "4321" in back.reason and "feche" in back.reason.lower()
+    assert plan.target.read_bytes() == after_apply, "an open Edge would re-save over us"
+
+
+def test_revert_refuses_a_symlinked_target_before_restoring(live, tmp_path):
+    plan = a_planned_tuning(live)
+    live.engine.apply(plan, confirm=True)
+    applied = plan.target.read_bytes()
+    elsewhere = tmp_path / "outro"
+    elsewhere.write_bytes(applied)
+    link = live.edge / "Local State"
+    link.unlink()
+    link.symlink_to(elsewhere)
+
+    back = live.engine.revert(STARTUP_BOOST, confirm=True)
+
+    assert back.ok is False and "symlink" in back.reason
+    assert elsewhere.read_bytes() == applied, "nada pode ter sido escrito pelo link"
 
 
 def test_revert_warns_before_discarding_a_change_we_did_not_make(live):
@@ -276,7 +316,7 @@ def test_revert_warns_before_discarding_a_change_we_did_not_make(live):
     live.edge.joinpath("Local State").write_bytes(
         minified({"startup_boost": {"enabled": False, "user_added": "coisa do usuário"}}))
 
-    back = live.engine.revert(STARTUP_BOOST)
+    back = live.engine.revert(STARTUP_BOOST, confirm=True)
 
     assert back.ok is False and "mudou" in back.reason
     assert "user_added" in plan.target.read_bytes().decode()
@@ -285,9 +325,40 @@ def test_revert_warns_before_discarding_a_change_we_did_not_make(live):
 def test_revert_with_no_backup_says_so(live):
     local_state(live.edge, {"startup_boost": {"enabled": False}})
 
-    back = live.engine.revert(STARTUP_BOOST)
+    back = live.engine.revert(STARTUP_BOOST, confirm=True)
 
     assert back.ok is False and "backup" in back.reason
+
+
+def test_coordinated_restore_failure_after_write_is_unknown(live, monkeypatch):
+    from types import SimpleNamespace
+    from folego.actions.tunings import coordinated
+    from folego.orchestration import Outcome, Journal
+    plan = a_planned_tuning(live)
+    original = plan.target.read_bytes()
+    applied = live.engine.apply(plan, confirm=True)
+    def broken_restore(backup_id):
+        assert backup_id == applied.backup_id
+        plan.target.write_bytes(original[:8])
+        return [SimpleNamespace(ok=False, error="falha após escrita")]
+    monkeypatch.setattr(live.engine.backup, "restore", broken_restore)
+    run = coordinated.revert(live.engine, STARTUP_BOOST, confirm=True)
+    assert run.verdict.outcome is Outcome.UNKNOWN
+    assert run.verdict.effects["backup_id"] == applied.backup_id
+    assert plan.target.read_bytes() == original[:8]
+    assert Journal().state_of(run.verdict.operation_id).result.outcome is Outcome.UNKNOWN
+
+
+def test_coordinated_restore_refuses_user_change_without_claiming_an_effect(live):
+    from folego.actions.tunings import coordinated
+    from folego.orchestration import Outcome
+    plan = a_planned_tuning(live)
+    live.engine.apply(plan, confirm=True)
+    changed = minified({"startup_boost": {"enabled": False}, "user": "preserve"})
+    plan.target.write_bytes(changed)
+    run = coordinated.revert(live.engine, STARTUP_BOOST, confirm=True)
+    assert run.verdict.outcome is Outcome.REFUSED
+    assert plan.target.read_bytes() == changed
 
 
 # ----------------------------------------------------------------- persistence

@@ -1,0 +1,30 @@
+  % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+                                 Dload  Upload  Total   Spent   Left   Speed
+  0      0   0      0   0      0      0      0                              0  0      0   0      0   0      0      0      0                              0  0      0   0      0   0      0      0      0                              0
+  0      0   0      0   0      0      0      0                              0100 21.21M 100 21.21M   0      0 24.83M      0                              0100 21.21M 100 21.21M   0      0 24.82M      0                              0100 21.21M 100 21.21M   0      0 24.81M      0                              0
+/home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.dev/cache/uv-0.12.10-x86_64-unknown-linux-musl.tar.gz: OK
+Downloading cpython-3.14.7-linux-x86_64-gnu (download) (34.3MiB)
+ Downloaded cpython-3.14.7-linux-x86_64-gnu (download)
+Installed Python 3.14.7 in 3.83s
+ + cpython-3.14.7-linux-x86_64-gnu
+Using CPython 3.14.7
+Creating virtual environment at: .dev/venv-headless
+Resolved 15 packages in 2ms
+   Building folego @ file:///home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout
+Downloading pygments (1.2MiB)
+ Downloaded pygments
+Downloading hypothesis (1.1MiB)
+ Downloaded hypothesis
+      Built folego @ file:///home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout
+Prepared 8 packages in 2.73s
+Installed 8 packages in 409ms
+ + folego==0.1.0 (from file:///home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout)
+ + hypothesis==6.170.1
+ + iniconfig==2.3.1
+ + packaging==26.3
+ + pluggy==1.7.0
+ + pygments==2.21.0
+ + pytest==9.1.1
+ + sortedcontainers==2.4.0
+Managed Python: /home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.dev/venv-headless/bin/python
+Ready: /home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.dev/venv-headless/bin/python

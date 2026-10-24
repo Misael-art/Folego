@@ -62,6 +62,38 @@ def test_restore_refuses_corrupted_payload(store, edge_files):
     assert prefs.read_bytes() == original  # untouched on integrity failure
 
 
+def test_backup_dirs_and_files_are_private(store, edge_files):
+    """O backup copia o perfil (que pode conter tokens): 0700/0600, não o que a
+    umask do dia deixar."""
+    import stat as stat_mod
+
+    prefs, state = edge_files
+    bid = store.create("t", [backup_entry(prefs), backup_entry(state)])
+    bdir = store.path_of(bid)
+
+    assert stat_mod.S_IMODE(bdir.stat().st_mode) == 0o700
+    assert stat_mod.S_IMODE((bdir / "files").stat().st_mode) == 0o700
+    assert stat_mod.S_IMODE((bdir / "manifest.json").stat().st_mode) == 0o600
+    assert stat_mod.S_IMODE((bdir / "files" / "000.bin").stat().st_mode) == 0o600
+    assert stat_mod.S_IMODE((bdir / "files" / "001.bin").stat().st_mode) == 0o600
+
+
+def test_create_fsyncs_payloads_manifest_and_directories(monkeypatch, store, edge_files):
+    """Criação durável: cada payload e o manifesto com fsync próprio, e cada
+    diretório que os nomeia com fsync de diretório."""
+    synced_dirs, synced_fds = [], []
+    monkeypatch.setattr(backup, "fsync_dir", synced_dirs.append)
+    monkeypatch.setattr(backup.os, "fsync", synced_fds.append)
+
+    prefs, state = edge_files
+    bid = store.create("t", [backup_entry(prefs), backup_entry(state)])
+    bdir = store.path_of(bid)
+
+    assert len(synced_fds) == 3, "dois payloads + manifesto, cada um com fsync próprio"
+    for directory in (bdir / "files", bdir, bdir.parent, store.root):
+        assert directory in synced_dirs
+
+
 def test_latest_picks_newest_backup_for_action(store, edge_files, monkeypatch):
     prefs, _ = edge_files
     b1 = store.create("dup", [backup_entry(prefs)])

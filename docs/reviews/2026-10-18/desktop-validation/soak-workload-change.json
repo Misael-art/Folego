@@ -1,0 +1,1297 @@
+{
+  "scope": "Read-only AT-SPI/KWin observation after widget budget failure; no input performed",
+  "window": {
+    "app_id": "folego-soak",
+    "backend": "kwin",
+    "bounds": {
+      "height": 593,
+      "width": 900,
+      "x": 24,
+      "y": 0
+    },
+    "client_type": null,
+    "focused": false,
+    "hidden": false,
+    "pid": 221314,
+    "title": "Fôlego 🟢 · 7,6/15,3 GB livre 7,6 · app 0 MB",
+    "wm_class": "folego-soak",
+    "workspace": null
+  },
+  "nodes": [
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 1,
+      "depth": 0,
+      "description": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/bin/python",
+      "index": 0,
+      "name": "folego-soak",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/root",
+      "parent_index": null,
+      "role": "application",
+      "states": [
+        "enabled",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": {
+        "height": 565,
+        "width": 900,
+        "x": 0,
+        "y": 0
+      },
+      "child_count": 1,
+      "depth": 1,
+      "description": null,
+      "index": 1,
+      "name": "Fôlego 🟢 · 7,6/15,3 GB livre 7,6 · app 0 MB",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483654",
+      "parent_index": 0,
+      "role": "frame",
+      "states": [
+        "enabled",
+        "resizable",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Sets the focus",
+          "index": 0,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": {
+        "height": 565,
+        "width": 900,
+        "x": 0,
+        "y": 0
+      },
+      "child_count": 39,
+      "depth": 2,
+      "description": null,
+      "index": 2,
+      "name": null,
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483652",
+      "parent_index": 1,
+      "role": "filler",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Sets the focus",
+          "index": 0,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": {
+        "height": 34,
+        "width": 376,
+        "x": 0,
+        "y": 0
+      },
+      "child_count": 7,
+      "depth": 3,
+      "description": null,
+      "index": 3,
+      "name": "central",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483677",
+      "parent_index": 2,
+      "role": "page tab list",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Triggers the action",
+          "index": 0,
+          "keybinding": "",
+          "name": "Press"
+        }
+      ],
+      "bounds": {
+        "height": 34,
+        "width": 71,
+        "x": 0,
+        "y": 0
+      },
+      "child_count": 0,
+      "depth": 4,
+      "description": null,
+      "index": 4,
+      "name": "central",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483860",
+      "parent_index": 3,
+      "role": "page tab",
+      "states": [
+        "enabled",
+        "focusable",
+        "focused",
+        "selectable",
+        "selected",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Triggers the action",
+          "index": 0,
+          "keybinding": "",
+          "name": "Press"
+        }
+      ],
+      "bounds": {
+        "height": 34,
+        "width": 72,
+        "x": 71,
+        "y": 0
+      },
+      "child_count": 0,
+      "depth": 4,
+      "description": null,
+      "index": 5,
+      "name": "ajustes",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483680",
+      "parent_index": 3,
+      "role": "page tab",
+      "states": [
+        "enabled",
+        "focusable",
+        "selectable",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Triggers the action",
+          "index": 0,
+          "keybinding": "",
+          "name": "Press"
+        }
+      ],
+      "bounds": {
+        "height": 34,
+        "width": 69,
+        "x": 143,
+        "y": 0
+      },
+      "child_count": 0,
+      "depth": 4,
+      "description": null,
+      "index": 6,
+      "name": "órfãos",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483703",
+      "parent_index": 3,
+      "role": "page tab",
+      "states": [
+        "enabled",
+        "focusable",
+        "selectable",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Triggers the action",
+          "index": 0,
+          "keybinding": "",
+          "name": "Press"
+        }
+      ],
+      "bounds": {
+        "height": 34,
+        "width": 62,
+        "x": 212,
+        "y": 0
+      },
+      "child_count": 0,
+      "depth": 4,
+      "description": null,
+      "index": 7,
+      "name": "disco",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483713",
+      "parent_index": 3,
+      "role": "page tab",
+      "states": [
+        "enabled",
+        "focusable",
+        "selectable",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Triggers the action",
+          "index": 0,
+          "keybinding": "",
+          "name": "Press"
+        }
+      ],
+      "bounds": {
+        "height": 34,
+        "width": 102,
+        "x": 274,
+        "y": 0
+      },
+      "child_count": 0,
+      "depth": 4,
+      "description": null,
+      "index": 8,
+      "name": "temporários",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483734",
+      "parent_index": 3,
+      "role": "page tab",
+      "states": [
+        "enabled",
+        "focusable",
+        "selectable",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 4,
+      "description": null,
+      "index": 9,
+      "name": "Scroll Left",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483678",
+      "parent_index": 3,
+      "role": "push button",
+      "states": [
+        "focusable"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 4,
+      "description": null,
+      "index": 10,
+      "name": "Scroll Right",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483679",
+      "parent_index": 3,
+      "role": "push button",
+      "states": [
+        "focusable"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": {
+        "height": 29,
+        "width": 880,
+        "x": 10,
+        "y": 43
+      },
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 11,
+      "name": "Fôlego 🟢 · 7,6/15,3 GB livre 7,6 · app 0 MB",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483657",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "showing",
+        "visible",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": {
+        "height": 34,
+        "width": 880,
+        "x": 10,
+        "y": 78
+      },
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 12,
+      "name": "usada 7,6 GB / 15,3 GB · livre 7,6 GB · app 0 MB · zram/swap 0,0 GB (0%) · psi/memória avg10 0,0 · top apps (RSS estimado) fixture 97 MB · amostra 2026-10-18T10:15:56-03:00",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483658",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "showing",
+        "visible",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": {
+        "height": 34,
+        "width": 880,
+        "x": 10,
+        "y": 118
+      },
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 13,
+      "name": "Saúde e qualidade da coleta",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483668",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "showing",
+        "visible",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": {
+        "height": 17,
+        "width": 880,
+        "x": 10,
+        "y": 158
+      },
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 14,
+      "name": "Última operação registrada",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483667",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "showing",
+        "visible",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": {
+        "height": 17,
+        "width": 880,
+        "x": 10,
+        "y": 181
+      },
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 15,
+      "name": "Modo da automação, preset e grants; somente leitura nesta versão",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483666",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "showing",
+        "visible",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": {
+        "height": 34,
+        "width": 880,
+        "x": 10,
+        "y": 479
+      },
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 16,
+      "name": "nada a sugerir: memória, pressão, zram e Edge estão dentro do orçamento · bandeja indisponível nesta sessão — o sinal fica na janela: emoji e números no título da janela",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483648",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "showing",
+        "visible",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Triggers the action",
+          "index": 0,
+          "keybinding": "",
+          "name": "Press"
+        },
+        {
+          "description": "Sets the focus",
+          "index": 1,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": {
+        "height": 36,
+        "width": 880,
+        "x": 10,
+        "y": 519
+      },
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 17,
+      "name": "Copiar um diagnóstico legível, sem comandos nem credenciais",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483649",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 18,
+      "name": "Aplicativos em segundo plano do Microsoft Edge",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483690",
+      "parent_index": 2,
+      "role": "panel",
+      "states": [
+        "enabled",
+        "sensitive"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 19,
+      "name": "Startup boost do Microsoft Edge",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483700",
+      "parent_index": 2,
+      "role": "panel",
+      "states": [
+        "enabled",
+        "sensitive"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Triggers the action",
+          "index": 0,
+          "keybinding": "",
+          "name": "Press"
+        },
+        {
+          "description": "Sets the focus",
+          "index": 1,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 20,
+      "name": "Reconsultar o navegador",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483701",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Sets the focus",
+          "index": 0,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 21,
+      "name": null,
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483707",
+      "parent_index": 2,
+      "role": "tree",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive",
+        "manages-descendants"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 22,
+      "name": "Investigação de processos com CPU ativa",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483861",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 23,
+      "name": "Sessões e exclusões ativas",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483708",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 24,
+      "name": "Sem órfãos: todo processo observado tem pai vivo, consome CPU ou está na lista protegida.",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483655",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Triggers the action",
+          "index": 0,
+          "keybinding": "",
+          "name": "Press"
+        },
+        {
+          "description": "Sets the focus",
+          "index": 1,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 25,
+      "name": "Encerrar selecionado (SIGTERM)",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483709",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 26,
+      "name": "Forçar sobreviventes (SIGKILL)",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483710",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "focusable"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Open the combo box selection popup",
+          "index": 0,
+          "keybinding": "",
+          "name": "Show Menu"
+        },
+        {
+          "description": "Open the combo box selection popup",
+          "index": 1,
+          "keybinding": "",
+          "name": "Press"
+        }
+      ],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 27,
+      "name": null,
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483656",
+      "parent_index": 2,
+      "role": "combo box",
+      "states": [
+        "expandable",
+        "focusable"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 28,
+      "name": "Encerrar grupo",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483711",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "focusable"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 29,
+      "name": "recuperáveis 0,0 KB em 5 item(ns) · lidos 0,0 KB",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483714",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Sets the focus",
+          "index": 0,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 30,
+      "name": null,
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483718",
+      "parent_index": 2,
+      "role": "table",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive",
+        "manages-descendants"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 31,
+      "name": "quarentena ainda não consultada.",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483719",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Sets the focus",
+          "index": 0,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 32,
+      "name": "Itens na quarentena reversível do disco",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483723",
+      "parent_index": 2,
+      "role": "table",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive",
+        "manages-descendants"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 33,
+      "name": "isto é um plano: nada foi movido. Quarentenar move o item para um destino reversível; restaurar devolve ao caminho original.",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483724",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Triggers the action",
+          "index": 0,
+          "keybinding": "",
+          "name": "Press"
+        },
+        {
+          "description": "Sets the focus",
+          "index": 1,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 34,
+      "name": "Ver quarentena",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483725",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 35,
+      "name": "Restaurar selecionado",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483726",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "focusable"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 36,
+      "name": "Apagar de vez (irreversível)",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483727",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "focusable"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Triggers the action",
+          "index": 0,
+          "keybinding": "",
+          "name": "Press"
+        },
+        {
+          "description": "Sets the focus",
+          "index": 1,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 37,
+      "name": "Reconsultar o disco",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483728",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 38,
+      "name": "Mover o item selecionado para a quarentena reversível",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483729",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "focusable"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 39,
+      "name": "pior volume: /fixture-tmpfs a 60%",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483664",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Sets the focus",
+          "index": 0,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 40,
+      "name": null,
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483661",
+      "parent_index": 2,
+      "role": "table",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive",
+        "manages-descendants"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 41,
+      "name": "liberáveis 0,0 KB em 0 item(ns) · protegidos 52 · lidos 52 · impressão 027359006032fd3c",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483737",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Sets the focus",
+          "index": 0,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 42,
+      "name": null,
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483741",
+      "parent_index": 2,
+      "role": "table",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive",
+        "manages-descendants"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 43,
+      "name": "retido 0,0 KB na SSD em 0 item(ns) · o mais velho 0,0 d · saiu da RAM e não voltou 0,0 KB · folga 3,0 GB",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483742",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Sets the focus",
+          "index": 0,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 44,
+      "name": null,
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483746",
+      "parent_index": 2,
+      "role": "table",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive",
+        "manages-descendants"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 45,
+      "name": "isto é um plano: nada foi movido. Liberar pede confirmação, e o item volta por esta aba.",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483747",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Triggers the action",
+          "index": 0,
+          "keybinding": "",
+          "name": "Press"
+        },
+        {
+          "description": "Sets the focus",
+          "index": 1,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 46,
+      "name": "Atualizar plano",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483748",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Triggers the action",
+          "index": 0,
+          "keybinding": "",
+          "name": "Press"
+        },
+        {
+          "description": "Sets the focus",
+          "index": 1,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": null,
+      "index": 47,
+      "name": "Expirar o excedente do orçamento",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483749",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 0,
+      "depth": 5,
+      "description": "nenhuma entrada staging no ledger: não há liberação inacabada",
+      "index": 48,
+      "name": "Recuperar liberações inacabadas",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483750",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "focusable"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    }
+  ]
+}

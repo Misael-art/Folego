@@ -1,0 +1,17 @@
+{
+  "recorded_before_final_completion": true,
+  "minimum_duration_s": 7200,
+  "warmup_s": 120,
+  "maximums": {
+    "cpu_ui_and_reaped_children_percent": 5,
+    "rss_peak_growth_mib": 64,
+    "rss_trend_mib_per_hour": 4,
+    "fd_peak_growth": 16,
+    "widget_peak_growth": 32,
+    "heartbeat_p99_upper_ms": 50,
+    "heartbeat_max_delay_ms": 500,
+    "read_mib_per_hour": 512,
+    "write_mib_per_hour": 64
+  },
+  "notes": "CPU is percent of one logical CPU; I/O fields are Linux /proc/PID/io counters; heartbeat is event dispatch delay, not compositor frame latency. Budget applies to this fixture workload, not all host inventories."
+}

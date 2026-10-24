@@ -198,6 +198,18 @@ def test_revert_confirmed_asks_the_child_to_restore(spy, fake_home, capsys):
     assert "restaurado" in out and "deadbeef" in out
 
 
+def test_revert_without_the_flag_refuses_before_the_child(spy, fake_home, capsys):
+    """R18: a recusa é local — nenhum filho chega a ser acionado sem confirmação."""
+    tuning = TUNINGS[0]
+
+    code = main(["tune", "revert", tuning.id])
+
+    err = capsys.readouterr().err
+    assert code == 2
+    assert spy.calls == [], "sem --confirmar não se aciona o worker"
+    assert "--confirmar" in err and "nada foi alterado" in err
+
+
 def test_an_unknown_tuning_id_is_answered_with_the_ones_that_exist(
         spy, fake_home, capsys):
     spy.box["answers"].append(a_run({"acao": "apply", "ok": False, "exit": 1,

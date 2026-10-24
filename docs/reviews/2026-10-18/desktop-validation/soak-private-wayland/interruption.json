@@ -1,0 +1,10 @@
+{
+  "status": "archived_incomplete",
+  "observed_utc": "2026-10-24T13:39:38.389799+00:00",
+  "last_elapsed_s": 2470.4738217960003,
+  "original_boot_id": "f26a67f7-9775-4416-a4ce-8eb3afed2448",
+  "current_boot_id": "2bfbc81b-38e5-4468-8c2d-5cfce82c1bdf",
+  "original_pid_present": false,
+  "cause": "No final report; previous response interrupted and original boot ended. Exact process exit unavailable.",
+  "acceptance": "not accepted; do not add durations across attempts"
+}

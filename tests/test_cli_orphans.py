@@ -5,7 +5,10 @@ import signal
 import pytest
 
 from folego.actions.orphans.reaper import Reaper
+
+
 from folego.cli import main
+from folego.safely import procs
 from folego.safely.audit import AuditLog
 from fixtures_proc import build_proc
 
@@ -13,6 +16,15 @@ UID = os.getuid()
 TERM = int(signal.SIGTERM)
 KILL = int(signal.SIGKILL)
 
+
+@pytest.fixture(autouse=True)
+def isolated_process_control(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    monkeypatch.setenv("DECKWELLNESS_PROC_ROOT", str(tmp_path / "proc"))
+    boot = tmp_path / "proc/sys/kernel/random/boot_id"
+    boot.parent.mkdir(parents=True)
+    boot.write_text("fixture-boot")
 
 @pytest.fixture
 def proc_tree(tmp_path, monkeypatch):
@@ -49,7 +61,8 @@ def sent(monkeypatch, tmp_path):
 
     def factory():
         return Reaper(proc_root=tmp_path / "proc", kill_fn=kill_fn,
-                      audit=AuditLog(tmp_path / "audit.jsonl"))
+                      audit=AuditLog(tmp_path / "audit.jsonl"),
+                      pin_fn=procs.unsupported, follow_up_s=0.0)
 
     monkeypatch.setattr("folego.cli._reaper", factory)
     return calls
@@ -76,10 +89,77 @@ def test_orphans_dry_run_lists_only_the_proven_orphan(proc_tree, sent, capsys):
 def test_confirmar_sends_sigterm_to_the_listed_orphan(proc_tree, sent, capsys):
     code = main(["orphans", "--janela", "0", "--confirmar"])
 
+    captured = capsys.readouterr()
+    assert code == 3, "envio sem acompanhamento é parcial, não término comprovado"
+    assert sent == [(500, TERM)]
+    # R10: o que a CLI provou foi o envio; encerramento é veredito da próxima leitura
+    assert "sinal enviado" in captured.out
+    assert "encerrado" not in captured.out
+    assert "não prova encerramento" in captured.err
+
+
+def test_a_partial_signal_names_sent_and_refused(tmp_path, monkeypatch, capsys):
+    """R10: recusa parcial não pode sumir no código de saída."""
+    from folego.actions.orphans.reaper import TermResult
+
+    root = tmp_path / "proc"
+    build_proc(root, pids=[
+        dict(pid=500, comm="esquecido", ppid=1, pgid=900, session=901, uid=UID,
+             starttime=777, rss_kb=250_000),
+        dict(pid=510, comm="preso", ppid=1, pgid=950, session=951, uid=UID,
+             starttime=778, rss_kb=10_000),
+    ])
+    monkeypatch.setenv("DECKWELLNESS_PROC_ROOT", str(root))
+
+    class HalfReaper:
+        def terminate(self, candidate):
+            ok = candidate.pid == 500
+            return TermResult(candidate.pid, candidate.comm, ok, 15,
+                              None if ok else "sem permissão para encerrar")
+
+    monkeypatch.setattr("folego.cli._reaper", lambda: HalfReaper())
+    code = main(["orphans", "--janela", "0", "--confirmar"])
+
+    captured = capsys.readouterr()
+    assert code == 3, "sinalizar um e recusar outro é parcial (3), não recusa pura"
+    assert "sinal enviado: pid 500" in captured.out
+    assert "resultado parcial: 1 sinalizado(s), 1 recusado(s)" in captured.err
+    assert "refused: pid 510" in captured.err
+
+
+def test_a_sigterm_survivor_is_partial_and_names_the_manual_escalation(
+        proc_tree, monkeypatch, capsys):
+    from folego.actions.orphans.reaper import TermResult
+
+    class Survivor:
+        def terminate(self, candidate):
+            return TermResult(candidate.pid, candidate.comm, True, TERM, exited=False)
+
+    monkeypatch.setattr("folego.cli._reaper", lambda: Survivor())
+    code = main(["orphans", "--janela", "0", "--confirmar"])
+
+    captured = capsys.readouterr()
+    assert code == 3, "sinal que não encerra é parcial, não sucesso"
+    assert "continua ativo após o sinal" in captured.out
+    assert "1 sobreviveu(aram) ao sinal" in captured.err
+    assert "escalada não é automática" in captured.err
+    assert "--confirmar --forcar" in captured.err
+
+
+def test_an_observed_exit_says_encerrado(proc_tree, monkeypatch, capsys):
+    from folego.actions.orphans.reaper import TermResult
+
+    class Gone:
+        def terminate(self, candidate):
+            return TermResult(candidate.pid, candidate.comm, True, TERM, exited=True)
+
+    monkeypatch.setattr("folego.cli._reaper", lambda: Gone())
+    code = main(["orphans", "--janela", "0", "--confirmar"])
+
     out = capsys.readouterr().out
     assert code == 0
-    assert sent == [(500, TERM)]
-    assert "encerrado" in out
+    assert "encerrado: pid 500" in out
+    assert "sinal enviado: pid 500" not in out
 
 
 def test_force_flag_without_confirmation_is_refused(proc_tree, sent, capsys):
@@ -94,7 +174,7 @@ def test_force_flag_without_confirmation_is_refused(proc_tree, sent, capsys):
 def test_force_with_both_flags_uses_sigkill(proc_tree, sent, capsys):
     code = main(["orphans", "--janela", "0", "--confirmar", "--forcar"])
 
-    assert code == 0
+    assert code == 3, "o fake desliga acompanhamento; SIGKILL enviado não comprova saída"
     assert sent == [(500, KILL)]
 
 
@@ -107,7 +187,8 @@ def test_a_recycled_pid_is_refused_at_the_last_moment(proc_tree, tmp_path,
     monkeypatch.setattr(
         "folego.cli._reaper",
         lambda: Reaper(proc_root=other, kill_fn=lambda pid, sig: calls.append(pid),
-                       audit=AuditLog(tmp_path / "audit.jsonl")))
+                       audit=AuditLog(tmp_path / "audit.jsonl"),
+                       pin_fn=procs.unsupported, follow_up_s=0.0))
 
     code = main(["orphans", "--janela", "0", "--confirmar"])
 
@@ -157,9 +238,11 @@ def test_groups_confirmar_terminates_children_first(browser_tree, sent, capsys):
     code = main(["groups", "--grupo", "edge", "--confirmar"])
 
     out = capsys.readouterr().out
-    assert code == 0
+    assert code == 3, "envio sem acompanhamento é parcial; não comprova término"
     assert [pid for pid, _ in sent] == [702, 701, 700]
     assert "Edge" in out
+    for pid in (700, 701, 702):
+        assert f"sinal enviado: pid {pid}" in out
 
 
 def test_groups_without_confirmation_is_a_dry_run(browser_tree, sent, capsys):
@@ -180,3 +263,40 @@ def test_unknown_group_is_refused(browser_tree, sent, capsys):
 
     assert code == 2
     assert sent == []
+
+
+def test_groups_forcar_is_an_explicit_sigkill(browser_tree, sent, capsys):
+    code = main(["groups", "--grupo", "edge", "--confirmar", "--forcar"])
+
+    assert code == 3, "SIGKILL enviado sem acompanhamento também é parcial"
+    assert sent == [(702, KILL), (701, KILL), (700, KILL)]
+    out = capsys.readouterr().out
+    for pid in (700, 701, 702):
+        assert f"sinal enviado: pid {pid}" in out
+
+
+def test_groups_forcar_without_confirmation_asks_for_it(browser_tree, sent, capsys):
+    code = main(["groups", "--grupo", "edge", "--forcar"])
+
+    assert code == 2
+    assert sent == []
+    assert "--confirmar" in capsys.readouterr().err
+
+
+def test_a_group_survivor_is_partial(browser_tree, monkeypatch, capsys):
+    from folego.actions.orphans.reaper import TermResult
+
+    class Survivor:
+        def terminate_group(self, target):
+            return [TermResult(m.pid, m.comm, True, TERM,
+                               exited=(m.pid != 700))
+                    for m in target.members]
+
+    monkeypatch.setattr("folego.cli._reaper", lambda: Survivor())
+    code = main(["groups", "--grupo", "edge", "--confirmar"])
+
+    captured = capsys.readouterr()
+    assert code == 3
+    assert "continua ativo após o sinal" in captured.out
+    assert "1 sobreviveu(aram) ao sinal" in captured.err
+    assert "escalada não é automática" in captured.err

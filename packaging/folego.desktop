@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Fôlego
+GenericName=Monitor de recursos
+Comment=Diagnóstico e higiene reversível de RAM, CPU e disco
+Exec=folego
+Icon=utilities-system-monitor
+Terminal=false
+Categories=System;Monitor;
+Keywords=memoria;ram;cpu;disco;steamdeck;kde;
+StartupNotify=true

@@ -11,8 +11,9 @@ import argparse
 import json
 import sys
 
-from .engine import NEEDS_CONFIRM, TuningEngine
+from .engine import NEEDS_CONFIRM, REVERT_NEEDS_CONFIRM, TuningEngine
 from .registry import TUNINGS, tuning_by_id
+from . import coordinated
 
 EXIT_OK = 0
 EXIT_REFUSED = 1
@@ -47,23 +48,50 @@ def run(acao: str, tuning_id: str, *, confirm: bool = False) -> dict:
         return _finish(acao, ok=True, exit=EXIT_OK, **_detect_fields(det))
 
     if acao == "revert":
-        result = engine.revert(tuning)
-        return _finish(acao, ok=result.ok,
-                       exit=EXIT_OK if result.ok else EXIT_REFUSED,
+        run = coordinated.revert(engine, tuning, confirm=confirm)
+        if run.verdict is not None and (run.result is None or not run.verdict.ok):
+            return _coordinated_failure(acao, run)
+        result = run.result
+        # entrada direta sem --confirmar também recusa com exit 2, como o apply: o
+        # CLI tem a sua própria mensagem, mas o worker não pode ser mais permissivo
+        exit_code = EXIT_OK if result.ok else (
+            EXIT_NEEDS_CONFIRM if result.reason == REVERT_NEEDS_CONFIRM
+            else EXIT_REFUSED)
+        return _finish(acao, ok=result.ok, exit=exit_code,
                        reason=result.reason, sha=result.sha, backup_id=result.backup_id,
-                       file=str(result.target))
+                       file=str(result.target), **_operation(run))
 
     plan = engine.plan(det)
     if plan is None:
         return _finish(acao, ok=True, exit=EXIT_OK, changed=False,
                        reason="já está no valor desejado; nada foi escrito",
                        file=str(det.target), **_detect_fields(det))
-    result = engine.apply(plan, confirm=confirm)
+    run = coordinated.apply(engine, plan, confirm=confirm)
+    if run.verdict is not None and (run.result is None or not run.verdict.ok):
+        return _coordinated_failure(acao, run)
+    result = run.result
     exit_code = EXIT_OK if result.ok else (
         EXIT_NEEDS_CONFIRM if result.reason == NEEDS_CONFIRM else EXIT_REFUSED)
     return _finish(acao, ok=result.ok, exit=exit_code, changed=result.ok,
                    reason=result.reason, sha=result.sha, backup_id=result.backup_id,
-                   file=str(result.target), plan=_plan_fields(plan))
+                   file=str(result.target), plan=_plan_fields(plan), **_operation(run))
+
+
+def _operation(run):
+    if run.verdict is None:
+        return {}
+    return {"operation_id": run.verdict.operation_id, "outcome": str(run.verdict.outcome)}
+
+
+def _coordinated_failure(action, run):
+    from ...orchestration.models import Outcome
+    codes = {Outcome.OK: 0, Outcome.REFUSED: 1, Outcome.PARTIAL: 3,
+             Outcome.FAILED: 4, Outcome.UNKNOWN: 5, Outcome.CANCELLED: 6}
+    verdict = run.verdict
+    return _finish(action, ok=False, exit=codes[verdict.outcome], reason=verdict.reason,
+                   effects=dict(verdict.effects), backup_id=verdict.effects.get("backup_id"),
+                   sha=verdict.effects.get("sha"), file=verdict.effects.get("file"),
+                   changed=bool(run.result and run.result.ok), **_operation(run))
 
 
 def _detect_fields(det) -> dict:

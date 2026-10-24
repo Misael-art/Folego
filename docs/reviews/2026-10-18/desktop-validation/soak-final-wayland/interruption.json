@@ -1,0 +1,9 @@
+{
+  "status": "incomplete_process_absent",
+  "last_elapsed_s": 2740.130659128001,
+  "observed_utc": "2026-10-18T12:42:49.848569+00:00",
+  "cause": "host boot after last sample; no final report",
+  "not_added_to_retry": true,
+  "current_boot_utc": "2026-10-18T11:37:19+00:00",
+  "current_boot_id": "f26a67f7-9775-4416-a4ce-8eb3afed2448"
+}

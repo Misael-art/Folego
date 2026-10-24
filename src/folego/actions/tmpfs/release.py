@@ -1,8 +1,12 @@
 """Liberar RAM de um tmpfs: copiar para a SSD, verificar, só então apagar.
 
-A ordem é a segurança: toda recusa acontece antes de qualquer escrita, o clone é
-conferido contra a origem, e o ledger registra o estado intermediário (``partial``)
-em vez de deixá-lo ser inferido. Se a remoção falhar, nada foi perdido.
+A ordem é a segurança: toda recusa acontece antes de qualquer escrita; a linha
+``staging`` entra no ledger *antes* do primeiro byte (uma queda no meio da cópia
+deixa o meio do caminho registrado, nunca um clone órfão); o clone é conferido
+contra a origem; e a remoção da origem só acontece depois do fsync do clone. O
+estado ``partial`` fica gravado em vez de inferido, e a liberação inacabada é
+recuperável por `recover_staging` — com a origem viva o clone redundante é
+descartado; sem origem, o clone nunca é apagado por adivinhação.
 """
 import hashlib
 import os
@@ -14,14 +18,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ... import paths
-from ...safely import guard
+from ...safely import guard, mounts as mount_rules
 from ...safely.hashing import sha256_file
 from ..disk import planner
+from ..disk.measure import measure_tree
 from .inventory import TmpfsEntry, entry_at
 from .holders import holder_index
-from .ledger import (ACTIVE_STATES, LedgerRecord, MAX_RETAINED_BYTES, RETENTION_DAYS,
+from .ledger import (LedgerRecord, MAX_RETAINED_BYTES, RETENTION_DAYS,
                      STATE_DROPPED, STATE_EXPIRED, STATE_PARTIAL, STATE_RELEASED,
-                     STATE_RESTORED)
+                     STATE_RESTORED, STATE_STAGING, UNRESOLVED_STATES)
 from .policy import classify
 from ...core.tmpfs import read_mounts
 
@@ -39,11 +44,19 @@ class ReleaseResult:
     stored: str = ""
     sha256: str = ""
     freed_bytes: int = 0
+    # contabilidade fina (F2/6b): `bytes` é o lógico (tamanho aparente) e também o
+    # transferido pela cópia; `allocated_bytes` é o que o clone ocupa de fato no
+    # SSD (st_blocks*512); `ram_observed_bytes` é a variação medida por statvfs.
+    # Desconhecido é None — nunca zero por omissão.
+    allocated_bytes: int = 0
+    ram_observed_bytes: int | None = None
 
     def to_dict(self) -> dict:
         return {"ok": self.ok, "entry_id": self.entry_id, "reason": self.reason,
                 "bytes": self.bytes, "stored": self.stored, "sha256": self.sha256,
-                "freed_bytes": self.freed_bytes}
+                "freed_bytes": self.freed_bytes,
+                "allocated_bytes": self.allocated_bytes,
+                "ram_observed_bytes": self.ram_observed_bytes}
 
 
 def _stamp(now: float) -> str:
@@ -86,6 +99,35 @@ def tree_digest(path: Path) -> tuple[str, int]:
     return h.hexdigest(), total
 
 
+def staging_bytes(ledger, *, measure_fn=None, deadline_s: float = 10.0):
+    """(bytes, problemas) dos clones `staging` — a parte não certificada da cota.
+
+    A linha `staging` registra bytes 0 (ainda não certificados) e fica fora do
+    orçamento do `expire` (apagar a única cópia seria adivinhação); mas o clone
+    existe e ocupa SSD. Contá-lo **aqui** impede que quedas repetidas empilhem
+    clones sem que nenhuma nova liberação caiba no teto comum de retenção/staging.
+    Clone que não mede por inteiro (prazo, permissão) **não vira zero**: os bytes
+    são desconhecidos e o ato que depende da cota recusa com o problema nomeado.
+    """
+    measure = measure_fn or measure_tree
+    total, problems = 0, []
+    for record in ledger.records().values():
+        if record.state != STATE_STAGING:
+            continue
+        stored = _registered_path(record.stored)
+        if stored is None:
+            problems.append(f"staging {record.entry_id}: caminho registrado ilegível")
+            continue
+        if not stored.exists():
+            continue  # sumido do disco: contribui zero porque está ausente, não porque não sei
+        stat = measure(stored, deadline_s=deadline_s)
+        if stat.truncated or stat.errors:
+            problems.append(f"staging {record.entry_id}: {stored} não mediu por inteiro")
+            continue
+        total += stat.bytes
+    return total, problems
+
+
 def _fresh_entry(path: str, *, volume: str = "", proc_root: str | None = None,
                  now: float | None = None) -> TmpfsEntry:
     """Re-derivado no momento da mutação: o plano pode estar superado."""
@@ -98,9 +140,39 @@ def _refuse(entry_id: str, reason: str) -> ReleaseResult:
     return ReleaseResult(False, entry_id, reason)
 
 
+def _ledger_refusal(ledger) -> str | None:
+    """Ledger ilegível/inconsistente fecha a porta antes de qualquer mutação.
+
+    Agir sobre um ledger com linha que não foi lida seria decidir com mapa
+    incompleto — a liberação repetida e o clone órfão da R11/R04. O problema é
+    nomeado; o reparo é a edição do arquivo com o app parado.
+    """
+    problems = ledger.problems()
+    if problems:
+        return ("refused: ledger inconsistente; nada foi alterado: "
+                + "; ".join(problems))
+    return None
+
+
+def _volume_free(statvfs_fn, volume: str) -> int | None:
+    """Espaço livre do volume, ou None quando o volume não responde.
+
+    É a medição *observada* do ato, separada do tamanho aparente: num tmpfs,
+    páginas presentes e tamanho de conteúdo divergem (buraco não é página), e é a
+    variação observada que diz quanto de RAM voltou de verdade. Volume ilegível
+    não vira zero — vira `None`, e o resultado nomeia a ausência.
+    """
+    try:
+        vfs = statvfs_fn(str(volume))
+    except OSError:
+        return None
+    return vfs.f_bavail * vfs.f_frsize
+
+
 def release_item(plan, item, *, ledger, dest_root=None, audit=None, confirm=False,
-                 entry_fn=_fresh_entry, statvfs_fn=os.statvfs, now: float | None = None,
-                 allowed_roots=None, remove_fn=None, proc_root=None) -> ReleaseResult:
+                 entry_fn=_fresh_entry, statvfs_fn=os.statvfs, mounts_fn=None,
+                 now: float | None = None, allowed_roots=None, remove_fn=None,
+                 proc_root=None) -> ReleaseResult:
     now = time.time() if now is None else now
     entry_id = _entry_id(now)
     src = Path(item.path)
@@ -108,8 +180,16 @@ def release_item(plan, item, *, ledger, dest_root=None, audit=None, confirm=Fals
         return _refuse(entry_id, "refused: liberar RAM exige --confirmar; "
                                  "nada foi alterado")
 
+    refusal = _ledger_refusal(ledger)
+    if refusal:
+        return _refuse(entry_id, refusal)
+
     held = ledger.find(item.path)
-    if held is not None and held.state in ACTIVE_STATES:
+    if held is not None and held.state in UNRESOLVED_STATES:
+        if held.state == STATE_STAGING:
+            return _refuse(entry_id, f"refused: {item.path} tem liberação inacabada "
+                                     f"no ledger como staging ({held.entry_id}); rode "
+                                     "folego tmpfs recover antes de liberar de novo")
         return _refuse(entry_id, f"refused: {item.path} já está no ledger como "
                                  f"{held.state} ({held.entry_id}); a correção é "
                                  "manual (restore ou purge por id)")
@@ -140,24 +220,60 @@ def release_item(plan, item, *, ledger, dest_root=None, audit=None, confirm=Fals
         return _refuse(entry_id, f"{dest_verdict.reason} — o destino de retenção "
                                  f"é {probe}")
 
+    # R12/F2: XDG sob a home é convenção, não prova — o destino tem de ser
+    # comprovadamente não-RAM e não o mesmo monte da origem (copiar para dentro do
+    # tmpfs não devolve capacidade a nada). A tabela é lida no ato; os testes
+    # injetam a fixture pelo parâmetro.
+    table = (mounts_fn or read_mounts)(proc_root)
+    dest_mount = mount_rules.destination_verdict(probe, source_mount=item.volume,
+                                                 mounts=table)
+    if not dest_mount.ok:
+        return _refuse(entry_id, f"{dest_mount.reason} — o destino de retenção "
+                                 f"é {probe}")
+
     if dest.exists():
         return _refuse(entry_id, f"refused: {dest} já existe — itens homônimos "
                                  "colidem nesse destino, e o clone já ledgerado "
                                  "seria pisado")
 
     vfs = statvfs_fn(str(probe))
-    if vfs.f_bavail * vfs.f_frsize < 2 * gate:
-        return _refuse(entry_id, f"refused: o destino não tem folga para copiar "
-                                 f"{gate} bytes antes de apagar a origem")
+    livre = vfs.f_bavail * vfs.f_frsize
+    necessario = 2 * gate       # o clone + a mesma quantia de reserva do volume
+    if livre < necessario:
+        return _refuse(entry_id, f"refused: o destino {probe} tem "
+                                 f"{planner.fmt_bytes(livre)} livres, menos que os "
+                                 f"{planner.fmt_bytes(necessario)} necessários para "
+                                 f"copiar {planner.fmt_bytes(gate)} com folga antes "
+                                 "de apagar a origem")
 
-    restantes = MAX_RETAINED_BYTES - ledger.retained_bytes()
+    # Cota conjunta (F2/entrega 6): retenção certificada E clones `staging` contam
+    # contra o mesmo teto — o clone não certificado ocupa SSD igual, mesmo sem
+    # entrar no orçamento do `expire` (lá ele é intocável).
+    retido = ledger.retained_bytes()
+    em_staging, staging_problems = staging_bytes(ledger)
+    if staging_problems:
+        return _refuse(entry_id, "refused: cota conjunta não verificável ("
+                                 + "; ".join(staging_problems)
+                                 + "); nada foi alterado")
+    restantes = MAX_RETAINED_BYTES - retido - em_staging
     if gate > restantes:
         oldest = ledger.oldest()
         cand = (f"a candidata a expirar é {oldest.entry_id} ({oldest.src})" if oldest
                 else "nada está retido — o item sozinho passa do teto")
         return _refuse(entry_id, f"refused: reter mais {gate} bytes estouraria o "
-                                 f"orçamento de {MAX_RETAINED_BYTES}; {cand}")
+                                 f"orçamento de {MAX_RETAINED_BYTES} ({retido} "
+                                 f"retidos + {em_staging} em staging); {cand}")
 
+    # A linha entra ANTES do primeiro byte: a janela entre a cópia e o registro
+    # `partial` era o clone órfão da R11 — queda no meio deixava um destino que
+    # nenhuma contagem via. Agora o meio do caminho está escrito (`staging`, bytes
+    # 0: ainda não certificados) e o `recover` sabe o que fazer com ele.
+    staging_event = _audit(audit, entry_id, STATE_STAGING, [str(src), str(dest)],
+                           plan_digest=plan.digest)
+    ledger.append(**_fields(entry_id, item, fresh, dest, "", 0, STATE_STAGING,
+                            staging_event))
+
+    ram_before = _volume_free(statvfs_fn, item.volume)
     try:
         dest.parent.mkdir(parents=True, exist_ok=True)
         if src.is_dir():
@@ -166,6 +282,10 @@ def release_item(plan, item, *, ledger, dest_root=None, audit=None, confirm=Fals
             shutil.copy2(src, dest)
     except OSError as err:
         _quiet_remove(dest)
+        _drop_staging(ledger, entry_id, item, fresh, dest, audit,
+                      plan_digest=plan.digest,
+                      error=f"a cópia falhou: {err.strerror or err}; a origem "
+                            "está intacta")
         return _refuse(entry_id, f"refused: a cópia falhou ({err.strerror or err}); "
                                  "a origem está intacta")
 
@@ -177,11 +297,17 @@ def release_item(plan, item, *, ledger, dest_root=None, audit=None, confirm=Fals
         clone_digest, clone_bytes = tree_digest(dest)
     except OSError as err:
         _quiet_remove(dest)
+        _drop_staging(ledger, entry_id, item, fresh, dest, audit,
+                      plan_digest=plan.digest,
+                      error=f"o digest não pôde ser lido: {err.strerror or err}")
         return _refuse(entry_id, f"refused: o digest não pôde ser lido "
                                  f"({err.strerror or err}); nada foi apagado")
 
     if source_digest != clone_digest:
         _quiet_remove(dest)
+        _drop_staging(ledger, entry_id, item, fresh, dest, audit,
+                      plan_digest=plan.digest,
+                      error="o digest do clone difere da origem; o clone foi desfeito")
         return _refuse(entry_id, "refused: o digest do clone difere da origem; "
                                  "nada foi apagado")
 
@@ -190,7 +316,7 @@ def release_item(plan, item, *, ledger, dest_root=None, audit=None, confirm=Fals
                            plan_digest=plan.digest)
     ledger.append(**_fields(entry_id, item, fresh, dest, clone_digest, clone_bytes,
                             STATE_PARTIAL, partial_event))
-    _sync_tree(dest)
+    clone_allocated = _sync_tree(dest)
     _sync_fd(dest.parent)
 
     remove = remove_fn or _remove
@@ -201,18 +327,23 @@ def release_item(plan, item, *, ledger, dest_root=None, audit=None, confirm=Fals
                plan_digest=plan.digest,
                error=f"a origem não pôde ser removida: {err.strerror or err}")
         return ReleaseResult(False, entry_id,
-                             f"refused: o clone está em {dest} e registrado como "
+                             f"parcial: o clone está em {dest} e registrado como "
                              f"partial; a origem não foi removida "
                              f"({err.strerror or err}); nada foi perdido",
                              bytes=clone_bytes, stored=str(dest), sha256=clone_digest,
-                             freed_bytes=0)
+                             freed_bytes=0, allocated_bytes=clone_allocated)
 
     released_event = _audit(audit, entry_id, STATE_RELEASED, [str(src), str(dest)],
                             plan_digest=plan.digest)
     ledger.append(**_fields(entry_id, item, fresh, dest, clone_digest, clone_bytes,
                             STATE_RELEASED, released_event))
+    ram_after = _volume_free(statvfs_fn, item.volume)
+    ram_observed = (ram_after - ram_before
+                    if ram_before is not None and ram_after is not None else None)
     return ReleaseResult(True, entry_id, "ok", bytes=clone_bytes, stored=str(dest),
-                         sha256=clone_digest, freed_bytes=clone_bytes)
+                         sha256=clone_digest, freed_bytes=clone_bytes,
+                         allocated_bytes=clone_allocated,
+                         ram_observed_bytes=ram_observed)
 
 
 def _sync_fd(path: Path) -> None:
@@ -224,17 +355,23 @@ def _sync_fd(path: Path) -> None:
         os.close(fd)
 
 
-def _sync_tree(path: Path) -> None:
-    """fsync de cada arquivo copiado, antes do fsync do diretório.
+def _sync_tree(path: Path) -> int:
+    """fsync de cada arquivo copiado e soma dos bytes alocados (st_blocks*512).
 
     O `tree_digest` leu a cópia pela page cache, então "verificado igual" ainda não
     quer dizer "chegou à SSD" — e é logo depois dele que a origem é apagada. O
-    fsync do diretório sozinho não fecha essa janela.
+    fsync do diretório sozinho não fecha essa janela. A soma do alocado aproveita a
+    mesma caminhada: é o número que diz o que o clone ocupa de verdade (não o
+    tamanho aparente, que num arquivo esparso mente).
     """
     arquivos = [path] if path.is_file() else sorted(path.rglob("*"))
+    total = 0
     for p in arquivos:
         if p.is_file():
             _sync_fd(p)
+            if not p.is_symlink():
+                total += p.stat().st_blocks * 512
+    return total
 
 
 def _remove(path: Path) -> None:
@@ -249,6 +386,35 @@ def _quiet_remove(path: Path) -> None:
         _remove(path)
     except OSError:
         pass  # o clone falho não apaga nada de valor; a recusa já foi reportada
+
+
+def _registered_path(value) -> Path | None:
+    """Linha ilegível não vira mutação: caminho registrado tem de ser absoluto.
+
+    O `_hydrate` de uma linha quebrada (versão futura, edição à mão, escrita
+    truncada) devolve campos vazios — e ``Path("")`` é ``.``: se o diretório atual
+    cair dentro de uma raiz permitida, um `expire`/`recover` apagaria o diretório
+    de trabalho. Desconhecido/ilegível nunca autoriza mutação; quem chama trata
+    `None` como "nada foi tocado" e relata.
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    path = Path(value)
+    return path if path.is_absolute() else None
+
+
+def _drop_staging(ledger, entry_id, item, fresh, dest, audit, *, plan_digest=None,
+                  error=None) -> None:
+    """Fecha a linha `staging` de uma tentativa que não virou clone certificado.
+
+    `dropped` é o terminal honesto desta tentativa: a origem está intacta e nenhum
+    byte *certificado* ficou na SSD — diferente de `partial`, que diz "clone retido
+    e conferível". O evento de auditoria carrega o motivo, para a transição não ser
+    um sumiço mudo no diário (§7).
+    """
+    event = _audit(audit, entry_id, STATE_DROPPED, [item.path, str(dest)],
+                   plan_digest=plan_digest, error=error)
+    ledger.append(**_fields(entry_id, item, fresh, dest, "", 0, STATE_DROPPED, event))
 
 
 def _fields(entry_id, item, fresh, dest, digest, size, state, event_id) -> dict:
@@ -282,6 +448,10 @@ class RestoreResult:
     bytes: int = 0
     restored_to: str = ""
 
+    def to_dict(self) -> dict:
+        return {"ok": self.ok, "entry_id": self.entry_id, "reason": self.reason,
+                "bytes": self.bytes, "restored_to": self.restored_to}
+
 
 @dataclass(frozen=True)
 class ExpireResult:
@@ -290,6 +460,11 @@ class ExpireResult:
     victims: tuple[str, ...] = ()
     freed_bytes: int = 0
     errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict:
+        return {"ok": self.ok, "reason": self.reason,
+                "victims": list(self.victims), "freed_bytes": self.freed_bytes,
+                "errors": list(self.errors)}
 
 
 def _foreign_mount(path: str, mounts, volume: str) -> str | None:
@@ -316,18 +491,29 @@ def restore_item(record_or_id, *, ledger, audit=None, confirm=False,
     if not confirm:
         return RestoreResult(False, str(record_or_id),
                              "refused: restaurar exige --confirmar; nada foi alterado")
+    refusal = _ledger_refusal(ledger)
+    if refusal:
+        return RestoreResult(False, str(record_or_id), refusal)
     record = record_or_id if isinstance(record_or_id, LedgerRecord) \
         else ledger.find(str(record_or_id))
     if record is None:
         return RestoreResult(False, str(record_or_id), "refused: entrada desconhecida "
                                                        "no ledger")
     if record.state not in (STATE_RELEASED, STATE_PARTIAL):
+        if record.state == STATE_STAGING:
+            return RestoreResult(False, record.entry_id,
+                                 "refused: a entrada está staging (clone não "
+                                 "certificado); rode folego tmpfs recover")
         return RestoreResult(False, record.entry_id,
                              f"refused: a entrada está {record.state}")
     entry_id = record.entry_id
 
-    original = Path(record.src)
-    stored_path = Path(record.stored)
+    original = _registered_path(record.src)
+    stored_path = _registered_path(record.stored)
+    if original is None or stored_path is None:
+        return RestoreResult(False, entry_id,
+                             "refused: a entrada não tem caminhos absolutos "
+                             "registrados; nada foi alterado")
     if original.exists():
         return RestoreResult(False, entry_id,
                              f"refused: {original} já existe, nada é sobrescrito")
@@ -418,6 +604,9 @@ def expire_over_budget(*, ledger, audit=None, days: float = RETENTION_DAYS,
                        irreversible=False, now: float | None = None,
                        allowed_roots=None, remove_fn=_remove) -> ExpireResult:
     now = time.time() if now is None else now
+    refusal = _ledger_refusal(ledger)
+    if refusal:
+        return ExpireResult(False, refusal)
     victims = ledger.over_budget(days=days, max_bytes=max_bytes, now=now)
     listed = ", ".join(f"{r.entry_id} ({r.bytes} bytes, {r.src})" for r in victims)
 
@@ -439,7 +628,11 @@ def expire_over_budget(*, ledger, audit=None, days: float = RETENTION_DAYS,
     roots = list(allowed_roots) if allowed_roots else default_allowed_roots()
     freed, errors, done = 0, [], []
     for record in victims:
-        payload = Path(record.stored)
+        payload = _registered_path(record.stored)
+        if payload is None:
+            errors.append(f"{record.entry_id}: o payload registrado não é um caminho "
+                          "absoluto; nada foi tocado")
+            continue
         verdict = guard.validate_target(payload, roots)
         if not verdict.ok:
             errors.append(f"{record.entry_id}: {verdict.reason}")
@@ -459,3 +652,104 @@ def expire_over_budget(*, ledger, audit=None, days: float = RETENTION_DAYS,
         _transition(ledger, record, STATE_EXPIRED, EXPIRE_KIND, event_id)
     return ExpireResult(True, f"expiradas {len(done)} entrada(s), {freed} bytes "
                               f"liberados da SSD", tuple(done), freed, tuple(errors))
+
+
+RECOVER_KIND = "tmpfs.recover"
+
+
+@dataclass(frozen=True)
+class RecoverResult:
+    ok: bool
+    reason: str
+    dropped: tuple[str, ...] = ()
+    kept: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
+    errors: tuple[str, ...] = ()
+    dry_run: bool = False
+
+    def to_dict(self) -> dict:
+        return {"ok": self.ok, "reason": self.reason, "dry_run": self.dry_run,
+                "dropped": list(self.dropped), "kept": list(self.kept),
+                "notes": list(self.notes), "errors": list(self.errors)}
+
+
+def recover_staging(*, ledger, audit=None, confirm=False, allowed_roots=None,
+                    remove_fn=_remove) -> RecoverResult:
+    """Fecha liberações inacabadas (linha `staging`) sem adivinhar conteúdo.
+
+    A origem viva é a âncora: com ela no lugar, o clone inacabado é redundante por
+    construção (a cópia só teria terminado antes de a origem sumir), então o clone
+    é descartado e a linha fecha como `dropped` — o caminho volta a ser liberável.
+    Origem sumida é o caso oposto: o clone não certificado pode ser a única cópia
+    restante; apagá-lo seria adivinhação destrutiva. Nada é tocado, a entrada fica
+    `staging` e a decisão manual é nomeada no resultado.
+    """
+    refusal = _ledger_refusal(ledger)
+    if refusal:
+        return RecoverResult(False, refusal)
+    staging = sorted((r for r in ledger.records().values()
+                      if r.state == STATE_STAGING),
+                     key=lambda r: (r.ts, r.entry_id))
+    if not staging:
+        return RecoverResult(True, "nada a recuperar: nenhuma liberação inacabada")
+    roots = list(allowed_roots) if allowed_roots else default_allowed_roots()
+
+    def origin_alive(record) -> bool:
+        src = _registered_path(record.src)
+        return src is not None and src.exists()
+
+    if not confirm:
+        # dry-run classifica pelo que é verificável sem mutar: existência da origem.
+        # Guard e falhas de remoção só aparecem no ato confirmado — o texto diz
+        # "seriam", não "serão"; quem confirma recebe o relatório real.
+        discardable = [r for r in staging if origin_alive(r)]
+        kept = [r for r in staging if not origin_alive(r)]
+        return RecoverResult(
+            True,
+            f"dry-run: {len(discardable)} clone(s) inacabado(s) seriam descartado(s) "
+            f"e {len(kept)} mantido(s) para decisão manual; nada foi alterado",
+            dropped=tuple(r.entry_id for r in discardable),
+            kept=tuple(r.entry_id for r in kept),
+            dry_run=True)
+
+    dropped, kept, notes, errors = [], [], [], []
+    for record in staging:
+        src = _registered_path(record.src)
+        if src is None:
+            kept.append(record.entry_id)
+            notes.append(f"{record.entry_id}: o registro não tem origem absoluta; "
+                         "nada foi tocado — decisão manual")
+            continue
+        if not src.exists():
+            kept.append(record.entry_id)
+            notes.append(f"{record.entry_id}: a origem {record.src} sumiu; o clone "
+                         f"{record.stored} não foi tocado — pode ser a única cópia "
+                         "restante (não certificada); decisão manual")
+            continue
+        payload = _registered_path(record.stored)
+        if payload is None:
+            errors.append(f"{record.entry_id}: o clone registrado não é um caminho "
+                          "absoluto; nada foi tocado")
+            continue
+        verdict = guard.validate_target(payload, roots)
+        if not verdict.ok:
+            errors.append(f"{record.entry_id}: {verdict.reason}")
+            continue
+        try:
+            if payload.exists():
+                remove_fn(payload)
+        except OSError as err:
+            errors.append(f"{record.entry_id}: a limpeza do clone falhou "
+                          f"({err.strerror or err})")
+            continue
+        event_id = _audit(audit, record.entry_id, STATE_DROPPED,
+                          [record.src, record.stored], kind=RECOVER_KIND,
+                          error="liberação inacabada descartada; a origem está intacta")
+        _transition(ledger, record, STATE_DROPPED, RECOVER_KIND, event_id)
+        dropped.append(record.entry_id)
+
+    return RecoverResult(
+        not errors,
+        f"recuperação: {len(dropped)} clone(s) inacabado(s) descartado(s), "
+        f"{len(kept)} mantido(s) para decisão manual",
+        tuple(dropped), tuple(kept), tuple(notes), tuple(errors))

@@ -1,0 +1,8 @@
+Using Python 3.14.7 environment at: .scratch/desktop-validation-vvnNlb/qt612-tests-venv
+  × No solution found when resolving dependencies:
+  ╰─▶ Because pytest was not found in the cache and folego[dev]==0.1.0 depends
+      on pytest, we can conclude that folego[dev]==0.1.0 cannot be used.
+      And because only folego[dev]==0.1.0 is available and you require
+      folego[dev], we can conclude that your requirements are unsatisfiable.
+
+hint: Packages were unavailable because the network was disabled. When the network is disabled, registry packages may only be read from the cache.

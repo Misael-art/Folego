@@ -1,0 +1,162 @@
+# Prompt de continuidade — implementar e testar o Fôlego
+
+Copie o texto abaixo para o próximo agente com acesso a este repositório. O prompt é uma instrução de implementação; a revisão que o acompanha não implementou as correções.
+
+---
+
+Você está continuando o **Fôlego**, em `/home/misael/Projects/Folego`: aplicação residente Linux/KDE, Python 3.14 + PySide6/Qt, com CLI independente de Qt. Sua tarefa é **implementar, integrar e testar os itens pendentes**, preservando as entregas existentes. Não se limite a elaborar outro plano ou a escrever módulos sem ligação com o produto.
+
+O usuário quer manter responsivas máquinas com agentes de IA e muitas aplicações: identificar resíduos e processos possivelmente abandonados, administrar temporários, caches e recursos virtuais com segurança, além de oferecer uma interface harmônica e moderna. A experiência final precisa incluir uma central e um controle flutuante/compacto “Dar fôlego”, saúde do host, presets separados das autorizações, ação manual clara e automação limitada opt-in. O feedback visual precisa corresponder ao que realmente aconteceu.
+
+## 1. Contexto confiável da retomada
+
+Leia nesta ordem:
+
+1. As instruções locais e `/home/misael/.codex/RTK.md`: prefixe comandos shell com `rtk`.
+2. `docs/reviews/2026-10-18/avaliacao-entrega.md` e `evidencias/README.md`.
+3. `docs/reviews/2026-10-17/02-arquitetura-e-presets.md`, `03-experiencia-visual.md` e `04-plano-de-acao.md`.
+4. `docs/reviews/2026-10-17/progresso.md`, `docs/desenvolvimento.md` e `packaging/README.md`, tratando-os como documentação parcialmente desatualizada.
+
+Em 18/10/2026, HEAD era `61179f55123b44a996aa6087d124474eb5e84b1e`, com muito código modificado/não rastreado. **Esses arquivos são a entrega a continuar. Não use reset, checkout de arquivos, clean ou substituição em massa para voltar ao HEAD.** Confira o working tree e o manifesto `docs/reviews/2026-10-18/evidencias/checkout.json`; se mudou, adapte os achados ao código presente. Não faça commit, push, publicação, autostart ou limpeza do host sem instrução específica.
+
+Resultados verificados nesta revisão:
+
+- Suíte completa: **1 failed, 1019 passed in 31.40s**. Não use 859 ou 902 como total atual.
+- Falha: `tests/test_ui_dashboard.py::test_a_removed_suggestion_row_returns_hidden_to_the_pool`, também reproduzida sozinha.
+- CI `pure`: a seleção por ausência textual de `PySide6` inclui `test_ui_orphans.py` e `test_ui_smoke.py`, que importam Qt indiretamente. Bloqueando Qt, a coleta gera dois erros.
+- Sondas reproduzem resultado falso “nada foi feito” após efeito, validade expirada/revogação durante espera, grant permissivo, conflito de `operation_id`, plano mutável, perda de pausa concorrente e duas coletas no JSON de ecosystem.
+
+**Não recrie componentes que já existem:** CI, `GrantStore`, `ConfigStore`, política `automation.evaluate`, `DecisionLog`, apresentação inicial de modo/grants na GUI, inventários F7, `doctor`, `InstanceLock`, migração, rotação de audit/decisions, teste longo e `tools/soak.py`. Integre, corrija e complete seus aceites. Não aceite a afirmação antiga “F0–F5 concluídos”: F2 ainda tem bloqueadores e F5 ainda não entrega a interação solicitada.
+
+## 2. Contratos que devem sobreviver às mudanças
+
+- Manter Python/Qt; `core`, `actions` e CLI sem Qt. Widgets apresentam estado e pedem operações; não sinalizam processos nem executam I/O pesado na thread gráfica.
+- Nenhum dado ausente, antigo, parcial, ilegível ou de versão desconhecida vira “vazio”, “livre”, “seguro” ou “abandonado”. Sem evidência suficiente, preservar e explicar.
+- Nome, idade, PPID=1, CPU baixa, heartbeat perdido ou agente desconectado não autorizam encerramento. Preservar trabalho útil, sessões `keep_active`, exclusões e descendentes cuja propriedade não esteja comprovada.
+- Identidade de processo inclui boot/starttime e pidfd quando disponível. SIGTERM precisa de acompanhamento; sobrevivente é parcial. SIGKILL só manual, separado e explicitamente confirmado; nunca escalada automática.
+- Projetos, `.git`, credenciais, bancos, modelos, volumes e discos virtuais são protegidos por padrão. Limpeza automática fica restrita ao que o Fôlego administra com propriedade e autorização comprovadas.
+- Intenção durável antes do efeito; resultado e recuperação por ID estável. Falha de registro posterior, timeout, interrupção ou exceção após início não significam “nada ocorreu”. Não repetir operação desconhecida às cegas.
+- Cópia de tmpfs só para destino comprovadamente persistente, distinto da origem, com orçamento de espaço/retencão/staging. Preservar origem ou cópia certificada em cada falha. Separar bytes lógicos, alocados, transferidos e variação observada; não prometer RAM “liberada” por soma de RSS.
+- Manual, Assistido e Automático são modos; Conservador, Equilibrado, Foco, Manutenção e Personalizado são presets. Preset nunca amplia grant. Confirmação manual de um plano não cria autorização automática persistente.
+- Não habilitar automação, agir sobre processos/daemons reais, instalar autostart ou limpar arquivos do usuário para testar. Testar efeitos apenas em ambientes descartáveis e processos criados pelo próprio teste.
+
+## 3. Ordem de implementação e aceite
+
+Trabalhe em incrementos completos, verificáveis e documentados. Continue após cada incremento quando houver trabalho autorizado que possa avançar. Corrija primeiro as falhas reproduzidas; não faça uma reescrita ampla antes de estabilizar os contratos.
+
+### I0 — Recuperar a linha de base e a CI
+
+1. Corrigir `_sync_rows()` em `ui/dashboard_tab.py`: a linha que retorna do pool precisa voltar visível, com conteúdo e callback corretos. Preservar foco e limite do pool, evitando regressão do problema anterior de vida útil Qt/Shiboken. Não apagar/enfraquecer o teste para obter verde.
+2. Substituir a seleção da CI baseada em `grep -L`. Separar os testes Qt de forma explícita, evitando importá-los durante a coleta headless. Apenas usar `-m` não resolve imports de topo anteriores à seleção.
+3. Rodar testes focados; depois a suíte completa. Validar o job headless em venv limpo sem acesso ao PySide6 do sistema, e o conjunto Qt em ambiente próprio. Manter cobertura GUI no job offscreen.
+4. Atualizar o topo do progresso com a situação real e o comando executado; preservar o histórico anterior.
+
+**Aceite:** suíte verde, coleta/execução headless sem Qt e sem importações transitivas de Qt; o teste antes falho continua exercitando remoção e retorno da mesma linha.
+
+### I1 — Fechar autorização, plano, idempotência e recuperação
+
+Arquivos iniciais: `orchestration/{models,coordinator,bridge,journal,grants,config}.py`, `actions/{disk,tmpfs}/coordinated.py`, CLI e testes correspondentes.
+
+1. Transformar C01–C04 e C09 da avaliação em testes que afirmem o comportamento correto. Use `evidencias/reproduzir.py` como reprodução, não como especificação para perpetuar seus resultados atuais.
+2. Separar falha anterior ao efeito, efeito conhecido sem persistência final e efeito incerto. Se gravar o resultado falhar após o executor, preservar o resultado observado/ID e expor `desconhecido` ou um estado parcial explicitamente recuperável, conforme a evidência. Nunca retornar a recusa “nada foi feito”. Exercitar ENOSPC/EACCES, escrita incompleta e queda em cada fronteira do diário.
+3. Revalidar plano, alvo, evidência, proteção, prazo, pausa e grant atual **após adquirir a coordenação e antes do efeito**. Revogação/pausa e execução precisam de uma ordem de locks/versões definida, sem deadlock. Definir o instante de validade da autorização; revogação bloqueia operações ainda não iniciadas, sem prometer desfazer efeitos já ocorridos. Usar espera/fila limitada, com resultado explícito ao expirar.
+4. Tornar grants fechados por ação e recursos: identidade/path administrado/sessão, parâmetros reconhecidos, limites de tamanho/quantidade/frequência e prazo quando aplicável. Rejeitar vazio permissivo, valores negativos/NaN, campos inesperados e alvos fora do escopo. Validar CLI, persistência e executor, sem depender somente de UI. Não ampliar silenciosamente grants antigos.
+5. Vincular análise/revisão/consentimento/execução ao mesmo plano e ID. Serializar um snapshot imutável dos campos relevantes, com validade e versão de política; definir migração do schema. O digest detecta alteração em comparação com o plano aprovado; não substitui autorização. Não construir um plano diferente na ponte depois da confirmação.
+6. Mesmo ID + mesmo plano retorna o resultado anterior sem efeito novo; mesmo ID + plano diferente recusa conflito. Intenção sem resultado requer consulta/reconciliação. Validar também ação, alvo e ID retornados pelo executor. Preservar essa propriedade após reinício, compactação do histórico e recuperação.
+7. Revalidar identidade dos alvos de disco: device/inode/mount, links, troca entre planejamento e execução e proteção da árvore. Campos vazios não podem simular identidade verificada. Usar primitivas adequadas ou recusar quando não houver garantia suficiente.
+8. Fazer leitura–alteração–escrita de `ConfigStore` sob transação/lock. Uma mudança de preset não pode desfazer pausa/modo salvo por outra instância.
+
+**Aceite:** testes de duas CLIs/instâncias, plano expirado na fila, grant revogado na fila, conflito de ID, alvo trocado, diário truncado e erro após efeito; nenhum efeito em recusas comprovadas; operação incerta não reaplicada. Documentar consulta e reconciliação pelo mesmo ID.
+
+### I2 — Usar o motor em todas as ações e preservar a responsividade
+
+1. Inventariar as entradas mutantes reais, incluindo ajustes apply/revert, reaper/órfãos/grupos, tmpfs, quarentena e suas recuperações. Identificar separadamente mudanças de configuração e migração, com suas próprias transações. Eliminar caminhos de execução mais permissivos que a porta comum.
+2. Migrar ajustes e encerramento de processos para o coordenador e executores fora da thread gráfica; GUI/CLI devem produzir o mesmo contrato. Preservar backups, protocolo de saída e confirmações existentes.
+3. Ler a proteção atual de sessões/exclusões no executor. O cache de `_build_protection()` serve à visualização, não ao último veredito. Testar exclusão/`keep_active` adicionado depois do snapshot e antes do sinal, PID reciclado, reboot e proteção de descendentes/sessões administradas.
+4. Definir prazo total da operação/coleta e cancelamento que não abandone filhos próprios sem acompanhamento. Interrupção durante efeito mantém resultado desconhecido até reconciliação. Não usar esperas por processo na UI.
+5. Atualizar saúde/frescor mesmo sem novas amostras: falha ou pausa de coleta não pode manter indicador verde baseado em leitura vencida. Distinguir pausa de monitoramento e de ações automáticas.
+6. Remover leitura integral recorrente de `Journal` da thread gráfica. Oferecer consulta incremental/último estado, com detecção de corrupção preservada e um orçamento mensurável para CPU, memória e I/O.
+
+**Aceite:** GUI permanece responsiva durante operações sintéticas longas; proteção adicionada após análise bloqueia o ato; GUI + CLIs não contornam serialização; pausa/falha de coleta atualiza central, bandeja e compacto; saída finaliza apenas filhos próprios de acordo com a política documentada.
+
+### I3 — Integrar F6 primeiro em simulação e depois sob limites comprovados
+
+1. Criar/integrar controlador sem Qt que conecte snapshots e inventário administrado a `Candidate`, `evaluate`, `DecisionLog` e consulta de estado. Produzir a evidência a partir do sistema/registro de sessões; não preencher `owner_verified`, duração sustentada ou contadores com constantes otimistas.
+2. Implementar aquecimento, histerese, cooldown, orçamento por hora/bytes, disjuntor, pausa e comportamento em reboot/resume/reinício. Persistir o necessário para reiniciar sem zerar artificialmente limites. Evitar repetir a mesma simulação a cada poll.
+3. Modo Assistido registra e mostra “executaria”, plano, motivo, bloqueios e estimativas sem efeito. Distinguir estado configurado de estado efetivo; incluir `execution_enabled` ou contrato equivalente no JSON/UI.
+4. Atualizar a GUI quando configuração/grants mudarem por CLI e quando expirar/revogar uma autorização, usando atualização limitada/eventos sem I/O pesado no loop gráfico.
+5. Completar os controles de revisão, concessão limitada, revogação e pausa. Preset Personalizado precisa de parâmetros reais validados, ou indicação explícita de indisponibilidade enquanto incompleto; não apresentar um alias fixo como personalização concluída.
+6. Só depois de I1/I2 e simulação verificável, implementar o executor automático do primeiro escopo: temporários administrados com propriedade, identidade, validade, orçamento e grant comprovados. Executar seus testes apenas em ambiente descartável. Manter modo manual/executor desligado por padrão no host e exigir opt-in explícito do usuário no produto. Processos descobertos, VMs e discos virtuais permanecem fora da automação inicial.
+
+**Aceite:** integração demonstra uma decisão simulada persistida a partir de evidências e a mesma decisão bloqueada por stale/revogação/pausa/orçamento. Testes descartáveis demonstram uma ação autorizada executada uma única vez e a reconciliação após interrupção. Trocar preset não aumenta autoridade. Documentar o que foi simulado, testado com efeito e efetivamente habilitado.
+
+### I4 — Concluir central, botão “Dar fôlego” e fluxo visual
+
+Não adie indefinidamente a experiência solicitada. Use a proposta visual existente e o tema Qt, preservando as funcionalidades das abas durante a reorganização.
+
+1. Central com saúde por recurso, qualidade/idade das leituras, recomendações acionáveis, sessões, armazenamento e histórico/recuperação. Concluir analisar → revisar plano → confirmar → executar → verificar resultado → restaurar/recuperar quando cabível, incluindo staging de tmpfs pela GUI.
+2. Controle principal flutuante/cápsula compacto, com painel rápido e acesso à central. Sem autorização de ação rápida, o clique abre análise/revisão; não executa limpeza arbitrária. Com preferência e autorização limitada válidas, a execução usa exatamente o plano elegível e o mesmo motor. Modo manual continua utilizável sem conceder automação persistente.
+3. Estados visuais derivados do motor: aguardando dados, saudável, atenção/crítico, analisando, revisão, execução, verificação, sucesso, parcial, recusa, desconhecido e pausa. Saúde do host e resultado da operação permanecem independentes. Animação não pode inventar porcentagem/progresso ou celebrar antes da verificação.
+4. Movimento reduzido, foco visível, navegação por teclado, nomes acessíveis, contraste medido, tooltip/texto para não depender só de cor, 800×600 e escalas 100/150/200%. Animações param quando ocultas/pausadas e não aumentam materialmente o consumo ocioso.
+5. Um clique repetido produz no máximo uma operação; arraste produz zero. A posição precisa conservar acesso aos controles e reagir a monitor removido enquanto aberto. Persistência de posição não significa suporte universal a posicionamento.
+6. Corrigir fallback de Wayland/sessão desconhecida: janela comum utilizável ou mecanismo de movimento comprovadamente suportado, em vez de assumir que uma janela frameless movida por coordenadas será arrastável. Testar X11 e Wayland de acordo com capacidades reais.
+7. Definir fechar/ocultar/pausar/sair considerando central, compacto e bandeja juntos. Nunca ocultar a última via de acesso sem alternativa recuperável; fechar central não deve deixar compacto aparentemente ativo com workers parados. Testar bandeja ausente.
+
+**Aceite:** fluxo completo com fixtures, screenshots reproduzíveis de estados reais do frontend e testes de interação; validação real do compositor registrada separadamente (foco, fullscreen, DPI, hotplug, bandeja, retorno ao launcher e leitor de tela quando disponível). Offscreen não equivale a esse aceite. Se o desktop necessário não estiver disponível, completar o restante e registrar exatamente essa pendência, sem inventar evidência.
+
+### I5 — Completar os adaptadores sem transformar heurística em autorização
+
+1. Corrigir imediatamente a coleta duplicada de `ecosystem --json`; serializar o snapshot já obtido. Separar resultado da consulta, disponibilidade e completude por adaptador.
+2. Projetos/Git: caminhos absolutos/canônicos, identidade e vínculos de worktrees, `.git` arquivo e diretório, locks reais, falhas de leitura explícitas. Manter projeto protegido mesmo limpo. Inventário não deve escrever estado do Git. Descarte só de artefato/worktree declarado descartável e validado, jamais por “status limpo” isoladamente.
+3. Caches: comprovar regenerabilidade, escopo, ausência de uso e custo de reconstrução; usar planejamento e quarentena compartilhados quando compatível.
+4. Docker e Podman: capacidades específicas por ferramenta, contexto/conexão fixados em cada chamada, IDs estáveis, inspeção de referências de containers ativos/parados/pausados, imagens, volumes e build cache. Falha de contexto/referência mantém proteção. Sem prune global automático.
+5. libvirt: URI comprovada, UUID, estado, discos/snapshots/backing chains e referências completas. Base compartilhada e VM pausada permanecem protegidas. Ações manuais específicas usam o gerenciador, plano e confirmação; não remover qcow2 por extensão/idade ou “não estar aberto”.
+6. Implementar a segunda entrega dos adaptadores somente após seus pré-requisitos: plano/resultado, ação limitada, revalidação e testes de referências/concorrência. Montagens/imagens externas continuam sob revisão manual, sem unmount/exclusão automática. Ações privilegiadas permanecem fora do primeiro ciclo.
+
+**Aceite:** ferramentas ausentes não quebram o produto; desconhecido não vira desreferenciado; contexts/URIs não se misturam; volume de container parado e backing de VM são preservados; cada ação anunciada tem teste ponta a ponta isolado. Usar runners falsos/ambientes descartáveis, nunca daemons de trabalho do usuário para provas destrutivas. Não declarar F7 completo apenas por ter classes de inventário.
+
+### I6 — Fechar F8 com evidência e documentação fiel
+
+1. Instalar pacote em ambiente Linux limpo, distinguindo instalação CLI sem Qt e GUI. Validar wheel/entrypoint, dependências, `doctor`, launcher fora de shell com venv ativado, remoção preservando estado e autostart opcional sem ativá-lo no host.
+2. Validar migração DeckWellness/Fôlego com fixtures antigas, interrupção e retomada conservadora, conflitos e backup. Preservar origem e rollback de aplicação.
+3. Definir budgets totais e retenção de audit/decisions/backups, não apenas tamanho do arquivo ativo. Planejar compactação/indexação do diário preservando resultados idempotentes, operações desconhecidas e recuperação. Nenhuma manutenção pode apagar a única cópia recuperável ou operar sobre recursos do usuário durante os testes.
+4. Manter os testes sintéticos de widgets e complementar com soak de duração configurável, telemetria e jobs sintéticos reais. Registrar duração, baseline/pico/tendência de RSS, CPU/I/O, latência da UI, QProcesses, descritores, filas e filhos após cancelamento/saída. Não chamar 20.000 iterações rápidas de ensaio de horas. Descrever separadamente processos em estado D, sem prometer encerramento impossível.
+5. Atualizar progresso F0–F8, guia de desenvolvimento, empacotamento, diagnóstico/recuperação e limitações. Distinguir implementado, integrado, testado e validado no desktop. Não substituir evidência por contagem de testes.
+
+**Aceite:** CI funcional; instalação limpa comprovada; regressões relevantes passando; migração preserva dados; ensaio prolongado com resultados e budgets; nenhuma alegação de funcionalidade ou validação sem evidência correspondente.
+
+## 4. Rotina de execução e testes
+
+Comece conferindo estado e reproduzindo somente o necessário:
+
+```bash
+rtk git status --short
+rtk proxy .venv/bin/python docs/reviews/2026-10-18/evidencias/reproduzir.py
+```
+
+Para a suíte completa, crie sempre basetemp exclusivo em `.scratch`, fora dos temporários de sessão em RAM:
+
+```bash
+rtk proxy bash -c '
+mkdir -p .scratch
+qa_tmp=$(mktemp -d "$PWD/.scratch/continuacao-pytest-XXXXXX")
+.venv/bin/python -m pytest -o addopts= --basetemp="$qa_tmp" -q
+'
+```
+
+Use fixtures de estado/configuração isolados, `/proc` e mounts sintéticos, relógio controlado, injeção de falhas e processos criados pelos testes. Não reaproveite paths reais do host em testes mutantes. Qt offscreen serve para regressões automatizadas; as provas do compositor são outra etapa.
+
+Após cada mudança, execute testes proporcionais ao risco; ao concluir um incremento, execute a suíte necessária e atualize o progresso. Só repita verificações amplas se houve mudança nova ou falha a investigar. Não reduza assertions para maquiar sucesso. Tests de segurança devem verificar efeitos/bytes/preservação, não apenas mocks de métodos chamados.
+
+Para cada incremento, registre problema, arquivos alterados, comando/ambiente/resultado, limitações e próxima ação. Se houver interrupção de contexto, deixe IDs de pendências e próximos testes concretos; não marque uma etapa completa por possuir uma parte dos módulos.
+
+## 5. Entrega esperada
+
+Entregue código integrado, testes, documentação e evidência local. Na resposta final, informe:
+
+- O que passou a funcionar e quais achados C01–C14 foram fechados, com referência aos testes.
+- Resultado real dos testes/CI local, instalação, soak e validação visual, distinguindo executado de pendente.
+- Estado F0–F8, recursos automáticos ainda desligados e limites de cada adaptador.
+- Como reproduzir a verificação e onde estão os registros.
+
+O objetivo não é só aumentar o número de testes. É fechar o ciclo seguro e observável de **analisar → autorizar → executar → verificar → recuperar**, oferecendo ao usuário a central e o botão “Dar fôlego” que motivaram esta evolução.

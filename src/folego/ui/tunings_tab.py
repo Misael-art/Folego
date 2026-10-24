@@ -7,7 +7,7 @@ disappearing — a silent "nothing happened" would look like success.
 """
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (QGridLayout, QGroupBox, QLabel, QMessageBox,
-                               QPushButton, QVBoxLayout, QWidget)
+                               QPushButton, QSizePolicy, QVBoxLayout, QWidget)
 
 from ..actions.tunings.registry import TUNINGS
 
@@ -20,9 +20,15 @@ class TuningRow(QGroupBox):
         self.tuning = tuning
         self.file_label = QLabel("")
         self.file_label.setWordWrap(True)
+        self.file_label.setSizePolicy(QSizePolicy.Policy.Ignored,
+                                      QSizePolicy.Policy.Preferred)
         self.state_label = QLabel(PENDING)
+        self.state_label.setWordWrap(True)
         self.verdict = QLabel("")
         self.verdict.setWordWrap(True)
+        why = QLabel(tuning.why)
+        why.setWordWrap(True)
+        why.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.apply_button = QPushButton("Aplicar")
         self.revert_button = QPushButton("Reverter")
         for button in (self.apply_button, self.revert_button):
@@ -34,7 +40,8 @@ class TuningRow(QGroupBox):
         grid.addWidget(QLabel("arquivo:"), 1, 0)
         grid.addWidget(self.file_label, 1, 1)
         grid.addWidget(QLabel("motivo:"), 2, 0)
-        grid.addWidget(QLabel(tuning.why), 2, 1)
+        grid.addWidget(why, 2, 1)
+        grid.setColumnStretch(1, 1)
 
         buttons = QVBoxLayout()
         buttons.addWidget(self.apply_button)
@@ -42,6 +49,7 @@ class TuningRow(QGroupBox):
         outer = QGridLayout()
         outer.addLayout(grid, 0, 0)
         outer.addLayout(buttons, 0, 1)
+        outer.setColumnStretch(0, 1)
         layout = QVBoxLayout(self)
         layout.addLayout(outer)
         layout.addWidget(self.verdict)
@@ -54,6 +62,7 @@ class TuningsTab(QWidget):
         self._confirm = confirm_fn or self._ask_dialog
         self._tunings = tuple(tunings if tunings is not None else TUNINGS)
         self._applied: set[str] = set()
+        self._uncertain: set[str] = set()
 
         layout = QVBoxLayout(self)
         self.rows: list[TuningRow] = []
@@ -92,7 +101,8 @@ class TuningsTab(QWidget):
         row.file_label.setText(str(payload.get("file") or "—"))
         if payload.get("error"):
             row.state_label.setText(payload["error"])
-            row.verdict.setText("")
+            if tuning.id not in self._uncertain:
+                row.verdict.setText("")
             return
         if not payload.get("exists"):
             row.state_label.setText("arquivo não existe")
@@ -109,10 +119,15 @@ class TuningsTab(QWidget):
         else:
             row.state_label.setText("desligado (já econômico)")
         row.revert_button.setEnabled(True)
+        if self._uncertain:
+            row.apply_button.setEnabled(False)
+            row.revert_button.setEnabled(False)
 
     # -------------------------------------------------------------------- acts
 
     def apply_clicked(self, tuning):
+        if self._uncertain:
+            return
         row = self.row_for(tuning.id)
         if not self._confirm(
                 "Aplicar ajuste",
@@ -127,6 +142,8 @@ class TuningsTab(QWidget):
                                                                payload))
 
     def revert_clicked(self, tuning):
+        if self._uncertain:
+            return
         row = self.row_for(tuning.id)
         if not self._confirm(
                 "Reverter ajuste",
@@ -140,12 +157,20 @@ class TuningsTab(QWidget):
 
     def show_mutation(self, success_word: str, tuning, payload):
         row = self.row_for(tuning.id)
-        if payload is None:
-            row.verdict.setText("o filho não respondeu; nada é considerado feito")
+        if not payload or payload.get("outcome") == "desconhecido":
+            self._uncertain.add(tuning.id)
+            payload = payload or {}
+            for other in self.rows:
+                other.apply_button.setEnabled(False)
+                other.revert_button.setEnabled(False)
+            row.verdict.setText("desconhecido: " + str(payload.get("reason") or "o filho não respondeu") +
+                " · operação " + str(payload.get("operation_id") or "consulte o histórico") +
+                " · não repetir antes de reconciliar")
             return
-        if not payload.get("ok"):
-            row.verdict.setText("recusado: "
-                                f"{payload.get('reason') or 'motivo não informado'}")
+        if not payload.get("ok") or payload.get("outcome") in ("parcial", "falha", "recusa"):
+            label = {"parcial": "parcial", "falha": "falha"}.get(payload.get("outcome"), "recusado")
+            row.verdict.setText(f"{label}: {payload.get('reason') or 'motivo não informado'}" +
+                (f" · operação {payload['operation_id']}" if payload.get("operation_id") else ""))
             return
         if payload.get("acao") == "apply" and not payload.get("changed", True):
             row.verdict.setText(payload.get("reason") or "nada a fazer")

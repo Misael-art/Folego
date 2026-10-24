@@ -1,0 +1,30 @@
+{
+  "wheel": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final2-wheels/folego-0.1.0-py3-none-any.whl",
+  "wheel_sha256": "fb3b1d38ef2cb14218eb55695cd6cdeff76a6d510a3b4efe3d9b9b711ea67607",
+  "cli": {
+    "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/installation-offline/wheel-cli-venv/lib/python3.14/site-packages/folego/__init__.py",
+    "pyside": null,
+    "prefix": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/installation-offline/wheel-cli-venv",
+    "path": [
+      "/usr/lib/python314.zip",
+      "/usr/lib/python3.14",
+      "/usr/lib/python3.14/lib-dynload",
+      "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/installation-offline/wheel-cli-venv/lib/python3.14/site-packages"
+    ]
+  },
+  "removal": {
+    "status": "passed",
+    "imports": {
+      "folego": null,
+      "PySide6_retained": true
+    },
+    "preserved_sha256": {
+      ".local/share/folego/backups/fixture/original.bin": "6855769c572621da0267f5f76de6f3adcbdc44c412e4d1fb8808793a1a23114f",
+      ".local/state/folego/automation.json": "cd1d35b900a43009eb5ac8dc8cd860548d6479845237735dc695b35cdeeee929",
+      ".local/state/folego/automation.json.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      ".local/state/folego/operations.jsonl": "5d996078556adb5c3887ade14abd99b3374b59675004415c6ac8185ae22afac6"
+    },
+    "autostart_created": false
+  },
+  "status": "passed"
+}

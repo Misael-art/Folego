@@ -1,0 +1,19 @@
+{
+  "scope": "25-second smoke only; not two-hour acceptance",
+  "checks": {
+    "fixture_original_bytes_restored": true,
+    "journal_complete_and_valid": true,
+    "journal_effects_verified_successfully": true,
+    "private_per_attempt_temporaries": true,
+    "retained_run_count_matches_children": true,
+    "temporary_runs_owned_by_soak": true,
+    "no_owned_child_after_shutdown": true
+  },
+  "jobs": {
+    "worker_started": 9,
+    "worker_completed": 9,
+    "cancel_started": 1,
+    "cancel_completed": 1
+  },
+  "retained_runs": 10
+}

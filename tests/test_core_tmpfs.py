@@ -69,14 +69,15 @@ def test_a_watched_path_that_is_not_tmpfs_is_not_measured(fake_proc):
     assert tmpfs.watched_volumes(proc_root=str(fake_proc), statvfs_fn=never) == ()
 
 
-def test_a_volume_that_cannot_be_statvfs_is_dropped_not_invented(fake_mounts):
+def test_a_volume_that_cannot_be_statvfs_remains_explicitly_unknown(fake_mounts):
     def statvfs_fn(path):
         if str(path) == "/dev/shm":
             raise OSError("não montado")
         return vfs(8, 2)
 
     got = tmpfs.watched_volumes(proc_root=str(fake_mounts), statvfs_fn=statvfs_fn)
-    assert [v.path for v in got] == ["/tmp", "/run/user/1000"]
+    assert [v.path for v in got] == ["/tmp", "/run/user/1000", "/dev/shm"]
+    assert got[-1].quality == "error" and "não montado" in got[-1].error
 
 
 def test_zero_sized_volume_does_not_divide_by_zero(fake_proc):

@@ -1,0 +1,64 @@
+{
+  "pid": 2694293,
+  "qt": "6.12.0",
+  "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/gui-venv/lib/python3.14/site-packages/folego/__init__.py",
+  "platform": "wayland",
+  "elapsed_s": 105.75459432899515,
+  "central": {
+    "visible": true,
+    "active": false,
+    "geometry": [
+      0,
+      0,
+      800,
+      387
+    ],
+    "client": [
+      800,
+      387
+    ],
+    "decorated": true,
+    "screen": "eDP-1",
+    "exposed": true,
+    "title": "Fôlego ⚪ · monitoramento pausado; saúde não comprovada"
+  },
+  "compact": {
+    "visible": true,
+    "active": true,
+    "geometry": [
+      0,
+      0,
+      420,
+      380
+    ],
+    "client": [
+      420,
+      380
+    ],
+    "decorated": true,
+    "screen": "eDP-1",
+    "exposed": true,
+    "title": "Fôlego — controle compacto"
+  },
+  "paused": true,
+  "tab": 0,
+  "poller_stopped": false,
+  "tray": true,
+  "screens": [
+    {
+      "name": "eDP-1",
+      "ratio": 2.0,
+      "geometry": [
+        0,
+        0,
+        948,
+        593
+      ]
+    }
+  ],
+  "last_command": {
+    "action": "capture",
+    "name": "central.png"
+  },
+  "errors": []
+}

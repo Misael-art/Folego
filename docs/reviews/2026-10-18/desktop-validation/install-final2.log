@@ -1,0 +1,7 @@
+Using Python 3.14.7 environment at: .scratch/desktop-validation-vvnNlb/final-gui-venv
+Resolved 7 packages in 4ms
+Prepared 1 package in 13ms
+Uninstalled 1 package in 9ms
+Installed 1 package in 51ms
+ - folego==0.1.0 (from file:///home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-wheels/folego-0.1.0-py3-none-any.whl)
+ + folego==0.1.0 (from file:///home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final2-wheels/folego-0.1.0-py3-none-any.whl)
