@@ -5,6 +5,7 @@ data. These tests drive it offscreen with fake job layers — the real child pat
 is covered in test_ui_tune_jobs.py.
 """
 from types import SimpleNamespace
+import os
 
 import pytest
 
@@ -476,7 +477,7 @@ def test_an_unreadable_journal_file_is_unknown_not_empty(qapp):
 
 def test_a_cpu_active_adopted_process_surfaces_as_investigation(qapp):
     proc = proc_info(700, comm="runaway", ppid=1, pgid=900, session=901,
-                     starttime=5_000, cpu_frac=77.0)
+                     starttime=5_000, cpu_frac=77.0, uid=os.getuid())
     win = make_window(sessions=_Sessions(), exclusions=_NoExclusions())
 
     win.apply_snapshot(snap(ts=1_000.0, procs=(proc,)))

@@ -1,0 +1,15 @@
+{
+  "scope": "Local user/PID namespace, read-only host except disposable QA tree; no desktop session, private NSS mounts",
+  "runner": {
+    "profile": "gui",
+    "status": "passed",
+    "runner_pid": 2,
+    "uid": 1001,
+    "gid": 1001,
+    "python": "/home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.dev/venv-gui/bin/python",
+    "workspace": "/home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.scratch/dev-tests/run-e2wg4n9u",
+    "started": 1792851618.542446,
+    "exit_code": 0,
+    "elapsed_s": 36.428813219070435
+  }
+}

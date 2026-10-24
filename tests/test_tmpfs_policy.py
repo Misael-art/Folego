@@ -115,9 +115,10 @@ def test_the_x11_socket_directory_is_never_eligible_with_the_default_list():
 
 def test_nothing_in_run_user_is_eligible_without_an_explicit_pattern():
     """Em /run/user/1000 mora a sessão: só com padrão explícito algo ali sai elegível."""
-    session = entry(volume="/run/user/1000", path="/run/user/1000/gnupg", name="gnupg")
+    runtime = f"/run/user/{os.getuid()}"
+    session = entry(volume=runtime, path=runtime + "/gnupg", name="gnupg")
     assert policy.classify(session, policy.Policy()).ok is False
-    with_pattern = policy.Policy(allow_patterns=("/run/user/1000/gnupg",))
+    with_pattern = policy.Policy(allow_patterns=(runtime + "/gnupg",))
     assert policy.classify(session, with_pattern).ok is True
 
 

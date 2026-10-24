@@ -42,6 +42,15 @@ def test_custom_runtime_is_collected_and_stat_failure_is_visible(tmp_path, monke
     assert "denied" in volumes[0].to_dict()["error"]
 
 
+def test_missing_headless_runtime_remains_an_unknown_volume(tmp_path, monkeypatch):
+    runtime = tmp_path / "no-login-runtime"
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(runtime))
+    volumes = watched_volumes(mounts=(), statvfs_fn=lambda _path: pytest.fail("must not stat an unverified runtime"))
+    assert len(volumes) == 1
+    assert volumes[0].path == str(runtime) and volumes[0].is_runtime
+    assert volumes[0].quality == "error" and volumes[0].error
+
+
 def test_denied_individual_fd_readlink_is_not_complete(tmp_path):
     fd = tmp_path / "123/fd"
     fd.mkdir(parents=True)

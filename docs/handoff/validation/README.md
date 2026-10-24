@@ -27,3 +27,22 @@ Os 100 arquivos Python do pacote correspondem ao wheel testado em 18/10;
 mudanças desta migração são suporte de desenvolvimento, metadados, documentação
 e a correção da fixture de permissões. Esta execução não certifica outra
 distribuição, ARM64 ou um compositor físico; tampouco conclui o soak de duas horas.
+
+## Portabilidade entre usuários e sessões
+
+A primeira CI Ubuntu 24.04 expôs fixtures dependentes de UID 1000/runtime real;
+bootstrap, instalação nativa e consultas CLI passaram. O log original está em
+`ci-first-failure.log`. As fixtures foram corrigidas para declarar UID atual ou
+sessão-modelo; capacidade de tmpfs é testada com watch-list explícita quando
+não depende do desktop. As recusas de propriedade da produção foram mantidas.
+
+Repetição sem sessão, com UID 1001 em namespace isolado e filesystem do host
+somente leitura: `suite-uid1001-headless.log`, **916 passed, 2 skipped in 15,57 s**.
+O namespace teve registros NSS descartáveis montados apenas nele; `/etc` do host
+não mudou. A nova regressão de runtime ausente eleva os totais para 918/1135.
+O runtime inválido continua produzindo volume desconhecido; não vira zero/livre.
+
+Perfil Qt no mesmo UID/contexto: `suite-uid1001-gui.log`,
+**1133 passed, 2 skipped in 35,55 s**. `uid1001-environment.json` registra
+UID/GID, resultado e origem do Python do runner. A produção permanece sem
+alterações nesta correção de portabilidade das fixtures.

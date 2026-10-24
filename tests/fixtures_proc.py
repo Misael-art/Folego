@@ -5,6 +5,7 @@ minflt cminflt majflt cmajflt utime stime cutime cstime priority nice threads
 itreal starttime
 """
 from pathlib import Path
+import os
 
 from folego.core.snapshot import ProcInfo, Snapshot
 
@@ -27,7 +28,8 @@ DEFAULT_PRESSURE_MEMORY = "some avg10=0.00 avg60=0.00 avg300=0.00 total=81109886
 
 def pid_dir(root: Path, pid: int, *, comm="app", state="S", ppid=1, pgid=None,
             session=None, utime=100, stime=50, starttime=12345,
-            rss_kb=1024, swap_kb=0, uid=1000, cmdline=None):
+            rss_kb=1024, swap_kb=0, uid=None, cmdline=None):
+    uid = os.getuid() if uid is None else uid
     d = root / str(pid)
     d.mkdir()
     stat = (f"{pid} ({comm}) {state} {ppid} {pgid if pgid is not None else pid} "

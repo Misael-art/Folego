@@ -13,6 +13,14 @@ baixa uv 0.12.10, verifica SHA-256 dos arquivos oficiais, instala Python 3.14.7
 gerenciado e usa os hashes/versões de `uv.lock`. O perfil headless não instala Qt.
 Contas GitHub/Codex precisam ser autenticadas novamente; credenciais não são exportadas.
 
+Para o agente, use Codex CLI no Linux ou o cliente Codex que já utiliza.
+O [guia oficial de instalação](https://learn.chatgpt.com/docs/codex/cli) oferece
+instalador standalone para Linux, sem exigir npm como dependência do projeto.
+Depois abra a pasta do projeto com `codex` e autentique-se com a mesma conta.
+Em servidor sem navegador, consulte o [login por dispositivo](https://learn.chatgpt.com/docs/auth).
+O wrapper prepara o Fôlego; não copia credenciais nem instala o cliente Codex
+ou altera sua configuração global silenciosamente.
+
 ## Recuperação principal pelo GitHub
 
 Repositório privado: https://github.com/Misael-art/Folego

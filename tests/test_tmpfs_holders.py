@@ -16,11 +16,12 @@ def make_proc(root, pid: int, links: dict):
 
 
 def test_only_targets_under_the_prefixes_are_recorded(fake_proc):
+    bus = f"/run/user/{os.getuid()}/bus"
     make_proc(fake_proc, 400, {"3": "/tmp/agente/sessao", "4": "/home/u/nota.md",
-                               "5": "/run/user/1000/bus", "6": "socket:[917]",
+                               "5": bus, "6": "socket:[917]",
                                "7": "/tmpx/algo"})
     idx = holders.holder_index(proc_root=str(fake_proc))
-    assert idx.refs == {"/run/user/1000/bus": (400,), "/tmp/agente/sessao": (400,)}
+    assert idx.refs == {bus: (400,), "/tmp/agente/sessao": (400,)}
     assert (idx.proc_count, idx.fd_count) == (1, 5)
     assert "/tmpx/algo" not in idx.refs   # compartilha as letras, não o separador
     assert idx.pids_holding("/tmp/algo") == frozenset()

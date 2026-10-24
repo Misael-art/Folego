@@ -123,6 +123,17 @@ Logs finais e manifesto do ambiente estão em
 `docs/handoff/validation/`. O teste usa bibliotecas nativas deste mesmo host;
 não equivale a executar o instalador de pacotes em uma distribuição vazia.
 
+O primeiro Actions em Ubuntu 24.04 passou no bootstrap e nas consultas CLI,
+mas expôs fixtures que presumiam UID 1000 e runtime de uma sessão gráfica.
+O runner usa UID 1001. As fixtures de `/proc`, reaper, watch-list e investigação
+agora declaram o UID/contexto correto; os testes de capacidade não dependem de
+um desktop real. Não houve relaxamento das proteções do produto. Uma regressão
+adicional exige runtime ausente como volume desconhecido. Repetição headless
+em namespace UID 1001, sem sessão gráfica: **916 passed, 2 skipped in 15,57 s**.
+Essa nova regressão eleva os totais para 918 headless e 1135 Qt.
+Perfil Qt no mesmo namespace: **1133 passed, 2 skipped in 35,55 s**.
+O primeiro log da CI está preservado em `docs/handoff/validation/ci-first-failure.log`.
+
 ## Material preservado e o que reconstruir
 
 Git conserva código, testes, revisão, capturas, logs e pedidos originais. A

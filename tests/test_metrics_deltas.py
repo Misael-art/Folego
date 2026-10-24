@@ -158,7 +158,8 @@ def test_tmpfs_carries_bytes_and_inodes(fake_proc):
                           f_bfree=50, f_bavail=40,
                           f_files=1000, f_ffree=250, f_favail=200)
 
-    volumes = watched_volumes(proc_root=str(fake_proc), statvfs_fn=lambda _p: vfs)
+    volumes = watched_volumes(proc_root=str(fake_proc), statvfs_fn=lambda _p: vfs,
+                              watched=("/tmp",))
 
     volume = volumes[0]
     assert volume.total_bytes == 409_600
@@ -175,5 +176,6 @@ def test_tmpfs_without_inode_numbers_does_not_divide_by_zero(fake_proc):
     (fake_proc / "mounts").write_text("tmpfs /tmp tmpfs rw 0 0\n")
     vfs = SimpleNamespace(f_frsize=4096, f_bsize=4096, f_blocks=100,
                           f_bfree=50, f_bavail=40)
-    volume = watched_volumes(proc_root=str(fake_proc), statvfs_fn=lambda _p: vfs)[0]
+    volume = watched_volumes(proc_root=str(fake_proc), statvfs_fn=lambda _p: vfs,
+                             watched=("/tmp",))[0]
     assert volume.inodes_total == 0 and volume.inodes_frac == 0.0

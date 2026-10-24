@@ -6,6 +6,7 @@ is still the same process (starttime) and still outside the pre-list.
 """
 import shutil
 import signal
+import os
 
 import pytest
 
@@ -17,10 +18,11 @@ from fixtures_proc import pid_dir
 
 TERM = signal.SIGTERM
 KILL = signal.SIGKILL
+UID = os.getuid()
 
 
 def candidate(pid=500, comm="worker", starttime=12345):
-    return OrphanCandidate(pid=pid, comm=comm, state="S", uid=1000, rss_kb=2000,
+    return OrphanCandidate(pid=pid, comm=comm, state="S", uid=UID, rss_kb=2000,
                            swap_kb=0, starttime=starttime, idle_s=900.0)
 
 
@@ -188,7 +190,7 @@ def test_force_still_rechecks_before_killing(reaper, live, kills):
 
 def test_a_group_member_can_be_forced_without_the_orphan_rule(reaper, live, kills):
     """Children of a browser always have a live parent; escalation must still be possible."""
-    member = GroupMember(401, "msedge", 1000, 222, 400)
+    member = GroupMember(401, "msedge", UID, 222, 400)
     pid_dir(live, 401, comm="msedge", starttime=222, ppid=400)
 
     result = reaper.force(member, confirm=True, require_orphan=False)
@@ -198,7 +200,7 @@ def test_a_group_member_can_be_forced_without_the_orphan_rule(reaper, live, kill
 
 
 def test_the_orphan_rule_still_blocks_force_when_the_caller_demands_it(reaper, live, kills):
-    member = GroupMember(401, "msedge", 1000, 222, 400)
+    member = GroupMember(401, "msedge", UID, 222, 400)
     pid_dir(live, 401, comm="msedge", starttime=222, ppid=400)
 
     result = reaper.force(member, confirm=True)
@@ -215,7 +217,7 @@ def a_browser_group(root):
     for pid, starttime in members:
         pid_dir(root, pid, comm="msedge", starttime=starttime, ppid=400)
     return GroupTarget("edge", "Microsoft Edge",
-                       tuple(GroupMember(pid, "msedge", 1000, start, 400)
+                       tuple(GroupMember(pid, "msedge", UID, start, 400)
                              for pid, start in members))
 
 
@@ -256,8 +258,8 @@ def test_group_refuses_a_protected_member_even_when_the_caller_asked(reaper, liv
     pid_dir(live, 400, comm="msedge", starttime=111, ppid=10)
     pid_dir(live, 401, comm="chrome_crashpad", starttime=222, ppid=400)
     target = GroupTarget("chrome", "Google Chrome/Chromium", (
-        GroupMember(401, "chrome_crashpad", 1000, 222, 400),
-        GroupMember(400, "msedge", 1000, 111, 10)))
+        GroupMember(401, "chrome_crashpad", UID, 222, 400),
+        GroupMember(400, "msedge", UID, 111, 10)))
 
     results = reaper.terminate_group(target)
 
@@ -271,7 +273,7 @@ def test_group_mode_refuses_a_member_that_got_a_driver_after_the_list(reaper, li
     pid_dir(live, 400, comm="msedge", starttime=111, ppid=10,
             cmdline=["/usr/bin/msedge", "--remote-debugging-port=9222"])
     target = GroupTarget("edge", "Microsoft Edge",
-                         (GroupMember(400, "msedge", 1000, 111, 10),))
+                         (GroupMember(400, "msedge", UID, 111, 10),))
 
     result = reaper.terminate_group(target)[0]
 
@@ -284,7 +286,7 @@ def test_group_mode_refuses_an_automation_shell(reaper, live, kills):
             cmdline=["/home/u/.cache/ms-playwright/chromium_headless_shell-1223"
                      "/chrome-headless-shell", "--headless"])
     target = GroupTarget("chrome", "Google Chrome/Chromium",
-                         (GroupMember(400, "chrome-headless", 1000, 111, 10),))
+                         (GroupMember(400, "chrome-headless", UID, 111, 10),))
 
     result = reaper.terminate_group(target)[0]
 

@@ -1,0 +1,180 @@
+núcleo e CLI sem Qt	Run ./dev test-headless	﻿2026-10-24T14:09:33.5684551Z ##[group]Run ./dev test-headless
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:33.5685679Z ^[[36;1m./dev test-headless^[[0m
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:33.5928710Z shell: /usr/bin/bash -e {0}
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:33.5929817Z ##[endgroup]
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:33.6420354Z   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:33.6423022Z                                  Dload  Upload   Total   Spent    Left  Speed
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:33.6424406Z 
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:33.7510887Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:33.7513050Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:33.8800580Z 
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:33.8802743Z 100 21.2M  100 21.2M    0     0  88.7M      0 --:--:-- --:--:-- --:--:-- 88.7M
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:33.9086002Z /home/runner/work/Folego/Folego/.dev/cache/uv-0.12.10-x86_64-unknown-linux-musl.tar.gz: OK
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:34.6455363Z Downloading cpython-3.14.7-linux-x86_64-gnu (download) (34.3MiB)
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:35.7010504Z  Downloaded cpython-3.14.7-linux-x86_64-gnu (download)
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:35.7065555Z Installed Python 3.14.7 in 1.18s
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:35.7066816Z  + cpython-3.14.7-linux-x86_64-gnu
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:35.8870666Z Using CPython 3.14.7
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:35.8874603Z Creating virtual environment at: .dev/venv-headless
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:35.8912269Z Resolved 15 packages in 0.57ms
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:35.8947790Z    Building folego @ file:///home/runner/work/Folego/Folego
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:35.9466177Z Downloading pygments (1.2MiB)
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:35.9687202Z Downloading hypothesis (1.1MiB)
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:36.0108222Z  Downloaded hypothesis
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:36.0263197Z  Downloaded pygments
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:37.4868653Z       Built folego @ file:///home/runner/work/Folego/Folego
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:37.4897147Z Prepared 8 packages in 1.59s
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:37.5203067Z Installed 8 packages in 28ms
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:37.5204214Z  + folego==0.1.0 (from file:///home/runner/work/Folego/Folego)
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:37.5242423Z  + hypothesis==6.170.1
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:37.5262210Z  + iniconfig==2.3.1
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:37.5272295Z  + packaging==26.3
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:37.5302961Z  + pluggy==1.7.0
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:37.5324749Z  + pygments==2.21.0
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:37.5352334Z  + pytest==9.1.1
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:37.5372249Z  + sortedcontainers==2.4.0
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:37.5651236Z Managed Python: /home/runner/work/Folego/Folego/.dev/venv-headless/bin/python
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:37.6343024Z QA workspace: /home/runner/work/Folego/Folego/.scratch/dev-tests/run-77loctus
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8374512Z  +  where False = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGTERM: 15>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').ok
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8397136Z FAILED tests/test_orphans_reaper.py::test_a_sigterm_survivor_is_named_and_never_escalated - AssertionError: assert (False)
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8399693Z  +  where False = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGTERM: 15>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').ok
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8402415Z FAILED tests/test_orphans_reaper.py::test_sigkill_is_followed_too - AssertionError: assert (False)
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8405178Z  +  where False = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGKILL: 9>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').ok
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8407781Z FAILED tests/test_orphans_reaper.py::test_group_follow_up_waits_once_for_the_whole_family - assert False
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8409436Z  +  where False = all(<generator object test_group_follow_up_waits_once_for_the_whole_family.<locals>.<genexpr> at 0x7f2dfe9264d0>)
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8411147Z FAILED tests/test_orphans_reaper.py::test_group_survivors_are_reported_without_killing_again - assert False
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8413350Z  +  where False = all(<generator object test_group_survivors_are_reported_without_killing_again.<locals>.<genexpr> at 0x7f2dfec63d30>)
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8415245Z FAILED tests/test_orphans_reaper.py::test_manual_kill_batch_has_one_shared_follow_deadline - assert False
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8416860Z  +  where False = all(<generator object test_manual_kill_batch_has_one_shared_follow_deadline.<locals>.<genexpr> at 0x7f2dfe8e6400>)
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8418625Z FAILED tests/test_orphans_reaper.py::test_unreadable_process_after_signal_is_not_reported_as_exited - AssertionError: assert (False)
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8421060Z  +  where False = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGTERM: 15>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').ok
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8423239Z FAILED tests/test_orphans_reaper.py::test_the_identity_method_comes_from_the_pinner - AssertionError: assert (False)
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8425560Z  +  where False = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGTERM: 15>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').ok
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8428356Z FAILED tests/test_orphans_reaper.py::test_session_protection_is_rechecked_at_act_time - AssertionError: assert (not False and 'proteção' in 'UID de outro usuário ou próprio executor: protegido')
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8431141Z  +  where False = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGTERM: 15>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').ok
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8434403Z  +  and   'UID de outro usuário ou próprio executor: protegido' = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGTERM: 15>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').reason
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8437520Z FAILED tests/test_orphans_reaper.py::test_an_unreadable_protection_source_fails_closed - AssertionError: assert (not False and 'ilegível' in 'UID de outro usuário ou próprio executor: protegido')
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8440331Z  +  where False = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGTERM: 15>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').ok
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8443733Z  +  and   'UID de outro usuário ou próprio executor: protegido' = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGTERM: 15>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').reason
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8446494Z FAILED tests/test_tmpfs_holders.py::test_only_targets_under_the_prefixes_are_recorded - AssertionError: assert {'/tmp/agente/sessao': (400,)} == {'/run/user/1...ssao': (400,)}
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8448006Z   
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8448607Z   Omitting 1 identical items, use -vv to show
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8449314Z   Right contains 1 more item:
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8449907Z   {'/run/user/1000/bus': (400,)}
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8450507Z   
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8450944Z   Full diff:
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8451424Z     {
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8452158Z   -     '/run/user/1000/bus': (
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8452717Z   -         400,
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8453187Z   -     ),
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8453677Z         '/tmp/agente/sessao': (
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8454250Z             400,
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8454738Z         ),
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8455190Z     }
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8456333Z FAILED tests/test_tmpfs_policy.py::test_nothing_in_run_user_is_eligible_without_an_explicit_pattern - AssertionError: assert False is True
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8458506Z  +  where False = Eligibility(ok=False, reason='refused: volume /run/user/1000 fora da watch-list', matched=None).ok
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8462920Z  +    where Eligibility(ok=False, reason='refused: volume /run/user/1000 fora da watch-list', matched=None) = <function classify at 0x7f2dff924d50>(TmpfsEntry(path='/run/user/1000/gnupg', name='gnupg', volume='/run/user/1000', kind='dir', uid=1001, bytes=1024, files..._point=False, under_mount=False, holder_pids=(), truncated=False, errors=(), holder_state='complete', holder_errors=()), Policy(allow_patterns=('/run/user/1000/gnupg',), min_age_days=3.0, max_item_bytes=2147483648, volumes=('/tmp', '/run/user/1001', '/dev/shm')))
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8466963Z  +      where <function classify at 0x7f2dff924d50> = policy.classify
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8468250Z FAILED tests/test_tunings_worker.py::test_the_worker_refuses_while_an_edge_process_is_running - assert (0 == 1)
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8470737Z  +  where 0 = CompletedProcess(args=['/home/runner/work/Folego/Folego/.dev/venv-headless/bin/python', '-m', 'folego.actions.tunings....88d6dc3b86", "blocked": null}, "operation_id": "ac172ebf1d7d4a63865128ad3664d15e", "outcome": "sucesso"}\n', stderr='').returncode
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8474461Z FAILED tests/test_tunings_worker.py::test_the_worker_refuses_revert_while_an_edge_process_is_running - assert (0 == 1)
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8477228Z  +  where 0 = CompletedProcess(args=['/home/runner/work/Folego/Folego/.dev/venv-headless/bin/python', '-m', 'folego.actions.tunings....g/microsoft-edge/Local State", "operation_id": "ba98953196ef4c93894281425f66ed49", "outcome": "sucesso"}\n', stderr='').returncode
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8482236Z 33 failed, 882 passed, 2 skipped in 11.40s
+núcleo e CLI sem Qt	Run ./dev test-headless	2026-10-24T14:09:49.8495817Z ##[error]Process completed with exit code 1.
+Qt offscreen em ambiente próprio	Run ./dev test	﻿2026-10-24T14:09:48.0087653Z ##[group]Run ./dev test
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:48.0087970Z ^[[36;1m./dev test^[[0m
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:48.0154813Z shell: /usr/bin/bash -e {0}
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:48.0155414Z ##[endgroup]
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:48.0735463Z   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:48.0736616Z                                  Dload  Upload   Total   Spent    Left  Speed
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:48.0737321Z 
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:48.1768665Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:48.1770031Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:48.3065997Z 
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:48.3078495Z 100 21.2M  100 21.2M    0     0  91.0M      0 --:--:-- --:--:-- --:--:-- 91.0M
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:48.3309621Z /home/runner/work/Folego/Folego/.dev/cache/uv-0.12.10-x86_64-unknown-linux-musl.tar.gz: OK
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:49.0144632Z Downloading cpython-3.14.7-linux-x86_64-gnu (download) (34.3MiB)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:50.0307193Z  Downloaded cpython-3.14.7-linux-x86_64-gnu (download)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:50.0349283Z Installed Python 3.14.7 in 1.14s
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:50.0350119Z  + cpython-3.14.7-linux-x86_64-gnu
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:50.2141369Z Using CPython 3.14.7
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:50.2142292Z Creating virtual environment at: .dev/venv-gui
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:50.2160382Z Resolved 15 packages in 0.59ms
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:50.2201925Z    Building folego @ file:///home/runner/work/Folego/Folego
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:50.2743103Z Downloading pyside6-webengine (111.3MiB)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:50.2930255Z Downloading pyside6-essentials (80.4MiB)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:50.2946222Z Downloading pyside6-addons (56.5MiB)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:51.4218123Z  Downloaded pyside6-addons
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:51.6766192Z Downloading pyside6-pdf (2.7MiB)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:51.7217636Z  Downloaded pyside6-pdf
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:51.8086338Z Downloading pygments (1.2MiB)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:51.8884004Z  Downloaded pyside6-essentials
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:51.9043069Z  Downloaded pygments
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:51.9269798Z Downloading hypothesis (1.1MiB)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:51.9630060Z  Downloaded hypothesis
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:52.0338907Z  Downloaded pyside6-webengine
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.0413439Z       Built folego @ file:///home/runner/work/Folego/Folego
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.0425818Z Prepared 14 packages in 3.82s
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.1735594Z Installed 14 packages in 130ms
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.1736568Z  + folego==0.1.0 (from file:///home/runner/work/Folego/Folego)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.1737571Z  + hypothesis==6.170.1
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.1738232Z  + iniconfig==2.3.1
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.1738793Z  + packaging==26.3
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.1739320Z  + pluggy==1.7.0
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.1739848Z  + pygments==2.21.0
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.1740373Z  + pyside6==6.12.0
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.1740923Z  + pyside6-addons==6.12.0
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.1741505Z  + pyside6-essentials==6.12.0
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.1742124Z  + pyside6-pdf==6.12.0.140
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.1742791Z  + pyside6-webengine==6.12.0.140
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.1743640Z  + pytest==9.1.1
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.1744315Z  + shiboken6==6.12.0
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.1745540Z  + sortedcontainers==2.4.0
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.2024387Z Managed Python: /home/runner/work/Folego/Folego/.dev/venv-gui/bin/python
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:09:54.2546957Z QA workspace: /home/runner/work/Folego/Folego/.scratch/dev-tests/run-5ib71i28
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2692579Z FAILED tests/test_orphans_reaper.py::test_a_sigterm_survivor_is_named_and_never_escalated - AssertionError: assert (False)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2695592Z  +  where False = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGTERM: 15>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').ok
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2697556Z FAILED tests/test_orphans_reaper.py::test_sigkill_is_followed_too - AssertionError: assert (False)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2699543Z  +  where False = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGKILL: 9>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').ok
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2701770Z FAILED tests/test_orphans_reaper.py::test_group_follow_up_waits_once_for_the_whole_family - assert False
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2703174Z  +  where False = all(<generator object test_group_follow_up_waits_once_for_the_whole_family.<locals>.<genexpr> at 0x7f87007b32a0>)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2704658Z FAILED tests/test_orphans_reaper.py::test_group_survivors_are_reported_without_killing_again - assert False
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2706502Z  +  where False = all(<generator object test_group_survivors_are_reported_without_killing_again.<locals>.<genexpr> at 0x7f86ff9a76b0>)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2707977Z FAILED tests/test_orphans_reaper.py::test_manual_kill_batch_has_one_shared_follow_deadline - assert False
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2709467Z  +  where False = all(<generator object test_manual_kill_batch_has_one_shared_follow_deadline.<locals>.<genexpr> at 0x7f86fff89560>)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2711081Z FAILED tests/test_orphans_reaper.py::test_unreadable_process_after_signal_is_not_reported_as_exited - AssertionError: assert (False)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2713286Z  +  where False = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGTERM: 15>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').ok
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2715712Z FAILED tests/test_orphans_reaper.py::test_the_identity_method_comes_from_the_pinner - AssertionError: assert (False)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2718189Z  +  where False = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGTERM: 15>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').ok
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2720821Z FAILED tests/test_orphans_reaper.py::test_session_protection_is_rechecked_at_act_time - AssertionError: assert (not False and 'proteção' in 'UID de outro usuário ou próprio executor: protegido')
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2723331Z  +  where False = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGTERM: 15>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').ok
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2726343Z  +  and   'UID de outro usuário ou próprio executor: protegido' = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGTERM: 15>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').reason
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2729224Z FAILED tests/test_orphans_reaper.py::test_an_unreadable_protection_source_fails_closed - AssertionError: assert (not False and 'ilegível' in 'UID de outro usuário ou próprio executor: protegido')
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2731766Z  +  where False = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGTERM: 15>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').ok
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2734518Z  +  and   'UID de outro usuário ou próprio executor: protegido' = TermResult(pid=500, comm='worker', ok=False, signal=<Signals.SIGTERM: 15>, reason='UID de outro usuário ou próprio executor: protegido', exited=None, identity='starttime').reason
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2737258Z FAILED tests/test_tmpfs_holders.py::test_only_targets_under_the_prefixes_are_recorded - AssertionError: assert {'/tmp/agente/sessao': (400,)} == {'/run/user/1...ssao': (400,)}
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2738909Z   
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2739479Z   Omitting 1 identical items, use -vv to show
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2740194Z   Right contains 1 more item:
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2740789Z   {'/run/user/1000/bus': (400,)}
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2741367Z   
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2741824Z   Full diff:
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2742317Z     {
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2742823Z   -     '/run/user/1000/bus': (
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2743415Z   -         400,
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2743905Z   -     ),
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2744368Z         '/tmp/agente/sessao': (
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2744884Z             400,
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2745656Z         ),
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2746147Z     }
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2747261Z FAILED tests/test_tmpfs_policy.py::test_nothing_in_run_user_is_eligible_without_an_explicit_pattern - AssertionError: assert False is True
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2749199Z  +  where False = Eligibility(ok=False, reason='refused: volume /run/user/1000 fora da watch-list', matched=None).ok
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2752979Z  +    where Eligibility(ok=False, reason='refused: volume /run/user/1000 fora da watch-list', matched=None) = <function classify at 0x7f8700b32e50>(TmpfsEntry(path='/run/user/1000/gnupg', name='gnupg', volume='/run/user/1000', kind='dir', uid=1001, bytes=1024, files..._point=False, under_mount=False, holder_pids=(), truncated=False, errors=(), holder_state='complete', holder_errors=()), Policy(allow_patterns=('/run/user/1000/gnupg',), min_age_days=3.0, max_item_bytes=2147483648, volumes=('/tmp', '/run/user/1001', '/dev/shm')))
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2756731Z  +      where <function classify at 0x7f8700b32e50> = policy.classify
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2757982Z FAILED tests/test_tunings_worker.py::test_the_worker_refuses_while_an_edge_process_is_running - assert (0 == 1)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2760392Z  +  where 0 = CompletedProcess(args=['/home/runner/work/Folego/Folego/.dev/venv-gui/bin/python', '-m', 'folego.actions.tunings.worke...88d6dc3b86", "blocked": null}, "operation_id": "f9858222751947c99ca0f26773cb966b", "outcome": "sucesso"}\n', stderr='').returncode
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2762864Z FAILED tests/test_tunings_worker.py::test_the_worker_refuses_revert_while_an_edge_process_is_running - assert (0 == 1)
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2765508Z  +  where 0 = CompletedProcess(args=['/home/runner/work/Folego/Folego/.dev/venv-gui/bin/python', '-m', 'folego.actions.tunings.worke...g/microsoft-edge/Local State", "operation_id": "7917815b8c8e47629830952c2fe08fb8", "outcome": "sucesso"}\n', stderr='').returncode
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2768180Z FAILED tests/test_ui_main_window_tabs.py::test_a_cpu_active_adopted_process_surfaces_as_investigation - AssertionError: assert ('pid 700' in '')
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2769505Z 34 failed, 1098 passed, 2 skipped in 19.23s
+Qt offscreen em ambiente próprio	Run ./dev test	2026-10-24T14:10:14.2816146Z ##[error]Process completed with exit code 1.

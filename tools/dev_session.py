@@ -83,6 +83,7 @@ def main(argv=None):
             raise SystemExit("Another suite owns the QA lock; run suites sequentially")
         run = reserve_workspace(ROOT / ".scratch/dev-tests")
         report = {"profile": profile, "status": "running", "runner_pid": os.getpid(),
+                  "uid": os.getuid(), "gid": os.getgid(),
                   "python": sys.executable, "workspace": str(run), "started": time.time()}
         report_path = run / "run.json"
         report_path.write_text(json.dumps(report, indent=2))
