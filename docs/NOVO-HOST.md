@@ -17,6 +17,9 @@ Contas GitHub/Codex precisam ser autenticadas novamente; credenciais não são e
 
 Repositório privado: https://github.com/Misael-art/Folego
 
+PR de continuidade: https://github.com/Misael-art/Folego/pull/1.
+Todos os pontos de recuperação estão em [handoff/REMOTE.md](handoff/REMOTE.md).
+
 Enquanto o PR não for integrado, continue na branch de entrega:
 
 ```bash

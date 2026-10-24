@@ -124,6 +124,14 @@ def main():
             "Inspect read-only; never rewrite identities or execute/replay these plans.\n"
             "Interrupted attempts are not two-hour acceptance and cannot be added together.\n")
         manifest["qa_capsules_unavailable"] = missing
+        location = evidence / "workspace-path.txt"
+        if location.exists():
+            qa_root = Path(location.read_text().strip()).resolve()
+            wheel = qa_root / "final2-wheels/folego-0.1.0-py3-none-any.whl"
+            if qa_root.is_relative_to(ROOT / ".scratch") and wheel.is_file() and not wheel.is_symlink():
+                with zipfile.ZipFile(target, "a", compression=zipfile.ZIP_DEFLATED) as archive:
+                    archive.write(wheel, "historical-tested-wheel/" + wheel.name)
+                manifest["historical_wheel_sha256"] = digest(wheel)
         payloads.append(target)
     for path in payloads:
         row = {"name": path.name, "bytes": path.stat().st_size, "sha256": digest(path)}
