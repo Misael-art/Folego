@@ -76,3 +76,7 @@ Evitar novos frameworks, executores paralelos e módulos sem integração.
 Antes de encerrar cada rodada: `git diff --check`, revisar o diff, atualizar
 esta passagem e apontar a próxima ação objetiva. Commits/PRs devem explicar
 problema, comportamento final e validação; não fazer merge sem pedido.
+
+## Recuperação organizada — 2026-10-26
+
+Raiz única neste host: `/home/misael/Projects/Folego`. Checkout existente realocado sem duplicação, base `815cf002248e80e51010191ace556dbaaa2319ce`. Ambientes recriados por `./dev`; núcleo: 916 pass/2 skip; Qt offscreen: 1133 pass/2 skip. Isso não aprova compositor físico nem soak de duas horas. Próxima tarefa continua sendo retenção segura dos temporários administrados; automação permanece desligada.

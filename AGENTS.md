@@ -56,3 +56,12 @@ Este projeto não depende do HOME, disco, venv, serviços ou skills do host ante
 
 A entrega de migração autorizou commit, push e PR; não autorizou merge,
 publicação de release do produto, autostart ou ações automáticas no host.
+
+## Coleção Projects: continuidade e organização
+
+- Este projeto tem um único checkout ativo por componente, sob a raiz de projetos escolhida pelo proprietário. Neste host, use somente `/home/misael/Projects/Folego`. Resgates antigos são arquivos de consulta, não outros ambientes de desenvolvimento.
+- Leia também as instruções do diretório pai e o registro central `.workspace/projects.json`, quando presentes. A instrução atual de raiz única prevalece sobre sugestões históricas de criar clones ou worktrees por agente/tarefa. Não crie worktrees nem variantes paralelas sem pedido explícito do usuário.
+- Preserve alterações locais. Faça mudanças pequenas no checkout existente, valide, revise arquivos/segredos/tamanho, faça commit e push do lote autorizado e confira o SHA remoto antes de declarar sincronização. Não faça stage global de material resgatado, push forçado ou merge automático de pesquisas.
+- Mantenha código, documentos e receitas no Git. SDKs, caches, dependências, builds, ROMs, bancos, pacotes de migração, sessões e dados privados usam os destinos próprios, com manifestos e recuperação verificável; `.gitignore` não é backup. Novo arquivo acima de 10 MiB exige revisão e armazenamento apropriado.
+- Continue autonomamente até a entrega verificável. Evite confirmações rotineiras e relatos de pequenos avanços. Interrompa apenas o que depender de informação, acesso ou autorização indispensável; registre causa e próxima ação, mantendo as partes independentes em andamento.
+- Resgate e testes históricos não aprovam funcionamento neste host. Preserve critérios e evidências de cada produto. A autorização de continuidade não permite publicar conteúdo privado em repositório público nem fazer merge/release/deploy do produto.
