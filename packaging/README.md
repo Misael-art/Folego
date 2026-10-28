@@ -32,7 +32,7 @@ instalado é `folego`; sem subcomando ele abre a GUI.
 
 ## Launcher desktop (opcional)
 
-O arquivo [folego.desktop](folego.desktop) não é instalado automaticamente.
+Ao abrir a GUI, o Fôlego verifica os atalhos `folego.desktop` no menu (`$XDG_DATA_HOME/applications`) e na Área de trabalho (`XDG_DESKTOP_DIR` de `user-dirs.dirs`): cria o que faltar, atualiza só os que ele mesmo criou (`X-Folego-Managed=true`) quando a instalação muda de lugar e preserva atalhos do usuário. Nunca cria autostart. Manualmente: `folego shortcuts`. O arquivo [folego.desktop](folego.desktop) é o modelo de referência (o teste garante que o gerado em `src/folego/shortcuts.py` coincide).
 Quando a instalação é um venv, gere um launcher preso ao entrypoint absoluto,
 para funcionar sem depender de um shell com o venv ativado:
 

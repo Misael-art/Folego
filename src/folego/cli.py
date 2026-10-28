@@ -375,6 +375,10 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument("tuning", help="id do ajuste, ex. edge.startup_boost")
         sub.add_argument("--confirmar", action="store_true", help="aceita esta mutação")
 
+    shortcut = commands.add_parser(
+        "shortcuts", help="atalhos do Fôlego no menu e na Área de trabalho (nunca autostart)")
+    shortcut.add_argument("--json", action="store_true", help="saída para máquinas")
+
     tmpfs = commands.add_parser(
         "tmpfs", help="espaços em RAM (/tmp, /run/user, /dev/shm): ver e liberar com confirmação")
     tmpfs_sub = tmpfs.add_subparsers(dest="sub")
@@ -2113,10 +2117,23 @@ _TUNE_HANDLERS = {
 }
 
 
+def _cmd_shortcuts(args) -> int:
+    from . import shortcuts
+    states = shortcuts.ensure()
+    if args.json:
+        print(json.dumps([s.to_dict() for s in states], ensure_ascii=False))
+    else:
+        for state in states:
+            print(f"{state.location}: {state.status} · {state.path}" + (f" · {state.detail}" if state.detail else ""))
+    return EXIT_REFUSED if any(s.status == "failed" for s in states) else EXIT_OK
+
+
 def _dispatch(ns, argv) -> int:
     """A escolha do handler, separada do `main` para o protocolo de erro envolvê-la."""
     if ns.command is None:
         return run_gui(argv)
+    if ns.command == "shortcuts":
+        return _cmd_shortcuts(ns)
     if ns.command == "orphans":
         return _cmd_orphans(ns)
     if ns.command == "groups":

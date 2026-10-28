@@ -22,6 +22,14 @@ def main() -> int:
                          f"{exc}\n")
         return 1
     try:
+        # Menu/Desktop launchers: create if missing, never autostart, never overwrite the user's own.
+        from . import shortcuts
+        for state in shortcuts.ensure():
+            if state.status in {"created", "updated", "failed"}:
+                sys.stderr.write(f"folego: atalho {state.location} {state.status}: {state.path} {state.detail}\n")
+    except Exception as exc:  # a shortcut problem must never block opening the app
+        sys.stderr.write(f"folego: atalhos não verificados: {exc}\n")
+    try:
         app = QApplication(sys.argv)
         app.setApplicationName("folego")
         apply_theme(app)

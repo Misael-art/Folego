@@ -105,3 +105,13 @@ protegia tudo corretamente, mas não dizia por quê nem qual o caminho seguro.
   os 36 itens do runtime permaneceram. A sessão SGDKForge que enchia o volume foi encerrada pelo
   `stop` oficial; o `audio.raw` dela não existia mais no momento da cópia (corrigido no SGDKForge,
   commit local `e80538de`, push bloqueado pelo registro de recuperação daquele projeto).
+
+## Atalhos de inicialização — 2026-10-28
+
+`src/folego/shortcuts.py`: a cada abertura da GUI (e por `folego shortcuts`) cria o atalho no menu e na
+Área de trabalho se faltar, apontando para `run.sh` do checkout (ou o entrypoint instalado); atualiza
+somente arquivos com `X-Folego-Managed=true`; preserva atalhos do usuário e symlinks; nunca autostart.
+Validação: 8 testes; `./dev check` 936 + 1157 pass (2 skips cada); no host criou
+`~/.local/share/applications/folego.desktop` e `~/Área de trabalho/folego.desktop` (válidos no
+`desktop-file-validate`), segunda execução `present`, e `gio launch` do atalho da Área de trabalho abriu a
+janela real no KDE (instância própria encerrada com SIGTERM).
