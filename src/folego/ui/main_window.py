@@ -40,6 +40,7 @@ TABS = (("central", "dashboard"), ("ajustes", "tunings"),
 JUMPS = {"memoria": "dashboard", "ajustes": "tunings", "orfaos": "orphans",
          "disco": "disk"}
 DISK_TIMEOUT_MS = 120_000  # the real cache walk took 54,7 s on this Deck (M3 log)
+RUNTIME_SIZE_TIMEOUT_MS = 180_000  # inclui a digitação da senha no diálogo do polkit
 TMPFS_TIMEOUT_MS = 45_000  # três volumes × o prazo de varredura de 10 s, com folga
 
 
@@ -106,7 +107,9 @@ class MainWindow(QMainWindow):
                                     on_force=self._force,
                                     on_group=self._group)
         self.disk = DiskTab(jobs=self._disk_jobs, confirm_fn=confirm_fn)
-        self.tmpfs = TmpfsTab(jobs=self._tmpfs_jobs, confirm_fn=confirm_fn)
+        # a autenticação do polkit pode levar minutos; não herda o prazo de varredura
+        self._runtime_jobs = TuneJobs(parent=self, argv_factory=argv_for, timeout_ms=RUNTIME_SIZE_TIMEOUT_MS)
+        self.tmpfs = TmpfsTab(jobs=self._tmpfs_jobs, confirm_fn=confirm_fn, runtime_jobs=self._runtime_jobs)
 
         self.tabs = QTabWidget()
         for title, attribute in TABS:

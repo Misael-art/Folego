@@ -33,6 +33,8 @@ from .core.migrate import MigrationError, apply_plan, build_plan
 from .core.orphans import GROUP_LABELS, KILLABLE_GROUPS, OrphanTracker, group_targets
 from .core.sessions import SessionError, SessionRegistry
 from .core.tmpfs import WATCHED, watched_volumes
+from .core import runtime_size
+from .actions.tmpfs import diagnosis as tmpfs_diagnosis
 from .orchestration import Coordinator, Outcome
 from .orchestration.automation import FIRST_AUTOMATION_ACTIONS, MODES, PRESETS
 from .orchestration.decisions import DecisionLog
@@ -392,6 +394,22 @@ def build_parser() -> argparse.ArgumentParser:
                       help="padrão extra de allow-list, item por item")
     plan.add_argument("--prazo", type=float, default=10.0,
                       help="segundos máximos de varredura por volume")
+
+    diagnose = tmpfs_sub.add_parser(
+        "diagnose", help="por que encheu: maiores itens, quem os segura e o comando oficial (não escreve)")
+    diagnose.add_argument("--json", action="store_true", help="saída para máquinas")
+    diagnose.add_argument("--raiz", action="append", default=None,
+                          help="volume a diagnosticar (padrão: o mais cheio)")
+    diagnose.add_argument("--prazo", type=float, default=10.0,
+                          help="segundos máximos de varredura por volume")
+
+    rsize = tmpfs_sub.add_parser(
+        "runtime-size", help="opções de tamanho do runtime (/run/user/<uid>); aplicar pede senha")
+    rsize.add_argument("--vezes", type=int, choices=runtime_size.MULTIPLIERS,
+                       help="múltiplo do tamanho atual a aplicar")
+    rsize.add_argument("--confirmar", action="store_true",
+                       help="executa via pkexec: drop-in do logind + remount imediato")
+    rsize.add_argument("--json", action="store_true", help="saída para máquinas")
 
     release = tmpfs_sub.add_parser(
         "release", help="liberar um item para a SSD: copy → verify → unlink, com ledger")
@@ -2005,7 +2023,81 @@ def _cmd_tmpfs_recover(args) -> int:
     return EXIT_PARTIAL if parcial else EXIT_OK
 
 
+def _cmd_tmpfs_diagnose(args) -> int:
+    volumes, entries = _scan_tmpfs(args.raiz, args.prazo)
+    if not volumes:
+        return _emit_gate_refusal(args, "diagnose", "refused: nenhum volume da watch-list montado")
+    worst = max(volumes, key=lambda v: v.used_frac)
+    plan = tmpfs_plan.build_plan(volumes, entries, tmpfs_policy((), None, [v.path for v in volumes]),
+                                 now=_tmpfs_now())
+    items = [item for item in (*plan.protected, *plan.reclaimable) if item.volume == worst.path]
+    consumers = tmpfs_diagnosis.diagnose(items)
+    if args.json:
+        print(json.dumps({"volume": worst.to_dict(), "consumers": [c.to_dict() for c in consumers]},
+                         ensure_ascii=False))
+        return EXIT_OK
+    print(f"{worst.path}: {round(worst.used_frac * 100)}% "
+          f"({planner.fmt_bytes(worst.used_bytes)} de {planner.fmt_bytes(worst.total_bytes)})")
+    for consumer in consumers:
+        print(f"\n· {consumer.path} · {planner.fmt_bytes(consumer.bytes)}")
+        for path, size in consumer.largest_files:
+            print(f"    arquivo: {path} · {planner.fmt_bytes(size)}")
+        for holder in consumer.holders:
+            print(f"    aberto por PID {holder.pid} ({holder.name})"
+                  + (" · árvore órfã: quem a iniciou já saiu (adotada pelo systemd --user)" if holder.adopted else "")
+                  + f"\n      {holder.cmdline}"
+                  + (f"\n      raiz da árvore: {holder.tree_root}" if holder.tree_root else ""))
+        print(f"    estado no plano: {consumer.reason}")
+        if consumer.official_action:
+            print(f"    dono: {consumer.owner}\n    caminho oficial: {consumer.official_action}")
+    print("\nNada foi alterado. Encerrar o dono preserva dados; o Fôlego não sinaliza sessões alheias.")
+    if worst.is_runtime and worst.used_frac >= 0.9:
+        print("Espaço insuficiente de forma recorrente: folego tmpfs runtime-size (aumentar o volume)")
+    return EXIT_OK
+
+
+def _cmd_tmpfs_runtime_size(args) -> int:
+    location = _tmpfs_runtime_volume()
+    if location is None:
+        return _emit_gate_refusal(args, "runtime-size", "refused: runtime do usuário não montado como tmpfs")
+    choices = runtime_size.options(location.total_bytes, runtime_size.mem_total_bytes())
+    configured = runtime_size.configured_size()
+    if args.vezes is None or not args.confirmar:
+        payload = {"runtime": location.path, "current_bytes": location.total_bytes,
+                   "configured_bytes": configured, "options": [o.to_dict() for o in choices]}
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False))
+            return EXIT_OK
+        print(f"{location.path}: {planner.fmt_bytes(location.total_bytes)} "
+              f"(usado {round(location.used_frac * 100)}%)"
+              + (f" · drop-in do Fôlego: {configured // runtime_size.MIB} MiB" if configured else ""))
+        for option in choices:
+            print(f"  {option.multiplier}× → {option.mib} MiB"
+                  + ("" if option.allowed else f" · recusado: {option.reason}"))
+        print("Aplicar: folego tmpfs runtime-size --vezes N --confirmar (pede a senha de administrador)")
+        return EXIT_OK
+    option = next(o for o in choices if o.multiplier == args.vezes)
+    if not option.allowed:
+        return _emit_gate_refusal(args, "runtime-size", f"refused: {option.reason}")
+    command = runtime_size.apply_command(option.bytes, runtime=location.path)
+    result = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    if result.returncode:
+        return _emit_gate_refusal(args, "runtime-size",
+                                  f"refused: pkexec retornou {result.returncode}: {(result.stderr or '').strip()[-300:]}")
+    after = _tmpfs_runtime_volume()
+    print(json.dumps({"runtime": location.path, "before_bytes": location.total_bytes,
+                      "after_bytes": after.total_bytes if after else None,
+                      "dropin": runtime_size.DROPIN_PATH}, ensure_ascii=False))
+    return EXIT_OK
+
+
+def _tmpfs_runtime_volume():
+    return next((v for v in _tmpfs_volumes() if v.is_runtime), None)
+
+
 _TMPFS_HANDLERS.update({
+    "diagnose": _cmd_tmpfs_diagnose,
+    "runtime-size": _cmd_tmpfs_runtime_size,
     "release": _cmd_tmpfs_release,
     "restore": _cmd_tmpfs_restore,
     "ledger": _cmd_tmpfs_ledger,

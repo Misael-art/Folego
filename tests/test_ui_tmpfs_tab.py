@@ -94,7 +94,11 @@ def recover_payload(acao="recover", target=""):
 
 ANSWERS = {"plan": plan_payload, "ledger": ledger_payload, "release": mutation_payload,
            "restore": mutation_payload, "expire": mutation_payload,
-           "recover": recover_payload}
+           "recover": recover_payload,
+           "diagnose": lambda *_: {"volume": {"path": "/tmp", "used_pct": 10.0}, "consumers": []},
+           "runtime-size": lambda *_: {"runtime": "/run/user/1000", "current_bytes": 1024 ** 3,
+                                       "options": [{"multiplier": 2, "mib": 2048, "bytes": 2 * 1024 ** 3,
+                                                    "allowed": True, "reason": ""}]}}
 
 
 def test_unknown_tmpfs_result_remains_unknown_after_refresh_and_blocks_retry(qapp):
@@ -108,11 +112,13 @@ def test_unknown_tmpfs_result_remains_unknown_after_refresh_and_blocks_retry(qap
     view.restore_clicked(view.ledger_rows[0])
     view.expire_clicked()
     view.recover_clicked()
+    view.runtime_size_clicked()
     assert len(layer.calls) == before
     assert "uncertain-tmpfs" in view.status.text() and "desconhecido" in view.status.text()
     assert "recusado" not in view.status.text()
     assert all(not button.isEnabled() for button in
-        (*view.release_buttons, *view.restore_buttons, view.expire_button, view.recover_button))
+        (*view.release_buttons, *view.restore_buttons, view.expire_button, view.recover_button,
+         view.runtime_button))
 
 
 def answers(acao, target):
@@ -260,9 +266,9 @@ def test_the_three_tables_pin_their_header_on_their_own_declaration(tab):
         assert headers(table) == [title for _, title in columns] == copy
 
 
-def test_refresh_asks_the_child_for_plan_and_ledger_only(tab, jobs):
+def test_refresh_asks_the_child_for_read_only_answers_only(tab, jobs):
     tab.refresh()
-    assert [c[0] for c in jobs.calls] == ["plan", "ledger"]
+    assert [c[0] for c in jobs.calls] == ["plan", "ledger", "diagnose", "runtime-size"]
     assert all(c[2] is False for c in jobs.calls), "leitura nunca leva --confirmar"
     assert tab.plan_rows[0]["path"] == "/tmp/qoder-cli-1000"
     assert tab.ledger_rows[0]["entry_id"] == "1700-abc"
@@ -478,3 +484,58 @@ def test_a_child_that_answered_nothing_is_not_a_success(qapp):
     assert t.plan_rows == [] and t.ledger_rows == []
     assert t.summary.text() == "sem plano"
     assert "sem leitura do ledger" in t.budget_label.text()
+
+
+def test_runtime_size_argv_passes_the_multiplier_as_an_option():
+    assert argv_for("runtime-size")[-2:] == ["runtime-size", "--json"]
+    assert argv_for("runtime-size", "3", True)[-5:] == [
+        "runtime-size", "--vezes", "3", "--json", "--confirmar"]
+
+
+RUNTIME_OPTIONS = {"runtime": "/run/user/1000", "current_bytes": 1482 * 1024 ** 2,
+                   "options": [{"multiplier": m, "mib": 1482 * m, "bytes": 1482 * m * 1024 ** 2,
+                                "allowed": m < 4, "reason": "" if m < 4 else "acima de 65% da RAM"}
+                               for m in (1, 2, 3, 4)]}
+
+
+def test_runtime_size_is_chosen_confirmed_and_sent_through_its_own_queue(qapp):
+    main = FakeJobs(lambda acao, target: RUNTIME_OPTIONS if acao == "runtime-size" else {})
+    slow = FakeJobs(lambda acao, target: {"before_bytes": 1, "after_bytes": 4446 * 1024 ** 2,
+                                          "dropin": "/etc/systemd/logind.conf.d/60-folego-runtime-size.conf"})
+    asked = []
+    view = TmpfsTab(jobs=main, runtime_jobs=slow, confirm_fn=lambda *a: asked.append(a) or True)
+    view.show_runtime_options(RUNTIME_OPTIONS)
+    assert view.runtime_choice.count() == 4 and view.runtime_button.isEnabled()
+    assert "acima do limite" in view.runtime_choice.itemText(3)
+    view.runtime_choice.setCurrentIndex(2)
+    view.runtime_size_clicked()
+    assert slow.calls == [("runtime-size", "3", True)]
+    assert "4446 MiB" in asked[0][1]
+    assert "4,3 GB" in view.status.text() or "4.3" in view.status.text() or "GB" in view.status.text()
+
+
+def test_runtime_size_refuses_above_the_cap_and_honours_cancel(qapp):
+    slow = FakeJobs(lambda acao, target: {})
+    view = TmpfsTab(jobs=FakeJobs(lambda a, t: {}), runtime_jobs=slow, confirm_fn=lambda *a: False)
+    view.show_runtime_options(RUNTIME_OPTIONS)
+    view.runtime_choice.setCurrentIndex(3)
+    view.runtime_size_clicked()
+    assert "recusado" in view.status.text()
+    view.runtime_choice.setCurrentIndex(1)
+    view.runtime_size_clicked()
+    assert "cancelado" in view.status.text()
+    assert slow.calls == []
+
+
+def test_the_diagnosis_names_the_consumer_holder_and_official_path(qapp):
+    view = TmpfsTab(jobs=FakeJobs(lambda a, t: {}), confirm_fn=lambda *a: True)
+    view.show_diagnosis({"volume": {"path": "/run/user/1000", "used_pct": 100.0}, "consumers": [{
+        "path": "/run/user/1000/forge-sessions", "bytes": 1_500_000_000, "reason": "refused",
+        "largest_files": [["/run/user/1000/forge-sessions/x/audio.raw", 1_500_000_000]],
+        "holders": [{"pid": 42, "name": "blastem.bin", "adopted": True}],
+        "owner": "SGDKForge session_coordinator", "official_action": "session_coordinator.py stop <sessão>"}]})
+    text = view.diagnosis.text()
+    assert "audio.raw" in text and "PID 42" in text and "árvore órfã" in text
+    assert "session_coordinator.py stop" in text and "não sinaliza" in text
+    view.show_diagnosis({"volume": {"path": "/tmp", "used_pct": 10.0}, "consumers": []})
+    assert view.diagnosis.text() == ""

@@ -19,7 +19,7 @@ from shiboken6 import isValid
 
 WORKER_MODULE = "folego.actions.tunings.worker"
 MUTATING = ("apply", "revert", "release", "restore", "expire", "recover",
-            "quarantine", "quarantine-reviewed", "purge", "signal")
+            "quarantine", "quarantine-reviewed", "purge", "signal", "runtime-size")
 # .../src — where folego lives for this process. A child started from a
 # .desktop file has no PYTHONPATH, and "-m folego.*" then dies on import.
 PACKAGE_ROOT = str(Path(__file__).resolve().parents[2])

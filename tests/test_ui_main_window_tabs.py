@@ -203,7 +203,8 @@ def test_the_window_never_scans_tmpfs_by_itself(window):
     window.apply_snapshot(snap())
     assert window._tmpfs_jobs.calls == []
     window.tmpfs.refresh()
-    assert [c[0] for c in window._tmpfs_jobs.calls] == ["plan", "ledger"]
+    assert [c[0] for c in window._tmpfs_jobs.calls] == ["plan", "ledger", "diagnose", "runtime-size"]
+    assert all(c[2] is False for c in window._tmpfs_jobs.calls), "atualizar nunca leva --confirmar"
 
 
 def test_a_snapshot_lands_on_the_title_the_dashboard_and_the_orphans(window):

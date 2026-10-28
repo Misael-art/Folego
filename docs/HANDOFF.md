@@ -80,3 +80,23 @@ problema, comportamento final e validação; não fazer merge sem pedido.
 ## Recuperação organizada — 2026-10-26
 
 Raiz única neste host: `/home/misael/Projects/Folego`. Checkout existente realocado sem duplicação, base `815cf002248e80e51010191ace556dbaaa2319ce`. Ambientes recriados por `./dev`; núcleo: 916 pass/2 skip; Qt offscreen: 1133 pass/2 skip. Isso não aprova compositor físico nem soak de duas horas. Próxima tarefa continua sendo retenção segura dos temporários administrados; automação permanece desligada.
+
+## Runtime /run/user cheio — 2026-10-28
+
+Caso real: `/run/user/1000` a 100% por `forge-sessions/1bf5a050/audio.raw` (1,5 GB) de uma
+sessão BlastEm do SGDKForge cuja árvore foi adotada pelo `systemd --user`. O plano tmpfs
+protegia tudo corretamente, mas não dizia por quê nem qual o caminho seguro.
+
+- `folego tmpfs diagnose [--json]` (somente leitura): maiores itens do volume mais cheio,
+  maiores arquivos, holders com raiz da árvore e marca de árvore órfã, dono conhecido e
+  comando oficial de encerramento (`actions/tmpfs/diagnosis.py`, `OWNER_HINTS`). Não sinaliza.
+- `folego tmpfs runtime-size [--vezes N --confirmar]` e controle na aba tmpfs: 1×–4× do tamanho
+  atual com teto de 65% da RAM (`core/runtime_size.py`). Aplicar é um único `pkexec` com
+  argumentos posicionais: drop-in `/etc/systemd/logind.conf.d/60-folego-runtime-size.conf`
+  (`RuntimeDirectorySize`) + remount imediato preservando conteúdo. Fila própria de 180 s para
+  a senha; bloqueado enquanto houver resultado desconhecido.
+- Validação: `./dev check` 928 + 1149 pass (2 skips cada); CLI real no host mostrou o
+  `audio.raw`, o PID 1915399 como árvore órfã e opções 1482/2964/4446/5928 MiB; aba renderizada
+  offscreen com dados reais. Não validado: compositor KDE real e aplicação do pkexec (decisão
+  do usuário). O encerramento da sessão SGDKForge pelo `session_coordinator.py stop` não foi
+  executado pelo agente (permissão negada); continua pendente com o usuário.

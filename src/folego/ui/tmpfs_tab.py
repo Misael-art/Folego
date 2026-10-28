@@ -9,15 +9,15 @@ silent "nothing happened" that could be read as success.
 import sys
 import time
 
-from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import (QHBoxLayout, QHeaderView, QLabel, QMessageBox,
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
                                QPushButton, QProgressBar, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..actions.disk.planner import fmt_bytes
 from ..actions.tmpfs import trend
 
-JSON_ACTIONS = ("plan", "ledger", "release", "restore", "expire", "recover")
+JSON_ACTIONS = ("plan", "ledger", "release", "restore", "expire", "recover", "diagnose", "runtime-size")
 SAMPLES_KEPT = 600  # 20 min de poller de 2 s; a janela do ETA é de 15 min
 PENDING = "ainda não analisado — use Atualizar plano."
 LOADING = "consultando o tmpfs (dry-run, nada é movido)…"
@@ -32,7 +32,10 @@ LEDGER_COLUMNS = (("entry_id", "id"), ("state", "estado"), ("size", "tamanho"),
 
 def argv_for(acao: str, target: str = "", confirm: bool = False) -> list:
     argv = [sys.executable, "-m", "folego", "tmpfs", acao]
-    if target:
+    if acao == "runtime-size":
+        if target:
+            argv.extend(["--vezes", str(int(target))])
+    elif target:
         argv.append(str(target))
     if acao in JSON_ACTIONS:
         argv.append("--json")
@@ -103,9 +106,12 @@ def _fill(table, columns, rows, *, action=None, label=""):
 
 
 class TmpfsTab(QWidget):
-    def __init__(self, *, jobs, confirm_fn=None, parent=None):
+    def __init__(self, *, jobs, confirm_fn=None, runtime_jobs=None, parent=None):
         super().__init__(parent)
         self._jobs = jobs
+        # O pedido de senha do polkit pode demorar: o redimensionamento tem fila própria.
+        self._runtime_jobs = runtime_jobs or jobs
+        self.runtime_options: list[dict] = []
         self._confirm = confirm_fn or self._ask_dialog
         self._samples: dict[str, list] = {}
         self.volume_rows: list[dict] = []
@@ -145,10 +151,26 @@ class TmpfsTab(QWidget):
         bar.addWidget(self.recover_button)
         bar.addStretch(1)
 
+        self.diagnosis = QLabel("")
+        self.diagnosis.setWordWrap(True)
+        self.diagnosis.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.runtime_label = QLabel("tamanho do runtime: sem leitura")
+        self.runtime_label.setWordWrap(True)
+        self.runtime_choice = QComboBox()
+        self.runtime_choice.setAccessibleName("Novo tamanho do runtime")
+        self.runtime_button = QPushButton("Aumentar runtime (pede senha)")
+        self.runtime_button.setEnabled(False)
+        self.runtime_button.clicked.connect(self.runtime_size_clicked)
+        runtime_bar = QHBoxLayout()
+        runtime_bar.addWidget(self.runtime_label, 1)
+        runtime_bar.addWidget(self.runtime_choice)
+        runtime_bar.addWidget(self.runtime_button)
+
         layout = QVBoxLayout(self)
-        for widget in (self.pressure, self.volume_table, self.summary, self.plan_table,
+        for widget in (self.pressure, self.diagnosis, self.volume_table, self.summary, self.plan_table,
                        self.budget_label, self.ledger_table, self.status):
             layout.addWidget(widget)
+        layout.addLayout(runtime_bar)
         layout.addLayout(bar)
 
     # -------------------------------------------------------------------- leitura
@@ -201,6 +223,86 @@ class TmpfsTab(QWidget):
         self.summary.setText(LOADING)
         self._jobs.run("plan", "", done=self.show_plan)
         self._jobs.run("ledger", "", done=self.show_ledger)
+        self._jobs.run("diagnose", "", done=self.show_diagnosis)
+        self._jobs.run("runtime-size", "", done=self.show_runtime_options)
+
+    # ------------------------------------------------------- diagnóstico e tamanho
+
+    def show_diagnosis(self, payload):
+        volume = (payload or {}).get("volume") or {}
+        consumers = (payload or {}).get("consumers")
+        if consumers is None:
+            self.diagnosis.setText("diagnóstico indisponível: " + str((payload or {}).get("reason", "sem resposta")))
+            return
+        if not consumers or (volume.get("used_pct") or 0) < 80:
+            self.diagnosis.setText("")
+            return
+        top = consumers[0]
+        lines = [f"Por que {volume.get('path')} está a {volume.get('used_pct')}%: "
+                 f"{top['path']} ocupa {fmt_bytes(int(top['bytes']))}."]
+        for path, size in top.get("largest_files", [])[:1]:
+            lines.append(f"Maior arquivo: {path} ({fmt_bytes(int(size))}).")
+        for holder in top.get("holders", [])[:2]:
+            lines.append(f"Aberto por PID {holder['pid']} ({holder['name']})"
+                         + (" — árvore órfã: quem a iniciou já saiu." if holder.get("adopted") else "."))
+        if top.get("official_action"):
+            lines.append(f"Dono: {top['owner']}. Caminho oficial: {top['official_action']}")
+        lines.append("O Fôlego não sinaliza sessões alheias; encerre pelo dono para preservar os dados.")
+        self.diagnosis.setText("\n".join(lines))
+
+    def show_runtime_options(self, payload):
+        self.runtime_choice.clear()
+        self.runtime_options = list((payload or {}).get("options") or [])
+        if not self.runtime_options:
+            self.runtime_label.setText("tamanho do runtime: " + str((payload or {}).get("reason", "sem leitura")))
+            self.runtime_button.setEnabled(False)
+            return
+        current = int(payload.get("current_bytes") or 0)
+        self.runtime_label.setText(f"Runtime {payload.get('runtime')}: {fmt_bytes(current)}. "
+                                   "Aumentar evita que agentes espalhem temporários pelo disco.")
+        for option in self.runtime_options:
+            text = f"{option['multiplier']}× · {option['mib']} MiB"
+            if not option["allowed"]:
+                text += " (acima do limite)"
+            self.runtime_choice.addItem(text, option["multiplier"])
+        bigger = self.runtime_choice.findData(2)
+        if bigger >= 0:
+            self.runtime_choice.setCurrentIndex(bigger)
+        self.runtime_button.setEnabled(any(o["allowed"] and o["multiplier"] > 1 for o in self.runtime_options))
+        self._preserve_uncertain()
+
+    def runtime_size_clicked(self):
+        if self._uncertain_text:
+            return
+        factor = self.runtime_choice.currentData()
+        option = next((o for o in self.runtime_options if o["multiplier"] == factor), None)
+        if option is None or factor == 1:
+            self.status.setText("escolha 2×, 3× ou 4× para aumentar o runtime")
+            return
+        if not option["allowed"]:
+            self.status.setText(f"recusado: {option['reason']}")
+            return
+        if not self._confirm(
+                "Aumentar o runtime do usuário",
+                f"O runtime passa a ter {option['mib']} MiB. O sistema pedirá a senha de "
+                "administrador para gravar /etc/systemd/logind.conf.d/60-folego-runtime-size.conf "
+                "e remontar o volume agora, sem apagar nada. É RAM: só ocupa o que for gravado. "
+                "Para voltar ao padrão, remova esse arquivo."):
+            self.status.setText("cancelado: tamanho do runtime inalterado")
+            return
+        self.runtime_button.setEnabled(False)
+        self.status.setText("aguardando a autenticação do sistema…")
+        self._runtime_jobs.run("runtime-size", str(factor), confirm=True, done=self.show_runtime_result)
+
+    def show_runtime_result(self, payload):
+        payload = payload or {}
+        if payload.get("after_bytes"):
+            self.status.setText(f"runtime agora com {fmt_bytes(int(payload['after_bytes']))} "
+                                f"(antes {fmt_bytes(int(payload.get('before_bytes') or 0))}); "
+                                f"configuração persistente em {payload.get('dropin')}")
+        else:
+            self.status.setText("runtime não alterado: " + str(payload.get("reason") or "sem resposta"))
+        self._jobs.run("runtime-size", "", done=self.show_runtime_options)
 
     def show_plan(self, payload):
         if not payload or "reclaimable" not in payload:
@@ -292,7 +394,7 @@ class TmpfsTab(QWidget):
         if self._uncertain_text:
             self.status.setText(self._uncertain_text)
             for button in (*self.release_buttons, *self.restore_buttons,
-                           self.expire_button, self.recover_button):
+                           self.expire_button, self.recover_button, self.runtime_button):
                 button.setEnabled(False)
 
     @staticmethod
