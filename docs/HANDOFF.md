@@ -97,6 +97,11 @@ protegia tudo corretamente, mas não dizia por quê nem qual o caminho seguro.
   a senha; bloqueado enquanto houver resultado desconhecido.
 - Validação: `./dev check` 928 + 1149 pass (2 skips cada); CLI real no host mostrou o
   `audio.raw`, o PID 1915399 como árvore órfã e opções 1482/2964/4446/5928 MiB; aba renderizada
-  offscreen com dados reais. Não validado: compositor KDE real e aplicação do pkexec (decisão
-  do usuário). O encerramento da sessão SGDKForge pelo `session_coordinator.py stop` não foi
+  offscreen com dados reais. Não validado: compositor KDE real. O encerramento da sessão SGDKForge pelo `session_coordinator.py stop` não foi
   executado pelo agente (permissão negada); continua pendente com o usuário.
+- Aplicação real em 28/10 pelo usuário: `./dev run tmpfs runtime-size --vezes 2 --confirmar`
+  levou `/run/user/1000` de 1.554.046.976 para 3.107.979.264 bytes (`df`: 2,9 GB, 1% usado), drop-in
+  `/etc/systemd/logind.conf.d/60-folego-runtime-size.conf` com `RuntimeDirectorySize=2964M`;
+  os 36 itens do runtime permaneceram. A sessão SGDKForge que enchia o volume foi encerrada pelo
+  `stop` oficial; o `audio.raw` dela não existia mais no momento da cópia (corrigido no SGDKForge,
+  commit local `e80538de`, push bloqueado pelo registro de recuperação daquele projeto).
