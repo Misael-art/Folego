@@ -143,3 +143,77 @@ regras; `folego widget-rule [--remover]`. Recusa fica gravada para não pergunta
 Validação: 10 testes novos/ajustados; `./dev check` 940 + 1170 pass (2 skips cada); execução real no
 KDE/Wayland: janela recolhida, bandeja presente, widget visível com dados reais (sem criar a regra).
 Pendente: aplicar a regra do KWin no host real (decisão do usuário) e validar keep-above/posição.
+
+## Avaliação do projeto — 2026-10-29
+
+Revisão da base `5575ea06f15103dd28e071b04b6df3ef37c0db81`, igual ao SHA remoto
+da branch de continuidade e do PR #1. Pedido de avaliação: nenhum código de
+produção corrigido nesta rodada. Arquitetura CLI/core sem Qt, coordenador e
+proteções têm cobertura ampla; isso não fecha os contratos dos caminhos novos.
+
+Achados reproduzidos, em ordem de prioridade:
+
+1. **P1 — configuração persistente alterada apresentada como recusa.**
+   `core/runtime_size.py:apply_command` substitui o drop-in antes de chamar
+   `mount`; uma falha de remount deixa o arquivo novo. Já
+   `cli.py:_cmd_tmpfs_runtime_size` converte qualquer retorno não zero em
+   `recusa`, sem ID/intenção no coordenador. Prova: corpo do shell executado
+   sem pkexec, com todos os destinos em árvore descartável e `mount` simulado
+   retornando 32; o drop-in novo permaneceu. CLI simulada retornou `recusa`.
+   Correção: integrar no coordenador, preservar estado anterior, registrar as
+   etapas e reconciliar configuração persistente e montagem; falha após efeito
+   precisa de resultado parcial/desconhecido e recuperação explícita.
+2. **P1 — resultado desconhecido permite repetir o resize na GUI.**
+   `ui/tmpfs_tab.py:show_runtime_result` ignora `outcome=desconhecido`, mostra
+   “runtime não alterado” e solicita opções; a resposta reabilita o botão sem
+   preencher `_uncertain_text`. Prova com payload de timeout e atualização
+   simulada. Correção: usar o bloqueio de incerteza também neste fluxo, com ID
+   estável e reconciliação antes de permitir outra mutação.
+3. **P1 — falha ao ler regras do KWin pode desativar regras alheias.**
+   `ui/kwin_rule.py:_rules` ignora o código de saída de `kreadconfig6` e usa
+   stdout vazio como lista vazia. `install` então grava somente a regra própria
+   em `General/rules`; `remove` pode gravar lista vazia. Prova com ferramentas
+   simuladas: lista inicial `existing-user-rule` substituída por `folego-widget`
+   após erro de leitura. Correção: recusar antes de qualquer escrita quando a
+   leitura não for comprovada e preservar a configuração anterior.
+4. **P2 — corrida no registro de filhos curtos.** `cli.py:_session_run` inicia
+   o comando antes de registrar a sessão; se ele já saiu, `register` recusa o
+   zumbi e um comando `exit 0` vira erro 1. A CI do PR #1 já falhou assim
+   ([run 40795479345](https://github.com/Misael-art/Folego/actions/runs/40795479345),
+   939 pass / 1 fail / 2 skip). Reproduzido localmente atrasando apenas o registro
+   de um filho descartável. Correção: coordenar lançamento/registro e término,
+   preservando o código real e a proteção dos filhos ainda vivos.
+5. **P2 — painel confunde ausência de recomendações com saúde.**
+   `core/suggestions.py:suggest` não cobre tmpfs; `DashboardTab._sync_rows`
+   apresenta “Tudo dentro do orçamento” sempre que não há sugestões. Provas:
+   runtime 100% cheio com medidor “Crítico”, e meminfo ausente com medidor
+   “Desconhecido”, ambos com texto de recursos dentro do orçamento. Correção:
+   cobrir tmpfs/inodes e derivar o estado vazio do relatório de saúde/frescor,
+   com navegação para a aba de temporários.
+
+Verificação no host atual, Python 3.14.7, ambientes existentes do `./dev`,
+HOME/XDG privados, temporários em disco e suítes sequenciais:
+
+- `./dev check`: **939 passed, 1 failed, 2 skipped** no perfil headless;
+  parou antes de Qt. `test_backup.py::test_roundtrip_property` gerou
+  `FlakyFailure`: uma execução levou 328,57 ms (deadline 200 ms) e a repetição
+  interna 11,44 ms. Não se alterou deadline/limite nem se aprovou o gate.
+- `./dev test`: **1170 passed, 2 skipped**, 30,27 s, Qt offscreen.
+- Seis provas isoladas + repetição focada do teste de backup: **7 passed**;
+  prova adicional do KWin: **1 passed**. As provas afirmam os comportamentos
+  defeituosos observados; não são testes de aceite de uma correção. Backup
+  passou na repetição focada; a falha anterior continua registrada.
+- Evidência local, descartável e fora do Git: `.scratch/dev-tests/run-_rab54lb`,
+  `run-29la1x1v`, `run-4poe65yr`, `run-t9dqu524` (logs/run.json), e
+  `run-review-20261029/test_assessment_probes.py` (sete provas). O relato acima
+  preserva os resultados no Git. Dois skips de Edge ausente permanecem.
+- Revisão documental e `git diff --check`; não se aplicou regra do KWin,
+  redimensionamento privilegiado, limpeza ou efeito em processo alheio.
+  Compositor físico e soak não foram exercitados nesta avaliação.
+
+Lacunas conhecidas permanecem: retenção dos 256 temporários sem lease/término
+comprovado (`safely/jobtemp.py`), plano/ID confirmado no pai para todas as
+mutações, prazo total e cancelamento, histórico sem compactação, soak real de
+7200 segundos e matriz física de desktop. Próximo incremento recomendado:
+fechar os três P1 acima com regressões nos fluxos oficiais, depois a corrida
+de sessão/CI e a retenção segura; automação continua desligada.
