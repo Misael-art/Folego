@@ -282,3 +282,14 @@ Continuam pendentes retenção segura dos temporários, demais planos/IDs no pai
 prazo total/histórico e matriz física/soak de duas horas. Automação permanece
 desligada. Próximo incremento técnico: retenção com identidade/lease e orçamento,
 sem adotar ou apagar diretórios ambíguos.
+
+### Publicação confirmada
+
+Repositório **público** em https://github.com/Misael-art/Folego, licença **MIT**
+reconhecida pelo GitHub e branch padrão `codex/portable-handoff-20261024`.
+Apresentação e código publicados em `3f770b19dbff7e1b12a1620b4684a4673b3508b8`;
+README e as duas imagens conferidos por leitura anônima e igualdade com os
+arquivos locais. Descrição e dez tópicos aplicados; PR #1 atualizado e aberto.
+CI desse SHA: núcleo sem Qt, Qt offscreen e contratos CLI **success**, tanto
+no push quanto no PR; CodeRabbit skipped. Nenhum merge ou release foi criado.
+Recibo local: `run-review-20261029/anonymous-publication-verification.json`.
