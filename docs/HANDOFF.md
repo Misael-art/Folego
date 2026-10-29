@@ -293,3 +293,93 @@ arquivos locais. Descrição e dez tópicos aplicados; PR #1 atualizado e aberto
 CI desse SHA: núcleo sem Qt, Qt offscreen e contratos CLI **success**, tanto
 no push quanto no PR; CodeRabbit skipped. Nenhum merge ou release foi criado.
 Recibo local: `run-review-20261029/anonymous-publication-verification.json`.
+
+## Avaliação: supervisão da acessibilidade do desktop — 2026-10-29
+
+Pedido novo: Fôlego acompanhar entrada/acessibilidade, espelhar estado por
+dispositivo e solicitar reparo manual ou automático, aguardando intervenções
+dos outros projetos. Esta rodada avalia viabilidade, dependências e aceite;
+não implementa nem ativa um executor novo. A solicitação de automação para
+acessibilidade não amplia autorização para limpar dados, sinalizar trabalhos,
+parar containers ou habilitar o executor genérico de recursos do Fôlego.
+
+### Estado verificado e fontes oficiais existentes
+
+- Fôlego em `e86d7d2`: há coleta de recursos, adapters somente leitura,
+  coordenador, diário e workers; não há monitor ou executor de acessibilidade.
+- PhaseZero, código verificado em `83c50a60`: o backend oficial é
+  `linux/steamdeck/desktop_session.py`, registrado por
+  `~/.config/phasezero/desktop-session.json`; CLI `pz steamdeck input status`.
+  Guardião de entrada e watcher do teclado estavam ativos/habilitados na
+  consulta. Supervisor `phasezero-controller-desktop.service` não instalado.
+- RetroFE mantém propriedade do perfil Steam e atalhos em
+  `Tools/launchers/retrofe/steam_desktop_session.py`; seu
+  `desktop_environment.py` já delega a política local ao backend registrado
+  do PhaseZero. Guardião de recuperação também estava ativo/habilitado.
+- Consulta oficial de status retornou processo com exit 0, mas `ok=false`,
+  `desktopReady=false`, `ownershipRecovered=true` e `touchscreen=missing`.
+  USB observado, dispositivos enumerados pelo KWin habilitados, teclado virtual
+  disponível em modo 1 e áudio enumerado sem mute. Enumeração não comprova
+  movimento, clique, caractere digitado, toque físico, audição ou fala.
+
+### Lacunas que precedem a automação coordenada
+
+1. **Não existe exclusão mútua comum de reparos.** `guardian.lock` do PhaseZero
+   protege instâncias de `watch`; `reconcile`/`capture` não adquirem essa mesma
+   trava de operação. RetroFE tem locks próprios de perfil/atalhos, e o
+   coordenador do Fôlego protege somente seus participantes. Ler “active” no
+   systemd ou conferir lease antes do efeito não elimina a corrida posterior.
+2. **Contrato de saúde/propriedade ainda precisa de qualidade explícita.** O
+   status do PhaseZero não pode ser interpretado só pelo exit code; leituras
+   vazias/indisponíveis e erros ao verificar identidade precisam continuar
+   desconhecidos. A leitura booleana `process_alive` existente exige revisão
+   de falhas de observação antes de servir como autorização ao Fôlego.
+3. **Containers não estão cobertos como donos de dispositivos.** O adapter
+   atual do Fôlego lista containers/imagens/volumes, não acesso a `/dev/input`.
+   Dispositivo passado ao container continua sendo recurso do host. Identificar
+   descritor aberto não prova captura exclusiva; processos/projetos precisam
+   cooperar com o mesmo contrato de propriedade.
+4. **FTS e login são outro nível.** Touchscreen continua ausente. O reparo FTS
+   restrito está no PhaseZero; fallback físico e persistência não homologados.
+   Units de usuário em `graphical-session.target` não certificam entrada no
+   greeter SDDM. Fôlego aberto depois do login não resolve sozinho bloqueio
+   ocorrido antes dele. Usar [systemd.special](https://freedesktop.org/software/systemd/man/latest/systemd.special.html#graphical-session.target)
+   e [documentação Docker](https://docs.docker.com/engine/containers/run/#runtime-privilege-and-linux-capabilities)
+   como referência desses limites.
+
+### Incrementos e aceite propostos
+
+| Ordem | Integração | Dependência e aceite |
+| --- | --- | --- |
+| 1 | Monitor somente leitura, CLI e painel Entrada/Acessibilidade | Usar registro do backend, validar schema/owner e orçamento total; representar saudável/degradado/desconhecido/ausente conforme capacidades do host. Pode avançar sem esperar reparo FTS. |
+| 2 | Protocolo comum e reparo manual | Estender o backend oficial, sem copiar sua política para Fôlego. Todos os caminhos envolvidos publicam/adquirem lease/trava por domínio/dispositivo. Testar concorrência, falha, filhos vivos, reboot/PID reutilizado e falta de evidência em fixtures. |
+| 3 | Supervisão automática limitada, independente da janela | Após o contrato comum: aguardar dono, reler estado, solicitar operação com ID, verificar resultado; cooldown, orçamento, disjuntor e intenção durável. Reconciliar timeout sem retry cego. Serviços existentes não significam que suas GUIs precisem ficar abertas. |
+| 4 | Garantia operacional antes do login e transições físicas | PhaseZero é owner do reparo FTS/boot. Validar driver e toque real, SDDM, cold boot, logout/login, suspend/resume, dock/USB, Steam/Big Picture e frontend com emulador filho vivo. Falha física não pode ser aprovada por fixture. |
+
+Fluxo requerido: observar → outro dono reparando/usando → aguardar sem efeito →
+adquirir exclusividade e revalidar → intenção → pedir reparo ao owner → testar →
+confirmar resultado ou manter parcial/desconhecido. Heartbeat vencido sozinho
+não prova abandono. Trava ausente só é autoridade quando todos os writers usam
+o protocolo. Nenhum restart global de KWin/Steam/USB nem reset de barramento
+compartilhado deve ser usado como fallback automático.
+
+Na interface: cards com ícone **e texto** para Deck/trackpads, toque, teclado
+físico/virtual, mouse/controles externos, áudio/microfone; mostrar dono, última
+verificação, motivo e estado “aguardando PhaseZero/RetroFE”. Botões “Verificar”
+e “Solicitar reparo” usam o mesmo controlador e as mesmas portas de automação,
+sem caminho manual que ignore propriedade. Tab/Enter, nomes acessíveis e
+feedback sem depender só de cor fazem parte do aceite. Não gravar teclas ou
+áudio para manter o monitoramento.
+
+A política observada é teclado automático somente por toque na tela (modo 1),
+com atalhos explícitos preservados. O termo “touchpad” no pedido pode significar
+trackpad ou touchscreen; esclarecer antes de alterar esse comportamento. O
+pedido termina por solicitar avaliação; implementação e ativação não foram
+inferidas desta avaliação enquanto essa escolha de escopo estiver pendente.
+
+Verificação desta rodada: leitura do anexo e dos fontes responsáveis,
+`systemctl --user show` das quatro units, enumeração do kernel/KWin e CLI
+oficial de status, sem gravação de configurações, coleta de teclas, restart,
+sinal ou reparo no host. Alteração apenas documental: revisar diff/referências;
+não há nova contagem de testes de produto. Próximo passo concreto: incremento
+1 e contrato comum do incremento 2, preservando os executores oficiais.
