@@ -7,6 +7,7 @@ tunings tab is never consulted on its own: opening the window must never be
 enough to write a byte or signal a process.
 """
 import os
+import subprocess
 import time
 import json
 import sys
@@ -121,7 +122,9 @@ class MainWindow(QMainWindow):
             parent=self, argv_factory=process_argv, timeout_ms=20_000)
         self._process_group = ""
 
-        self.dashboard = DashboardTab(on_jump=self.jump_to, thresholds=self._thresholds)
+        self.dashboard = DashboardTab(on_jump=self.jump_to, thresholds=self._thresholds,
+                                      on_widget=self.enter_widget_mode)
+        self._widget_confirm = confirm_fn or self._ask_widget_rule
         self._show_automation_state()
         self.tunings = TuningsTab(jobs=self._jobs, confirm_fn=confirm_fn)
         self.orphans = OrphansPanel(confirm_fn=confirm_fn,
@@ -381,6 +384,58 @@ class MainWindow(QMainWindow):
             self._compact.show_snapshot(self._last_snapshot,
                                         signal=self._last_signal)
         self._compact.show_compact()
+
+    def enter_widget_mode(self) -> bool:
+        """Modo widget: abre o widget flutuante e recolhe a janela central para a bandeja."""
+        self.show_compact()
+        self._offer_kwin_rule()
+        return self.hide_window()
+
+    def _offer_kwin_rule(self) -> None:
+        """No Wayland do Plasma, só uma regra do KWin mantém o widget por cima; pergunta uma vez."""
+        from . import kwin_rule
+        caps = self._caps or desktop_caps.detect(session_type=os.environ.get("XDG_SESSION_TYPE"),
+                                                 platform=QGuiApplication.platformName())
+        if caps.keep_above or "KDE" not in os.environ.get("XDG_CURRENT_DESKTOP", "").upper():
+            return
+        settings = self._widget_settings()
+        if settings.value("widget/kwin_rule_declined", False) in (True, "true") or kwin_rule.installed():
+            return
+        if not self._widget_confirm(
+                "Manter o widget em primeiro plano",
+                "No Plasma com Wayland, um aplicativo não pode se manter sobre as outras janelas sozinho. "
+                "Posso criar uma regra do KWin só para o widget do Fôlego: fica acima das janelas, sem "
+                "borda, fora da barra de tarefas e do Alt+Tab, nunca recebe o foco e abre no canto inferior "
+                "direito. Outras regras não são alteradas e esta pode ser removida com "
+                "`folego widget-rule --remover`."):
+            settings.setValue("widget/kwin_rule_declined", True)
+            return
+        screen = QGuiApplication.primaryScreen()
+        area = screen.availableGeometry() if screen is not None else None
+        compact = self._compact
+        x = (area.x() + area.width() - compact.width() - 24) if area else 0
+        y = (area.y() + area.height() - compact.sizeHint().height() - 24) if area else 0
+        try:
+            kwin_rule.install(compact.windowTitle(), x, y, confirmed=True)
+        except (RuntimeError, OSError, subprocess.CalledProcessError) as exc:
+            self._tray_note = f"regra do KWin não criada: {exc}"
+            return
+        # a regra vale no mapeamento da janela: reabre o widget para aplicá-la já
+        compact.hide()
+        compact.show_compact()
+
+    def _widget_settings(self):
+        from PySide6.QtCore import QSettings
+        return QSettings("folego", "folego")
+
+    def _ask_widget_rule(self, title: str, text: str) -> bool:
+        from PySide6.QtWidgets import QMessageBox
+        box = QMessageBox(self)
+        box.setWindowTitle(title)
+        box.setText(text)
+        box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        box.setDefaultButton(QMessageBox.StandardButton.No)
+        return box.exec() == QMessageBox.StandardButton.Yes
 
     def hide_window(self) -> bool:
         """Hide, never stop: a way back must exist (tray or compact control)."""

@@ -129,3 +129,17 @@ Validação: 4 testes novos; `./dev check` 936 + 1161 pass (2 skips cada); janel
 quatro vezes durante os ajustes (rótulos rotacionados, abas altas e detalhes cortados corrigidos).
 Para rodar o gate foi preciso remover 17 workspaces de QA desta sessão (o wrapper recusa com 20
 retidos); os 3 anteriores a 28/10 foram preservados.
+
+## Modo widget — 2026-10-28
+
+Botão "⧉ Modo widget" na visão central: abre o controle compacto como widget flutuante (cartão sem
+borda, mini medidor, RAM/CPU/Swap/Temp, botão "⤢ Abrir Fôlego" que volta à UI padrão e recolhe o
+widget) e recolhe a janela para a bandeja (`hide_window` mantém a garantia de caminho de volta).
+O widget nunca recebe foco, fica fora da barra de tarefas e no Wayland usa `startSystemMove`.
+Keep-above no Plasma/Wayland não é possível pelo app: `ui/kwin_rule.py` cria, com confirmação, uma
+regra do KWin só para o widget (app id `folego`, título exato; acima, sem borda, fora de barra/Alt+Tab,
+sem foco, posição inicial no canto inferior direito) via kwriteconfig6 + reconfigure; preserva outras
+regras; `folego widget-rule [--remover]`. Recusa fica gravada para não perguntar de novo.
+Validação: 10 testes novos/ajustados; `./dev check` 940 + 1170 pass (2 skips cada); execução real no
+KDE/Wayland: janela recolhida, bandeja presente, widget visível com dados reais (sem criar a regra).
+Pendente: aplicar a regra do KWin no host real (decisão do usuário) e validar keep-above/posição.

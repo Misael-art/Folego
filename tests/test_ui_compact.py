@@ -96,12 +96,15 @@ def test_partial_overlap_keeps_all_controls_inside_the_screen():
     assert clamp_position(1900, 1000, 360, 190, ((0, 0, 1920, 1080),)) == (1560, 890)
 
 
-def test_wayland_fallback_is_decorated_and_never_restores_absolute_coordinates(qapp):
+def test_wayland_widget_never_takes_focus_nor_restores_absolute_coordinates(qapp):
     from PySide6.QtCore import Qt
     store = Store("5000,5000")
     view, _ = make(qapp, caps=wayland(), store=store)
-    assert not view.windowFlags() & Qt.FramelessWindowHint
-    assert view.windowType() == Qt.Window
+    flags = view.windowFlags()
+    assert flags & Qt.FramelessWindowHint and flags & Qt.WindowDoesNotAcceptFocus
+    assert view.windowType() == Qt.Tool
+    # keep-above is not provable on Wayland: it comes from the optional KWin rule, not from a hint
+    assert not flags & Qt.WindowStaysOnTopHint
     view.show_compact()
     view._save_position()
     assert store.data["compact/position"] == "5000,5000"
@@ -162,7 +165,8 @@ def test_pause_is_a_distinct_state_and_says_so(qapp):
     view.pause_button.click()
     assert host.paused is True
     assert "PAUSADO" in view.mode_label.text()
-    assert view.pause_button.text() == "Retomar monitoramento"
+    assert view.pause_button.toolTip() == "Retomar monitoramento"
+    assert view.pause_button.accessibleDescription() == "monitoramento pausado"
 
     view.pause_button.click()
     assert host.paused is False
@@ -224,3 +228,22 @@ def test_closing_the_compact_control_only_hides_it(qapp):
     view.close()
     assert not view.isVisible()
     view.force_close()
+
+
+def test_the_widget_button_returns_to_the_central_window_and_folds_itself(qapp):
+    view, host = make(qapp)
+    view.show_compact()
+    view.open_button.click()
+    assert host.raised == 1 and not view.isVisible()
+
+
+def test_the_widget_shows_the_basic_numbers_and_a_mini_gauge(qapp):
+    from folego.core.snapshot import MemInfo, Snapshot
+    view, _ = make(qapp)
+    snapshot = Snapshot(ts=0.0, mem=MemInfo(10_000_000, 3_000_000), swap_used_kb=500, swap_total_kb=1000,
+                        pressure_memory=None, pressure_io=None, pressure_cpu=None, load=None,
+                        apps=(), self_rss_kb=0, errors=(), tmpfs=(), sources=())
+    view.show_snapshot(snapshot)
+    text = view.detail_label.text()
+    assert "RAM 70%" in text and "Swap 50%" in text
+    assert view.gauge.value == 30

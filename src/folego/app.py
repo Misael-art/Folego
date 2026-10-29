@@ -32,6 +32,8 @@ def main() -> int:
     try:
         app = QApplication(sys.argv)
         app.setApplicationName("folego")
+        # Wayland app id = desktop file name: the launcher and the KWin widget rule match "folego"
+        app.setDesktopFileName("folego")
         apply_theme(app)
         win = MainWindow(collector_factory=MetricsCollector)
         win.show()

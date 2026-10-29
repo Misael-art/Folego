@@ -51,9 +51,10 @@ def usage_level(used_frac: float, *, warning: float, critical: float) -> str:
 class HealthGauge(QWidget):
     """Ring with the headroom number and the verdict word; static, no animation."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, compact: bool = False):
         super().__init__(parent)
-        self.setMinimumSize(176, 176)
+        self._compact = compact
+        self.setMinimumSize(*((72, 72) if compact else (176, 176)))
         self.value: int | None = None
         self.verdict, self.color = VERDICT[health.UNKNOWN]
         self.setAccessibleName("Saúde geral")
@@ -71,32 +72,35 @@ class HealthGauge(QWidget):
         self.setToolTip("Menor folga entre memória, swap e temporários; o veredito vem do relatório de saúde")
 
     def paintEvent(self, event):
-        side = min(self.width(), self.height()) - 16
+        side = min(self.width(), self.height()) - (8 if self._compact else 16)
+        ring = 7 if self._compact else 12
         rect = QRectF((self.width() - side) / 2, (self.height() - side) / 2, side, side)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        track = QPen(QColor(TOKENS.surface_alt), 12)
+        track = QPen(QColor(TOKENS.surface_alt), ring)
         track.setCapStyle(Qt.PenCapStyle.RoundCap)
         painter.setPen(track)
         painter.drawArc(rect, 225 * 16, -270 * 16)
         if self.value is not None:
-            arc = QPen(QColor(self.color), 12)
+            arc = QPen(QColor(self.color), ring)
             arc.setCapStyle(Qt.PenCapStyle.RoundCap)
             painter.setPen(arc)
             painter.drawArc(rect, 225 * 16, int(-270 * 16 * self.value / 100))
         painter.setPen(QColor(TOKENS.text))
         font = painter.font()
-        font.setPointSizeF(font.pointSizeF() * 2.2)
+        scale = 1.2 if self._compact else 2.2
+        font.setPointSizeF(font.pointSizeF() * scale)
         font.setBold(True)
         painter.setFont(font)
         number = rect.adjusted(0, -side * 0.08, 0, -side * 0.08)
         painter.drawText(number, Qt.AlignmentFlag.AlignCenter, "—" if self.value is None else f"{self.value}%")
-        font.setPointSizeF(font.pointSizeF() / 2.2)
+        font.setPointSizeF(font.pointSizeF() / scale)
         font.setBold(False)
         painter.setFont(font)
         painter.setPen(QColor(self.color))
-        painter.drawText(rect.adjusted(0, side * 0.22, 0, side * 0.22), Qt.AlignmentFlag.AlignCenter,
-                         f"{self.verdict} · folga")
+        if not self._compact:
+            painter.drawText(rect.adjusted(0, side * 0.22, 0, side * 0.22), Qt.AlignmentFlag.AlignCenter,
+                             f"{self.verdict} · folga")
         painter.end()
 
 
@@ -178,9 +182,10 @@ class SuggestionRow(QWidget):
 
 class DashboardTab(QWidget):
     def __init__(self, *, on_jump=None, thresholds: title_signal.Thresholds | None = None,
-                 parent=None):
+                 on_widget=None, parent=None):
         super().__init__(parent)
         self._jump = on_jump or (lambda target: None)
+        self._on_widget = on_widget
         # the same thresholds the title uses: two signals, one verdict
         self._thresholds = thresholds or title_signal.Thresholds()
         self.rows: list[SuggestionRow] = []
@@ -235,11 +240,19 @@ class DashboardTab(QWidget):
         hero_text.addWidget(self.verdict_line)
         hero_text.addWidget(self.primary_button, 0, Qt.AlignmentFlag.AlignLeft)
         hero_text.addStretch(1)
+        self.widget_button = QPushButton("⧉  Modo widget")
+        self.widget_button.setObjectName("pill")
+        self.widget_button.setAccessibleName("Recolher para o widget flutuante e a bandeja")
+        self.widget_button.setToolTip("Minimiza para a bandeja e mostra um widget compacto que não pega o foco")
+        self.widget_button.setVisible(on_widget is not None)
+        if on_widget is not None:
+            self.widget_button.clicked.connect(on_widget)
         hero = QFrame()
         hero.setObjectName("hero")
         hero_layout = QHBoxLayout(hero)
         hero_layout.addWidget(self.gauge, 0)
         hero_layout.addLayout(hero_text, 1)
+        hero_layout.addWidget(self.widget_button, 0, Qt.AlignmentFlag.AlignTop)
 
         # um cartão por recurso
         self.cards = {key: ResourceCard(title) for key, title in (

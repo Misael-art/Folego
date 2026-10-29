@@ -114,6 +114,18 @@ QLabel#section {{
     font-weight: 600;
     font-size: 11pt;
 }}
+QPushButton#pill {{
+    background: {TOKENS.surface_alt};
+    color: {TOKENS.text};
+    border: 1px solid {TOKENS.accent};
+    border-radius: 16px;
+    padding: 7px 16px;
+    font-weight: 600;
+}}
+QPushButton#pill:hover {{
+    background: {TOKENS.accent};
+    color: {TOKENS.accent_text};
+}}
 QPushButton#primary {{
     background: {TOKENS.accent};
     color: {TOKENS.accent_text};

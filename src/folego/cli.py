@@ -375,6 +375,10 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument("tuning", help="id do ajuste, ex. edge.startup_boost")
         sub.add_argument("--confirmar", action="store_true", help="aceita esta mutação")
 
+    wrule = commands.add_parser(
+        "widget-rule", help="regra do KWin do widget flutuante: estado ou remoção (criação pela GUI)")
+    wrule.add_argument("--remover", action="store_true", help="remove somente a regra criada pelo Fôlego")
+
     shortcut = commands.add_parser(
         "shortcuts", help="atalhos do Fôlego no menu e na Área de trabalho (nunca autostart)")
     shortcut.add_argument("--json", action="store_true", help="saída para máquinas")
@@ -2117,6 +2121,20 @@ _TUNE_HANDLERS = {
 }
 
 
+def _cmd_widget_rule(args) -> int:
+    from .ui import kwin_rule
+    try:
+        if args.remover:
+            print(json.dumps(kwin_rule.remove(), ensure_ascii=False))
+        else:
+            print("regra do KWin do widget: " + ("instalada" if kwin_rule.installed() else "ausente") +
+                  " · criação: botão Modo widget na GUI (Plasma/Wayland)")
+    except (RuntimeError, OSError, subprocess.CalledProcessError) as exc:
+        sys.stderr.write(f"refused: {exc}\n")
+        return EXIT_REFUSED
+    return EXIT_OK
+
+
 def _cmd_shortcuts(args) -> int:
     from . import shortcuts
     states = shortcuts.ensure()
@@ -2134,6 +2152,8 @@ def _dispatch(ns, argv) -> int:
         return run_gui(argv)
     if ns.command == "shortcuts":
         return _cmd_shortcuts(ns)
+    if ns.command == "widget-rule":
+        return _cmd_widget_rule(ns)
     if ns.command == "orphans":
         return _cmd_orphans(ns)
     if ns.command == "groups":

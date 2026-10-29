@@ -253,3 +253,13 @@ def test_primary_action_jumps_to_the_most_urgent_recommendation_only(panel):
     assert tab.primary_button.isEnabled() and not tab.no_recommendations.isVisibleTo(tab)
     tab.primary_button.click()
     assert jumps == [tab.rows[0].target]
+
+
+def test_widget_button_exists_only_with_a_handler_and_calls_it(qapp):
+    calls = []
+    with_handler = DashboardTab(on_widget=lambda: calls.append(1))
+    with_handler.show()
+    assert with_handler.widget_button.isVisible()
+    with_handler.widget_button.click()
+    assert calls == [1]
+    assert not DashboardTab().widget_button.isVisibleTo(DashboardTab())

@@ -174,7 +174,7 @@ def test_the_compact_control_receives_the_same_read_only_automation_state(qapp):
 
     assert "automação assistido" in text and "preset foco" in text
     assert "execução real desligada" in text
-    assert win._compact.pause_button.text() == "Pausar monitoramento", (
+    assert win._compact.pause_button.toolTip() == "Pausar monitoramento", (
         "pausa da automação não é a pausa da coleta")
     win._compact.force_close()
 
@@ -498,3 +498,40 @@ def test_navigation_is_a_left_sidebar_with_horizontal_labels(window):
     hint = bar.tabSizeHint(0)
     assert hint.width() > hint.height(), "rótulo horizontal: aba mais larga que alta"
     assert [window.tabs.tabText(i) for i in range(window.tabs.count())][0] == "central"
+
+
+def test_widget_mode_opens_the_widget_and_folds_the_window_without_touching_kwin(qapp, monkeypatch):
+    from folego.ui import kwin_rule
+    calls = []
+    monkeypatch.setattr(kwin_rule, "installed", lambda **kw: calls.append("installed") or False)
+    monkeypatch.setattr(kwin_rule, "install", lambda *a, **kw: calls.append(("install", a, kw)) or {})
+    monkeypatch.setenv("XDG_CURRENT_DESKTOP", "KDE")
+    asked = []
+    win = make_window(compact_factory=lambda view, caps: CompactWindow(view, caps=caps, store=_CompactStore()))
+    win._widget_confirm = lambda title, text: asked.append(title) or False
+    win._widget_settings = lambda: _CompactStore()
+    win.show()
+    win.tray.tray = object()  # a way back exists: the window may hide
+    assert win.dashboard.widget_button.isVisible()
+    win.dashboard.widget_button.click()
+    assert win._compact.isVisible() and not win.isVisible()
+    assert asked == ["Manter o widget em primeiro plano"]
+    assert not any(isinstance(c, tuple) for c in calls), "recusar não cria regra"
+    win._compact.open_button.click()
+    assert win.isVisible() and not win._compact.isVisible()
+    win._compact.force_close()
+
+
+def test_accepting_the_offer_installs_the_rule_with_the_widget_title(qapp, monkeypatch):
+    from folego.ui import kwin_rule
+    installs = []
+    monkeypatch.setattr(kwin_rule, "installed", lambda **kw: False)
+    monkeypatch.setattr(kwin_rule, "install", lambda title, x, y, **kw: installs.append((title, kw)) or {})
+    monkeypatch.setenv("XDG_CURRENT_DESKTOP", "KDE")
+    win = make_window(compact_factory=lambda view, caps: CompactWindow(view, caps=caps, store=_CompactStore()))
+    win._widget_confirm = lambda title, text: True
+    win._widget_settings = lambda: _CompactStore()
+    win.tray.tray = object()
+    win.enter_widget_mode()
+    assert installs == [("Fôlego — widget", {"confirmed": True})]
+    win._compact.force_close()
