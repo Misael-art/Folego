@@ -216,3 +216,40 @@ def test_a_snapshot_without_memory_leaves_the_title_alone(panel):
                      load=None, apps=(), self_rss_kb=0)
     view.show_snapshot(empty)
     assert "indisponível" in view.headline.text()
+
+
+def test_headroom_is_the_smallest_free_share_and_unknown_without_data():
+    from folego.core.tmpfs import TmpfsVolume
+    from folego.ui.dashboard_tab import headroom_pct
+    runtime = TmpfsVolume("/run/user/1000", "tmpfs", 100, 95, 5, is_runtime=True)
+    assert headroom_pct(snap(available_kb=7_187_152, swap_used_kb=0)) == 50
+    assert headroom_pct(snap(swap_used_kb=6_487_852)) == 10
+    assert headroom_pct(snap(tmpfs=(runtime,))) == 5
+    broken = TmpfsVolume("/tmp", "tmpfs", 0, 0, 0, quality="error", error="x")
+    empty = Snapshot(ts=0.0, mem=None, swap_used_kb=0, swap_total_kb=0, pressure_memory=None,
+                     pressure_io=None, pressure_cpu=None, load=None, apps=(), self_rss_kb=0,
+                     errors=(), tmpfs=(broken,), sources=())
+    assert headroom_pct(empty) is None
+
+
+def test_gauge_and_cards_say_the_level_in_words(panel):
+    tab, _ = panel
+    tab.show_snapshot(snap(available_kb=1_000_000, swap_used_kb=6_800_000))
+    assert tab.gauge.verdict == "Crítico"
+    assert "Crítico" in tab.gauge.accessibleDescription() and "folga" in tab.gauge.accessibleDescription()
+    memory = tab.cards["memoria"]
+    assert memory.value.text() == "93%" and memory.detail.text().startswith("crítico")
+    assert memory.property("level") == "danger"
+    assert tab.cards["swap"].detail.text().startswith("crítico")
+    assert tab.cards["cpu"].value.text() == "—"
+    assert "menor folga" in tab.verdict_line.text()
+
+
+def test_primary_action_jumps_to_the_most_urgent_recommendation_only(panel):
+    tab, jumps = panel
+    tab.show_snapshot(snap(apps=()))
+    assert not tab.primary_button.isEnabled() and tab.no_recommendations.isVisibleTo(tab)
+    tab.show_snapshot(snap(available_kb=1_000_000))
+    assert tab.primary_button.isEnabled() and not tab.no_recommendations.isVisibleTo(tab)
+    tab.primary_button.click()
+    assert jumps == [tab.rows[0].target]

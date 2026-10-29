@@ -1,22 +1,141 @@
 """M3 dashboard: the title-bar numbers, the reasons behind them, and a way out.
 
+Layout follows the usual maintenance-dashboard pattern: a health gauge with the
+verdict and one primary action at the top, one card per resource, the
+recommendations, then recent activity. The gauge shows the smallest headroom
+among the measured resources; the verdict word and colour come from the same
+health report as the title, so the two never disagree.
+
 Plain data in (Snapshot plus the counts the window already computed), jump
 requests out. This widget measures nothing and mutates nothing on purpose: the
 rules live in ``core.suggestions``, so the same verdicts are testable without a
 display and reusable by the tray tooltip.
 """
-from PySide6.QtCore import Slot
-from PySide6.QtGui import QGuiApplication
-from PySide6.QtWidgets import (QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
-                               QWidget)
+from PySide6.QtCore import QRectF, Qt, Slot
+from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen
+from PySide6.QtWidgets import (QFrame, QGridLayout, QHBoxLayout, QLabel, QProgressBar,
+                               QPushButton, QVBoxLayout, QWidget)
 
 from . import title_signal
+from .theme import TOKENS
+from ..core import health
 from ..core.snapshot import ERROR, MISSING, PARTIAL
 from ..core.suggestions import suggest
 
 LEVEL_EMOJI = {"critico": "🔴", "alto": "🟠", "medio": "🟡"}
 TARGET_LABEL = {"memoria": "memória", "ajustes": "ajustes",
                 "orfaos": "órfãos", "disco": "disco"}
+
+
+VERDICT = {health.GREEN: ("Saudável", TOKENS.ok), health.YELLOW: ("Atenção", TOKENS.warning),
+           health.RED: ("Crítico", TOKENS.danger), health.UNKNOWN: ("Desconhecido", TOKENS.muted)}
+
+
+def headroom_pct(snapshot) -> int | None:
+    """Smallest free share among memory, swap and the fullest watched tmpfs; None without data."""
+    shares = []
+    if snapshot.mem is not None and snapshot.mem.mem_total_kb:
+        shares.append(snapshot.mem.mem_available_kb / snapshot.mem.mem_total_kb)
+    if snapshot.swap_total_kb:
+        shares.append(1 - snapshot.swap_used_kb / snapshot.swap_total_kb)
+    measured = [v for v in snapshot.tmpfs if v.quality == "ok" and v.total_bytes]
+    if measured:
+        shares.append(1 - max(v.used_frac for v in measured))
+    return round(max(0.0, min(shares)) * 100) if shares else None
+
+
+def usage_level(used_frac: float, *, warning: float, critical: float) -> str:
+    return "crítico" if used_frac >= critical else "atenção" if used_frac >= warning else "ok"
+
+
+class HealthGauge(QWidget):
+    """Ring with the headroom number and the verdict word; static, no animation."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumSize(176, 176)
+        self.value: int | None = None
+        self.verdict, self.color = VERDICT[health.UNKNOWN]
+        self.setAccessibleName("Saúde geral")
+        self._sync_accessible()
+
+    def set_state(self, value: int | None, level: str) -> None:
+        self.value = value
+        self.verdict, self.color = VERDICT.get(level, VERDICT[health.UNKNOWN])
+        self._sync_accessible()
+        self.update()
+
+    def _sync_accessible(self):
+        amount = "sem dados" if self.value is None else f"{self.value}% de folga"
+        self.setAccessibleDescription(f"{self.verdict}, {amount}")
+        self.setToolTip("Menor folga entre memória, swap e temporários; o veredito vem do relatório de saúde")
+
+    def paintEvent(self, event):
+        side = min(self.width(), self.height()) - 16
+        rect = QRectF((self.width() - side) / 2, (self.height() - side) / 2, side, side)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        track = QPen(QColor(TOKENS.surface_alt), 12)
+        track.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(track)
+        painter.drawArc(rect, 225 * 16, -270 * 16)
+        if self.value is not None:
+            arc = QPen(QColor(self.color), 12)
+            arc.setCapStyle(Qt.PenCapStyle.RoundCap)
+            painter.setPen(arc)
+            painter.drawArc(rect, 225 * 16, int(-270 * 16 * self.value / 100))
+        painter.setPen(QColor(TOKENS.text))
+        font = painter.font()
+        font.setPointSizeF(font.pointSizeF() * 2.2)
+        font.setBold(True)
+        painter.setFont(font)
+        number = rect.adjusted(0, -side * 0.08, 0, -side * 0.08)
+        painter.drawText(number, Qt.AlignmentFlag.AlignCenter, "—" if self.value is None else f"{self.value}%")
+        font.setPointSizeF(font.pointSizeF() / 2.2)
+        font.setBold(False)
+        painter.setFont(font)
+        painter.setPen(QColor(self.color))
+        painter.drawText(rect.adjusted(0, side * 0.22, 0, side * 0.22), Qt.AlignmentFlag.AlignCenter,
+                         f"{self.verdict} · folga")
+        painter.end()
+
+
+class ResourceCard(QFrame):
+    """One resource: big number, bar and a state word (colour is never the only signal)."""
+
+    def __init__(self, title: str, parent=None):
+        super().__init__(parent)
+        self.setObjectName("card")
+        self.title = QLabel(title)
+        self.title.setObjectName("cardTitle")
+        self.value = QLabel("—")
+        self.value.setObjectName("cardValue")
+        self.bar = QProgressBar()
+        self.bar.setRange(0, 100)
+        self.bar.setTextVisible(False)
+        self.bar.setFixedHeight(8)
+        self.detail = QLabel("aguardando amostra")
+        self.detail.setObjectName("why")
+        self.detail.setWordWrap(True)
+        self.setAccessibleName(title)
+        layout = QVBoxLayout(self)
+        layout.setSpacing(6)
+        for widget in (self.title, self.value, self.bar, self.detail):
+            layout.addWidget(widget)
+
+    def set_value(self, used_frac: float | None, level: str, detail: str) -> None:
+        if used_frac is None:
+            self.value.setText("—")
+            self.bar.setValue(0)
+            self.setProperty("level", "unknown")
+        else:
+            self.value.setText(f"{used_frac * 100:.0f}%")
+            self.bar.setValue(round(used_frac * 100))
+            self.setProperty("level", {"ok": "ok", "atenção": "warning", "crítico": "danger"}[level])
+        self.detail.setText(detail)
+        self.setAccessibleDescription(f"{self.value.text()} · {detail}")
+        self.style().unpolish(self)
+        self.style().polish(self)
 
 
 class SuggestionRow(QWidget):
@@ -97,19 +216,65 @@ class DashboardTab(QWidget):
         self._hidden_rows: list[SuggestionRow] = []
         holder = QWidget()
         holder.setLayout(self.list_box)
-        scroll_rows = QVBoxLayout()
-        scroll_rows.addWidget(holder)
-        scroll_rows.addStretch(1)
+
+        # topo: medidor + veredito + uma ação principal
+        self.gauge = HealthGauge()
+        self.details.setObjectName("why")
+        self.primary_button = QPushButton("Tudo dentro do orçamento")
+        self.primary_button.setObjectName("primary")
+        self.primary_button.setEnabled(False)
+        self.primary_button.setAccessibleName("Ir para a recomendação mais urgente")
+        self.primary_button.clicked.connect(self._primary_clicked)
+        hero_text = QVBoxLayout()
+        hero_text.setSpacing(6)
+        hero_text.addStretch(1)
+        hero_text.addWidget(self.headline)
+        self.verdict_line = QLabel("")
+        self.verdict_line.setObjectName("why")
+        self.verdict_line.setWordWrap(True)
+        hero_text.addWidget(self.verdict_line)
+        hero_text.addWidget(self.primary_button, 0, Qt.AlignmentFlag.AlignLeft)
+        hero_text.addStretch(1)
+        hero = QFrame()
+        hero.setObjectName("hero")
+        hero_layout = QHBoxLayout(hero)
+        hero_layout.addWidget(self.gauge, 0)
+        hero_layout.addLayout(hero_text, 1)
+
+        # um cartão por recurso
+        self.cards = {key: ResourceCard(title) for key, title in (
+            ("memoria", "Memória"), ("cpu", "CPU"), ("swap", "Swap / zram"), ("tmpfs", "Temporários"))}
+        grid = QGridLayout()
+        grid.setSpacing(10)
+        for index, card in enumerate(self.cards.values()):
+            grid.addWidget(card, 0, index)
+
+        recommendations = QLabel("Recomendações")
+        recommendations.setObjectName("section")
+        self.no_recommendations = QLabel("Nenhuma recomendação agora: os recursos estão dentro do orçamento.")
+        self.no_recommendations.setObjectName("why")
+        activity_title = QLabel("Atividade recente")
+        activity_title.setObjectName("section")
+        activity = QFrame()
+        activity.setObjectName("card")
+        activity_layout = QVBoxLayout(activity)
+        for widget in (self.last_operation, self.automation_status, self.resources, self.details):
+            activity_layout.addWidget(widget)
+        footer = QHBoxLayout()
+        footer.addWidget(self.status, 1)
+        footer.addWidget(self.copy_button, 0)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(self.headline)
-        layout.addWidget(self.details)
-        layout.addWidget(self.resources)
-        layout.addWidget(self.last_operation)
-        layout.addWidget(self.automation_status)
-        layout.addLayout(scroll_rows)
-        layout.addWidget(self.status)
-        layout.addWidget(self.copy_button, 0)
+        layout.setSpacing(12)
+        layout.addWidget(hero)
+        layout.addLayout(grid)
+        layout.addWidget(recommendations)
+        layout.addWidget(self.no_recommendations)
+        layout.addWidget(holder)
+        layout.addWidget(activity_title)
+        layout.addWidget(activity)
+        layout.addStretch(1)
+        layout.addLayout(footer)
 
     def show_snapshot(self, snapshot, *, orphan_count: int = 0,
                       thumbnails_kb: int | None = None,
@@ -117,6 +282,13 @@ class DashboardTab(QWidget):
         signal = signal or title_signal.compute(snapshot, self._thresholds)
         self.headline.setText(signal.text)
         self.details.setText(self._details(snapshot))
+        headroom = headroom_pct(snapshot)
+        self.gauge.set_state(headroom, signal.level)
+        verdict = VERDICT.get(signal.level, VERDICT[health.UNKNOWN])[0]
+        self.verdict_line.setText(
+            f"{verdict}: menor folga {headroom}% entre memória, swap e temporários." if headroom is not None
+            else f"{verdict}: aguardando dados de memória, swap e temporários.")
+        self._show_cards(snapshot)
         self.resources.setText(self._resources(snapshot))
         if last_operation:
             self.last_operation.setText(f"última operação: {last_operation}")
@@ -139,6 +311,42 @@ class DashboardTab(QWidget):
                          "dentro do orçamento")
         notes.extend(extra_notes)
         self.status.setText(" · ".join(notes))
+
+    def _show_cards(self, snapshot) -> None:
+        cards, t = self.cards, self._thresholds
+        if snapshot.mem is None:
+            cards["memoria"].set_value(None, "ok", "sem meminfo")
+        else:
+            total, avail = snapshot.mem.mem_total_kb, snapshot.mem.mem_available_kb
+            used = 1 - avail / max(1, total)
+            level = ("crítico" if 1 - used < t.red_available_frac else
+                     "atenção" if 1 - used < t.yellow_available_frac else "ok")
+            cards["memoria"].set_value(used, level, f"{level} · {title_signal.fmt1(avail / title_signal.MB)} GB livres "
+                                       f"de {title_signal.fmt1(total / title_signal.MB)} GB")
+        if snapshot.cpu_busy_frac is None:
+            cards["cpu"].set_value(None, "ok", "delta ainda não disponível")
+        else:
+            level = usage_level(snapshot.cpu_busy_frac, warning=.75, critical=.95)
+            cards["cpu"].set_value(snapshot.cpu_busy_frac, level, f"{level} · {snapshot.cpu_count} cpu(s)")
+        if snapshot.swap_total_kb:
+            used = snapshot.swap_used_kb / snapshot.swap_total_kb
+            level = usage_level(used, warning=.6, critical=.9)
+            cards["swap"].set_value(used, level, f"{level} · {title_signal.fmt1(snapshot.swap_used_kb / title_signal.MB)} GB "
+                                    f"de {title_signal.fmt1(snapshot.swap_total_kb / title_signal.MB)} GB")
+        else:
+            cards["swap"].set_value(None, "ok", "sem swap/zram")
+        measured = [v for v in snapshot.tmpfs if v.quality == "ok" and v.total_bytes]
+        if measured:
+            worst = max(measured, key=lambda v: v.used_frac)
+            level = usage_level(worst.used_frac, warning=t.tmpfs_yellow_frac, critical=t.tmpfs_red_frac)
+            cards["tmpfs"].set_value(worst.used_frac, level, f"{level} · mais cheio: {worst.path}")
+        else:
+            cards["tmpfs"].set_value(None, "ok", "sem volume observado")
+
+    @Slot()
+    def _primary_clicked(self):
+        if self.rows:
+            self._jump(self.rows[0].target)
 
     def show_automation(self, *, mode: str, preset: str, paused: bool,
                         active_grants: int, error: str = "") -> None:
@@ -288,3 +496,11 @@ class DashboardTab(QWidget):
                 self.list_box.insertWidget(index, row)
             row.show()
         self.rows = rows
+        self.no_recommendations.setVisible(not rows)
+        if rows:
+            top = rows[0].suggestion
+            self.primary_button.setText(f"Resolver agora: {TARGET_LABEL.get(top.target, 'aba')}")
+            self.primary_button.setEnabled(True)
+        else:
+            self.primary_button.setText("Tudo dentro do orçamento")
+            self.primary_button.setEnabled(False)

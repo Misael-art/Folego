@@ -115,3 +115,17 @@ Validação: 8 testes; `./dev check` 936 + 1157 pass (2 skips cada); no host cri
 `~/.local/share/applications/folego.desktop` e `~/Área de trabalho/folego.desktop` (válidos no
 `desktop-file-validate`), segunda execução `present`, e `gio launch` do atalho da Área de trabalho abriu a
 janela real no KDE (instância própria encerrada com SIGTERM).
+
+## Visão padrão redesenhada — 2026-10-28
+
+Padrão comum de painéis de manutenção (o artigo de referência do Medium não pôde ser lido; o usuário
+aprovou seguir o padrão): navegação lateral (`SidebarTabBar`, abas West com rótulos horizontais), topo
+com medidor de folga (`HealthGauge`: menor fração livre entre memória, swap e tmpfs; veredito e cor do
+mesmo relatório de saúde do título) e uma ação principal que só leva à recomendação mais urgente,
+cartões por recurso (memória, CPU, swap/zram, temporários; nível em palavra e cor, limiares oficiais),
+recomendações com estado vazio e atividade recente com os detalhes da amostra. Nenhum comportamento
+de ação mudou; nada novo executa efeito.
+Validação: 4 testes novos; `./dev check` 936 + 1161 pass (2 skips cada); janela real no KDE capturada
+quatro vezes durante os ajustes (rótulos rotacionados, abas altas e detalhes cortados corrigidos).
+Para rodar o gate foi preciso remover 17 workspaces de QA desta sessão (o wrapper recusa com 20
+retidos); os 3 anteriores a 28/10 foram preservados.

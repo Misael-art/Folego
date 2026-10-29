@@ -487,3 +487,14 @@ def test_a_cpu_active_adopted_process_surfaces_as_investigation(qapp):
     assert "pid 700" in text and "cpu 77%" in text
     assert "abandono não provado" in text
     assert win.orphans.rows() == [], "not offered as a terminable orphan"
+
+
+def test_navigation_is_a_left_sidebar_with_horizontal_labels(window):
+    from PySide6.QtWidgets import QTabWidget
+    from folego.ui.main_window import SidebarTabBar
+    assert window.tabs.tabPosition() == QTabWidget.TabPosition.West
+    bar = window.tabs.tabBar()
+    assert isinstance(bar, SidebarTabBar)
+    hint = bar.tabSizeHint(0)
+    assert hint.width() > hint.height(), "rótulo horizontal: aba mais larga que alta"
+    assert [window.tabs.tabText(i) for i in range(window.tabs.count())][0] == "central"

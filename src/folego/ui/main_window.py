@@ -14,7 +14,7 @@ from concurrent.futures import Future
 
 from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QMainWindow, QTabWidget
+from PySide6.QtWidgets import QMainWindow, QStyle, QStyleOptionTab, QStylePainter, QTabBar, QTabWidget
 
 from . import desktop_caps, title_signal
 from .compact import CompactWindow
@@ -42,6 +42,28 @@ JUMPS = {"memoria": "dashboard", "ajustes": "tunings", "orfaos": "orphans",
 DISK_TIMEOUT_MS = 120_000  # the real cache walk took 54,7 s on this Deck (M3 log)
 RUNTIME_SIZE_TIMEOUT_MS = 180_000  # inclui a digitação da senha no diálogo do polkit
 TMPFS_TIMEOUT_MS = 45_000  # três volumes × o prazo de varredura de 10 s, com folga
+
+
+class SidebarTabBar(QTabBar):
+    """Tabs on the left with horizontal, readable labels (Qt rotates West tabs by default)."""
+
+    def tabSizeHint(self, index):
+        size = super().tabSizeHint(index)
+        size.transpose()
+        # largura do maior rótulo, altura de um item de menu: compacto e sem rolagem
+        size.setWidth(max(size.width(), self.fontMetrics().horizontalAdvance(self.tabText(index)) + 40, 150))
+        size.setHeight(max(self.fontMetrics().height() + 22, 40))
+        return size
+
+    def paintEvent(self, event):
+        painter = QStylePainter(self)
+        option = QStyleOptionTab()
+        for index in range(self.count()):
+            self.initStyleOption(option, index)
+            painter.drawControl(QStyle.ControlElement.CE_TabBarTabShape, option)
+            # o rótulo usa o próprio retângulo da aba, desenhado como aba horizontal
+            option.shape = QTabBar.Shape.RoundedNorth
+            painter.drawControl(QStyle.ControlElement.CE_TabBarTabLabel, option)
 
 
 class MainWindow(QMainWindow):
@@ -112,6 +134,10 @@ class MainWindow(QMainWindow):
         self.tmpfs = TmpfsTab(jobs=self._tmpfs_jobs, confirm_fn=confirm_fn, runtime_jobs=self._runtime_jobs)
 
         self.tabs = QTabWidget()
+        self.tabs.setTabBar(SidebarTabBar())
+        # navegação lateral, como no padrão de painéis de manutenção; os títulos continuam os mesmos
+        self.tabs.setObjectName("sidebar")
+        self.tabs.setTabPosition(QTabWidget.TabPosition.West)
         for title, attribute in TABS:
             self.tabs.addTab(getattr(self, attribute), title)
         self.setCentralWidget(self.tabs)

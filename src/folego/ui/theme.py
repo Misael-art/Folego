@@ -65,6 +65,76 @@ QTabBar::tab:selected {{
 QTabBar::tab:focus {{
     border: 2px solid {TOKENS.focus};
 }}
+QTabWidget#sidebar::pane {{
+    border: none;
+    border-left: 1px solid {TOKENS.border};
+    border-radius: 0;
+}}
+QTabWidget#sidebar QTabBar::tab {{
+    min-width: 128px;
+    padding: 12px 16px;
+    margin: 2px 6px 2px 0;
+    border: none;
+    border-left: 3px solid transparent;
+    border-radius: {TOKENS.radius}px;
+    text-align: left;
+}}
+QTabWidget#sidebar QTabBar::tab:selected {{
+    background: {TOKENS.surface_alt};
+    color: {TOKENS.text};
+    border-left: 3px solid {TOKENS.accent};
+}}
+QTabWidget#sidebar QTabBar::tab:focus {{
+    border: 2px solid {TOKENS.focus};
+}}
+QFrame#hero, QFrame#card {{
+    background: {TOKENS.surface};
+    border: 1px solid {TOKENS.border};
+    border-radius: {TOKENS.radius * 2}px;
+}}
+QFrame#hero QLabel, QFrame#card QLabel, QFrame#card QProgressBar {{
+    background: transparent;
+}}
+QFrame#card[level="warning"] {{
+    border-color: {TOKENS.warning};
+}}
+QFrame#card[level="danger"] {{
+    border-color: {TOKENS.danger};
+}}
+QLabel#cardTitle {{
+    color: {TOKENS.muted};
+    font-weight: 600;
+}}
+QLabel#cardValue {{
+    font-size: 20pt;
+    font-weight: 600;
+}}
+QLabel#section {{
+    color: {TOKENS.muted};
+    font-weight: 600;
+    font-size: 11pt;
+}}
+QPushButton#primary {{
+    background: {TOKENS.accent};
+    color: {TOKENS.accent_text};
+    border: 1px solid {TOKENS.accent};
+    font-weight: 600;
+    padding: 9px 18px;
+}}
+QPushButton#primary:disabled {{
+    background: {TOKENS.surface_alt};
+    color: {TOKENS.muted};
+    border-color: {TOKENS.border};
+}}
+QFrame#card[level="warning"] QProgressBar::chunk {{
+    background: {TOKENS.warning};
+}}
+QFrame#card[level="danger"] QProgressBar::chunk {{
+    background: {TOKENS.danger};
+}}
+QFrame#card[level="ok"] QProgressBar::chunk {{
+    background: {TOKENS.ok};
+}}
 QLabel#headline {{
     font-size: 16pt;
     font-weight: 600;
