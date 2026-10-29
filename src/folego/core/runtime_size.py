@@ -10,6 +10,7 @@ o novo tamanho, sem perder o conteúdo (remount de tmpfs preserva os arquivos).
 """
 import os
 import re
+import uuid
 from dataclasses import dataclass
 
 DROPIN_DIR = "/etc/systemd/logind.conf.d"
@@ -69,7 +70,9 @@ def dropin_text(size_bytes: int) -> str:
             f"RuntimeDirectorySize={size_bytes // MIB}M\n")
 
 
-def apply_command(size_bytes: int, *, uid: int | None = None, runtime: str | None = None) -> list:
+def apply_command(size_bytes: int, *, uid: int | None = None, runtime: str | None = None,
+                  operation_id: str | None = None, expected_identity: str = "",
+                  before_bytes: int = 0) -> list:
     """Um único `pkexec` com argumentos validados: drop-in persistente + remount imediato."""
     uid = os.getuid() if uid is None else uid
     runtime = runtime or f"/run/user/{uid}"
@@ -79,10 +82,54 @@ def apply_command(size_bytes: int, *, uid: int | None = None, runtime: str | Non
     mib = size_bytes // MIB
     if not re.fullmatch(r"\d+", str(mib)):
         raise ValueError("tamanho inválido")
-    script = ('set -e; mkdir -p "$1"; printf %s "$2" > "$3.tmp"; chmod 0644 "$3.tmp"; '
-              'mv "$3.tmp" "$3"; mount -o remount,size="$4"M "$5"')
+    operation_id = operation_id or uuid.uuid4().hex
+    if not re.fullmatch(r"[a-f0-9]{32}", operation_id):
+        raise ValueError("ID de operação inválido")
+    # The final receipt is written only when the privileged shell exits. A
+    # missing receipt never proves cancellation (pkexec may still be waiting).
+    script = '''set -eu
+umask 077
+configured=0
+mounted=0
+receipt="$3.result-$6"
+operation="$6"
+target_mib="$4"
+finish() {
+    code=$?
+    trap - EXIT
+    printf '%s %s %s %s %s\n' "$operation" "$code" "$configured" "$mounted" "$target_mib" > "$receipt.tmp"
+    chmod 0644 "$receipt.tmp"
+    mv "$receipt.tmp" "$receipt"
+    exit "$code"
+}
+test ! -L "$5"
+test "$(stat -c %u "$5")" = "$9"
+test "$(findmnt -n -M "$5" -o FSTYPE)" = tmpfs
+if test -n "$7"; then test "$(stat -c %d:%i "$5")" = "$7"; fi
+if test "$8" -gt 0; then
+    blocks=$(stat -f -c %b "$5")
+    blocksize=$(stat -f -c %S "$5")
+    test "$((blocks * blocksize))" = "$8"
+fi
+mkdir -p "$1"
+test ! -L "$3"
+test ! -e "$receipt"
+trap finish EXIT
+if test -e "$3"; then
+    test -f "$3"
+    cp -p "$3" "$3.before-$6"
+fi
+printf %s "$2" > "$3.tmp-$6"
+chmod 0644 "$3.tmp-$6"
+mv "$3.tmp-$6" "$3"
+configured=1
+printf 'configured\n'
+mount -o remount,size="$4"M "$5"
+mounted=1
+'''
     return ["pkexec", "/bin/sh", "-c", script, "folego-runtime-size",
-            DROPIN_DIR, text, DROPIN_PATH, str(mib), runtime]
+            DROPIN_DIR, text, DROPIN_PATH, str(mib), runtime, operation_id,
+            expected_identity, str(before_bytes), str(uid)]
 
 
 def configured_size(dropin: str = DROPIN_PATH) -> int | None:

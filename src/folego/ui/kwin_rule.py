@@ -39,7 +39,9 @@ def _tools(which=shutil.which):
 
 def _rules(read, run) -> list:
     result = run([read, "--file", FILE, "--group", "General", "--key", "rules"],
-                 capture_output=True, text=True, check=False)
+                 capture_output=True, text=True, check=False, timeout=5)
+    if result.returncode:
+        raise RuntimeError("não foi possível ler as regras do KWin; configuração preservada")
     return [item for item in (result.stdout or "").strip().split(",") if item]
 
 
@@ -66,9 +68,9 @@ def install(title: str, x: int, y: int, *, confirmed: bool, run=subprocess.run, 
     if not confirmed:
         raise ValueError("criar a regra do KWin exige confirmação explícita")
     write, read = _tools(which)
+    rules = _rules(read, run)
     for key, value in rule_keys(title, x, y).items():
         run([write, "--file", FILE, "--group", GROUP, "--key", key, value], check=True)
-    rules = _rules(read, run)
     if GROUP not in rules:
         rules.append(GROUP)
         run([write, "--file", FILE, "--group", "General", "--key", "rules", ",".join(rules)], check=True)

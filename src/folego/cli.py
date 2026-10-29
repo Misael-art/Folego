@@ -35,6 +35,7 @@ from .core.sessions import SessionError, SessionRegistry
 from .core.tmpfs import WATCHED, watched_volumes
 from .core import runtime_size
 from .actions.tmpfs import diagnosis as tmpfs_diagnosis
+from .actions.tmpfs import runtime_size as runtime_actions
 from .orchestration import Coordinator, Outcome
 from .orchestration.automation import FIRST_AUTOMATION_ACTIONS, MODES, PRESETS
 from .orchestration.decisions import DecisionLog
@@ -418,6 +419,8 @@ def build_parser() -> argparse.ArgumentParser:
     rsize.add_argument("--confirmar", action="store_true",
                        help="executa via pkexec: drop-in do logind + remount imediato")
     rsize.add_argument("--json", action="store_true", help="saída para máquinas")
+    rsize.add_argument("--reviewed-plan", help="plano imutável devolvido pela consulta --json")
+    rsize.add_argument("--reconciliar", metavar="ID", help="verifica uma operação incerta sem reaplicá-la")
 
     release = tmpfs_sub.add_parser(
         "release", help="liberar um item para a SSD: copy → verify → unlink, com ledger")
@@ -914,7 +917,7 @@ def _session_run(args) -> int:
                               EXIT_FAILED)
     store = SessionRegistry()
     try:
-        session = store.register(child.pid, project=args.project,
+        session = store.register_child(child, project=args.project,
                                  label=args.label, keep_active=args.keep_active)
     except SessionError as exc:
         # O filho já existe; não deixamos um processo sem registro protetor.
@@ -2065,14 +2068,35 @@ def _cmd_tmpfs_diagnose(args) -> int:
 
 
 def _cmd_tmpfs_runtime_size(args) -> int:
+    coordinator = _tmpfs_coordinator()
+    if args.reconciliar:
+        if args.confirmar or args.vezes is not None or args.reviewed_plan:
+            return _emit_gate_refusal(args, "runtime-size", "reconciliação não aceita pedido de execução")
+        try:
+            result = runtime_actions.reconcile(args.reconciliar, coordinator=coordinator,
+                                               volume_fn=_tmpfs_runtime_volume)
+        except (OSError, ValueError) as exc:
+            return _emit_gate_refusal(args, "runtime-size", str(exc))
+        return _emit_runtime_result(result)
     location = _tmpfs_runtime_volume()
     if location is None:
         return _emit_gate_refusal(args, "runtime-size", "refused: runtime do usuário não montado como tmpfs")
     choices = runtime_size.options(location.total_bytes, runtime_size.mem_total_bytes())
     configured = runtime_size.configured_size()
-    if args.vezes is None or not args.confirmar:
+    if (args.vezes is None and not args.reviewed_plan) or not args.confirmar:
+        try:
+            unresolved = runtime_actions.pending(coordinator.journal, location.path)
+            option_rows = []
+            for choice in choices:
+                row = choice.to_dict()
+                if choice.allowed:
+                    row["plan"] = runtime_actions.plan_for(location, choice.bytes).to_dict()
+                option_rows.append(row)
+        except (OSError, ValueError) as exc:
+            return _emit_gate_refusal(args, "runtime-size", str(exc))
         payload = {"runtime": location.path, "current_bytes": location.total_bytes,
-                   "configured_bytes": configured, "options": [o.to_dict() for o in choices]}
+                   "configured_bytes": configured, "options": option_rows,
+                   "pending_operation_ids": unresolved}
         if args.json:
             print(json.dumps(payload, ensure_ascii=False))
             return EXIT_OK
@@ -2084,19 +2108,32 @@ def _cmd_tmpfs_runtime_size(args) -> int:
                   + ("" if option.allowed else f" · recusado: {option.reason}"))
         print("Aplicar: folego tmpfs runtime-size --vezes N --confirmar (pede a senha de administrador)")
         return EXIT_OK
-    option = next(o for o in choices if o.multiplier == args.vezes)
-    if not option.allowed:
-        return _emit_gate_refusal(args, "runtime-size", f"refused: {option.reason}")
-    command = runtime_size.apply_command(option.bytes, runtime=location.path)
-    result = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, text=True)
-    if result.returncode:
-        return _emit_gate_refusal(args, "runtime-size",
-                                  f"refused: pkexec retornou {result.returncode}: {(result.stderr or '').strip()[-300:]}")
-    after = _tmpfs_runtime_volume()
-    print(json.dumps({"runtime": location.path, "before_bytes": location.total_bytes,
-                      "after_bytes": after.total_bytes if after else None,
-                      "dropin": runtime_size.DROPIN_PATH}, ensure_ascii=False))
-    return EXIT_OK
+    try:
+        from .orchestration.models import ActionPlan
+        if args.reviewed_plan:
+            if args.vezes is not None:
+                raise ValueError("use plano revisado ou multiplicador, não ambos")
+            plan = ActionPlan.from_dict(json.loads(args.reviewed_plan))
+        else:
+            option = next(o for o in choices if o.multiplier == args.vezes)
+            if not option.allowed:
+                raise ValueError(option.reason)
+            plan = runtime_actions.plan_for(location, option.bytes)
+        if plan.action != runtime_actions.ACTION:
+            raise ValueError("plano não é de redimensionamento")
+        result = runtime_actions.apply(plan, coordinator=coordinator, volume_fn=_tmpfs_runtime_volume)
+    except (OSError, ValueError) as exc:
+        return _emit_gate_refusal(args, "runtime-size", str(exc))
+    return _emit_runtime_result(result)
+
+
+def _emit_runtime_result(result):
+    code = EXIT_BY_OUTCOME[result.outcome]
+    print(json.dumps({"acao": "runtime-size", "ok": result.outcome == Outcome.OK,
+                      "exit": code, "outcome": str(result.outcome),
+                      "operation_id": result.operation_id, "reason": result.reason,
+                      **dict(result.effects)}, ensure_ascii=False))
+    return code
 
 
 def _tmpfs_runtime_volume():

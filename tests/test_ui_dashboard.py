@@ -83,6 +83,40 @@ def test_a_calm_machine_is_reported_calm_instead_of_left_blank(panel):
     assert "nada" in view.status.text().lower()
 
 
+def test_full_runtime_recommends_the_temporaries_tab(panel):
+    from folego.core.tmpfs import TmpfsVolume
+    view, jumps = panel
+    view.show_snapshot(snap(apps=(), tmpfs=(TmpfsVolume(
+        "/run/user/1000", "tmpfs", 1000, 1000, 0, is_runtime=True),)))
+    assert view.gauge.verdict == "Crítico"
+    assert view.rows[0].target == "tmpfs"
+    view.primary_button.click()
+    assert jumps == ["tmpfs"]
+    assert "dentro do orçamento" not in view.primary_button.text()
+
+
+def test_missing_or_stale_memory_never_gets_a_healthy_empty_state(panel):
+    from dataclasses import replace
+    from folego.core.snapshot import SourceQuality
+    view, _ = panel
+    for sample in (replace(snap(apps=()), mem=None),
+                   replace(snap(apps=()), mono=1, sources=(SourceQuality("meminfo", "ok"),))):
+        view.show_snapshot(sample)
+        assert view.gauge.verdict == "Desconhecido"
+        assert "dentro do orçamento" not in view.no_recommendations.text()
+        assert "dados válidos" in view.primary_button.text()
+
+
+def test_freshness_timer_invalidates_gauge_cards_and_empty_state(panel):
+    from folego.ui.title_signal import TitleSignal
+    view, _ = panel
+    view.show_snapshot(snap(apps=()))
+    view.invalidate_health(TitleSignal("unknown", "⚪", "amostra antiga"))
+    assert view.gauge.value is None and view.gauge.verdict == "Desconhecido"
+    assert all(card.value.text() == "—" for card in view.cards.values())
+    assert "dentro do orçamento" not in view.no_recommendations.text()
+
+
 def test_the_panel_shows_what_the_collector_could_not_read(panel):
     view, _ = panel
     view.show_snapshot(snap(errors=("meminfo: No space left on device",)))

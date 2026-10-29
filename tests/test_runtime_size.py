@@ -33,7 +33,7 @@ def test_apply_is_one_pkexec_call_with_positional_arguments_only():
     script, *positional = argv[3:]
     # no value is interpolated into the shell text; all of them arrive as $1..$5
     assert "2964" not in script and "/run/user" not in script
-    assert positional == ["folego-runtime-size", rs.DROPIN_DIR, rs.dropin_text(2964 * MIB),
+    assert positional[:6] == ["folego-runtime-size", rs.DROPIN_DIR, rs.dropin_text(2964 * MIB),
                           rs.DROPIN_PATH, "2964", "/run/user/1000"]
     assert 'mount -o remount,size="$4"M "$5"' in script
 

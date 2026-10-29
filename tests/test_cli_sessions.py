@@ -120,6 +120,22 @@ def test_session_run_launches_a_disposable_child_and_ends_the_session(
     assert sessions[0]["keep_active"] is True
 
 
+def test_session_run_keeps_the_exit_code_when_child_exits_before_registration(
+        fake_home, monkeypatch, capsys):
+    import time
+    original = cli.SessionRegistry.register_child
+    def delayed(self, child, **kwargs):
+        time.sleep(.15)
+        return original(self, child, **kwargs)
+    monkeypatch.setattr(cli.SessionRegistry, "register_child", delayed)
+    for expected in (0, 7):
+        assert cli.main(["session", "run", "--", "/bin/sh", "-c", f"exit {expected}"]) == expected
+    capsys.readouterr()
+    assert cli.main(["session", "list", "--json"]) == 0
+    sessions = _json(capsys)["sessions"]
+    assert len(sessions) == 2 and all(item["state"] == "ended" for item in sessions)
+
+
 def test_session_child_receives_explicit_disk_temporaries(fake_home, tmp_path, monkeypatch):
     import sys
     output = tmp_path / "child-env.json"

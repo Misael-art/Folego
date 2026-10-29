@@ -67,3 +67,19 @@ def test_without_kde_tools_nothing_is_attempted():
     with pytest.raises(RuntimeError):
         kwin_rule.install("t", 0, 0, confirmed=True, run=fake.run, which=lambda name: None)
     assert kwin_rule.installed(run=fake.run, which=lambda name: None) is False
+
+
+@pytest.mark.parametrize("action", ["install", "remove"])
+def test_failed_read_preserves_every_rule_before_any_write(action):
+    fake = FakeKConfig(general_rules="user-rule")
+    before = dict(fake.data)
+    def run(argv, **kwargs):
+        if argv[0].endswith("kreadconfig6"):
+            return SimpleNamespace(returncode=1, stdout="", stderr="read failed")
+        return fake.run(argv, **kwargs)
+    with pytest.raises(RuntimeError, match="configuração preservada"):
+        if action == "install":
+            kwin_rule.install("widget", 0, 0, confirmed=True, run=run, which=fake.which)
+        else:
+            kwin_rule.remove(run=run, which=fake.which)
+    assert fake.data == before and fake.reloads == 0

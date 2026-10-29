@@ -24,7 +24,7 @@ from ..core.suggestions import suggest
 
 LEVEL_EMOJI = {"critico": "🔴", "alto": "🟠", "medio": "🟡"}
 TARGET_LABEL = {"memoria": "memória", "ajustes": "ajustes",
-                "orfaos": "órfãos", "disco": "disco"}
+                "orfaos": "órfãos", "disco": "disco", "tmpfs": "temporários"}
 
 
 VERDICT = {health.GREEN: ("Saudável", TOKENS.ok), health.YELLOW: ("Atenção", TOKENS.warning),
@@ -307,6 +307,7 @@ class DashboardTab(QWidget):
             self.last_operation.setText(f"última operação: {last_operation}")
         self._sync_rows(suggest(snapshot, orphan_count=orphan_count,
                                 thumbnails_kb=thumbnails_kb))
+        self._show_empty_state(signal, unavailable=bool(snapshot.errors))
 
         notes = [f"não foi possível ler: {e}" for e in snapshot.errors]
         for quality in snapshot.sources:
@@ -324,6 +325,30 @@ class DashboardTab(QWidget):
                          "dentro do orçamento")
         notes.extend(extra_notes)
         self.status.setText(" · ".join(notes))
+
+    def _show_empty_state(self, signal, *, unavailable=False):
+        if not self.rows:
+            if signal.level == health.GREEN and not unavailable:
+                message = "Nenhuma recomendação agora: os recursos observados estão dentro do orçamento."
+                button = "Tudo dentro do orçamento"
+            elif signal.level == health.UNKNOWN or unavailable:
+                message = "Dados insuficientes ou antigos: aguarde uma leitura válida para avaliar os recursos."
+                button = "Aguardando dados válidos"
+            else:
+                message = "Há alertas de saúde; consulte os detalhes dos recursos antes de escolher uma ação."
+                button = "Revise os alertas dos recursos"
+            self.no_recommendations.setText(message)
+            self.primary_button.setText(button)
+
+    def invalidate_health(self, signal):
+        self.headline.setText(signal.text)
+        self.resources.setText("saúde não comprovada; aguardando nova amostra")
+        self.gauge.set_state(None, health.UNKNOWN)
+        self.verdict_line.setText("Saúde não comprovada; aguardando nova amostra.")
+        for card in self.cards.values():
+            card.set_value(None, "ok", "aguardando nova amostra")
+        self._sync_rows(())
+        self._show_empty_state(signal, unavailable=True)
 
     def _show_cards(self, snapshot) -> None:
         cards, t = self.cards, self._thresholds

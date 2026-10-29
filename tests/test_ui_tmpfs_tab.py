@@ -5,6 +5,7 @@ filho matável. Nada aqui abre /proc, varre árvore ou escreve byte — e o ETA 
 extrapolação das amostras que a própria aba guardou, nunca uma promessa.
 """
 import sys
+import json
 
 import pytest
 
@@ -486,21 +487,23 @@ def test_a_child_that_answered_nothing_is_not_a_success(qapp):
     assert "sem leitura do ledger" in t.budget_label.text()
 
 
-def test_runtime_size_argv_passes_the_multiplier_as_an_option():
+def test_runtime_size_argv_preserves_the_reviewed_plan():
     assert argv_for("runtime-size")[-2:] == ["runtime-size", "--json"]
-    assert argv_for("runtime-size", "3", True)[-5:] == [
-        "runtime-size", "--vezes", "3", "--json", "--confirmar"]
+    assert argv_for("runtime-size", '{"operation_id":"fixed"}', True)[-5:] == [
+        "runtime-size", "--reviewed-plan", '{"operation_id":"fixed"}', "--json", "--confirmar"]
 
 
 RUNTIME_OPTIONS = {"runtime": "/run/user/1000", "current_bytes": 1482 * 1024 ** 2,
                    "options": [{"multiplier": m, "mib": 1482 * m, "bytes": 1482 * m * 1024 ** 2,
-                                "allowed": m < 4, "reason": "" if m < 4 else "acima de 65% da RAM"}
+                                "allowed": m < 4, "reason": "" if m < 4 else "acima de 65% da RAM",
+                                "plan": {"operation_id": f"op-{m}", "size_bytes": 1482 * m * 1024 ** 2}}
                                for m in (1, 2, 3, 4)]}
 
 
 def test_runtime_size_is_chosen_confirmed_and_sent_through_its_own_queue(qapp):
     main = FakeJobs(lambda acao, target: RUNTIME_OPTIONS if acao == "runtime-size" else {})
-    slow = FakeJobs(lambda acao, target: {"before_bytes": 1, "after_bytes": 4446 * 1024 ** 2,
+    slow = FakeJobs(lambda acao, target: {"ok": True, "outcome": "sucesso", "operation_id": "op-3",
+                                          "before_bytes": 1, "after_bytes": 4446 * 1024 ** 2,
                                           "dropin": "/etc/systemd/logind.conf.d/60-folego-runtime-size.conf"})
     asked = []
     view = TmpfsTab(jobs=main, runtime_jobs=slow, confirm_fn=lambda *a: asked.append(a) or True)
@@ -509,7 +512,8 @@ def test_runtime_size_is_chosen_confirmed_and_sent_through_its_own_queue(qapp):
     assert "acima do limite" in view.runtime_choice.itemText(3)
     view.runtime_choice.setCurrentIndex(2)
     view.runtime_size_clicked()
-    assert slow.calls == [("runtime-size", "3", True)]
+    assert len(slow.calls) == 1 and slow.calls[0][0] == "runtime-size" and slow.calls[0][2]
+    assert json.loads(slow.calls[0][1]) == RUNTIME_OPTIONS["options"][2]["plan"]
     assert "4446 MiB" in asked[0][1]
     assert "4,3 GB" in view.status.text() or "4.3" in view.status.text() or "GB" in view.status.text()
 
@@ -525,6 +529,31 @@ def test_runtime_size_refuses_above_the_cap_and_honours_cancel(qapp):
     view.runtime_size_clicked()
     assert "cancelado" in view.status.text()
     assert slow.calls == []
+
+
+def test_runtime_timeout_keeps_parent_id_and_blocks_refresh_and_retry(qapp):
+    slow = FakeJobs(lambda a, t: {"outcome": "desconhecido", "reason": "timeout", "exit": 5})
+    view = TmpfsTab(jobs=FakeJobs(lambda a, t: RUNTIME_OPTIONS), runtime_jobs=slow,
+                    confirm_fn=lambda *a: True)
+    view.show_runtime_options(RUNTIME_OPTIONS)
+    view.runtime_size_clicked()
+    assert "op-2" in view.status.text() and "não repetir" in view.status.text()
+    view.show_runtime_options(RUNTIME_OPTIONS)
+    assert not view.runtime_button.isEnabled()
+    view.runtime_size_clicked()
+    assert len(slow.calls) == 1
+    assert view.runtime_reconcile.isEnabled()
+
+
+def test_runtime_pending_operation_survives_reopening_and_can_be_verified(qapp):
+    slow = FakeJobs(lambda a, t: {"ok": True, "outcome": "sucesso", "operation_id": "saved",
+                                  "before_bytes": 1, "after_bytes": 2})
+    view = TmpfsTab(jobs=FakeJobs(lambda a, t: RUNTIME_OPTIONS), runtime_jobs=slow)
+    view.show_runtime_options({**RUNTIME_OPTIONS, "pending_operation_ids": ["saved"]})
+    assert not view.runtime_button.isEnabled()
+    view.reconcile_runtime()
+    assert slow.calls == [("runtime-size-reconcile", "saved", False)]
+    assert not view._uncertain_text and view.runtime_button.isEnabled()
 
 
 def test_the_diagnosis_names_the_consumer_holder_and_official_path(qapp):

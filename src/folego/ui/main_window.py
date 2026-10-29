@@ -39,7 +39,7 @@ from ..orchestration.history import HistoryReader
 TABS = (("central", "dashboard"), ("ajustes", "tunings"),
         ("órfãos", "orphans"), ("disco", "disk"), ("temporários", "tmpfs"))
 JUMPS = {"memoria": "dashboard", "ajustes": "tunings", "orfaos": "orphans",
-         "disco": "disk"}
+         "disco": "disk", "tmpfs": "tmpfs"}
 DISK_TIMEOUT_MS = 120_000  # the real cache walk took 54,7 s on this Deck (M3 log)
 RUNTIME_SIZE_TIMEOUT_MS = 180_000  # inclui a digitação da senha no diálogo do polkit
 TMPFS_TIMEOUT_MS = 45_000  # três volumes × o prazo de varredura de 10 s, com folga
@@ -231,9 +231,7 @@ class MainWindow(QMainWindow):
             return
         self._last_signal = signal
         self.setWindowTitle(signal.text)
-        self.dashboard.headline.setText(signal.text)
-        self.dashboard.resources.setText("saúde não comprovada; aguardando nova amostra")
-        self.dashboard._sync_rows(())
+        self.dashboard.invalidate_health(signal)
         if self.tray.tray is not None and snapshot is not None:
             self.tray.show_snapshot(snapshot, signal=signal)
         if self._compact is not None and snapshot is not None:
@@ -399,7 +397,13 @@ class MainWindow(QMainWindow):
         if caps.keep_above or "KDE" not in os.environ.get("XDG_CURRENT_DESKTOP", "").upper():
             return
         settings = self._widget_settings()
-        if settings.value("widget/kwin_rule_declined", False) in (True, "true") or kwin_rule.installed():
+        if settings.value("widget/kwin_rule_declined", False) in (True, "true"):
+            return
+        try:
+            if kwin_rule.installed():
+                return
+        except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
+            self._tray_note = f"regras do KWin indisponíveis: {exc}"
             return
         if not self._widget_confirm(
                 "Manter o widget em primeiro plano",

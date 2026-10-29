@@ -8,6 +8,7 @@ silent "nothing happened" that could be read as success.
 """
 import sys
 import time
+import json
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
@@ -34,7 +35,10 @@ def argv_for(acao: str, target: str = "", confirm: bool = False) -> list:
     argv = [sys.executable, "-m", "folego", "tmpfs", acao]
     if acao == "runtime-size":
         if target:
-            argv.extend(["--vezes", str(int(target))])
+            argv.extend(["--reviewed-plan", target])
+    elif acao == "runtime-size-reconcile":
+        argv = [sys.executable, "-m", "folego", "tmpfs", "runtime-size",
+                "--reconciliar", target, "--json"]
     elif target:
         argv.append(str(target))
     if acao in JSON_ACTIONS:
@@ -121,6 +125,8 @@ class TmpfsTab(QWidget):
         self.victims: list[dict] = []
         self._plan_ok = False
         self._uncertain_text = ""
+        self._runtime_operation = ""
+        self._runtime_busy = False
         self.release_buttons: list[QPushButton] = []
         self.restore_buttons: list[QPushButton] = []
 
@@ -161,10 +167,14 @@ class TmpfsTab(QWidget):
         self.runtime_button = QPushButton("Aumentar runtime (pede senha)")
         self.runtime_button.setEnabled(False)
         self.runtime_button.clicked.connect(self.runtime_size_clicked)
+        self.runtime_reconcile = QPushButton("Verificar operação pendente")
+        self.runtime_reconcile.setEnabled(False)
+        self.runtime_reconcile.clicked.connect(self.reconcile_runtime)
         runtime_bar = QHBoxLayout()
         runtime_bar.addWidget(self.runtime_label, 1)
         runtime_bar.addWidget(self.runtime_choice)
         runtime_bar.addWidget(self.runtime_button)
+        runtime_bar.addWidget(self.runtime_reconcile)
 
         layout = QVBoxLayout(self)
         for widget in (self.pressure, self.diagnosis, self.volume_table, self.summary, self.plan_table,
@@ -251,6 +261,11 @@ class TmpfsTab(QWidget):
         self.diagnosis.setText("\n".join(lines))
 
     def show_runtime_options(self, payload):
+        pending = (payload or {}).get("pending_operation_ids") or []
+        if pending:
+            self._runtime_operation = pending[0]
+            self._uncertain_text = f"desconhecido: operação {pending[0]} · verifique antes de repetir"
+            self.runtime_reconcile.setEnabled(True)
         self.runtime_choice.clear()
         self.runtime_options = list((payload or {}).get("options") or [])
         if not self.runtime_options:
@@ -268,11 +283,12 @@ class TmpfsTab(QWidget):
         bigger = self.runtime_choice.findData(2)
         if bigger >= 0:
             self.runtime_choice.setCurrentIndex(bigger)
-        self.runtime_button.setEnabled(any(o["allowed"] and o["multiplier"] > 1 for o in self.runtime_options))
+        self.runtime_button.setEnabled(not self._runtime_busy and any(
+            o["allowed"] and o["multiplier"] > 1 for o in self.runtime_options))
         self._preserve_uncertain()
 
     def runtime_size_clicked(self):
-        if self._uncertain_text:
+        if self._uncertain_text or self._runtime_busy:
             return
         factor = self.runtime_choice.currentData()
         option = next((o for o in self.runtime_options if o["multiplier"] == factor), None)
@@ -282,26 +298,53 @@ class TmpfsTab(QWidget):
         if not option["allowed"]:
             self.status.setText(f"recusado: {option['reason']}")
             return
+        plan = option.get("plan")
+        if not plan:
+            self.status.setText("plano de tamanho ausente; atualize as opções")
+            return
         if not self._confirm(
                 "Aumentar o runtime do usuário",
                 f"O runtime passa a ter {option['mib']} MiB. O sistema pedirá a senha de "
                 "administrador para gravar /etc/systemd/logind.conf.d/60-folego-runtime-size.conf "
-                "e remontar o volume agora, sem apagar nada. É RAM: só ocupa o que for gravado. "
+                "(configuração global do logind) e remontar seu volume agora, sem apagar nada. "
+                "É RAM: só ocupa o que for gravado. "
                 "Para voltar ao padrão, remova esse arquivo."):
             self.status.setText("cancelado: tamanho do runtime inalterado")
             return
+        self._runtime_operation = plan["operation_id"]
+        self._runtime_busy = True
         self.runtime_button.setEnabled(False)
         self.status.setText("aguardando a autenticação do sistema…")
-        self._runtime_jobs.run("runtime-size", str(factor), confirm=True, done=self.show_runtime_result)
+        self._runtime_jobs.run("runtime-size", json.dumps(plan), confirm=True, done=self.show_runtime_result)
+
+    def reconcile_runtime(self):
+        if self._runtime_operation and not self._runtime_busy:
+            self._runtime_busy = True
+            self.runtime_reconcile.setEnabled(False)
+            self._runtime_jobs.run("runtime-size-reconcile", self._runtime_operation,
+                                   done=self.show_runtime_result)
 
     def show_runtime_result(self, payload):
         payload = payload or {}
-        if payload.get("after_bytes"):
+        self._runtime_busy = False
+        if not payload or payload.get("outcome") == "desconhecido":
+            self._runtime_operation = payload.get("operation_id") or self._runtime_operation
+            self.show_mutation({**payload, "outcome": "desconhecido",
+                                "operation_id": self._runtime_operation})
+            self.runtime_reconcile.setEnabled(bool(self._runtime_operation))
+            return
+        if payload.get("operation_id") == self._runtime_operation:
+            self._uncertain_text = ""
+            self.runtime_reconcile.setEnabled(False)
+        if payload.get("outcome") == "parcial":
+            self.status.setText("parcial: " + str(payload.get("reason")) +
+                                f" · configuração anterior: {payload.get('previous_config')}")
+        elif payload.get("ok") and payload.get("after_bytes"):
             self.status.setText(f"runtime agora com {fmt_bytes(int(payload['after_bytes']))} "
                                 f"(antes {fmt_bytes(int(payload.get('before_bytes') or 0))}); "
                                 f"configuração persistente em {payload.get('dropin')}")
         else:
-            self.status.setText("runtime não alterado: " + str(payload.get("reason") or "sem resposta"))
+            self.status.setText("pedido recusado: " + str(payload.get("reason") or "sem resposta"))
         self._jobs.run("runtime-size", "", done=self.show_runtime_options)
 
     def show_plan(self, payload):

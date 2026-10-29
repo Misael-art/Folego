@@ -306,10 +306,26 @@ class SessionRegistry:
 
     def register(self, pid: int, *, project: str = "", label: str = "",
                  keep_active: bool = False, uid: int | None = None) -> Session:
+        return self._register(pid, project=project, label=label,
+                              keep_active=keep_active, uid=uid)
+
+    def register_child(self, child, *, project: str = "", label: str = "",
+                       keep_active: bool = False) -> Session:
+        """Record our unreaped child even when it exited before registration.
+
+        A zombie still has its original PID/starttime and parent. Ordinary
+        registration keeps refusing zombies and processes owned by other users.
+        """
+        return self._register(child.pid, project=project, label=label,
+                              keep_active=keep_active, allow_exited_child=True)
+
+    def _register(self, pid: int, *, project: str = "", label: str = "",
+                  keep_active: bool = False, uid: int | None = None,
+                  allow_exited_child: bool = False) -> Session:
         live = procfs.read_proc(self.proc_root, int(pid))
         if live is None:
             raise SessionError(f"pid {pid} não existe; sessão não registrada")
-        if live.state == "Z":
+        if live.state == "Z" and not (allow_exited_child and live.ppid == os.getpid()):
             raise SessionError(f"pid {pid} é zumbi; sessão não registrada")
         own_uid = os.getuid() if uid is None else uid
         if live.uid != own_uid:
@@ -336,7 +352,11 @@ class SessionRegistry:
                 starttime=live.starttime, boot_id=boot, uid=live.uid,
                 created_at=now, heartbeat_at=now, state=ACTIVE,
                 project=project, label=label, keep_active=keep_active,
-                cgroup=cgroup, cgroup_verified=cgroup is not None)
+                cgroup=cgroup, cgroup_verified=cgroup is not None,
+                ended_at=now if live.state == "Z" else None,
+                ended_reason="filho terminou antes do registro" if live.state == "Z" else None)
+            if live.state == "Z":
+                session = replace(session, state=ENDED)
             sessions.append(session)
             self._save(sessions)
             return session
