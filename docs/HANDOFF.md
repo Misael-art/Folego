@@ -217,3 +217,68 @@ mutações, prazo total e cancelamento, histórico sem compactação, soak real 
 7200 segundos e matriz física de desktop. Próximo incremento recomendado:
 fechar os três P1 acima com regressões nos fluxos oficiais, depois a corrida
 de sessão/CI e a retenção segura; automação continua desligada.
+
+
+## Correções da avaliação e apresentação pública — 2026-10-29
+
+Implementação em `fac2d2b377fa6395885b059cdb50f74d60d68bf7`, sobre a avaliação `2fff195`.
+Os cinco achados receberam correção integrada e testes de regressão:
+
+- Resize usa `actions/tmpfs/runtime_size.py`, o coordenador comum e intenção
+  durável. A consulta entrega o plano v2 com tamanho exato/ID; a GUI preserva
+  esse plano. O filho revalida volume, UID, identidade e capacidade antes do
+  efeito, preserva a configuração anterior quando existe e deixa recibo de
+  término. Falha após gravar configuração é parcial; falta de prova é desconhecida.
+- Timeout conserva o ID no pai, bloqueia repetição e reapresenta operações
+  pendentes após reabrir a aba. O botão “Verificar operação pendente” e
+  `tmpfs runtime-size --reconciliar ID --json` verificam recibo e estado atual
+  sob trava; não executam o resize novamente. Sem recibo comprovado, permanece
+  desconhecido. Backups/recibos ficam ao lado do drop-in com sufixos por ID e
+  não são removidos automaticamente.
+- KWin recusa erro de leitura antes de qualquer escrita e preserva regras
+  alheias. A GUI apresenta indisponibilidade em vez de propagar a exceção.
+- Sessões registram filhos próprios ainda não coletados mesmo se já encerrados;
+  registro avulso de zumbi continua recusado e o código real do comando é preservado.
+- Painel recomenda a aba de temporários por ocupação/inodes e diferencia
+  ausência de recomendação de ausência de evidência. Pausa/frescor invalidam
+  também medidor, cartões e mensagem vazia.
+
+Validação final com Python 3.14.7 e Qt 6.12.0:
+
+- Focados: **135 passed**. Após a revisão final, `./dev check`: **952 passed,
+  2 skipped** headless (18,34 s) e **1187 passed, 2 skipped** Qt offscreen
+  (29,03 s), sequencialmente. Os skips continuam sendo Edge ausente.
+- O teste de backup antes instável passou sem mudança de prazo ou remoção de
+  verificação; isso não é uma afirmação de que toda variabilidade de I/O foi eliminada.
+- Janela própria no KDE/Wayland real, HOME/XDG privados e dados sintéticos:
+  exposição da janela, navegação pelo alerta tmpfs, bloqueio de timeout e
+  invalidação de frescor passaram. `./dev gui` abriu em HOME próprio e permaneceu
+  por 5 s; somente essa instância foi encerrada com SIGTERM. Nenhum efeito
+  privilegiado, regra do KWin ou sinal a processo de trabalho foi aplicado.
+- Shell privilegiado testado sem pkexec em árvore descartável, com ferramentas
+  simuladas; a aplicação real do novo resize via polkit/remount não foi repetida.
+- Logs finais locais: `.scratch/dev-tests/run-g0z90paq` e `run-wd7tp0ii`.
+  Evidências adicionais em `run-review-20261029/native-demo` e `official-smoke`.
+  Logs/manifestos da primeira rodada e do foco inicial foram preservados nessa
+  raiz de revisão antes de remover somente os próprios workspaces regeneráveis
+  já concluídos. O limite de revisão de QA permanece 20; revisar retenção antes
+  de abrir novas rodadas, sem elevar o teto ou limpar evidência alheia.
+
+Apresentação preparada: README com banner SVG próprio, captura real com dados
+sintéticos, instruções, recursos, CLI e limites; licença MIT, metadados SPDX,
+avisos de terceiros, guia de contribuição e modelos de issue/PR. Links locais,
+SVG e `License-Expression: MIT` do pacote instalado foram verificados. A captura
+`docs/assets/dashboard.png` não expõe dados do host.
+
+A publicação pública foi solicitada explicitamente pelo usuário. Revisão local
+prévia: 785 blobs históricos (22.418.992 bytes) sem correspondência aos padrões
+procurados de chaves privadas, tokens GitHub/OpenAI/AWS e credenciais em URL;
+109 capturas rastreadas revisadas por folhas de contato, com inspeção adicional
+individual. Isso não é garantia universal de ausência de informação sensível.
+A publicação usa a branch de continuidade como padrão para apresentar esta
+versão, preservando `main` e o PR #1. Não há merge ou release de produto neste lote.
+
+Continuam pendentes retenção segura dos temporários, demais planos/IDs no pai,
+prazo total/histórico e matriz física/soak de duas horas. Automação permanece
+desligada. Próximo incremento técnico: retenção com identidade/lease e orçamento,
+sem adotar ou apagar diretórios ambíguos.

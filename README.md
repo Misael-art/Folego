@@ -1,52 +1,174 @@
-# Fôlego
+<div align="center">
 
-Assistente Linux/KDE em Python/Qt para diagnosticar pressão de recursos e pedir
-ações manuais reversíveis. A CLI funciona sem Qt. Automação real permanece
-desligada; a aplicação não deve limpar o host nem encerrar trabalho útil por heurística.
+![Fôlego — espaço para o que importa](docs/assets/folego-banner.svg)
 
-## Retomar em outro host
+**Entenda a pressão do seu Linux. Revise uma ação. Preserve seu trabalho.**
 
-O ponto de entrada é [NOVO-HOST](docs/NOVO-HOST.md). O estado do desenvolvimento,
-ordem de trabalho e limites estão em [HANDOFF](docs/HANDOFF.md) e no
-[diagnóstico consolidado](docs/DIAGNOSTICO-2026-10-24.md). Agentes devem ler
-[AGENTS.md](AGENTS.md) antes de executar ações.
+[![CI](https://github.com/Misael-art/Folego/actions/workflows/ci.yml/badge.svg)](https://github.com/Misael-art/Folego/actions/workflows/ci.yml)
+[![MIT](https://img.shields.io/badge/licença-MIT-4cc9ac)](LICENSE)
+![Python 3.14](https://img.shields.io/badge/Python-3.14-3776ab?logo=python&logoColor=white)
+![Linux · KDE](https://img.shields.io/badge/Linux-KDE%20Plasma-1d99f3?logo=kde&logoColor=white)
+![Status](https://img.shields.io/badge/status-em%20desenvolvimento-e8b66b)
 
-Cópia independente do disco: [Página privada de recuperação](https://chatgpt.com/space/page_c86741eb68348191a25318610e82b50d).
+[Começar](#começar) · [Recursos](#o-que-você-pode-fazer) · [Segurança](#seu-trabalho-vem-primeiro) · [Contribuir](CONTRIBUTING.md)
+
+</div>
+
+Fôlego é um assistente de recursos para Linux com interface Qt, integração com
+KDE Plasma e uma CLI que funciona sem ambiente gráfico. Ele reúne memória,
+CPU, swap e temporários em uma visão clara e ajuda a investigar o que está
+pressionando a máquina — inclusive quando há agentes de IA, builds e várias
+aplicações trabalhando ao mesmo tempo.
+
+As ações são manuais e passam por confirmação e verificações de proteção.
+**A execução automática permanece desligada.** O projeto está em desenvolvimento;
+os limites de validação estão descritos abaixo.
+
+<div align="center">
+
+![Central do Fôlego com medidor de folga, cartões de recursos e recomendações](docs/assets/dashboard.png)
+
+<sub>Interface real da aplicação, com dados de demonstração. Nenhum processo ou arquivo do usuário foi usado como fixture.</sub>
+
+</div>
+
+## O que você pode fazer
+
+| Recurso | Para que serve |
+|---|---|
+| **Visão geral** | Acompanhar RAM, CPU, swap/zram e tmpfs, com alertas de pressão e indicação de dados ausentes ou antigos. |
+| **Diagnóstico de temporários** | Identificar os maiores consumidores, processos que mantêm arquivos abertos e caminhos oficiais de encerramento quando conhecidos. |
+| **Quarentena e recuperação** | Revisar ações de disco e tmpfs, com cópia verificada e recuperação nos fluxos suportados. |
+| **Proteção de sessões** | Registrar trabalhos que devem continuar ativos e revisar candidatos sem tratar nome, idade ou CPU baixa como autorização. |
+| **Ajustes reversíveis** | Revisar ajustes suportados, como opções de segundo plano do navegador, com preservação do estado anterior. |
+| **Widget e bandeja** | Consultar o estado em uma janela compacta e retornar à central. No Plasma/Wayland, a regra opcional do KWin exige confirmação. |
+| **CLI independente de Qt** | Investigar o ambiente e consultar operações diretamente pelo terminal. |
+
+## Começar
+
+O alvo é **Linux**, com KDE Plasma para a integração completa com o desktop.
+O wrapper gerencia Python **3.14.7**, uv e dependências fixadas em `uv.lock`.
+Não é necessário ativar um ambiente virtual ou instalar pacotes Python globalmente.
 
 ```bash
-./dev setup --system-deps
-./dev check
+git clone https://github.com/Misael-art/Folego.git
+cd Folego
+./dev setup
 ./dev gui
 ```
 
-Em servidor sem desktop: `./dev setup --headless` e `./dev test-headless`.
-O wrapper baixa uv **0.12.10**, verifica SHA-256, instala Python **3.14.7** e
-sincroniza dependências de `uv.lock`. Tudo gerenciado fica em `.dev/`; testes
-usam `.scratch/dev-tests/`, HOME privado e temporários exclusivos em disco.
-Bibliotecas nativas requerem acesso administrativo. Veja o plano com
-`./dev system-deps`; `--system-deps` aplica a instalação. Não é preciso ativar venv.
+O primeiro setup baixa ferramentas e dependências para `.dev/`. Reserve ao menos
+4 GiB livres. Se faltarem bibliotecas nativas, consulte o plano e aplique-o explicitamente:
 
-## Situação verificada
+```bash
+./dev system-deps
+./dev setup --system-deps
+```
 
-Em 18/10: 1134 testes com Qt 6.11.2 e 6.12.0; 917 sem Qt. Instalação GUI por
-wheel em venv limpo no mesmo BigLinux, launcher GIO, remoção preservando dados e
-fluxos KDE/Wayland passaram no escopo documentado. Escalas adicionais e hotplug
-foram exercitados em compositor virtual; X11 usou Xvfb/KWin isolado.
+O segundo comando pode solicitar privilégios administrativos para instalar
+bibliotecas da distribuição. Ele não habilita serviços de limpeza ou autostart.
 
-**Soak de duas horas não recebeu aceite.** Houve tentativas interrompidas e
-falhas do harness; a última parou com 2470 segundos registrados. Nenhum relatório
-final de duas horas existe. Resultados novos do bootstrap ficam no diagnóstico
-consolidado; não devem substituir silenciosamente os logs históricos.
+Em servidor ou terminal sem Qt:
 
-## Mapa
+```bash
+./dev setup --headless
+./dev doctor
+./dev run --help
+```
 
-- `src/folego/core`: telemetria e regras sem Qt.
-- `actions`, `safely`, `orchestration`: executores, persistência, autorização e recuperação.
-- `ui`: central, compacto, abas, bandeja e workers Qt.
-- `tests`: contratos e fixtures descartáveis.
-- `tools`: verificadores e suporte de desenvolvimento; não são serviços de produção.
-- `packaging`: instalação, launcher opcional e remoção.
-- `docs/reviews`: revisões, evidências e histórico preservado.
+O [guia de ambiente](docs/NOVO-HOST.md) detalha requisitos, isolamento e recuperação.
+O [guia de empacotamento](packaging/README.md) cobre os fluxos de instalação do pacote.
 
-Não copie `.venv`, `.dev` ou os 5 GB antigos de `.scratch` para continuar.
-O código, histórico Git, documentos e cápsulas selecionadas são o material de recuperação.
+## Explore pelo terminal
+
+Estas consultas não limpam arquivos nem encerram processos:
+
+```bash
+./dev doctor
+./dev run tmpfs status
+./dev run tmpfs diagnose --json
+./dev run session list --json
+./dev run automation status --json
+```
+
+Para acompanhar um comando seu como sessão protegida:
+
+```bash
+./dev run session run --project meu-projeto --manter-ativo -- comando argumento
+```
+
+Alterações exigem uma escolha explícita. O redimensionamento do runtime apresenta
+opções antes de executar e usa autenticação do sistema. Ele altera uma configuração
+**global do logind** e remonta somente o runtime do usuário atual. Não o use para
+substituir o diagnóstico de um produtor descontrolado.
+
+Uma operação sem resposta permanece desconhecida. Consulte o mesmo ID:
+
+```bash
+./dev run operation ID --json
+./dev run tmpfs runtime-size --reconciliar ID --json
+```
+
+A reconciliação verifica evidência de término e o estado atual; não repete o
+redimensionamento. Se a evidência ainda faltar, a operação continua bloqueada.
+Em uma falha parcial, o resultado informa separadamente o tamanho montado e a
+configuração persistente. A configuração anterior, quando existia, é preservada
+no caminho `previous_config` devolvido pela operação para recuperação explícita.
+
+## Seu trabalho vem primeiro
+
+- **Intenção antes do efeito.** Mutações coordenadas registram o que será feito e o resultado observado.
+- **Desconhecido continua desconhecido.** Timeout, leitura incompleta ou falta de evidência não autorizam uma repetição cega.
+- **Processos têm identidade.** Proteções consideram boot, PID/starttime, sessões, exclusões e ancestrais; SIGKILL é uma ação manual separada.
+- **Dados importantes são protegidos.** Projetos, Git, credenciais, bancos, modelos, volumes e discos virtuais têm restrições próprias.
+- **Recuperação é parte do fluxo.** Cópias de tmpfs exigem destino persistente, espaço, staging e verificação.
+- **Presets não concedem permissão.** Modos Manual, Assistido e Automático são distintos; o executor automático está desligado.
+
+## Estado do projeto
+
+Há testes de núcleo, CLI, persistência, falhas, processos próprios e Qt offscreen,
+além de evidências de desktop documentadas. Isso não equivale a certificar todos
+os ambientes ou considerar o produto concluído.
+
+Continuam pendentes a política integral de retenção dos temporários administrados,
+a conclusão do fluxo “Dar fôlego”, partes da matriz física de acessibilidade e
+desktop e um ensaio contínuo aprovado de **duas horas**. Não há aceite desse ensaio.
+
+O estado técnico vigente, os comandos verificados e as próximas tarefas ficam em
+[HANDOFF](docs/HANDOFF.md). O [diagnóstico consolidado](docs/DIAGNOSTICO-2026-10-24.md)
+preserva o alcance e as limitações das evidências históricas.
+
+## Desenvolvimento
+
+```bash
+./dev test-headless   # núcleo e CLI, sem Qt
+./dev test            # suíte completa com Qt offscreen
+./dev check           # ambas, sequencialmente, e revisão de whitespace
+```
+
+Os testes usam HOME/XDG privados e temporários exclusivos em disco. As suítes
+completas devem rodar sequencialmente. Logs ficam em `.scratch/dev-tests/`, com
+orçamentos de revisão e sem limpeza automática.
+
+```text
+src/folego/
+├── core/            # coleta, saúde e proteção; sem Qt
+├── actions/         # operações por domínio e integração com o coordenador
+├── orchestration/   # planos, diário, autorização e resultados
+├── safely/          # persistência, verificação e recuperação
+└── ui/              # central, widget, bandeja e apresentação do estado
+tests/               # contratos e regressões em árvores descartáveis
+tools/               # bootstrap e verificadores de desenvolvimento
+packaging/           # instalação e launcher
+```
+
+Leia [CONTRIBUTING](CONTRIBUTING.md) para preparar uma contribuição e
+[AGENTS.md](AGENTS.md) para as regras de trabalho automatizado.
+Problemas reproduzíveis e propostas bem delimitadas são bem-vindos em
+[Issues](https://github.com/Misael-art/Folego/issues).
+
+## Licença
+
+O código do Fôlego é disponibilizado sob a [licença MIT](LICENSE).
+Dependências mantêm suas próprias licenças; veja [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md),
+incluindo os avisos de Qt/PySide6.

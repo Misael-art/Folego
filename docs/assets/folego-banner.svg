@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-labelledby="title description">
+  <title id="title">Fôlego</title>
+  <desc id="description">Espaço para o que importa. Diagnóstico claro, decisões conscientes e trabalho preservado.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101c2e"/><stop offset="1" stop-color="#08121c"/></linearGradient>
+    <linearGradient id="accent"><stop stop-color="#5de3b9"/><stop offset="1" stop-color="#65b9f5"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#2b786c" stop-opacity=".24"/><stop offset="1" stop-color="#2b786c" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="1280" height="360" rx="24" fill="url(#bg)"/>
+  <circle cx="1080" cy="160" r="300" fill="url(#glow)"/>
+  <g fill="none" stroke="#284049" opacity=".55">
+    <circle cx="1090" cy="180" r="160"/><circle cx="1090" cy="180" r="118"/><circle cx="1090" cy="180" r="76"/>
+    <path d="M850 180h400M1090 0v360"/>
+  </g>
+  <g stroke="url(#accent)" stroke-width="8" fill="none" stroke-linecap="round">
+    <path d="M78 135h70c42 0 42-52 7-52-16 0-24 9-24 20"/>
+    <path d="M78 160h118c42 0 42 53 7 53-16 0-24-9-24-20"/>
+    <path d="M78 185h51c40 0 40 49 7 49"/>
+  </g>
+  <text x="258" y="171" fill="#f0f6fa" font-family="DejaVu Sans,Arial,sans-serif" font-size="80" font-weight="700" letter-spacing="-3">Fôlego</text>
+  <text x="80" y="288" fill="#d5e6eb" font-family="DejaVu Sans,Arial,sans-serif" font-size="27">Espaço para o que importa.</text>
+  <text x="80" y="320" fill="#88a4b3" font-family="DejaVu Sans,Arial,sans-serif" font-size="17">Diagnóstico claro. Decisões conscientes. Trabalho preservado.</text>
+  <rect x="973" y="160" width="234" height="40" rx="20" fill="#163e39" stroke="#34665b"/>
+  <circle cx="997" cy="180" r="5" fill="#5de3b9"/>
+  <text x="1013" y="186" fill="#8aebcb" font-family="DejaVu Sans,Arial,sans-serif" font-size="15" letter-spacing="1">LINUX · KDE · PYTHON</text>
+</svg>

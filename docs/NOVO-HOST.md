@@ -23,7 +23,7 @@ ou altera sua configuração global silenciosamente.
 
 ## Recuperação principal pelo GitHub
 
-Repositório privado: https://github.com/Misael-art/Folego
+Repositório público, código sob licença MIT: https://github.com/Misael-art/Folego
 
 PR de continuidade: https://github.com/Misael-art/Folego/pull/1.
 Todos os pontos de recuperação estão em [handoff/REMOTE.md](handoff/REMOTE.md).
@@ -38,8 +38,8 @@ cd Folego
 ./dev gui
 ```
 
-Faça login no GitHub com um helper de credenciais/`gh auth login` para clonar o
-repositório privado. Não colocar token na URL, em scripts ou no histórico shell.
+O clone público não exige autenticação. Para enviar contribuições, autentique
+pelo helper oficial do GitHub. Não colocar token na URL, em scripts ou no histórico shell.
 Se ainda não houver Git, baixe a cópia fonte da Página de recuperação, extraia e
 execute `./dev setup --system-deps`; o instalador nativo inclui Git.
 
