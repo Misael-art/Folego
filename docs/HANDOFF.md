@@ -430,7 +430,7 @@ a política de entrada do executor automático de recursos ainda desligado.
 
 - Gate final `./dev check`, Python 3.14.7 gerenciado, HOME/XDG privados,
   suítes sequenciais: **994 passed, 2 skipped em 17,69 s** sem Qt e
-  **1236 passed, 2 skipped em 28,37 s** com Qt offscreen; diff check aprovado.
+  **1236 passed, 2 skipped em 28,37 s** com Qt 6.12.0 offscreen; diff check aprovado.
   Logs/run.json: `run-a1i86z0r` e `run-pooobcvm`. Os dois skips em cada perfil
   exigem Edge real ausente. Regressão final de consultas: 42 testes headless
   focados aprovados em 1,30 s antes desse gate completo.
@@ -476,3 +476,20 @@ universal de acessibilidade. FTS ausente, boot/SDDM, login/logout, suspensão,
 dock, atalhos Steam, leitor de tela e soak contínuo de duas horas continuam
 pendentes. Próximo passo: integrar writers interessados ao protocolo e validar
 essas transições no alvo físico, sem desligar entradas de trabalho para testes.
+
+### Fechamento e publicação
+
+Implementação, testes e documentação publicados no commit
+`02db56c8d7399ddb3e8ba546f66358ec01f9f73f`, na branch padrão de continuidade
+`codex/portable-handoff-20261024`; SHA remoto conferido. Repositório público e
+licença MIT novamente confirmados. [PR #1](https://github.com/Misael-art/Folego/pull/1)
+reutilizado, aberto e atualizado com o comportamento final e seus limites.
+CI desse SHA: núcleo sem Qt, Qt offscreen e contratos CLI **success** no push
+e no PR; CodeRabbit/Sourcery **skipped**. Nenhum merge ou release.
+
+Após atualizar o código de consultas, somente a unit do Fôlego foi reiniciada
+para carregar a versão validada. Consulta final: `enabled`, `active/running`,
+`ExecMainStatus=0`, `NRestarts=0` (reinícios por falha), heartbeat recente,
+política habilitada, ciclo `waiting` pelo PhaseZero e nenhuma operação pendente.
+Diário do host: **zero intenções de reparo de acessibilidade**. O fechamento
+subsequente altera apenas este registro, sem mudar o código testado.
