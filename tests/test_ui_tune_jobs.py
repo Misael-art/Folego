@@ -59,6 +59,40 @@ def jobs(qapp, sandbox):
     layer.shutdown()
 
 
+def test_the_job_layer_serializes_disk_mutations_too():
+    from folego.ui.tune_jobs import MUTATING
+    assert "quarantine" in MUTATING and "purge" in MUTATING
+    assert "recover" in MUTATING, "recover move/apaga clone e é mutação"
+    assert "list" not in MUTATING and "plan" not in MUTATING
+
+
+def test_real_child_uses_private_temporaries_with_old_parent_environment(qapp, sandbox, tmp_path, monkeypatch):
+    from folego.ui.tune_jobs import TuneJobs
+    from folego.safely import jobtemp
+
+    runtime = tmp_path / "runtime"
+    runtime.mkdir(mode=0o700)
+    sandbox["TMPDIR"] = str(runtime / "codex-desktop/tmp")
+    sandbox["XDG_RUNTIME_DIR"] = str(runtime)
+    monkeypatch.setattr(jobtemp, "read_mounts_checked", lambda: (
+        (("/", "ext4"), (str(runtime), "tmpfs")), None))
+    source = "import json,os; print(json.dumps({'ok':True,'tmp':os.environ['TMPDIR'],'pytest':os.environ['PYTEST_DEBUG_TEMPROOT'],'runtime':os.environ['XDG_RUNTIME_DIR']}))"
+    jobs = TuneJobs(env=sandbox, argv_factory=lambda *args: [sys.executable, "-c", source])
+    results = []
+    try:
+        jobs.run("status", "", done=results.append)
+        assert pump(qapp, lambda: bool(results))
+        payload = results[0]
+        assert payload["ok"]
+        assert payload["tmp"].startswith(sandbox["XDG_DATA_HOME"])
+        assert payload["pytest"] != payload["tmp"]
+        assert payload["runtime"] == str(runtime)
+        assert Path(payload["tmp"]).is_dir()
+        assert jobs.procs == []
+    finally:
+        jobs.shutdown()
+
+
 def test_a_layer_that_shuts_down_leaves_no_child_running(qapp, sandbox):
     from folego.ui.tune_jobs import TuneJobs
 
@@ -74,6 +108,20 @@ def test_a_layer_that_shuts_down_leaves_no_child_running(qapp, sandbox):
     pump(qapp, lambda: answers and layer.in_flight == 0)
     assert "a janela fechou antes da resposta" in answers[-1]["reason"]
     assert layer.in_flight == 0, "um filho morto não pode travar a próxima mutação"
+
+
+def test_mutating_child_with_scalar_json_has_unknown_result(qapp, sandbox):
+    from folego.ui.tune_jobs import TuneJobs
+    answers = []
+    layer = TuneJobs(env=sandbox, argv_factory=lambda *args:
+                     [sys.executable, "-c", "print('null')"])
+    try:
+        layer.run("signal", "fixture", confirm=True, done=answers.append)
+        assert pump(qapp, lambda: bool(answers))
+        assert answers[0]["outcome"] == "desconhecido" and answers[0]["exit"] == 5
+        assert layer.in_flight == 0 and not layer.procs
+    finally:
+        layer.shutdown()
 
 
 def test_a_real_child_answers_with_its_own_json_line(qapp, jobs):
@@ -115,6 +163,37 @@ def test_a_child_finds_the_package_without_a_pythonpath_in_the_environment(qapp,
         layer.shutdown()
 
 
+def test_a_worker_that_cannot_start_finishes_once_and_frees_the_layer(qapp, sandbox,
+                                                                      tmp_path):
+    """R06: FailedToStart não emite finished; sem finalizar, a mutação fica em voo.
+
+    O estado preso bloqueava toda mutação seguinte e o objeto do processo nunca
+    era descartado.
+    """
+    from folego.ui.tune_jobs import TuneJobs
+
+    answers = []
+    layer = TuneJobs(env=sandbox, timeout_ms=1000,
+                     argv_factory=lambda acao, tid, confirm:
+                     [str(tmp_path / "nao-existe-mesmo")])
+    try:
+        layer.run("apply", "edge.startup_boost", confirm=True, done=answers.append)
+        assert pump(qapp, lambda: len(answers) == 1), \
+            "o worker que não inicia nunca finalizou"
+        assert answers[0]["ok"] is False
+        assert "iniciar" in answers[0]["reason"] or "no such" in answers[0]["reason"].lower()
+        # o filho nem existiu: recusa é o desfecho honesto, não "desconhecido"
+        assert answers[0]["outcome"] == "recusa" and answers[0]["exit"] == 1
+        assert layer.in_flight == 0, "a mutação não pode ficar presa em voo"
+        assert pump(qapp, lambda: layer.procs == []), \
+            "o objeto concluído tem de sair da lista"
+        # a segunda mutação não pode ser recusada por uma fantasma
+        layer.run("revert", "edge.startup_boost", confirm=True, done=answers.append)
+        assert pump(qapp, lambda: len(answers) == 2)
+    finally:
+        layer.shutdown()
+
+
 def test_a_stalling_child_is_killed_and_reported(qapp, sandbox):
     from folego.ui.tune_jobs import TuneJobs
 
@@ -126,7 +205,17 @@ def test_a_stalling_child_is_killed_and_reported(qapp, sandbox):
         layer.run("detect", "edge.startup_boost", done=stalled.append)
         assert pump(qapp, lambda: len(stalled) == 1), "um filho travado prendeu a janela"
         assert "não respondeu" in stalled[0]["reason"]
+        # leitura estourada: nada foi tocado — recusa, não desconhecido
+        assert stalled[0]["outcome"] == "recusa" and stalled[0]["exit"] == 1
         assert layer.in_flight == 0, "o filho morto não conta como mutação em voo"
+
+        # a mesma trava numa mutação é outra história (entrega 7): tempo esgotado
+        # não prova ausência de efeitos — o desfecho é desconhecido (5)
+        layer.run("apply", "edge.startup_boost", confirm=True, done=stalled.append)
+        assert pump(qapp, lambda: len(stalled) == 2), "a mutação travada não finalizou"
+        assert stalled[1]["outcome"] == "desconhecido" and stalled[1]["exit"] == 5, \
+            "tempo esgotado não é recusa: o filho pode ter começado o efeito"
+        assert layer.in_flight == 0
     finally:
         layer.shutdown()
 
@@ -145,6 +234,8 @@ def test_only_one_mutation_is_in_flight_at_a_time(qapp, sandbox):
 
         layer.run("apply", "edge.background_mode", confirm=True, done=answers.append)
         assert answers[-1]["ok"] is False and "em voo" in answers[-1]["reason"]
+        assert answers[-1]["outcome"] == "recusa" and answers[-1]["exit"] == 1, \
+            "recusar por concorrência é seguro: nada foi tocado"
         assert layer.in_flight == 1, "a recusa não abre um segundo filho"
     finally:
         layer.shutdown()
@@ -165,6 +256,8 @@ def test_a_tmpfs_release_blocks_the_next_mutation(qapp, sandbox):
         assert layer.in_flight == 1
         layer.run("restore", "1700-abc", confirm=True, done=answers.append)
         assert answers[-1]["ok"] is False and "em voo" in answers[-1]["reason"]
+        assert answers[-1]["outcome"] == "recusa" and answers[-1]["exit"] == 1, \
+            "recusar por concorrência é seguro: nada foi tocado"
         assert layer.in_flight == 1, "a recusa não abre um segundo filho"
     finally:
         layer.shutdown()

@@ -1,0 +1,5 @@
+{
+  "external_basetemp_refused": true,
+  "concurrent_suite_refused": true,
+  "no_workspace_created_by_refusals": true
+}

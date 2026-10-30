@@ -16,11 +16,12 @@ def make_proc(root, pid: int, links: dict):
 
 
 def test_only_targets_under_the_prefixes_are_recorded(fake_proc):
+    bus = f"/run/user/{os.getuid()}/bus"
     make_proc(fake_proc, 400, {"3": "/tmp/agente/sessao", "4": "/home/u/nota.md",
-                               "5": "/run/user/1000/bus", "6": "socket:[917]",
+                               "5": bus, "6": "socket:[917]",
                                "7": "/tmpx/algo"})
     idx = holders.holder_index(proc_root=str(fake_proc))
-    assert idx.refs == {"/run/user/1000/bus": (400,), "/tmp/agente/sessao": (400,)}
+    assert idx.refs == {bus: (400,), "/tmp/agente/sessao": (400,)}
     assert (idx.proc_count, idx.fd_count) == (1, 5)
     assert "/tmpx/algo" not in idx.refs   # compartilha as letras, não o separador
     assert idx.pids_holding("/tmp/algo") == frozenset()
@@ -100,3 +101,39 @@ def test_an_absent_proc_root_is_not_proof_of_no_holders(tmp_path):
     assert idx.refs == {}
     assert idx.proc_count == 0            # quer dizer "não sabemos", não "nada aberto"
     assert idx.fd_count == 0
+    assert idx.state == "unavailable"     # R02: o índice diz que não pôde ler
+    assert idx.errors, "a abrangência perdida tem de estar nomeada"
+
+
+def test_a_complete_scan_over_an_empty_proc_root_is_complete(fake_proc):
+    """Ler /proc e não achar processo é diferente de não conseguir ler /proc."""
+    idx = holders.holder_index(proc_root=str(fake_proc))
+    assert idx.state == "complete"
+    assert idx.errors == ()
+
+
+def test_an_unreadable_fd_directory_makes_the_index_partial(fake_proc):
+    """R02: sem ler todos os fd, 'nenhum holder' é ignorância, não prova."""
+    make_proc(fake_proc, 800, {"0": "/tmp/x"})
+    real = os.scandir
+
+    def deny(path):
+        if str(path).endswith("/800/fd"):
+            raise PermissionError(13, "denied")
+        return real(path)
+
+    idx = holders.holder_index(proc_root=str(fake_proc), scandir_fn=deny)
+    assert idx.state == "partial"
+    assert idx.errors, "o fd ilegível tem de aparecer no estado"
+
+
+def test_an_unreadable_pid_directory_makes_the_index_partial(fake_proc):
+    real = os.scandir
+
+    def deny_pid_dirs(path):
+        if str(path) == str(fake_proc):
+            raise PermissionError(13, "denied")
+        return real(path)
+
+    idx = holders.holder_index(proc_root=str(fake_proc), scandir_fn=deny_pid_dirs)
+    assert idx.state == "unavailable"

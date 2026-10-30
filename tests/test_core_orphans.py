@@ -357,3 +357,67 @@ def test_one_process_belongs_to_at_most_one_group():
 
     assert [t.group for t in targets] == ["edge"]
     assert sum(len(t.members) for t in targets) == 1, "no double-counted yield"
+
+
+# -------------------------------------- F3.5: sessions, exclusions and CPU clues
+
+def test_protected_fn_removes_a_proven_orphan_from_the_list():
+    tracker = OrphanTracker(
+        min_idle_s=0.0, uid=1000, self_pid=10,
+        protected_fn=lambda p: "sessão manter ativo" if p.pid == 500 else None)
+    p = orphan()
+    tracker.observe(snapshot_of(p, ts=1_000.0))
+
+    assert tracker.observe(snapshot_of(p, ts=2_000.0)) == ()
+
+
+def test_a_protection_file_that_cannot_be_read_fails_closed():
+    def broken(_proc):
+        raise OSError("permission denied")
+
+    tracker = OrphanTracker(min_idle_s=0.0, uid=1000, self_pid=10,
+                            protected_fn=broken)
+    p = orphan()
+    tracker.observe(snapshot_of(p, ts=1_000.0))
+
+    assert tracker.observe(snapshot_of(p, ts=2_000.0)) == ()
+
+
+def test_one_protected_member_removes_the_whole_browser_family():
+    members = [edge(400, pgid=400, session=400, ppid=10),
+               edge(401, comm="msedge --type=gpu-process", ppid=400,
+                    rss_kb=90_000)]
+    protected = lambda p: "sessão manter ativo" if p.pid == 401 else None
+
+    assert group_targets(members, uid=1000, self_pid=10,
+                         protected_fn=protected) == (), (
+        "a partial family kill could let the parent respawn the protected child")
+
+
+def test_cpu_active_adopted_process_is_only_an_investigation_clue():
+    from folego.core.orphans import active_investigation
+    p = orphan(cpu_frac=37.0)
+    # It keeps advancing its CPU counter, so the old idle rule never lists it.
+    tracker = OrphanTracker(min_idle_s=300.0, uid=1000, self_pid=10)
+    tracker.observe(snapshot_of(p, ts=1_000.0))
+    assert tracker.observe(snapshot_of(replace(p, utime=p.utime + 50),
+                                       ts=2_000.0)) == ()
+
+    clues = active_investigation(snapshot_of(p), uid=1000, self_pid=10)
+
+    assert [c.pid for c in clues] == [500]
+    assert clues[0].investigation is True
+    assert clues[0].idle_s == 0.0
+    assert clues[0].cpu_frac == 37.0
+
+
+def test_active_investigation_skips_low_cpu_and_protected_processes():
+    from folego.core.orphans import active_investigation
+    quiet = orphan(500, cpu_frac=1.0)
+    protected = orphan(501, cpu_frac=80.0)
+    clues = active_investigation(
+        snapshot_of(quiet, protected), min_cpu_frac=10.0, uid=1000,
+        self_pid=10,
+        protected_fn=lambda p: "sessão" if p.pid == 501 else None)
+
+    assert clues == ()

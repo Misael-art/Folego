@@ -1,0 +1,19 @@
+Using Python 3.14.7 environment at: .scratch/desktop-validation-vvnNlb/gui-venv
+Resolved 7 packages in 177ms
+Downloading pyside6-webengine (111.3MiB)
+Downloading pyside6-essentials (80.4MiB)
+Downloading pyside6-addons (56.5MiB)
+Downloading pyside6-pdf (2.7MiB)
+ Downloaded pyside6-pdf
+ Downloaded pyside6-addons
+ Downloaded pyside6-essentials
+ Downloaded pyside6-webengine
+Prepared 7 packages in 4.02s
+Installed 7 packages in 1.26s
+ + folego==0.1.0 (from file:///home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/wheels/folego-0.1.0-py3-none-any.whl)
+ + pyside6==6.12.0
+ + pyside6-addons==6.12.0
+ + pyside6-essentials==6.12.0
+ + pyside6-pdf==6.12.0.140
+ + pyside6-webengine==6.12.0.140
+ + shiboken6==6.12.0

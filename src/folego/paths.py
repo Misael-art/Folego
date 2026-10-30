@@ -48,6 +48,56 @@ def audit_log_path() -> Path:
     return state_dir() / "audit.jsonl"
 
 
+def operations_journal_path() -> Path:
+    """Diário de intenção do motor comum (F2): append-only, uma linha por ato."""
+    return state_dir() / "operations.jsonl"
+
+
+def coordinator_lock_path() -> Path:
+    """Trava entre processos das mutações (flock por usuário/estado)."""
+    return state_dir() / "coordinator.lock"
+
+
+def grants_path() -> Path:
+    """Grants persistidos da automação; ausente = nenhum grant (F6)."""
+    return state_dir() / "grants.json"
+
+
+def automation_path() -> Path:
+    """Modo/preset/pausa da automação; ausente = manual e equilibrado."""
+    return state_dir() / "automation.json"
+
+
+def automation_decisions_path() -> Path:
+    """Simulações persistidas ("executaria", executado=False) para revisão."""
+    return state_dir() / "automation-decisions.jsonl"
+
+
+def projects_path() -> Path:
+    """Projetos cadastrados para o inventário F7; ausente = nenhum."""
+    return state_dir() / "projects.json"
+
+
+def instance_lock_path() -> Path:
+    """Trava da instância GUI única (o CLI pode rodar em paralelo)."""
+    return state_dir() / "gui.lock"
+
+
+def autostart_path() -> Path:
+    """Arquivo de autostart XDG opcional; o app só lê, nunca instala sozinho."""
+    return xdg_config_home() / "autostart" / "folego.desktop"
+
+
+def sessions_path() -> Path:
+    """Registro opt-in de sessões; ausente = nenhuma sessão registrada."""
+    return state_dir() / "sessions.json"
+
+
+def exclusions_path() -> Path:
+    """Exclusões por aplicação/projeto e opção \"manter ativo\"."""
+    return state_dir() / "exclusions.json"
+
+
 def proc_root() -> str:
     return os.environ.get("DECKWELLNESS_PROC_ROOT", "/proc")
 

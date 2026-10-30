@@ -1,0 +1,85 @@
+........................................................................ [  7%]
+........................................................................ [ 14%]
+........................................................................ [ 21%]
+........................................................................ [ 28%]
+........................................................................ [ 35%]
+........................................................................ [ 42%]
+........................................................................ [ 49%]
+........................................................................ [ 56%]
+........................................................................ [ 63%]
+........................................................................ [ 70%]
+........................................................................ [ 77%]
+........................................................................ [ 84%]
+........Fatal Python error: Segmentation fault
+
+Current thread 0x00007fea93293b80 [python] (most recent call first):
+  File "/home/misael/Projects/Folego/tests/test_ui_long_run.py", line 83 in test_repeated_snapshots_do_not_grow_widgets_samples_or_jobs
+  File "/usr/lib/python3.14/site-packages/_pytest/python.py", line 167 in pytest_pyfunc_call
+  File "/usr/lib/python3.14/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/usr/lib/python3.14/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/usr/lib/python3.14/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/usr/lib/python3.14/site-packages/_pytest/python.py", line 1707 in runtest
+  File "/usr/lib/python3.14/site-packages/_pytest/runner.py", line 184 in pytest_runtest_call
+  File "/usr/lib/python3.14/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/usr/lib/python3.14/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/usr/lib/python3.14/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/usr/lib/python3.14/site-packages/_pytest/runner.py", line 250 in <lambda>
+  File "/usr/lib/python3.14/site-packages/_pytest/runner.py", line 361 in from_call
+  File "/usr/lib/python3.14/site-packages/_pytest/runner.py", line 249 in call_and_report
+  File "/usr/lib/python3.14/site-packages/_pytest/runner.py", line 139 in runtestprotocol
+  File "/usr/lib/python3.14/site-packages/_pytest/runner.py", line 118 in pytest_runtest_protocol
+  File "/usr/lib/python3.14/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/usr/lib/python3.14/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/usr/lib/python3.14/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/usr/lib/python3.14/site-packages/_pytest/main.py", line 408 in pytest_runtestloop
+  File "/usr/lib/python3.14/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/usr/lib/python3.14/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/usr/lib/python3.14/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/usr/lib/python3.14/site-packages/_pytest/main.py", line 384 in _main
+  File "/usr/lib/python3.14/site-packages/_pytest/main.py", line 330 in wrap_session
+  File "/usr/lib/python3.14/site-packages/_pytest/main.py", line 377 in pytest_cmdline_main
+  File "/usr/lib/python3.14/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "/usr/lib/python3.14/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "/usr/lib/python3.14/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "/usr/lib/python3.14/site-packages/_pytest/config/__init__.py", line 229 in _main
+  File "/usr/lib/python3.14/site-packages/_pytest/config/__init__.py", line 253 in _console_main
+  File "/usr/lib/python3.14/site-packages/pytest/__main__.py", line 9 in <module>
+  File "<frozen runpy>", line 88 in _run_code
+  File "<frozen runpy>", line 203 in _run_module_as_main
+
+Current thread's C stack trace (most recent call first):
+  Binary file "/usr/lib/libpython3.14.so.1.0", at _Py_DumpStack+0x4d [0x7fea92d6883a]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x169051 [0x7fea92d69051]
+  Binary file "/usr/lib/libc.so.6", at +0x3e6f0 [0x7fea9283e6f0]
+  Binary file "/usr/lib/libstdc++.so.6", at __dynamic_cast+0x125 [0x7fea8f6b4045]
+  Binary file "/usr/lib/libshiboken6.cpython-314-x86_64-linux-gnu.so.6.11", at +0x1f9c9 [0x7fea8fac99c9]
+  Binary file "/usr/lib/libshiboken6.cpython-314-x86_64-linux-gnu.so.6.11", at +0x1f99a [0x7fea8fac999a]
+  Binary file "/usr/lib/libshiboken6.cpython-314-x86_64-linux-gnu.so.6.11", at _ZNK8Shiboken14BindingManager15findDerivedTypeEPvP11_typeobject+0x5c [0x7fea8fac9aac]
+  Binary file "/usr/lib/libshiboken6.cpython-314-x86_64-linux-gnu.so.6.11", at +0x1fb24 [0x7fea8fac9b24]
+  Binary file "/usr/lib/libpyside6.cpython-314-x86_64-linux-gnu.so.6.11", at _ZN6PySide20getWrapperForQObjectEP7QObjectP11_typeobject+0x105 [0x7fea8f995375]
+  Binary file "/usr/lib/python3.14/site-packages/PySide6/QtWidgets.cpython-314-x86_64-linux-gnu.so", at +0x4a0ed7 [0x7fea8a8a0ed7]
+  Binary file "/usr/lib/python3.14/site-packages/PySide6/QtWidgets.cpython-314-x86_64-linux-gnu.so", at +0xd3d82 [0x7fea8a4d3d82]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x5dfc1 [0x7fea92c5dfc1]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x1e478b [0x7fea92de478b]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x32591f [0x7fea92f2591f]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at _PyObject_MakeTpCall+0x89 [0x7fea92da69e9]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x671d8 [0x7fea92c671d8]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x1e478b [0x7fea92de478b]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x32591f [0x7fea92f2591f]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x20069d [0x7fea92e0069d]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x693f9 [0x7fea92c693f9]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x1e478b [0x7fea92de478b]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x32591f [0x7fea92f2591f]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at _PyObject_MakeTpCall+0x89 [0x7fea92da69e9]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x671d8 [0x7fea92c671d8]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x1e478b [0x7fea92de478b]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x32591f [0x7fea92f2591f]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at _PyObject_MakeTpCall+0x89 [0x7fea92da69e9]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x69ef6 [0x7fea92c69ef6]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x1e478b [0x7fea92de478b]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x32591f [0x7fea92f2591f]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at _PyObject_MakeTpCall+0x89 [0x7fea92da69e9]
+  Binary file "/usr/lib/libpython3.14.so.1.0", at +0x69ef6 [0x7fea92c69ef6]
+  <truncated rest of calls>
+
+Extension modules: shiboken6.Shiboken, PySide6.QtCore, PySide6.QtGui, PySide6.QtWidgets (total: 4)

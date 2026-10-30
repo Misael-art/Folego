@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "python": "3.14.7",
+  "qt": "6.12.0",
+  "source_base": "26b1567db77648c7a8a0fdbc4c41bd0884cbb2ac",
+  "suite_isolation": "./dev; private HOME/XDG; disk temporaries; sequential suites",
+  "suites": {
+    "headless": {
+      "status": "passed",
+      "summary": "1014 passed, 2 skipped in 27.07s",
+      "sha256": "aedebb9ba259267e04e0b96eb92257e89a55a19c0c58750fb144a5fd02882c24"
+    },
+    "gui": {
+      "status": "passed",
+      "summary": "1264 passed, 2 skipped in 42.15s",
+      "sha256": "12b88117a5613ab2553188968f3b3d20f114f5b4c77cd8fc2c73139c20aecab2"
+    }
+  },
+  "physical_transitions_approved": false,
+  "soak_approved": true,
+  "native": {
+    "platform": "wayland",
+    "exposed": true,
+    "default_on": true,
+    "disabled_persisted_after_reopen": true,
+    "tab_navigation": true,
+    "geometry": [
+      [
+        800,
+        600
+      ],
+      [
+        1280,
+        800
+      ]
+    ],
+    "reviewed_ids_confirmed": [
+      "27c85b10d511407a95ca771383f4a79d",
+      "5bcd8fb4743e42e8ad41b6309251722d"
+    ],
+    "apply_and_restore_owned_fixture": true,
+    "pending_survived_reopen_and_cancelled_without_effect": true,
+    "host_units_touched": false,
+    "physical_suspend_or_login_claimed": false
+  },
+  "launcher": {
+    "official": "./dev gui",
+    "survived_seconds": 5,
+    "isolated_home": true,
+    "opt_out_preserved": true
+  },
+  "host": {
+    "autostart_preference": true,
+    "desktop_hidden": false,
+    "monitor_enabled": true,
+    "monitor_active": true,
+    "repair_policy_preserved": true,
+    "input_state": "waiting-existing-provider",
+    "baseline_count": 0,
+    "waiting_alert_observed": true,
+    "desktop_entry_validated": true,
+    "service_restart_failures": 0,
+    "input_repair_intents": 0
+  },
+  "product_sha": "a65b5f7f822ea55c520ad8e6b8598a00df741c5e",
+  "smoke": {
+    "status": "complete",
+    "elapsed_s": 45.009725248000905,
+    "source_unchanged": true,
+    "job_counters": {
+      "worker_started": 6,
+      "worker_completed": 6,
+      "cancel_started": 1,
+      "cancel_completed": 1
+    },
+    "failures": []
+  },
+  "ci": {
+    "sha": "a65b5f7f822ea55c520ad8e6b8598a00df741c5e",
+    "push_and_pr_success_jobs": 6,
+    "reviews_skipped": [
+      "CodeRabbit",
+      "Sourcery"
+    ],
+    "runs": [
+      "https://github.com/Misael-art/Folego/actions/runs/40999625427",
+      "https://github.com/Misael-art/Folego/actions/runs/40999631726"
+    ]
+  },
+  "soak_scope_limit": "synthetic /proc without boot ID; temporary lifecycle remains conservatively unverified in soak; separate real /proc check required",
+  "real_proc_child_lifecycle": {
+    "test": "test_real_child_lifecycle_certifies_only_an_observed_boot",
+    "status": "passed",
+    "scope": "real own QProcess, boot/PID/starttime/session and completion manifest; disposable root"
+  },
+  "soak": {
+    "status": "passed",
+    "product_sha": "a65b5f7f822ea55c520ad8e6b8598a00df741c5e",
+    "analysis": "soak/analysis.json",
+    "elapsed_s": 7200.056755731999,
+    "physical_transitions_approved": false,
+    "continuous_temporary_retention_approved": false
+  },
+  "real_proc_retention": {
+    "archived": 0,
+    "reason": "consumer ownership unknown; owned fixture preserved",
+    "effective_archive_approved": false,
+    "receipt": "retention-real-proc.json"
+  }
+}

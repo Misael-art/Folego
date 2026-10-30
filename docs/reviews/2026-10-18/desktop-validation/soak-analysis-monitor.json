@@ -1,0 +1,9 @@
+{
+  "status": "failed",
+  "pid": 221314,
+  "launch": "/home/misael/Projects/Folego/docs/reviews/2026-10-18/desktop-validation/soak-retry-launch.json",
+  "report": "/home/misael/Projects/Folego/docs/reviews/2026-10-18/desktop-validation/soak-retry-wayland/report.json",
+  "observed_utc": "2026-10-18T13:17:43.469527+00:00",
+  "analyzer_exit": 1,
+  "analysis": "/home/misael/Projects/Folego/docs/reviews/2026-10-18/desktop-validation/soak-analysis.json"
+}

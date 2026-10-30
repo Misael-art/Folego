@@ -63,6 +63,21 @@ def test_a_live_holder_is_refused_and_named():
     assert "4242" in verdict.reason and "4243" in verdict.reason
 
 
+def test_a_holder_index_that_could_not_be_read_blocks_eligibility():
+    """R02: sem prova de ausência de uso, o item não é liberável."""
+    verdict = policy.classify(entry(holder_state="unavailable"), policy.Policy())
+    assert verdict.ok is False
+    assert "holder" in verdict.reason.lower() or "uso" in verdict.reason.lower()
+
+
+def test_a_partial_holder_index_also_blocks_eligibility():
+    verdict = policy.classify(entry(holder_state="partial",
+                                    holder_errors=("800: permissão negada",)),
+                              policy.Policy())
+    assert verdict.ok is False
+    assert verdict.reason.startswith("refused")
+
+
 def test_a_truncated_walk_is_not_evidence_enough_to_delete():
     verdict = policy.classify(entry(truncated=True), policy.Policy())
     assert verdict.ok is False and "incompleta (truncada)" in verdict.reason
@@ -100,9 +115,10 @@ def test_the_x11_socket_directory_is_never_eligible_with_the_default_list():
 
 def test_nothing_in_run_user_is_eligible_without_an_explicit_pattern():
     """Em /run/user/1000 mora a sessão: só com padrão explícito algo ali sai elegível."""
-    session = entry(volume="/run/user/1000", path="/run/user/1000/gnupg", name="gnupg")
+    runtime = f"/run/user/{os.getuid()}"
+    session = entry(volume=runtime, path=runtime + "/gnupg", name="gnupg")
     assert policy.classify(session, policy.Policy()).ok is False
-    with_pattern = policy.Policy(allow_patterns=("/run/user/1000/gnupg",))
+    with_pattern = policy.Policy(allow_patterns=(runtime + "/gnupg",))
     assert policy.classify(session, with_pattern).ok is True
 
 

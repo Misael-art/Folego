@@ -1,16 +1,28 @@
 [project]
 name = "folego"
 version = "0.1.0"
-description = "Reversible RAM/CPU wellness tuner for the Steam Deck (BigLinux/KDE)"
-requires-python = ">=3.14"
-# PySide6 is provided by the system python; the venv uses --system-site-packages.
+description = "Resource diagnostics and reversible manual actions for Linux and KDE Plasma"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["linux", "kde", "resource-monitor", "tmpfs", "pyside6"]
+requires-python = ">=3.14,<3.15"
+# CLI independente de Qt; o wrapper instala a GUI em ambiente próprio.
 dependencies = []
 
+[project.urls]
+Repository = "https://github.com/Misael-art/Folego"
+Issues = "https://github.com/Misael-art/Folego/issues"
+
 [project.optional-dependencies]
+gui = ["PySide6>=6.6"]
 dev = ["pytest", "hypothesis"]
 
+[project.scripts]
+folego = "folego.cli:main"
+
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools==84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]

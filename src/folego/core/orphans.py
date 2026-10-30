@@ -59,6 +59,11 @@ class OrphanCandidate:
     idle_s: float
     ppid: int = 1
     cmdline: tuple[str, ...] = ()
+    cpu_frac: float | None = None
+    # CPU ativa não é a regra antiga de ociosidade: a linha é uma investigação,
+    # não uma prova de abandono. A UI não oferece ação automática para ela.
+    investigation: bool = False
+    cpu_ticks: int | None = None
 
     @property
     def label(self) -> str:
@@ -133,8 +138,18 @@ def is_tooling(proc: ProcInfo) -> bool:
     return any(marker in exe for marker in TOOLING_EXE_MARKERS)
 
 
+def _protection_reason(protected_fn, proc: ProcInfo) -> str | None:
+    if protected_fn is None:
+        return None
+    try:
+        return protected_fn(proc)
+    except Exception as exc:  # fail closed: an unreadable protection file protects
+        return f"proteção ilegível: {type(exc).__name__}: {exc}"
+
+
 def group_targets(procs, *, groups=KILLABLE_GROUPS, uid: int | None = None,
-                  self_pid: int | None = None) -> tuple[GroupTarget, ...]:
+                  self_pid: int | None = None,
+                  protected_fn=None) -> tuple[GroupTarget, ...]:
     own_uid = os.getuid() if uid is None else uid
     me = os.getpid() if self_pid is None else self_pid
     protected = ancestor_pids(procs, me)
@@ -143,12 +158,18 @@ def group_targets(procs, *, groups=KILLABLE_GROUPS, uid: int | None = None,
             if p.uid == own_uid and not is_tooling(p) and not under_automation_control(p)]
     out = []
     for group in groups:
-        members = [
-            GroupMember(p.pid, p.comm, p.rss_kb, p.starttime, p.ppid)
-            for p in pool
+        family = [
+            p for p in pool
             if _matches_group(p, rules[group])
             and not is_protected(p, self_pid=me, ancestor_pids=protected)
         ]
+        # Uma família é a unidade: se qualquer membro estiver protegido (sessão
+        # com "manter ativo", exclusão do usuário ou arquivo ilegível), não se
+        # oferece um encerramento parcial que mataria o pai e deixaria o filho.
+        if any(_protection_reason(protected_fn, p) for p in family):
+            continue
+        members = [GroupMember(p.pid, p.comm, p.rss_kb, p.starttime, p.ppid)
+                   for p in family]
         pool = [p for p in pool if p.pid not in {m.pid for m in members}]
         if members:
             # children first: a live parent respawns a killed child
@@ -183,16 +204,25 @@ class OrphanTracker:
     """Stateful across polls: idleness is measured between observations, never assumed."""
 
     def __init__(self, *, min_idle_s: float = MIN_IDLE_S, uid: int | None = None,
-                 self_pid: int | None = None):
+                 self_pid: int | None = None, protected_fn=None):
         self.min_idle_s = min_idle_s
         self.uid = uid
         self.self_pid = self_pid
+        self.protected_fn = protected_fn
         self._seen: dict[tuple[int, int], _Observation] = {}
 
     def observe(self, snapshot: Snapshot) -> tuple[OrphanCandidate, ...]:
+        # Amostra real sem processos utilizáveis não prova "nenhum órfão": uma
+        # varredura que falhou não pode alimentar a lista. Snapshots sintéticos
+        # (sem fontes declaradas) continuam aceitos pelos testes de unidade.
+        if snapshot.sources and not snapshot.usable("processes"):
+            return ()
         own_uid = os.getuid() if self.uid is None else self.uid
         me = os.getpid() if self.self_pid is None else self.self_pid
         procs = snapshot.procs
+        # Idade da CPU é intervalo: relógio monotônico quando existir; parede é
+        # só o fallback de snapshots antigos/sintéticos.
+        now = snapshot.mono if snapshot.mono > 0 else snapshot.ts
         protected = ancestor_pids(procs, me)
         by_pid = {p.pid: p for p in procs}
         parents: dict[int, int] = {}
@@ -204,20 +234,27 @@ class OrphanTracker:
 
         candidates = []
         for p in procs:
+            reason = _protection_reason(self.protected_fn, p)
+            if reason:
+                # Não conta o tempo em que esteve protegido: se a proteção sair,
+                # a observação de ociosidade recomeça em vez de herdar o passado.
+                self._seen.pop((p.pid, p.starttime), None)
+                continue
             cpu = p.utime + p.stime
             key = (p.pid, p.starttime)
             previous = self._seen.get(key)
             if previous is None or previous.cpu != cpu:
-                self._seen[key] = _Observation(cpu, snapshot.ts)
+                self._seen[key] = _Observation(cpu, now)
             if not self._qualifies(p, own_uid=own_uid, parents=parents,
                                    protected=protected, by_pid=by_pid):
                 continue
-            idle_s = snapshot.ts - self._seen[key].last_change_ts
+            idle_s = now - self._seen[key].last_change_ts
             if idle_s >= self.min_idle_s:
                 candidates.append(OrphanCandidate(
                     pid=p.pid, comm=p.comm, state=p.state, uid=p.uid,
                     rss_kb=p.rss_kb, swap_kb=p.swap_kb, starttime=p.starttime,
-                    idle_s=idle_s, ppid=p.ppid, cmdline=p.cmdline))
+                    idle_s=idle_s, ppid=p.ppid, cmdline=p.cmdline,
+                    cpu_frac=p.cpu_frac, cpu_ticks=p.utime + p.stime))
         return tuple(sorted(candidates, key=lambda c: -c.rss_kb))
 
     @staticmethod
@@ -228,3 +265,42 @@ class OrphanTracker:
                 and is_adopted(p, by_pid.get(p.ppid))
                 and parents.get(p.pid, 0) == 0
                 and not is_protected(p, ancestor_pids=protected))
+
+
+def active_investigation(snapshot: Snapshot, *, min_cpu_frac: float = 10.0,
+                         uid: int | None = None, self_pid: int | None = None,
+                         protected_fn=None) -> tuple[OrphanCandidate, ...]:
+    """Adopted, childless processes with active CPU: investigation, not proof.
+
+    The old orphan rule requires a frozen CPU counter, so a runaway leftover that
+    keeps consuming CPU never appears there. This surface lists it as something
+    to inspect, but deliberately does not claim abandonment and offers no
+    automatic action: a useful build can also be CPU-active.
+    """
+    if snapshot.sources and not snapshot.usable("processes"):
+        return ()
+    own_uid = os.getuid() if uid is None else uid
+    me = os.getpid() if self_pid is None else self_pid
+    procs = snapshot.procs
+    protected = ancestor_pids(procs, me)
+    by_pid = {p.pid: p for p in procs}
+    parents: dict[int, int] = {}
+    for p in procs:
+        if p.state != "Z":
+            parents[p.ppid] = parents.get(p.ppid, 0) + 1
+    minimum = max(0.0, float(min_cpu_frac))
+    out = []
+    for p in procs:
+        if p.cpu_frac is None or p.cpu_frac < minimum:
+            continue
+        if not OrphanTracker._qualifies(p, own_uid=own_uid, parents=parents,
+                                        protected=protected, by_pid=by_pid):
+            continue
+        if _protection_reason(protected_fn, p):
+            continue
+        out.append(OrphanCandidate(
+            pid=p.pid, comm=p.comm, state=p.state, uid=p.uid,
+            rss_kb=p.rss_kb, swap_kb=p.swap_kb, starttime=p.starttime,
+            idle_s=0.0, ppid=p.ppid, cmdline=p.cmdline,
+            cpu_frac=p.cpu_frac, investigation=True))
+    return tuple(sorted(out, key=lambda c: (-(c.cpu_frac or 0.0), -c.rss_kb)))

@@ -1,0 +1,35 @@
+Python 3.14.7 is already installed
+Resolved 15 packages in 2ms
+Checked 8 packages in 0.36ms
+Managed Python: /home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.dev/venv-headless/bin/python
+QA workspace: /home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.scratch/dev-tests/run-onprnrhr
+........................................................................ [  7%]
+........................................................................ [ 15%]
+........................................................................ [ 23%]
+........................................................................ [ 31%]
+........................................................................ [ 39%]
+........................................................................ [ 47%]
+........................................................................ [ 54%]
+........................................................................ [ 62%]
+........................................................................ [ 70%]
+.........F.............................................................. [ 78%]
+........................................................................ [ 86%]
+........................................................................ [ 94%]
+.......................................ss............                    [100%]
+=================================== FAILURES ===================================
+__________ test_runtime_symlinks_and_public_permissions_are_rejected ___________
+
+tmp_path = PosixPath('/home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.scratch/dev-tests/run-onprnrhr/base/test_runtime_symlinks_and_publ0')
+
+    def test_runtime_symlinks_and_public_permissions_are_rejected(tmp_path):
+        runtime = tmp_path / "runtime"
+        runtime.mkdir(mode=0o755)
+>       assert not discover_runtime(env={"XDG_RUNTIME_DIR": str(runtime)}).valid
+E       AssertionError: assert not True
+E        +  where True = RuntimeLocation(path='/home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.scratch/dev-tests/run-onprnrhr/base/test_runtime_symlinks_and_publ0/runtime', valid=True, reason='').valid
+E        +    where RuntimeLocation(path='/home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.scratch/dev-tests/run-onprnrhr/base/test_runtime_symlinks_and_publ0/runtime', valid=True, reason='') = discover_runtime(env={'XDG_RUNTIME_DIR': '/home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.scratch/dev-tests/run-onprnrhr/base/test_runtime_symlinks_and_publ0/runtime'})
+
+tests/test_runtime_protection.py:25: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_runtime_protection.py::test_runtime_symlinks_and_public_permissions_are_rejected
+1 failed, 914 passed, 2 skipped in 34.95s

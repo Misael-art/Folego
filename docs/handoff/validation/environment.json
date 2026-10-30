@@ -1,0 +1,35 @@
+{
+  "scope": "Fresh source copy, empty managed prefix/private HOME; native libraries from same BigLinux host; x86_64 only",
+  "profiles": {
+    "headless": {
+      "python": "3.14.7 (main, Sep  1 2026, 14:18:09) [Clang 22.1.3 ]",
+      "executable": "/home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.dev/venv-headless/bin/python",
+      "prefix": "/home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.dev/venv-headless",
+      "base_prefix": "/home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.dev/python/cpython-3.14.7-linux-x86_64-gnu",
+      "qt_available": false,
+      "pytest": "9.1.1",
+      "hypothesis": "6.170.1",
+      "pyvenv_cfg": "home = /home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.dev/python/cpython-3.14.7-linux-x86_64-gnu/bin\nimplementation = CPython\nuv = 0.12.10\nversion_info = 3.14.7\ninclude-system-site-packages = false\nprompt = folego\n"
+    },
+    "gui": {
+      "python": "3.14.7 (main, Sep  1 2026, 14:18:09) [Clang 22.1.3 ]",
+      "executable": "/home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.dev/venv-gui/bin/python",
+      "prefix": "/home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.dev/venv-gui",
+      "base_prefix": "/home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.dev/python/cpython-3.14.7-linux-x86_64-gnu",
+      "qt_available": true,
+      "pytest": "9.1.1",
+      "hypothesis": "6.170.1",
+      "pyvenv_cfg": "home = /home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.dev/python/cpython-3.14.7-linux-x86_64-gnu/bin\nimplementation = CPython\nuv = 0.12.10\nversion_info = 3.14.7\ninclude-system-site-packages = false\nprompt = folego\n"
+    }
+  },
+  "historical_wheel_source_comparison": {
+    "files": 100,
+    "mismatches": []
+  },
+  "headless_result": "915 passed, 2 skipped in 22.07s",
+  "gui_result": "1132 passed, 2 skipped in 41.90s",
+  "skips": "Two read-only Edge checks; Edge absent in private HOME",
+  "system_packages": "Plan only; no native packages installed on this host",
+  "qt_offscreen_lifecycle": "6 cases passed",
+  "home_files_after_bootstrap": []
+}

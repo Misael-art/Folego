@@ -85,6 +85,44 @@ def test_missing_directory_degrades_to_empty_plan(tmp_path):
     assert plan.total_bytes == 0
 
 
+def test_a_recent_descendant_keeps_the_whole_tree(tmp_dir):
+    """R01: a idade é a do arquivo mais novo da árvore, não a do filho direto.
+
+    Uma sessão de cinco dias pode receber escrita agora — o mtime do diretório
+    não muda quando um arquivo já existente é regravado, e escolher pelo filho
+    direto apagava trabalho vivo.
+    """
+    old_dir = tmp_dir / "sessao-longa"
+    old_dir.mkdir()
+    stale = time.time() - 5 * DAY
+    (old_dir / "historico.log").write_bytes(b"a" * 100)
+    os.utime(old_dir / "historico.log", (stale, stale))
+    (old_dir / "recem-escrito.txt").write_text("o agente ainda usa isto")
+    os.utime(old_dir, (stale, stale))
+
+    plan = tmpclean.plan_tmp(tmp_dir, min_age_days=3)
+
+    assert plan.items == ()
+    assert plan.kept == (str(old_dir),)
+
+
+def test_expire_does_not_touch_a_tree_with_a_recent_descendant(tmp_dir):
+    """A mesma regra vale na mutação: o plano é refeito e nada é removido."""
+    old_dir = tmp_dir / "sessao-longa"
+    old_dir.mkdir()
+    stale = time.time() - 5 * DAY
+    (old_dir / "historico.log").write_bytes(b"a" * 100)
+    os.utime(old_dir / "historico.log", (stale, stale))
+    kept_file = old_dir / "recem-escrito.txt"
+    kept_file.write_text("vivo")
+    os.utime(old_dir, (stale, stale))
+
+    result = tmpclean.expire_tmp(tmp_dir, min_age_days=3)
+
+    assert result.removed == ()
+    assert kept_file.exists() and old_dir.exists()
+
+
 def test_expire_deletes_only_planned_entries_and_is_audited(tmp_dir, fake_home):
     old = _make(tmp_dir, "velho", 5, is_dir=True)
     fresh = _make(tmp_dir, "novo", 1, is_dir=True)

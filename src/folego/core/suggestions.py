@@ -25,6 +25,8 @@ class SuggestionThresholds:
     edge_kb: int = 2 * GB_KB
     self_rss_kb: int = 300_000
     thumbnails_kb: int = GB_KB
+    tmpfs_yellow_frac: float = .75
+    tmpfs_red_frac: float = .90
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,18 @@ def suggest(snapshot: Snapshot, *, orphan_count: int = 0,
             thresholds: SuggestionThresholds = SuggestionThresholds()
             ) -> tuple[Suggestion, ...]:
     out = []
+    for volume in snapshot.tmpfs:
+        if volume.quality != "ok":
+            continue
+        no_inodes = volume.inodes_total > 0 and volume.inodes_avail == 0
+        if volume.used_frac >= thresholds.tmpfs_yellow_frac or no_inodes:
+            critical = volume.used_frac >= thresholds.tmpfs_red_frac or no_inodes
+            out.append(Suggestion(
+                "tmpfs:" + volume.path, CRITICO if critical else ALTO,
+                f"{volume.path}: " + ("inodes esgotados" if no_inodes else
+                                      f"{volume.used_frac * 100:.0f}% ocupado"),
+                "Revise o diagnóstico e os donos na aba de temporários antes de escolher uma ação.",
+                "tmpfs"))
     psi10 = snapshot.pressure_memory.some_avg10 if snapshot.pressure_memory else 0.0
     if psi10 > thresholds.psi_memory_some_avg10:
         out.append(Suggestion(
@@ -96,9 +110,10 @@ def suggest(snapshot: Snapshot, *, orphan_count: int = 0,
     if orphan_count:
         out.append(Suggestion(
             "orfaos", MEDIO,
-            f"{orphan_count} processo(s) órfão(ãos) comprovado(s)",
+            f"{orphan_count} processo(s) possivelmente abandonado(s)",
             "Adotados pelo supervisor da sessão, sem filhos vivos e sem consumir "
-            "CPU: encerrar devolve a RAM sem risco.",
+            "CPU: a decisão é sua — encerrar exige confirmação, e a próxima "
+            "leitura confirma (ou não) o efeito.",
             "orfaos"))
 
     if thumbnails_kb and thumbnails_kb > thresholds.thumbnails_kb:

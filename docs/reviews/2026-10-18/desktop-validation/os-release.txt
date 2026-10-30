@@ -1,0 +1,12 @@
+NAME="BigLinux based on Manjaro Linux"
+PRETTY_NAME="BigLinux based on Manjaro Linux"
+ID="biglinux"
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="32;1;24;144;200"
+HOME_URL="https://www.biglinux.com.br"
+DOCUMENTATION_URL="https://manual.biglinux.com.br"
+SUPPORT_URL="https://forum.biglinux.com.br"
+BUG_REPORT_URL="https://github.com/biglinux"
+
+LOGO="biglinux-blue"

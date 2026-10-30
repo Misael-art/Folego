@@ -1,0 +1,36 @@
+{
+  "platform": "wayland",
+  "exposed": true,
+  "data": "simulated",
+  "host_effects": false,
+  "requested_sizes": [
+    [
+      800,
+      600
+    ],
+    [
+      1280,
+      800
+    ]
+  ],
+  "actual_sizes": [
+    [
+      800,
+      600
+    ],
+    [
+      1280,
+      800
+    ]
+  ],
+  "whole_card_and_space_activate": true,
+  "ready_and_conflict_distinguished": true,
+  "buttons_and_result_outside_scroll": true,
+  "verify_summary_visible": true,
+  "commands": [
+    "accessibility-activation-plan",
+    "accessibility-activate",
+    "accessibility-activation-plan",
+    "accessibility-activate"
+  ]
+}

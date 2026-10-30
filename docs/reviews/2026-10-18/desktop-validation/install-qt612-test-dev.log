@@ -1,0 +1,13 @@
+Using Python 3.14.7 environment at: .scratch/desktop-validation-vvnNlb/qt612-tests-venv
+Resolved 7 packages in 1.76s
+Downloading hypothesis (1.1MiB)
+ Downloaded hypothesis
+Prepared 3 packages in 1.27s
+Installed 7 packages in 105ms
+ + hypothesis==6.170.1
+ + iniconfig==2.3.1
+ + packaging==26.3
+ + pluggy==1.7.0
+ + pygments==2.21.0
+ + pytest==9.1.1
+ + sortedcontainers==2.4.0

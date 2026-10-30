@@ -1,0 +1,17 @@
+{
+  "boot_id": "f26a67f7-9775-4416-a4ce-8eb3afed2448",
+  "kernel": "6.18.49-1-MANJARO",
+  "qt": "6.12.0",
+  "platform": "wayland",
+  "kwin_version": "kwin 6.7.4",
+  "screens": [
+    {
+      "name": "eDP-1",
+      "size": [
+        948,
+        593
+      ],
+      "dpr": 2.0
+    }
+  ]
+}

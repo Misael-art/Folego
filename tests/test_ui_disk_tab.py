@@ -21,7 +21,7 @@ GIB = 1024 ** 3
 
 
 def plan_payload():
-    return {"acao": "plan", "ok": True, "exit": 0, "digest": "d1",
+    payload = {"acao": "plan", "ok": True, "exit": 0, "digest": "d1",
             "total_bytes": 5 * GIB, "scanned_bytes": 6 * GIB,
             "volumes": [{"mount": "/", "total_bytes": 465 * GIB,
                          "free_bytes": 159 * GIB, "used_frac": 0.68}],
@@ -40,8 +40,19 @@ def plan_payload():
                  "errors": [], "truncated": False},
             ]}
 
+    from folego.orchestration.models import ActionPlan, ResourceIdentity
+    for item in payload["items"]:
+        if item["reclaimable"]:
+            item["action_plan"] = ActionPlan("disk.quarantine", ResourceIdentity.path(
+                item["path"], dev=8, ino=42)).to_dict()
+    return payload
 
-class FakeJobs:
+
+
+from review_jobs import ReviewJobs
+
+
+class FakeJobs(ReviewJobs):
     def __init__(self, answer=None, defer=False):
         self.calls = []
         self.answer = answer
@@ -61,6 +72,21 @@ def tab(qapp):
     jobs = FakeJobs(plan_payload())
     view = DiskTab(jobs=jobs)
     return view, jobs
+
+
+def test_unknown_disk_result_preserves_reviewed_id_and_blocks_new_mutation(tab):
+    view, jobs = tab
+    view._reviewed_operation = "uncertain-disk"
+    view._mutation_done({"ok": False, "outcome": "desconhecido", "reason": "filho caiu"})
+    view.show_plan(plan_payload())
+    view.table.selectRow(0)
+    before = len(jobs.calls)
+    view.quarantine_selected()
+    view.restore_selected()
+    view.purge_selected()
+    assert len(jobs.calls) == before
+    assert "uncertain-disk" in view.status.text() and "desconhecido" in view.status.text()
+    assert not view.quarantine_button.isEnabled()
 
 
 def test_the_tab_asks_the_child_for_a_dry_run_plan(tab):
@@ -137,6 +163,139 @@ def test_a_plan_that_has_not_landed_measures_nothing(qapp):
     view = DiskTab(jobs=FakeJobs(None, defer=True))
     view.refresh()
     assert view.thumbnails_kb is None
+
+
+def test_the_tab_starts_as_not_analyzed_not_as_a_fake_job(qapp):
+    view = DiskTab(jobs=FakeJobs(None, defer=True))
+    assert "ainda não analisado" in view.summary.text()
+    assert "consultando" not in view.summary.text()
+    view.refresh()
+    assert "consultando" in view.summary.text()
+
+
+class RouteJobs(ReviewJobs):
+    """Answers each action with its own payload and records the argv contract."""
+
+    def __init__(self, answers):
+        self.answers = answers
+        self.calls = []
+
+    def run(self, acao, target, *, confirm=False, done):
+        self.calls.append((acao, target, confirm))
+        done(self.answers[acao])
+
+
+def _quarantine_payload():
+    return {"acao": "disk.list", "ok": True, "exit": 0, "outcome": "sucesso",
+            "entries": [{
+                "entry_id": "1700000000-deadbeef",
+                "original": "/home/u/.cache/pip",
+                "stored": "/home/u/.local/share/folego/quarantine/x",
+                "bytes": 3 * GIB, "observed_bytes": 3 * GIB, "state": "stored",
+                "moved_at": "2026-10-17T00:00:00Z", "action_id": "a",
+            }],
+            "reclaimable_bytes": 3 * GIB}
+
+
+def test_quarantine_moves_the_selected_reclaimable_item_after_confirmation(qapp):
+    jobs = RouteJobs({"plan": plan_payload(), "list": _quarantine_payload(),
+                      "quarantine-reviewed": {"acao": "quarantine", "ok": True,
+                                     "exit": 0, "outcome": "sucesso",
+                                     "reason": None}})
+    seen = []
+    view = DiskTab(jobs=jobs, confirm_fn=lambda text: seen.append(text) or True)
+    view.refresh()
+    view.table.selectRow(0)  # pip, the biggest item
+
+    view.quarantine_selected()
+
+    assert jobs.calls[0] == ("plan", "disk", False)
+    mutation = next(call for call in jobs.calls if call[0] == "quarantine-reviewed")
+    reviewed = json.loads(mutation[1])
+    assert reviewed == jobs.answers["plan"]["items"][1]["action_plan"]
+    assert reviewed["operation_id"] in seen[0]
+    assert mutation[2] is True
+    assert "reversível" in seen[0] and "pip" in seen[0]
+    assert "operação concluída" in view.status.text()
+    # after the act the plan and the quarantine inventory are re-read
+    assert [call[0] for call in jobs.calls[-2:]] == ["plan", "list"]
+
+
+def test_a_cancelled_quarantine_does_not_spawn_a_mutation(qapp):
+    jobs = RouteJobs({"plan": plan_payload(), "list": _quarantine_payload()})
+    view = DiskTab(jobs=jobs, confirm_fn=lambda text: False)
+    view.refresh()
+    view.table.selectRow(0)
+
+    view.quarantine_selected()
+
+    assert not [call for call in jobs.calls if call[0].startswith("quarantine")]
+    assert "Cancelado" in view.status.text()
+
+
+def test_repeated_clicks_reuse_one_review_and_spawn_at_most_one_mutation(qapp):
+    jobs = FakeJobs(defer=True)
+    view = DiskTab(jobs=jobs, confirm_fn=lambda text: True)
+    payload = plan_payload()
+    view.show_plan(payload)
+    view.table.selectRow(0)
+    expected = view.rows[0]["action_plan"]
+    view.quarantine_selected()
+    view.quarantine_selected()
+    assert len(jobs.calls) == 1
+    assert jobs.calls[0][0] == "quarantine-reviewed"
+    assert json.loads(jobs.calls[0][1]) == expected
+    argv = plan_argv(*jobs.calls[0])
+    assert json.loads(argv[argv.index("--reviewed-plan") + 1]) == expected
+
+
+def test_restore_and_purge_are_offered_only_for_stored_entries(qapp):
+    jobs = RouteJobs({"plan": plan_payload(), "list": _quarantine_payload(),
+                      "restore": {"acao": "restore", "ok": True, "exit": 0,
+                                  "outcome": "sucesso"},
+                      "purge": {"acao": "purge", "ok": True, "exit": 0,
+                                "outcome": "sucesso"}})
+    seen = []
+    view = DiskTab(jobs=jobs, confirm_fn=lambda text: seen.append(text) or True)
+    view.refresh_quarantine()
+    assert len(view.quarantine_rows) == 1
+    assert view.restore_button.isEnabled() is False
+
+    view.quarantine_table.selectRow(0)
+    assert view.restore_button.isEnabled() and view.purge_button.isEnabled()
+    view.restore_selected()
+    assert ("restore", "1700000000-deadbeef", True) in jobs.calls
+    assert "volta ao caminho original" in seen[0]
+
+    view.quarantine_table.selectRow(0)
+    view.purge_selected()
+    assert ("purge", "1700000000-deadbeef", True) in jobs.calls
+    assert "IRREVERSÍVEL" in seen[1]
+
+
+def test_an_unreadable_quarantine_offers_no_restore(qapp):
+    jobs = RouteJobs({"plan": plan_payload(),
+                      "list": {"acao": "disk.list", "ok": False, "exit": 1,
+                               "outcome": "recusa", "reason": "manifesto ilegível"}})
+    view = DiskTab(jobs=jobs)
+    view.refresh()
+    view.refresh_quarantine()
+
+    assert view.quarantine_rows == []
+    assert view.restore_button.isEnabled() is False
+    assert view.purge_button.isEnabled() is False
+    assert "ilegível" in view.quarantine_summary.text()
+
+
+def test_the_argv_for_list_and_mutations_is_machine_readable():
+    assert plan_argv("list", "quarantine", False) == [
+        sys.executable, "-m", "folego", "disk", "list", "--json"]
+    assert plan_argv("quarantine", "/home/u/.cache/pip", True) == [
+        sys.executable, "-m", "folego", "disk", "quarantine",
+        "/home/u/.cache/pip", "--json", "--confirmar"]
+    purge = plan_argv("purge", "entry-1", True)
+    assert purge[-2:] == ["--confirmar", "--irreversivel"]
+    assert "--json" in purge
 
 
 def test_the_argv_the_tab_spawns_answers_with_one_json_line(fake_home):

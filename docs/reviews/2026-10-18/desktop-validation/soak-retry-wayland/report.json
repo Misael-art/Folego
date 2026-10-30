@@ -1,0 +1,109 @@
+{
+  "status": "running",
+  "pid": 221314,
+  "started_utc": "2026-10-18T12:42:50.302307+00:00",
+  "elapsed_s": 2080.559725786,
+  "target_s": 7200.0,
+  "platform": "wayland",
+  "qt": "6.12.0",
+  "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/lib/python3.14/site-packages/folego/__init__.py",
+  "state": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/soak-retry-wayland",
+  "metrics": {
+    "VmHWM": 101008,
+    "VmRSS": 94692,
+    "Threads": 6,
+    "fds": 15,
+    "cpu_s": 14.774050449,
+    "children_cpu_s": 5.260000000000001,
+    "io": {
+      "rchar": 146352353,
+      "wchar": 1271514,
+      "syscr": 33371,
+      "syscw": 29530,
+      "read_bytes": 26583040,
+      "write_bytes": 13860864,
+      "cancelled_write_bytes": 4096
+    },
+    "children": []
+  },
+  "initial": {
+    "VmHWM": 64896,
+    "VmRSS": 64896,
+    "Threads": 4,
+    "fds": 14,
+    "cpu_s": 0.381604142,
+    "children_cpu_s": 0.0,
+    "io": {
+      "rchar": 6059830,
+      "wchar": 9761,
+      "syscr": 675,
+      "syscw": 32,
+      "read_bytes": 23740416,
+      "write_bytes": 53248,
+      "cancelled_write_bytes": 0
+    },
+    "children": []
+  },
+  "baseline": {
+    "VmHWM": 87668,
+    "VmRSS": 87668,
+    "Threads": 6,
+    "fds": 20,
+    "cpu_s": 1.214317352,
+    "children_cpu_s": 0.27,
+    "io": {
+      "rchar": 13524805,
+      "wchar": 69078,
+      "syscr": 2435,
+      "syscw": 1631,
+      "read_bytes": 25145344,
+      "write_bytes": 995328,
+      "cancelled_write_bytes": 4096
+    },
+    "children": [
+      226294
+    ],
+    "widgets": 179,
+    "elapsed_s": 120.56189448399982
+  },
+  "peak": {
+    "rss_kb": 102000,
+    "fds": 25,
+    "children": 2,
+    "widgets": 239
+  },
+  "rss_trend_kb_per_hour": 13523.925738613165,
+  "cpu_average_percent": 0.6917583825459651,
+  "heartbeat_max_delay_ms": 71.43021799965936,
+  "heartbeat_histogram_ms": {
+    "100": 1,
+    "1": 40583,
+    "10": 16,
+    "5": 1007,
+    "50": 2
+  },
+  "widgets": 239,
+  "samples": 600,
+  "samples_cap": 600,
+  "collection_count": 1041,
+  "collector_queue": 0,
+  "history_queue": 0,
+  "history_bytes_read": 398756,
+  "active_qprocesses": 0,
+  "job_counters": {
+    "worker_started": 35,
+    "worker_completed": 35,
+    "cancel_started": 5,
+    "cancel_completed": 5
+  },
+  "last_worker": {
+    "acao": "apply",
+    "ok": true,
+    "outcome": "sucesso",
+    "operation_id": "dc7bd66c5486420b93bb0d53342074f8",
+    "reason": null
+  },
+  "failures": [
+    "widget count grew by more than 32 after warmup"
+  ]
+}

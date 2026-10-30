@@ -1,0 +1,37 @@
+{
+  "scope": "fixtures isoladas; nenhuma limpeza ou sinal no host",
+  "legacy_tmp_recent_descendant": {
+    "fresh_child_selected_for_deletion": true,
+    "executed_deletion": false
+  },
+  "unknown_holders": {
+    "proc_count": 0,
+    "eligible": true,
+    "reason": "liberável: casado com /home/misael/Projects/Folego/.scratch/review-dkxk3yp1/tmp/sessao"
+  },
+  "incomplete_disk_walk": {
+    "reclaimable": true,
+    "truncated": true,
+    "errors": [
+      "permission denied"
+    ]
+  },
+  "ledger_path_lookup": {
+    "returned_id": "old",
+    "active_ids": [
+      "new"
+    ]
+  },
+  "group_disappears": {
+    "exception": "IndexError",
+    "message": "tuple index out of range"
+  },
+  "worker_failed_to_start": {
+    "callbacks": 0,
+    "in_flight": 1,
+    "pending_jobs": 1
+  },
+  "protected_item_button": {
+    "enabled": true
+  }
+}

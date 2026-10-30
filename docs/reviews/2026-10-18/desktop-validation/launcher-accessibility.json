@@ -1,0 +1,412 @@
+{
+  "pid": 2723995,
+  "method": "native Ctrl+Shift+F through private uinput helper; installed entrypoint with PATH=/usr/bin:/bin and no VIRTUAL_ENV/PYTHONPATH",
+  "tree": [
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 2,
+      "depth": 0,
+      "description": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/bin/folego",
+      "index": 0,
+      "name": "folego",
+      "object_ref": ":1.167/org/a11y/atspi/accessible/root",
+      "parent_index": null,
+      "role": "application",
+      "states": [
+        "enabled",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": {
+        "height": 565,
+        "width": 900,
+        "x": 0,
+        "y": 0
+      },
+      "child_count": 1,
+      "depth": 1,
+      "description": null,
+      "index": 1,
+      "name": "Fôlego 🔴 · 10,0/14,5 GB livre 4,5 · app 97 MB · Runtime da sessão crítico — aplicativos podem não abrir · /run/user/1000 98%",
+      "object_ref": ":1.167/org/a11y/atspi/accessible/2147483654",
+      "parent_index": 0,
+      "role": "frame",
+      "states": [
+        "enabled",
+        "resizable",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": {
+        "height": 380,
+        "width": 420,
+        "x": 0,
+        "y": 0
+      },
+      "child_count": 9,
+      "depth": 1,
+      "description": null,
+      "index": 2,
+      "name": "Controle compacto do Fôlego",
+      "object_ref": ":1.167/org/a11y/atspi/accessible/2147483794",
+      "parent_index": 0,
+      "role": "filler",
+      "states": [
+        "active",
+        "enabled",
+        "resizable",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Sets the focus",
+          "index": 0,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": {
+        "height": 565,
+        "width": 900,
+        "x": 0,
+        "y": 0
+      },
+      "child_count": 1,
+      "depth": 2,
+      "description": null,
+      "index": 3,
+      "name": null,
+      "object_ref": ":1.167/org/a11y/atspi/accessible/2147483652",
+      "parent_index": 1,
+      "role": "filler",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": {
+        "height": 72,
+        "width": 396,
+        "x": 12,
+        "y": 10
+      },
+      "child_count": 0,
+      "depth": 2,
+      "description": null,
+      "index": 4,
+      "name": "Saúde atual",
+      "object_ref": ":1.167/org/a11y/atspi/accessible/2147483785",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "showing",
+        "visible",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": {
+        "height": 48,
+        "width": 396,
+        "x": 12,
+        "y": 87
+      },
+      "child_count": 0,
+      "depth": 2,
+      "description": null,
+      "index": 5,
+      "name": "Runtime da sessão crítico — aplicativos podem não abrir · livre 4,5 GB · cpu 6% · coleta parcial: process_io",
+      "object_ref": ":1.167/org/a11y/atspi/accessible/2147483786",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "showing",
+        "visible",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": {
+        "height": 47,
+        "width": 396,
+        "x": 12,
+        "y": 140
+      },
+      "child_count": 0,
+      "depth": 2,
+      "description": null,
+      "index": 6,
+      "name": "automação manual · preset equilibrado · nenhum grant ativo · execução real desligada · monitoramento ativo",
+      "object_ref": ":1.167/org/a11y/atspi/accessible/2147483787",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "showing",
+        "visible",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": {
+        "height": 48,
+        "width": 396,
+        "x": 12,
+        "y": 192
+      },
+      "child_count": 0,
+      "depth": 2,
+      "description": null,
+      "index": 7,
+      "name": "operação: nenhuma operação registrada (diário ainda não existe)",
+      "object_ref": ":1.167/org/a11y/atspi/accessible/2147483788",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "showing",
+        "visible",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": {
+        "height": 47,
+        "width": 396,
+        "x": 12,
+        "y": 245
+      },
+      "child_count": 0,
+      "depth": 2,
+      "description": null,
+      "index": 8,
+      "name": "Wayland: posição absoluta e keep-above não são comprováveis; usando janela compacta comum e bandeja quando disponível",
+      "object_ref": ":1.167/org/a11y/atspi/accessible/2147483789",
+      "parent_index": 2,
+      "role": "label",
+      "states": [
+        "enabled",
+        "sensitive",
+        "showing",
+        "visible",
+        "read-only"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Triggers the action",
+          "index": 0,
+          "keybinding": "",
+          "name": "Press"
+        },
+        {
+          "description": "Sets the focus",
+          "index": 1,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": {
+        "height": 34,
+        "width": 196,
+        "x": 12,
+        "y": 297
+      },
+      "child_count": 0,
+      "depth": 2,
+      "description": null,
+      "index": 9,
+      "name": "Abrir a janela central do Fôlego",
+      "object_ref": ":1.167/org/a11y/atspi/accessible/2147483790",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "enabled",
+        "focusable",
+        "focused",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Triggers the action",
+          "index": 0,
+          "keybinding": "",
+          "name": "Press"
+        },
+        {
+          "description": "Sets the focus",
+          "index": 1,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": {
+        "height": 34,
+        "width": 195,
+        "x": 213,
+        "y": 297
+      },
+      "child_count": 0,
+      "depth": 2,
+      "description": null,
+      "index": 10,
+      "name": "Ocultar somente o controle compacto",
+      "object_ref": ":1.167/org/a11y/atspi/accessible/2147483791",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Triggers the action",
+          "index": 0,
+          "keybinding": "",
+          "name": "Press"
+        },
+        {
+          "description": "Sets the focus",
+          "index": 1,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": {
+        "height": 34,
+        "width": 196,
+        "x": 12,
+        "y": 336
+      },
+      "child_count": 0,
+      "depth": 2,
+      "description": null,
+      "index": 11,
+      "name": "Pausar ou retomar a coleta de telemetria",
+      "object_ref": ":1.167/org/a11y/atspi/accessible/2147483792",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [
+        {
+          "description": "Triggers the action",
+          "index": 0,
+          "keybinding": "",
+          "name": "Press"
+        },
+        {
+          "description": "Sets the focus",
+          "index": 1,
+          "keybinding": "",
+          "name": "Set Focus"
+        }
+      ],
+      "bounds": {
+        "height": 34,
+        "width": 195,
+        "x": 213,
+        "y": 336
+      },
+      "child_count": 0,
+      "depth": 2,
+      "description": null,
+      "index": 12,
+      "name": "Sair do Fôlego e parar o monitoramento",
+      "object_ref": ":1.167/org/a11y/atspi/accessible/2147483793",
+      "parent_index": 2,
+      "role": "push button",
+      "states": [
+        "enabled",
+        "focusable",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    }
+  ]
+}

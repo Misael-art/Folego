@@ -6,16 +6,19 @@ memória, então o movimento é explicitamente copy → verify → unlink, e o l
 registra o meio do caminho.
 """
 import os
+import json
 import shutil
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from folego.actions.tmpfs import release
 from folego.actions.tmpfs.inventory import TmpfsEntry
-from folego.actions.tmpfs.ledger import (MAX_RETAINED_BYTES, STATE_PARTIAL,
-                                                 STATE_RELEASED, STATE_RESTORED, Ledger)
+from folego.actions.tmpfs.ledger import (MAX_RETAINED_BYTES, STATE_DROPPED, STATE_PARTIAL,
+                                          STATE_RELEASED, STATE_RESTORED,
+                                          STATE_STAGING, Ledger)
 from folego.actions.tmpfs.plan import build_plan
 from folego.actions.tmpfs.policy import Policy
 from folego.core.tmpfs import TmpfsVolume
@@ -203,6 +206,176 @@ def test_an_item_bigger_than_the_ceiling_refuses_without_a_candidate(tmp_path, b
     assert book.retained_count() == 0
 
 
+def test_release_refuses_a_ram_destination(tmp_path, book):
+    """Entrega 6: retenção em tmpfs não libera a origem — XDG não é prova de SSD.
+
+    A tabela de montes é fixture: o destino cai num `tmpfs`; nada é copiado e a
+    recusa nomeia o tipo do monte. Sem esta verificação, `paths` sob a home
+    valeria por convenção, não por prova.
+    """
+    plan, it, src = item(tmp_path)
+    res = release.release_item(plan, it, ledger=book, confirm=True,
+                               dest_root=tmp_path / "retida", entry_fn=free(),
+                               mounts_fn=lambda proc_root=None: (
+                                   (str(tmp_path), "tmpfs"), ("/", "ext4")),
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               allowed_roots=roots(tmp_path), now=NOW)
+    assert res.ok is False and "RAM" in res.reason
+    assert (src / "blob.bin").exists()
+    assert book.retained_count() == 0, "recusa antes de qualquer linha do ledger"
+    assert not (tmp_path / "retida").exists(), "nada foi copiado"
+
+
+def test_release_refuses_a_destination_on_the_source_mount(tmp_path, book):
+    """Copiar para dentro do mesmo tmpfs não devolve capacidade a nada."""
+    plan, it, src = item(tmp_path)
+    mesmo_monte = replace(it, volume=str(tmp_path))
+    res = release.release_item(plan, mesmo_monte, ledger=book, confirm=True,
+                               dest_root=tmp_path / "retida", entry_fn=free(),
+                               mounts_fn=lambda proc_root=None: (
+                                   (str(tmp_path), "ext4"),),
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               allowed_roots=roots(tmp_path), now=NOW)
+    assert res.ok is False and "mesmo monte" in res.reason
+    assert (src / "blob.bin").exists()
+
+
+def test_release_refuses_a_destination_outside_known_mounts(tmp_path, book):
+    """Host ilegível não é permissão: sem a tabela, o destino não tem prova."""
+    plan, it, src = item(tmp_path)
+    res = release.release_item(plan, it, ledger=book, confirm=True,
+                               dest_root=tmp_path / "retida", entry_fn=free(),
+                               mounts_fn=lambda proc_root=None: (),
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               allowed_roots=roots(tmp_path), now=NOW)
+    assert res.ok is False and "conhecido" in res.reason
+    assert (src / "blob.bin").exists()
+
+
+def test_staging_clones_count_in_the_joint_ceiling(tmp_path, book):
+    """Cota conjunta (entrega 6): clone não certificado ocupa SSD e conta no teto.
+
+    A linha `staging` registra bytes 0 e fica fora do orçamento do `expire` (lá
+    ela é intocável); mas enquanto existe, ocupa disco. A cota do próximo
+    release soma o que os clones em staging medem agora.
+    """
+    clone = tmp_path / "staging-clone"
+    clone.mkdir()
+    meio = clone / "meio.bin"
+    meio.touch()
+    os.truncate(str(meio), MAX_RETAINED_BYTES - 1024)  # esparso: só st_size
+    book.append(entry_id="st-1", src=str(tmp_path / "origem"), volume="/tmp",
+                stored=str(clone), bytes=0, sha256="", age_days=0.0,
+                matched_pattern=None, holder_pids=(), state=STATE_STAGING,
+                action_id="tmpfs.release")
+
+    plan, it, src = item(tmp_path)
+    res = release.release_item(plan, it, ledger=book, confirm=True,
+                               dest_root=tmp_path / "retida", entry_fn=free(),
+                               mounts_fn=lambda proc_root=None: (("/", "ext4"),),
+                               statvfs_fn=lambda p: _vfs(20 * GIB),
+                               allowed_roots=roots(tmp_path), now=NOW)
+
+    assert res.ok is False and "orçamento" in res.reason
+    assert "staging" in res.reason, "a recusa nomeia a parte não certificada"
+    assert (src / "blob.bin").exists() and not (tmp_path / "retida").exists()
+
+
+def test_staging_bytes_measures_only_living_staging_clones(tmp_path, book):
+    clone = tmp_path / "clone"
+    (clone / "sub").mkdir(parents=True)
+    (clone / "sub" / "b.bin").write_bytes(b"a" * 100)
+    book.append(entry_id="st-vivo", src=str(tmp_path / "a"), volume="/tmp",
+                stored=str(clone), bytes=0, sha256="", age_days=0.0,
+                matched_pattern=None, holder_pids=(), state=STATE_STAGING,
+                action_id="tmpfs.release")
+    book.append(entry_id="st-sumido", src=str(tmp_path / "b"), volume="/tmp",
+                stored=str(tmp_path / "sumiu"), bytes=0, sha256="", age_days=0.0,
+                matched_pattern=None, holder_pids=(), state=STATE_STAGING,
+                action_id="tmpfs.release")
+    book.append(entry_id="certificada", src=str(tmp_path / "c"), volume="/tmp",
+                stored=str(clone), bytes=100, sha256="x", age_days=0.0,
+                matched_pattern=None, holder_pids=(), state=STATE_RELEASED,
+                action_id="tmpfs.release")
+
+    assert release.staging_bytes(book) == (100, []), \
+        "só staging existente conta; certificado fica no retained_bytes"
+
+
+def test_an_unmeasurable_staging_clone_refuses_the_joint_ceiling(tmp_path, book):
+    """Desconhecido não é zero: clone ilegível fecha a cota em vez de sumir dela."""
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    (clone / "b.bin").write_bytes(b"a" * 100)
+    book.append(entry_id="st-escuro", src=str(tmp_path / "a"), volume="/tmp",
+                stored=str(clone), bytes=0, sha256="", age_days=0.0,
+                matched_pattern=None, holder_pids=(), state=STATE_STAGING,
+                action_id="tmpfs.release")
+    os.chmod(clone, 0o000)
+    try:
+        assert release.staging_bytes(book)[1], "clone ilegível é problema relatado"
+
+        plan, it, src = item(tmp_path)
+        res = release.release_item(plan, it, ledger=book, confirm=True,
+                                   dest_root=tmp_path / "retida", entry_fn=free(),
+                                   mounts_fn=lambda proc_root=None: (("/", "ext4"),),
+                                   statvfs_fn=lambda p: _vfs(20 * GIB),
+                                   allowed_roots=roots(tmp_path), now=NOW)
+        assert res.ok is False and "não verificável" in res.reason
+        assert res.reason.count("refused:") == 1
+        assert (src / "blob.bin").exists() and not (tmp_path / "retida").exists()
+    finally:
+        os.chmod(clone, 0o700)
+
+
+def test_release_reports_allocated_and_observed_bytes(tmp_path, book):
+    """Contabilidade fina (6b): lógico, alocado e observado são medidas separadas."""
+    plan, it, src = item(tmp_path)
+    livres = [10 * GIB, 10 * GIB + 8192]  # o volume, antes e depois do ato
+
+    def vfs_fn(p):
+        if p == it.volume:
+            return _vfs(livres.pop(0))
+        return _vfs(20 * GIB)
+
+    res = release.release_item(plan, it, ledger=book, confirm=True,
+                               dest_root=tmp_path / "retida", entry_fn=free(),
+                               mounts_fn=lambda proc_root=None: (("/", "ext4"),),
+                               statvfs_fn=vfs_fn, allowed_roots=roots(tmp_path),
+                               now=NOW)
+
+    assert res.ok is True
+    assert res.bytes == 4096, "lógico segue sendo o tamanho aparente"
+    esperado = sum(p.stat().st_blocks * 512
+                   for p in (tmp_path / "retida").rglob("*")
+                   if p.is_file() and not p.is_symlink())
+    assert res.allocated_bytes == esperado, "alocado é medido no clone, não estimado"
+    assert res.ram_observed_bytes == 8192, "observado é a variação do statvfs"
+
+
+def test_release_reports_no_observation_when_the_volume_is_unreadable(tmp_path, book):
+    """Desconhecido ≠ zero: volume ilegível não vira 'nada foi liberado'."""
+    plan, it, src = item(tmp_path)
+
+    def vfs_fn(p):
+        if p == it.volume:
+            raise OSError(5, "I/O error")
+        return _vfs(20 * GIB)
+
+    res = release.release_item(plan, it, ledger=book, confirm=True,
+                               dest_root=tmp_path / "retida", entry_fn=free(),
+                               mounts_fn=lambda proc_root=None: (("/", "ext4"),),
+                               statvfs_fn=vfs_fn, allowed_roots=roots(tmp_path),
+                               now=NOW)
+
+    assert res.ok is True
+    assert res.ram_observed_bytes is None, "sem observação, nada de zero inventado"
+    esperado = sum(p.stat().st_blocks * 512
+                   for p in (tmp_path / "retida").rglob("*")
+                   if p.is_file() and not p.is_symlink())
+    assert res.allocated_bytes == esperado
+
+
 def test_dev_shm_is_measured_never_mutated(tmp_path, book):
     """R9: o guard já blacklista /dev; este teste prova que não afrouxamos nada.
 
@@ -260,6 +433,8 @@ def test_a_digest_mismatch_refuses_and_keeps_the_original(tmp_path, book, monkey
     assert res.ok is False and "digest" in res.reason
     assert (src / "blob.bin").exists()
     assert not any((tmp_path / "retida").rglob("blob.bin")), "o clone divergente é desfeito"
+    assert book.find(str(src)).state == STATE_DROPPED, \
+        "a tentativa fecha como dropped: nada de staging pendurado"
 
 
 def test_releasing_a_path_already_in_the_ledger_is_refused(tmp_path, book):
@@ -408,6 +583,8 @@ def test_a_digest_that_cannot_be_read_leaves_no_orphan_clone(tmp_path, book, mon
     assert (src / "blob.bin").exists()
     assert not any((tmp_path / "retida").rglob("blob.bin")), "nenhum clone órfão"
     assert book.retained_count() == 0
+    assert book.find(str(src)).state == STATE_DROPPED, \
+        "a tentativa fechou como dropped; não sobra staging para o recover"
 
 
 def test_tree_digest_is_stable_and_order_independent(tmp_path):
@@ -745,3 +922,407 @@ def test_a_copytree_failure_on_the_release_side_refuses_without_a_traceback(tmp_
     assert locked.exists(), "a origem está intacta, inclusive o que não pôde ser lido"
     assert not any((tmp_path / "retida").rglob("*.bin")), "a metade copiada foi desfeita"
     assert book.retained_bytes() == 0
+    assert book.find(str(src)).state == STATE_DROPPED, \
+        "a cópia que falhou fecha a própria linha: nada fica pendurado"
+
+
+# --------------------------------------------------- entrega 4: staging e recover
+
+
+def _release(plan, it, book, tmp_path, **over):
+    kwargs = dict(ledger=book, confirm=True, dest_root=tmp_path / "retida",
+                  entry_fn=free(), statvfs_fn=lambda p: _vfs(20 * GIB),
+                  allowed_roots=roots(tmp_path), now=NOW)
+    kwargs.update(over)
+    return release.release_item(plan, it, **kwargs)
+
+
+def crash_during_copy(monkeypatch):
+    """Queda no meio da cópia: `KeyboardInterrupt` não é `OSError`.
+
+    O `except OSError` do bloco de cópia não pega `BaseException` — exatamente como
+    um kill no meio do caminho. O que sobrar (meia cópia + linha `staging`) é o que
+    o `recover` tem de resolver; nada pode depender de o `except` ter rodado. Só a
+    primeira cópia morre: depois da recuperação, o mesmo chão volta a funcionar.
+    """
+    real = shutil.copytree
+    first = []
+
+    def boom(src, dst, **kw):
+        if first:
+            return real(src, dst, **kw)
+        first.append(1)
+        Path(dst).mkdir(parents=True, exist_ok=True)
+        (Path(dst) / "meio.bin").write_bytes(b"x" * 128)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(release.shutil, "copytree", boom)
+    return real
+
+
+def crash_after_copy(monkeypatch):
+    """Queda depois da cópia e antes da certificação: clone completo, sem certidão.
+
+    Só a primeira leitura de digest morre; a segunda (que representaria outra
+    execução do processo) volta ao normal.
+    """
+    real = release.tree_digest
+    first = []
+
+    def boom(path, *a, **kw):
+        if not first:
+            first.append(path)
+            raise KeyboardInterrupt
+        return real(path, *a, **kw)
+
+    monkeypatch.setattr(release, "tree_digest", boom)
+
+
+def test_the_ledger_knows_the_clone_before_the_first_byte_is_copied(tmp_path, book,
+                                                                    monkeypatch):
+    """A ordem invertida é a correção da R11: o meio do caminho é escrito ANTES.
+
+    A espiã lê o ledger de dentro da própria cópia: quando o `copytree` roda, a única
+    linha vigente já é `staging`. Sem ela, uma queda aqui deixaria um destino órfão
+    que nem `retained_bytes()` nem o `recover` veriam.
+    """
+    plan, it, src = item(tmp_path)
+    real = shutil.copytree
+    seen = []
+
+    def spy(a, b, **kw):
+        seen.extend(r.state for r in book.records().values())
+        return real(a, b, **kw)
+
+    monkeypatch.setattr(release.shutil, "copytree", spy)
+    res = _release(plan, it, book, tmp_path)
+    assert res.ok is True
+    assert seen == [STATE_STAGING], "o ledger tem de conhecer o clone antes do byte"
+    assert book.records()[res.entry_id].state == STATE_RELEASED
+
+
+def test_an_interrupted_copy_is_recovered_and_never_leaves_an_orphan_clone(
+        tmp_path, book, audit, monkeypatch):
+    """A queda no meio da cópia vira estado recuperável, não lixo invisível.
+
+    O caminho inteiro: a meia cópia fica registrada (`staging`), a origem continua
+    intacta, a próxima liberação é recusada apontando o `recover`, o clone
+    redundante é descartado com a linha fechando como `dropped`, e a liberação
+    funcionar de novo é a prova de que nada ficou preso.
+    """
+    plan, it, src = item(tmp_path)
+    crash_during_copy(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        _release(plan, it, book, tmp_path)
+
+    record = book.find(str(src))
+    assert record.state == STATE_STAGING, "a queda virou uma linha, não um órfão"
+    assert (src / "blob.bin").exists(), "a origem nunca foi tocada"
+    assert (Path(record.stored) / "meio.bin").exists(), "a meia cópia ficou para o recover"
+
+    again = _release(plan, it, book, tmp_path)
+    assert again.ok is False
+    assert "staging" in again.reason and "recover" in again.reason, again.reason
+
+    out = release.recover_staging(ledger=book, audit=audit, confirm=True,
+                                  allowed_roots=roots(tmp_path))
+    assert out.ok is True and out.dropped == (record.entry_id,)
+    assert not any((tmp_path / "retida").rglob("meio.bin")), "o clone inacabado saiu"
+    assert book.find(str(src)).state == STATE_DROPPED
+    assert any(e["kind"] == "tmpfs.recover" and e["outcome"] == STATE_DROPPED
+               for e in audit.tail(10)), "a transição tem o próprio evento"
+
+    res = _release(plan, it, book, tmp_path)
+    assert res.ok is True and not src.exists(), "o caminho volta a ser liberável"
+
+
+def test_a_crash_after_the_copy_but_before_certification_is_recoverable(tmp_path, book,
+                                                                        monkeypatch):
+    """Clone completo e não certificado também é staging — e também é descartável.
+
+    Certificar só vale contra a origem viva; o clone sem certidão não pode virar
+    `partial` por suposição. Com a origem presente, a recuperação o descarta.
+    """
+    plan, it, src = item(tmp_path)
+    crash_after_copy(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        _release(plan, it, book, tmp_path)
+
+    record = book.find(str(src))
+    assert record.state == STATE_STAGING
+    clone = Path(record.stored) / "blob.bin"
+    assert clone.exists() and clone.stat().st_size == 4096, "a cópia terminou inteira"
+
+    out = release.recover_staging(ledger=book, confirm=True,
+                                  allowed_roots=roots(tmp_path))
+    assert out.dropped == (record.entry_id,) and not clone.exists()
+    assert (src / "blob.bin").exists(), "a âncora da decisão continua intacta"
+
+
+def test_recovery_never_deletes_the_clone_when_the_origin_is_gone(tmp_path, book,
+                                                                   monkeypatch):
+    """Origem sumida: o clone não certificado pode ser a única cópia — não se apaga.
+
+    Este é o outro lado da R11: apagar por adivinhação seria destruição; a saída
+    honesta é manter, dizer que a decisão é manual e nunca deixar o `restore`
+    tratar um clone não certificado como payload devolvível.
+    """
+    plan, it, src = item(tmp_path)
+    crash_after_copy(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        _release(plan, it, book, tmp_path)
+    record = book.find(str(src))
+    clone = Path(record.stored) / "blob.bin"
+    shutil.rmtree(src)  # a origem sumiu (agente, usuário, outro processo)
+
+    dry = release.recover_staging(ledger=book, confirm=False,
+                                  allowed_roots=roots(tmp_path))
+    assert dry.dry_run is True and dry.dropped == () and dry.kept == (record.entry_id,)
+    assert clone.exists(), "dry-run não toca em nada"
+
+    out = release.recover_staging(ledger=book, confirm=True,
+                                  allowed_roots=roots(tmp_path))
+    assert out.dropped == () and out.kept == (record.entry_id,)
+    assert clone.exists(), "o único clone não certificado não pode ser apagado"
+    assert any("decisão manual" in n for n in out.notes)
+    assert book.find(str(src)).state == STATE_STAGING, "a decisão continua aberta"
+
+    res = release.restore_item(record.entry_id, ledger=book, confirm=True,
+                               allowed_roots=roots(tmp_path))
+    assert res.ok is False and "staging" in res.reason and "recover" in res.reason, \
+        "clone não certificado não vira volume, nem pela volta"
+
+
+def test_recover_dry_run_separates_discardable_from_manual(tmp_path, book, monkeypatch):
+    """O dry-run é o inventário: o que seria descartado e o que pede gente."""
+    plan, it, src = item(tmp_path)
+    crash_during_copy(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        _release(plan, it, book, tmp_path)
+    discardable = book.find(str(src))
+
+    plan2, it2, src2 = item(tmp_path, name="qoder-cli-1001",
+                            allow=(str(tmp_path / "qoder-cli-1001"),
+                                   str(tmp_path / "qoder-cli-1001" / "*")))
+    planner_item = plan2.find(str(src2))
+    crash_during_copy(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        release.release_item(plan2, planner_item, ledger=book, confirm=True,
+                             dest_root=tmp_path / "retida", entry_fn=free(),
+                             statvfs_fn=lambda p: _vfs(20 * GIB),
+                             allowed_roots=roots(tmp_path), now=NOW)
+    gone = book.find(str(src2))
+    shutil.rmtree(src2)
+
+    dry = release.recover_staging(ledger=book, confirm=False,
+                                  allowed_roots=roots(tmp_path))
+    assert dry.dropped == (discardable.entry_id,)
+    assert dry.kept == (gone.entry_id,)
+    assert book.find(str(src)).state == STATE_STAGING
+    assert book.find(str(src2)).state == STATE_STAGING
+
+    out = release.recover_staging(ledger=book, confirm=True,
+                                  allowed_roots=roots(tmp_path))
+    assert out.dropped == (discardable.entry_id,) and out.kept == (gone.entry_id,)
+
+
+def test_recover_refuses_a_clone_outside_the_allowed_roots_and_keeps_it(
+        tmp_path, book, monkeypatch):
+    """O guard vale também para o clone: recusa relatada, entrada segue staging."""
+    plan, it, src = item(tmp_path)
+    crash_during_copy(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        _release(plan, it, book, tmp_path)
+    record = book.find(str(src))
+
+    out = release.recover_staging(ledger=book, confirm=True,
+                                  allowed_roots=[tmp_path / "fora"])
+    assert out.ok is False and out.dropped == ()
+    assert any("allowed root" in e for e in out.errors)
+    assert Path(record.stored).exists(), "sem permissão de tocar, não se toca"
+    assert book.find(str(src)).state == STATE_STAGING
+
+
+def test_a_failed_copy_closes_its_staging_line_and_frees_the_retry(tmp_path, book,
+                                                                    monkeypatch):
+    """Falha pega pelo `except` não deixa linha pendurada nem caminho preso."""
+    plan, it, src = item(tmp_path)
+    real = shutil.copytree
+    first = []
+
+    def boom_once(a, b, **kw):
+        if not first:
+            first.append(1)
+            raise OSError(28, "No space left on device")
+        return real(a, b, **kw)
+
+    monkeypatch.setattr(release.shutil, "copytree", boom_once)
+    res = _release(plan, it, book, tmp_path)
+    assert res.ok is False and "cópia" in res.reason
+    assert book.find(str(src)).state == STATE_DROPPED
+    assert book.retained_bytes() == 0
+
+    good = _release(plan, it, book, tmp_path)
+    assert good.ok is True and not src.exists()
+
+
+def test_recover_with_a_clean_ledger_says_there_is_nothing(tmp_path, book):
+    out = release.recover_staging(ledger=book, confirm=True,
+                                  allowed_roots=roots(tmp_path))
+    assert out.ok is True and out.dropped == () and out.kept == ()
+    assert "nada a recuperar" in out.reason
+    dry = release.recover_staging(ledger=book, confirm=False,
+                                  allowed_roots=roots(tmp_path))
+    assert dry.dry_run is False and "nada a recuperar" in dry.reason
+
+
+def _write_raw_ledger_row(book, **row):
+    """Uma linha como uma versão futura (ou uma edição à mão) a deixaria.
+
+    `Ledger.append` preenche tudo; escrever o JSON cru é o que fabrica o registro
+    degradado que o `_hydrate` aceita com campos vazios.
+    """
+    book.path.parent.mkdir(parents=True, exist_ok=True)
+    with book.path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row) + "\n")
+
+
+def test_a_malformed_staging_row_never_authorizes_deleting_the_cwd(tmp_path, book):
+    """Linha quebrada não vira mutação: `Path("")` é `.` e `.` não se apaga.
+
+    Duas degradações: (a) linha sem campo obrigatório — o `_hydrate` zera tudo e a
+    entrada vira decisão manual, porque nem a origem é legível; (b) linha hidratável
+    com `stored=""` — sem o portão de caminho absoluto, `.` passaria pelo guard
+    (raízes incluem o cwd de propósito) e o `remove_fn` seria chamado com o
+    diretório de trabalho. O spy prova que nenhuma remoção foi *tentada*.
+    """
+    clone = tmp_path / "clone-real"
+    clone.mkdir()
+    _write_raw_ledger_row(book, ts="2026-01-01T00:00:00Z", entry_id="mau-degradada",
+                          src=str(tmp_path / "origem"), volume="/tmp",
+                          state="staging", bytes=0, sha256="", age_days=0.0,
+                          matched_pattern=None, holder_pids=(),
+                          action_id="tmpfs.release")
+    _write_raw_ledger_row(book, ts="2026-01-01T00:00:01Z", entry_id="mau-vazia",
+                          src=str(clone), volume="/tmp", stored="",
+                          state="staging", bytes=0, sha256="", age_days=0.0,
+                          matched_pattern=None, holder_pids=(),
+                          action_id="tmpfs.release", audit_event_id="")
+    tentados = []
+
+    out = release.recover_staging(ledger=book, confirm=True,
+                                  allowed_roots=[tmp_path, Path.cwd()],
+                                  remove_fn=tentados.append)
+
+    assert out.dropped == (), "nenhuma linha degradada autoriza remoção"
+    assert out.kept == ("mau-degradada",), "sem origem legível, nada é tocado"
+    assert tentados == [], "o portão de caminho absoluto barra `.` antes do remove"
+    assert any("absoluto" in e for e in out.errors)
+    assert clone.exists()
+    assert book.find("mau-degradada").state == STATE_STAGING
+    assert book.find("mau-vazia").state == STATE_STAGING
+
+
+def test_staging_stays_out_of_the_budget_and_the_expire(tmp_path, book, monkeypatch):
+    """Bytes não certificados não orçam, e o expire jamais apaga um staging.
+
+    Com a origem possivelmente sumida, o clone `staging` pode ser a única cópia:
+    contá-lo no orçamento convidaria o `expire` a apagá-lo — exatamente o que não
+    pode acontecer.
+    """
+    plan, it, src = item(tmp_path)
+    crash_during_copy(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        _release(plan, it, book, tmp_path)
+    record = book.find(str(src))
+
+    assert record.state == STATE_STAGING
+    assert book.retained_count() == 0 and book.retained_bytes() == 0, \
+        "bytes não certificados não entram no orçamento"
+    out = release.expire_over_budget(ledger=book, confirm=True, irreversible=True,
+                                     now=NOW + 40 * DAY, allowed_roots=roots(tmp_path))
+    assert out.victims == ()
+    assert (Path(record.stored) / "meio.bin").exists()
+    assert book.find(str(src)).state == STATE_STAGING
+
+
+def test_a_malformed_expire_victim_is_reported_never_deleted(tmp_path, book):
+    """A mesma linha degradada no expire: vítima sem caminho absoluto é aviso."""
+    clone = tmp_path / "clone-real"
+    clone.mkdir()
+    _write_raw_ledger_row(book, ts=time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                                                 time.gmtime(NOW - 40 * DAY)),
+                          entry_id="mau-vencida", src=str(tmp_path / "origem"),
+                          volume="/tmp", state="released",
+                          bytes=MAX_RETAINED_BYTES + 1, sha256="", age_days=40.0,
+                          matched_pattern=None, holder_pids=(),
+                          action_id="tmpfs.release")
+
+    out = release.expire_over_budget(ledger=book, confirm=True, irreversible=True,
+                                     allowed_roots=roots(tmp_path), now=NOW)
+
+    assert out.victims == ()
+    assert any("absoluto" in e for e in out.errors), out.errors
+    assert clone.exists()
+
+
+def test_a_malformed_restore_is_refused_before_touching_anything(tmp_path, book):
+    _write_raw_ledger_row(book, ts="2026-01-01T00:00:00Z", entry_id="mau-restore",
+                          src=str(tmp_path / "origem"), volume="/tmp",
+                          state="released", bytes=10, sha256="", age_days=0.0,
+                          matched_pattern=None, holder_pids=(),
+                          action_id="tmpfs.release")
+
+    res = release.restore_item("mau-restore", ledger=book, confirm=True,
+                               allowed_roots=roots(tmp_path))
+
+    assert res.ok is False and "absoluto" in res.reason
+    assert not (tmp_path / "origem").exists()
+
+
+def _corrupt_ledger(book):
+    book.path.parent.mkdir(parents=True, exist_ok=True)
+    with book.path.open("a", encoding="utf-8") as fh:
+        fh.write("{linha quebrada}\n")
+
+
+def test_an_inconsistent_ledger_blocks_every_mutation(tmp_path, book, audit):
+    """Linha ilegível fecha a porta dos quatro atos: decidir com mapa incompleto é a R11.
+
+    A leitura continua mostrando o que dá para ler e nomeia a linha; o que não
+    pode é copiar, restaurar, expirar ou descartar clone em cima de um registro
+    que talvez esconda um clone ativo ou uma liberação inacabada.
+    """
+    plan, it, src = item(tmp_path)
+    book.append(entry_id="retido", state=STATE_RELEASED, action_id="tmpfs.release",
+                src=str(tmp_path / "antigo"), volume="/tmp",
+                stored=str(tmp_path / "retida" / "antigo"), bytes=4096,
+                sha256="ab" * 32, age_days=1.0)
+    _corrupt_ledger(book)
+
+    out = release.release_item(plan, it, ledger=book, audit=audit, confirm=True,
+                               dest_root=tmp_path / "retida",
+                               allowed_roots=roots(tmp_path))
+    assert out.ok is False and "ledger inconsistente" in out.reason
+
+    out = release.restore_item("retido", ledger=book, audit=audit, confirm=True,
+                               allowed_roots=roots(tmp_path))
+    assert out.ok is False and "ledger inconsistente" in out.reason
+
+    out = release.expire_over_budget(ledger=book, audit=audit, confirm=True,
+                                     irreversible=True, allowed_roots=roots(tmp_path))
+    assert out.ok is False and "ledger inconsistente" in out.reason
+
+    out = release.recover_staging(ledger=book, audit=audit, confirm=True,
+                                  allowed_roots=roots(tmp_path))
+    assert out.ok is False and "ledger inconsistente" in out.reason
+
+    dry = release.recover_staging(ledger=book, confirm=False,
+                                  allowed_roots=roots(tmp_path))
+    assert dry.ok is False and "ledger inconsistente" in dry.reason, \
+        "nem o dry-run decide com mapa incompleto"
+
+    assert src.exists() and (src / "blob.bin").exists(), "nada foi tocado"
+    assert not (tmp_path / "retida").exists()
+    rows, problems = book.load()
+    assert len(rows) == 1 and problems, "o relatório continua nomeando a linha"
