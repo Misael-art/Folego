@@ -43,5 +43,13 @@
     "passed": 22,
     "seconds": 6.37,
     "environment": "compatible managed Folego Python; PhaseZero core doctor unavailable"
+  },
+  "product_sha": "617c2ad3b6ab3982094a261a1f0a8f2bdcd05bbd",
+  "ci_product_sha": {
+    "code_jobs_success": 6,
+    "reviews_skipped": [
+      "CodeRabbit",
+      "Sourcery"
+    ]
   }
 }

@@ -28,7 +28,7 @@ preservados. Digitação no polkit sem dock ainda precisa de aceite do operador.
 
 Gate final `./dev check`: **1037 passed, 2 skipped** headless (29,94 s),
 **1291 passed, 2 skipped** Qt offscreen (50,21 s). PhaseZero focal **22 passed**
-(7,57 s), runtime compatível gerenciado; wrapper core indisponível. Uma tentativa
+(6,37 s), runtime compatível gerenciado; wrapper core indisponível. Uma tentativa
 intermediária falhou por deadline flutuante de backup; falha preservada, sem
 relaxar limite. QA Wayland própria com efeitos simulados: cards/Tab/Espaço,
 800×600/1280×800, estados e resumo; não homologa toque/login/auth física.
@@ -38,6 +38,14 @@ Próximo aceite: operador confirmar teclado e digitação sem dock; investigar F
 sem reiniciar a sessão de trabalho para QA, mantendo pendência desconhecida até
 prova de término/revisão apropriada. O soak histórico abaixo não aprova esta nova
 implementação. Limites do executor automático de recursos continuam inalterados.
+
+Checkpoint de produto publicado: `617c2ad3b6ab3982094a261a1f0a8f2bdcd05bbd`,
+SHA remoto conferido na branch padrão; PR #1 atualizado e ainda draft. CI desse
+SHA: seis jobs de código success; CodeRabbit/Sourcery skipped. Repositório público
+e MIT conferidos. PhaseZero `9ebb6487` remoto conferido, PR #129 atualizado;
+CI ainda em andamento no último marco (a base tinha falha ShellCheck 0.9).
+Esta nota posterior muda somente documentação/metadados de validação. Nenhuma
+pendência física ou incerta foi liberada para obter esse checkpoint.
 
 ## Retomada vigente: resiliência e início com a sessão
 
