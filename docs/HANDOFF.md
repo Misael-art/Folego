@@ -493,3 +493,28 @@ para carregar a versão validada. Consulta final: `enabled`, `active/running`,
 política habilitada, ciclo `waiting` pelo PhaseZero e nenhuma operação pendente.
 Diário do host: **zero intenções de reparo de acessibilidade**. O fechamento
 subsequente altera apenas este registro, sem mudar o código testado.
+
+### Correção de teste temporal descoberta na CI de fechamento
+
+A CI de `a65a0027c5f76b30f80c50509c84663c5f8fa3e9` aprovou todos os jobs do PR,
+mas o Qt do push falhou no teste **preexistente**
+`test_file_changed_mid_read_is_not_certified`: 1235 passed, 2 skipped e uma
+falha. [Job preservado](https://github.com/Misael-art/Folego/actions/runs/40978896214/job/123813676422).
+O leitor retornou corretamente “em andamento” quando seu passo excedeu 10 ms;
+o teste assumia que o diagnóstico final ocorreria na primeira chamada. Isso
+não demonstra uma falha do novo reparador nem autoriza aumentar o orçamento.
+
+A fixture agora injeta o relógio já suportado pelo leitor, isolando a mudança
+de arquivo da latência do runner. Outra regressão expira explicitamente o
+mesmo orçamento de 10 ms durante a mudança e exige estado não certificado,
+seguido de revalidação que lê o conteúdo novo. Nenhum limite ou código de
+produção foi alterado. Focados: `./dev test-headless tests/test_history_reader.py`,
+**12 passed em 0,44 s**. Resposta/log da CI preservados em
+`accessibility-native-3/failed-ci-job.json`; não se apagou a falha nem se
+reexecutou o job para obter verde sem uma correção.
+
+Gate após corrigir a fixture: `./dev check`, mesmas ferramentas, perfis privados
+e execução sequencial, **995 passed, 2 skipped em 19,66 s** sem Qt e
+**1237 passed, 2 skipped em 32,50 s** com Qt. Diff check aprovado; logs/run.json
+em `run-2usf6g4u` e `run-3ay4598a`. O código de produto segue o SHA `02db56c`;
+este incremento altera apenas o teste e o presente registro de continuidade.

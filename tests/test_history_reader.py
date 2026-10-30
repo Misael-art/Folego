@@ -102,7 +102,9 @@ def test_missing_history_and_later_creation_are_distinguished(tmp_path):
 def test_file_changed_mid_read_is_not_certified(tmp_path, monkeypatch):
     path = tmp_path / "journal"
     path.write_bytes(record(1))
-    reader = HistoryReader(Journal(path))
+    # Exercise signature revalidation independently of scheduler latency. The
+    # separate expired-step case below covers the real production time budget.
+    reader = HistoryReader(Journal(path), clock=lambda: 0)
     original = os.pread
     changed = False
     def mutate(fd, length, offset):
@@ -115,3 +117,25 @@ def test_file_changed_mid_read_is_not_certified(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "pread", mutate)
     assert "mudou durante a leitura" in reader.refresh()
     assert "sucesso" in finish(reader)
+
+
+def test_changed_file_when_step_expires_is_not_certified_before_next_read(tmp_path, monkeypatch):
+    path = tmp_path / "journal"
+    path.write_bytes(record(1))
+    now = [0.0]
+    reader = HistoryReader(Journal(path), clock=lambda: now[0])
+    original = os.pread
+    changed = False
+    def mutate(fd, length, offset):
+        nonlocal changed
+        chunk = original(fd, length, offset)
+        if not changed:
+            changed = True
+            path.write_bytes(record(1, "different"))
+            now[0] += .020  # The unchanged 10 ms production budget expires.
+        return chunk
+    monkeypatch.setattr(os, "pread", mutate)
+    assert "em andamento" in reader.refresh()
+    assert not reader._complete
+    assert "sucesso" in finish(reader)
+    assert reader.last.result.reason == "different"
