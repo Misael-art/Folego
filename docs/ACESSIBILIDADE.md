@@ -37,7 +37,10 @@ operação pendente** usam o mesmo supervisor da CLI. O resumo da central leva
 ./dev run accessibility install --confirmar
 ```
 
-Não há automação habilitada por padrão numa instalação nova. `enable` ativa
+Não há reparo automático habilitado por padrão numa instalação nova. O **início
+do aplicativo e da observação com a sessão** fica ligado por padrão; a aba
+**opções** e `startup enable/disable --confirmar` controlam essa preferência.
+Desligar afeta o próximo login e não sinaliza um monitor já aberto. `enable` ativa
 somente a política de entrada; `install` cria/inicia a unit **do usuário**
 `folego-accessibility.service`, vinculada a `graphical-session.target`.
 O processo é independente da janela Qt e não requer Qt. Uma unit pessoal
@@ -47,7 +50,10 @@ executou a instalação: após mover/remover esse ambiente, revise a unit.
 O ciclo padrão é de dez segundos. Fontes externas têm limite individual de
 um segundo, total de coleta de oito segundos e saída limitada. A identidade do
 monitor residente inclui boot/PID/starttime; um arquivo antigo sozinho não
-significa monitor ativo. As amostras expiram em vinte segundos.
+significa monitor ativo. As amostras expiram em vinte segundos, inclusive após
+suspensão: usa-se o [CLOCK_BOOTTIME do Linux](https://docs.python.org/3.14/library/time.html#time.CLOCK_BOOTTIME).
+O autostart gráfico segue a [especificação XDG](https://specifications.freedesktop.org/autostart/latest/),
+com `Hidden=true` para desligar e sem sobrescrever uma entrada pessoal.
 
 A política aprende entradas reparáveis **já habilitadas**, somente numa leitura
 completa e sem responsáveis bloqueando. Dispositivos saudáveis conectados depois
@@ -128,9 +134,26 @@ libere. O PID deve ser o processo duradouro responsável, **não** a CLI transit
 Use `repairing` antes de uma alteração de recuperação. Declare filhos via
 `--child-pid PID`, repetível; o launcher é responsável por registrar todos os
 consumidores relevantes. O mesmo slot estável por provider evita criar um
-arquivo a cada execução. Há até 32 providers e 64 filhos por lease. Propriedade
+arquivo a cada execução. Há até 32 providers ativos e 64 filhos por lease. Propriedade
 inclui boot/PID/starttime, sem expiração por idade. Filhos vivos ou desconhecidos
 são preservados, inclusive se omitidos numa atualização, e impedem liberação.
+
+Para comandos próprios, há um launcher que publica a identidade do filho antes
+de permitir sua execução e acompanha os consumidores conhecidos:
+
+```bash
+./dev run accessibility lease-run --provider meu-launcher -- comando argumento
+```
+
+Nesse fluxo, o lease exige conclusão explícita: a morte do launcher não libera
+automaticamente descendentes cuja situação ficou incerta. Uma execução iniciada
+sem prova de conclusão retorna desconhecido; consulte/reconcilie o mesmo lease
+em vez de repetir o comando. Aplicações que não usam esse launcher/protocolo
+continuam sujeitas aos limites de observação descritos abaixo.
+
+Leases explicitamente liberados e validados saem dos slots ativos, sob a trava
+comum, para `leases-closed/`. Preserva-se o recibo mais recente por provider;
+documentos inválidos, filhos vivos/desconhecidos e reparos incertos não expiram.
 
 As publicações e o reparo usam a mesma trava do coordenador. Outro dono ativo
 ou desconhecido impede aquisição/reparo. Se dono e filhos de um lease `using`
@@ -161,6 +184,21 @@ outros writers adotem o protocolo. Não há descoberta universal de donos nem
 reinício global de KWin, Steam, USB ou drivers como contingência.
 
 ## Validação e limites
+
+O monitor mantém uma leitura incremental limitada do diário comum (256 KiB e
+10 ms por etapa, linhas de até 64 KiB). Arquivo alterado/incompleto, corrupção
+ou índice ainda não validado bloqueiam efeitos; a execução continua revalidando
+no coordenador. Não se apagam intenções ou se compacta silenciosamente o diário.
+
+O painel e a bandeja avisam sobre monitor ausente, disjuntor aberto e espera
+prolongada (cinco minutos). Notificações locais têm intervalo limitado. O anel
+diagnóstico conserva até 32 transições de boot, compositor, dispositivos, estado
+e lacunas de observação. Ele não certifica testes físicos e não registra teclas
+ou áudio:
+
+```bash
+./dev run accessibility transitions --json
+```
 
 Os testes usam árvores e filhos próprios e cobrem hosts sem integrações, fontes
 ausentes, desktops sem backend, propriedade, containers, hotplug, identidade,

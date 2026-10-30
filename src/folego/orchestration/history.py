@@ -45,6 +45,7 @@ class HistoryReader:
         self.clock = clock
         self._signature = None
         self._complete = False
+        self.verified = False
         self._text = "aguardando leitura do histórico"
         self._reset()
         self.bytes_read = 0  # measurable cumulative payload I/O, not OS cache size
@@ -85,10 +86,14 @@ class HistoryReader:
         elif record.seq != self.expected:
             self._problem(f"sequência {record.seq} onde se esperava {self.expected}")
         else:
-            self.last = record
+            self._accept(record)
             self.expected += 1
 
+    def _accept(self, record):
+        self.last = record
+
     def refresh(self):
+        self.verified = False
         # Legacy injected readers are test seams; even their load runs in the
         # overview worker. Production always uses the bounded path below.
         if not isinstance(self.journal, Journal):
@@ -102,6 +107,8 @@ class HistoryReader:
             self._signature = None
             self._reset()
             self._text = format_history([], [])
+            self._complete = True
+            self.verified = True
             return self._text
         except OSError as exc:
             return f"histórico ilegível ({exc}) — mutações não comprovadas"
@@ -115,6 +122,7 @@ class HistoryReader:
                 self._signature = signature
                 self._complete = False
             if self._complete:
+                self.verified = True
                 return self._text
             remaining = READ_BUDGET
             deadline = self.clock() + STEP_SECONDS
@@ -132,6 +140,7 @@ class HistoryReader:
                         self._signature = None
                         return "histórico mudou durante a leitura; aguardando revalidação"
                     self._complete = True
+                    self.verified = True
                     if self.problem_count:
                         self._text = (f"histórico com {self.problem_count} problema(s): {self.first_problem} — "
                                       "mutações devem ser recusadas até o reparo")
@@ -152,3 +161,42 @@ class HistoryReader:
             return f"histórico ilegível ({exc}) — mutações não comprovadas"
         finally:
             os.close(fd)
+
+
+class PendingReader(HistoryReader):
+    """Bounded pending-operation view, rebuilt after *any* signature change.
+
+    Completed history is never retained. Partial/changed/corrupt views cannot
+    authorize actions; the coordinator still revalidates the authoritative log.
+    """
+    def __init__(self, journal, *, action=None, clock=time.monotonic):
+        self.action = action
+        super().__init__(journal, clock=clock)
+
+    def _reset(self):
+        super()._reset()
+        self.pending = {}
+
+    def _accept(self, record):
+        super()._accept(record)
+        obj = record.plan if record.kind == "intent" else record.result
+        target = (obj.action, obj.target.key if record.kind == "intent" else obj.target_key)
+        previous = self.pending.get(record.operation_id)
+        if previous is not None and previous != target:
+            self._problem("resultado não corresponde à ação/alvo da intenção pendente")
+            return
+        if self.action is not None and obj.action != self.action:
+            return
+        if record.kind == "intent" or str(record.result.outcome) == "desconhecido":
+            if record.operation_id not in self.pending and len(self.pending) >= 4096:
+                self._problem("operações pendentes excedem orçamento; revisão necessária")
+            else:
+                self.pending[record.operation_id] = target
+        else:
+            self.pending.pop(record.operation_id, None)
+
+    def ids(self):
+        text = self.refresh()
+        if not self.verified or self.problem_count:
+            raise ValueError(text)
+        return list(self.pending)

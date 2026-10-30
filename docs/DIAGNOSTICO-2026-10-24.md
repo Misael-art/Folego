@@ -1,11 +1,13 @@
 # Diagnóstico consolidado e estado da migração
 
-Atualização posterior (29/10): a supervisão restrita de entrada tem autorização,
+Atualizações posteriores (29–30/10): a supervisão restrita de entrada tem autorização,
 implementação e ativação próprias, descritas no [HANDOFF](HANDOFF.md) e no
 [guia de acessibilidade](ACESSIBILIDADE.md). As afirmações históricas abaixo
 sobre automação desligada continuam válidas para o executor de recursos e
-não substituem esse registro posterior. O soak e a matriz física permanecem
-sem aceite.
+não substituem esse registro posterior. O início com a sessão passou a ser
+ligado por padrão, com opt-out na aba opções; temporários próprios e revisões
+de operações receberam integração descrita na passagem. Consulte ali o aceite
+vigente do soak; a matriz física permanece sem aceite integral.
 
 ## Conclusão
 

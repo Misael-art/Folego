@@ -12,7 +12,10 @@ from folego.ui.tunings_tab import TuningsTab
 pytest.importorskip("PySide6")
 
 
-class FakeJobs:
+from review_jobs import ReviewJobs
+
+
+class FakeJobs(ReviewJobs):
     """Stands in for the QProcess layer; answers synchronously unless deferred."""
 
     def __init__(self, answers=None):

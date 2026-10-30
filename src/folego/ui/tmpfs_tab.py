@@ -125,6 +125,7 @@ class TmpfsTab(QWidget):
         self.victims: list[dict] = []
         self._plan_ok = False
         self._uncertain_text = ""
+        self._pending_review_id = ""
         self._runtime_operation = ""
         self._runtime_busy = False
         self.release_buttons: list[QPushButton] = []
@@ -404,6 +405,7 @@ class TmpfsTab(QWidget):
         self.budget = payload.get("budget") or {}
         self.victims = payload.get("victims") or []
         self.ledger_rows = [{"entry_id": r["entry_id"], "state": r["state"],
+                             "bytes": r["bytes"],
                              "size": fmt_bytes(r["bytes"]), "src": r["src"]}
                             for r in payload["records"]]
         # a linha `partial` mantém botão: quem recusa é o ato, com motivo — a aba
@@ -463,30 +465,26 @@ class TmpfsTab(QWidget):
             self.status.setText(f"bloqueado: {row.get('reason') or 'item protegido'}"
                                 " — nada foi pedido ao executor")
             return
-        if not self._confirm(
-                "Liberar espaço em RAM",
+        self._jobs.review_and_run("release", row["path"], title="Liberar espaço em RAM", confirm_fn=self._confirm,
+                expected_scope=[{"key": row["path"], "bytes": row["bytes"]}],
+                text=
                 f"Vou tirar {row['size']} de RAM movendo\n  {row['path']}\n"
                 "para a quarentena na SSD, verificando hash por arquivo antes de "
                 "apagar a origem.\n\n"
                 f"Processos com arquivo aberto aqui: {row['holders']}.\n"
                 "Volta por esta aba, com o id do registro — e enquanto estiver retido "
-                "conta no orçamento de retenção."):
-            self.status.setText(f"cancelado: nada foi liberado ({row['path']})")
-            return
-        self._jobs.run("release", row["path"], confirm=True, done=self.show_mutation)
+                "conta no orçamento de retenção.", done=self.show_mutation)
 
     def restore_clicked(self, row):
         if self._uncertain_text:
             return
-        if not self._confirm(
-                "Devolver ao espaço temporário",
+        self._jobs.review_and_run("restore", row["entry_id"], title="Devolver ao espaço temporário", confirm_fn=self._confirm,
+                expected_scope=[{"key": row["entry_id"], "bytes": row["bytes"]}],
+                text=
                 f"Vou copiar {row['size']} de volta para\n  {row['src']}\n"
                 "e apagar o clone na SSD depois que o hash bater. Se o caminho de "
                 "destino virou ponto de montagem, a recusa vem antes de qualquer "
-                "escrita."):
-            self.status.setText(f"cancelado: nada foi devolvido ({row['entry_id']})")
-            return
-        self._jobs.run("restore", row["entry_id"], confirm=True, done=self.show_mutation)
+                "escrita.", done=self.show_mutation)
 
     def recover_clicked(self):
         if self._uncertain_text:
@@ -501,17 +499,15 @@ class TmpfsTab(QWidget):
                           for row in shown)
         extra = (f"\n  … e mais {len(staging) - len(shown)}"
                  if len(staging) > len(shown) else "")
-        if not self._confirm(
-                "Recuperar liberações inacabadas",
+        self._jobs.review_and_run("recover", "", title="Recuperar liberações inacabadas", confirm_fn=self._confirm,
+                expected_scope=[{"key": item["entry_id"], "bytes": item["bytes"]} for item in staging],
+                text=
                 f"Vou fechar {len(staging)} entrada(s) deixadas em `staging`:\n"
                 f"{lines}{extra}\n\n"
                 "Com a origem ainda viva, o clone inacabado é descartado e o "
                 "caminho volta a ser liberável. Se a origem sumiu, o clone é "
                 "preservado — pode ser a única cópia — e o caso fica para decisão "
-                "manual. Nenhum conteúdo é apagado sem essa prova."):
-            self.status.setText("cancelado: nada foi recuperado")
-            return
-        self._jobs.run("recover", "", confirm=True, done=self.show_mutation)
+                "manual. Nenhum conteúdo é apagado sem essa prova.", done=self.show_mutation)
 
     def expire_clicked(self):
         if self._uncertain_text:
@@ -532,20 +528,22 @@ class TmpfsTab(QWidget):
         lines = "\n".join(f"  · {v.get('entry_id')} · {fmt_bytes(int(v.get('bytes', 0)))}"
                           f" · {v.get('src')}" for v in shown)
         extra = f"\n  … e mais {len(victims) - len(shown)}" if len(victims) > len(shown) else ""
-        if not self._confirm(
-                "Expirar retenção (irreversível)",
+        self._jobs.review_and_run("expire", "", title="Expirar retenção (irreversível)", confirm_fn=self._confirm,
+                expected_scope=[{"key": item["entry_id"], "bytes": item["bytes"]} for item in victims],
+                text=
                 f"Vou apagar {len(victims)} item(ns) que passaram do orçamento "
                 f"({self.budget.get('days', 0):g} dias ou "
                 f"{fmt_bytes(self.budget.get('max_bytes', 0))}):\n{lines}{extra}\n\n"
                 f"São {fmt_bytes(total)} no total. Isto é irreversível: o conteúdo "
-                "não volta, e o histórico do ledger continua registrado."):
-            self.status.setText("cancelado: nada foi expirado")
-            return
-        self._jobs.run("expire", "", confirm=True, done=self.show_mutation)
+                "não volta, e o histórico do ledger continua registrado.", done=self.show_mutation)
 
     def show_mutation(self, payload):
+        if payload and payload.get("outcome") == "cancelamento":
+            self.status.setText(payload.get("reason", "cancelado: nenhum efeito solicitado"))
+            return
         if not payload or payload.get("outcome") == "desconhecido":
             payload = payload or {}
+            self._pending_review_id = payload.get("operation_id") or self._pending_review_id
             self._uncertain_text = ("desconhecido: " + str(payload.get("reason") or "o filho não respondeu") +
                 " · operação " + str(payload.get("operation_id") or "consulte o histórico") +
                 " · não repetir antes de reconciliar")
@@ -601,11 +599,16 @@ class TmpfsTab(QWidget):
         # do callback do filho anterior
         QTimer.singleShot(0, self.refresh)
 
+    def resolve_operation(self, payload):
+        key = payload.get("operation_id")
+        if key and key == self._pending_review_id:
+            self._pending_review_id = ""
+            self._uncertain_text = ""
+            self.status.setText("verificado: " + str(payload.get("reason") or "resultado consultado"))
+            self.refresh()
+        elif key and key == self._runtime_operation:
+            self.show_runtime_result({**payload.get("effects", {}), **payload})
+
     def _ask_dialog(self, title: str, text: str) -> bool:
-        box = QMessageBox(self)
-        box.setWindowTitle(title)
-        box.setText(text)
-        box.setStandardButtons(QMessageBox.StandardButton.Yes |
-                               QMessageBox.StandardButton.No)
-        box.setDefaultButton(QMessageBox.StandardButton.No)
-        return box.exec() == QMessageBox.StandardButton.Yes
+        from .confirmation import confirm_text
+        return confirm_text(title, text, self)

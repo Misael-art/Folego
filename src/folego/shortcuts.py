@@ -3,7 +3,7 @@
 `ensure()` runs on every GUI start: it creates a missing shortcut, refreshes one that
 Fôlego created earlier when the installation moved, and preserves any file it did not
 create (a user's own launcher is reported, never overwritten). Only the two launcher
-locations are touched; ~/.config/autostart stays out of scope by contract.
+locations are touched here; ``startup`` owns the separate session-start option.
 """
 import os
 import re
@@ -56,6 +56,11 @@ def launcher_executable() -> Path | None:
     argv0 = Path(sys.argv[0]).resolve() if sys.argv and sys.argv[0] else None
     if argv0 and argv0.name == "folego" and argv0.is_file() and os.access(argv0, os.X_OK):
         return argv0
+    # A -m child has __main__.py as argv[0]. Installed per-app environments
+    # need their own entrypoint without depending on the user's shell PATH.
+    local_entrypoint = Path(sys.executable).with_name("folego")
+    if local_entrypoint.is_file() and os.access(local_entrypoint, os.X_OK):
+        return local_entrypoint
     found = shutil.which("folego")
     return Path(found).resolve() if found else None
 

@@ -1,4 +1,80 @@
-# Passagem para o próximo agente — 24/10/2026
+# Passagem para o próximo agente — atualizada em 30/10/2026
+
+## Retomada vigente: resiliência e início com a sessão
+
+Base deste incremento: `26b1567db77648c7a8a0fdbc4c41bd0884cbb2ac`. O usuário
+autorizou todas as recomendações da revisão posterior de entrada e pediu uma
+opção de início com a sessão **ligada por padrão**. O estado abaixo substitui
+as pendências históricas equivalentes, sem promover aceites físicos antigos.
+
+- **Opções:** sétima aba, preferência durável e autostart XDG gerenciado;
+  sincronização da unit própria de observação no login. Desligar persiste após
+  reabrir e não encerra um monitor já aberto. Entradas/units pessoais são
+  preservadas. Nenhum grant de reparo/recursos é ampliado pelo início automático.
+- **Leases:** limite de 32 considera participantes ativos; liberações validadas
+  saem para recibos fechados. `accessibility lease-run` registra filhos antes
+  de abrir o gate do comando; conclusão incerta preserva a propriedade, inclusive
+  se o launcher morrer. PhaseZero continua opcional.
+- **Temporários próprios:** manifesto ligado à raiz/diretório e processo/sessão;
+  somente encerrados certificados, sem consumidores/referências comprovados,
+  podem ir por rename a `.retained`. Payloads não são apagados, legado/ambíguo
+  permanece protegido. Cap 256, inventário limitado e orçamento de 1 GiB
+  permanecem; esgotamento exige revisão. Não é retenção integral de dados do host.
+- **Revisão e recuperação:** ajustes, tmpfs release/restore/expire/recover e
+  disco restore/purge usam o mesmo plano durável confirmado e ID no pai, com
+  evidência dos alvos/conteúdo e validação no coordenador existente. A aba
+  opções consulta IDs, reapresenta revisões após reabrir e cancela somente as
+  não iniciadas. Timeout não permite retry cego; o recibo encerra só o ID correto.
+- **Monitor:** índice incremental limitado das pendências, sem apagar o diário;
+  corrupção/parcialidade bloqueia. Alertas locais para serviço ausente,
+  disjuntor e espera prolongada; anel de 32 transições. Frescor usa CLOCK_BOOTTIME
+  para incluir suspensão. Esses registros não certificam movimento/toque físico.
+
+### Validação desta rodada
+
+Python 3.14.7 e Qt 6.12.0 gerenciados por `./dev`, HOME/XDG privados, suítes
+sequenciais. Gate `./dev check`: **1014 passed, 2 skipped em 27,07 s** sem Qt;
+**1263 passed, 2 skipped em 44,15 s** Qt offscreen. Foco final de 34 casos
+passou em 6,07 s. Dois skips por perfil exigem Edge real, ausente nas fixtures.
+Após corrigir o corte do rótulo em foco, repetição Qt: **1263 passed, 2 skipped
+em 42,34 s**. Logs e resumo portátil em
+`handoff/validation/session-resilience-2026-10-30/`.
+
+QA KDE/Wayland própria: 800×600 e 1280×800, navegação por Tab, início ligado,
+desligamento persistido após reabrir, aplicação/restauração real de arquivo
+descartável pelo protocolo de revisão, ID apresentado e revisão reapresentada/
+cancelada sem efeito. Launcher oficial vivo por 5 s em HOME privado; encerrado
+somente o processo próprio. `systemctl` da QA foi simulado para não tocar units
+do host. Evidência local final em `run-review-20261029/session-resilience-native-6/`.
+
+Falhas corrigidas e preservadas: primeira rodada focada 176 pass/6 fail;
+confirmação Qt com botão padrão incorreto no gate intermediário
+(`run-oix0iopc`, 1261 pass/1 fail/2 skip); QA nativa 1 com alvo de harness
+incorreto e 3 com callback Qt após destruição do widget. Repetições finais
+passaram após correções, sem relaxar orçamentos nem somar tentativas.
+Logs/run.json das suítes passadas regeneráveis foram preservados antes de
+retirar apenas seus diretórios temporários; teto de 20 sessões inalterado.
+
+### Ativação e próximos aceites
+
+Executado `./dev run startup enable --confirmar --json` neste host: preferência
+true, desktop entry gerenciada `Hidden=false`, serviço `enabled`/`active`,
+FragmentPath próprio. Reiniciada somente a unit do Fôlego para carregar a versão
+validada. Política de entrada preexistente preservada, baseline vazio, ciclo
+waiting pelo PhaseZero ativo; nenhum reparo físico provocado. O executor de
+recursos continua desligado. O comando `startup status --json` confere a escolha.
+
+Próximo aceite: ensaio contínuo de 7200 s, fonte congelada, mesmo orçamento
+preexistente, workers/filhos e restauração contabilizados; smoke curto não é
+esse aceite. A matriz física (boot/SDDM, logout/login, suspend/resume, dock,
+Steam, leitor de tela e toque) permanece pendente: não suspender/desconectar
+o host de trabalho para produzir prova. Integração de writers interessados
+usa o protocolo opcional; não se altera aplicações de terceiros automaticamente.
+
+Demais pendências de produto: concluir “Dar fôlego”, política integral de
+retenção/expiração revisada, limites restantes de coleta/cancelamento e
+compactação autoritativa do diário. A leitura incremental do monitor não é
+compactação nem substitui revalidação na execução. Sem merge/release neste lote.
 
 ## Ponto de retomada
 

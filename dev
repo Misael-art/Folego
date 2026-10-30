@@ -12,7 +12,7 @@ case "$command" in
 ./dev test [pytest arguments]           Full Qt suite, offscreen, private HOME
 ./dev test-headless [pytest arguments]  Separate environment without Qt
 ./dev check                            Both suites sequentially + diff check
-./dev gui                              Launch GUI (manual actions only)
+./dev gui                              Launch GUI (session startup defaults on)
 ./dev run [CLI arguments]               CLI; no arguments launches GUI
 ./dev doctor                           Read-only application diagnostics
 ./dev status                           Paths and retained QA workspaces
@@ -20,8 +20,9 @@ case "$command" in
 ./dev system-deps [--apply]             Preview/apply native package installation
 
 Linux + Bash required. First setup downloads uv/Python/packages. Native packages
-need --system-deps (or system-deps --apply) and administrator access. No autostart,
-shell profile changes, automatic host cleanup, or activation of automation.
+need --system-deps (or system-deps --apply) and administrator access. Setup does
+not enable services. GUI session startup defaults on; change it in Options.
+No shell profile changes or automatic resource cleanup.
 HELP
     exit 0 ;;
   system-deps) exec bash "$ROOT/tools/system_deps.sh" "$@" ;;

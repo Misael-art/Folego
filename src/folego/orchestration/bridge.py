@@ -41,14 +41,30 @@ def perform(*, coordinator: Coordinator, action: str, target: ResourceIdentity,
     ``execute``, então quando o domínio toca no mundo já existe linha no diário.
     O veredito recebe ``(resultado_do_domínio, chave_do_alvo)``.
     """
+    from .review import ACTIVE
+    review = ACTIVE.get()
+    if review is not None:
+        if review.capture:
+            review.plan = ActionPlan(action=action, target=target, params=params)
+            return Coordinated(None, ActionResult(action, Outcome.REFUSED, review.plan.operation_id,
+                                                  target_key=target.key, reason="somente revisão; nenhum efeito"))
+        reviewed_plan = review.plan
     plan = reviewed_plan or ActionPlan(action=action, target=target, params=params)
     if plan.action != action or plan.target != target or dict(plan.params) != params:
-        return Coordinated(None, ActionResult(
+        refused = ActionResult(
             action=action, outcome=Outcome.REFUSED, operation_id=plan.operation_id,
-            target_key=target.key, reason="plano revisado difere da operação solicitada"))
+            target_key=target.key, reason="plano revisado difere da operação solicitada")
+        if review is not None: review.result = refused
+        return Coordinated(None, refused)
     box: dict[str, object] = {}
 
     def execute(plan: ActionPlan) -> ActionResult:
+        if review is not None:
+            try:
+                review.validate()
+            except (OSError, ValueError) as exc:
+                return ActionResult(action, Outcome.REFUSED, plan.operation_id,
+                                    target_key=target.key, reason=str(exc))
         box["started"] = True
         result = act()
         box["result"] = result
@@ -74,4 +90,5 @@ def perform(*, coordinator: Coordinator, action: str, target: ResourceIdentity,
             action=action, outcome=Outcome.REFUSED, operation_id=plan.operation_id,
             target_key=target.key,
             reason=f"não foi possível registrar a intenção ({exc}); nada foi feito"))
+    if review is not None: review.result = outcome
     return Coordinated(box.get("result"), outcome)

@@ -72,7 +72,7 @@ QTabWidget#sidebar::pane {{
 }}
 QTabWidget#sidebar QTabBar::tab {{
     min-width: 128px;
-    padding: 12px 16px;
+    padding: 8px 16px;
     margin: 2px 6px 2px 0;
     border: none;
     border-left: 3px solid transparent;

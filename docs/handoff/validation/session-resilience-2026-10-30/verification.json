@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "python": "3.14.7",
+  "qt": "6.12.0",
+  "source_base": "26b1567db77648c7a8a0fdbc4c41bd0884cbb2ac",
+  "suite_isolation": "./dev; private HOME/XDG; disk temporaries; sequential suites",
+  "suites": {
+    "headless": {
+      "status": "passed",
+      "summary": "1014 passed, 2 skipped in 27.07s",
+      "sha256": "aedebb9ba259267e04e0b96eb92257e89a55a19c0c58750fb144a5fd02882c24"
+    },
+    "gui": {
+      "status": "passed",
+      "summary": "1263 passed, 2 skipped in 42.34s",
+      "sha256": "5950665bb867f7c73824f3c0c76fd56ad477f4da06582985cc8327cca4c2b76b"
+    }
+  },
+  "physical_transitions_approved": false,
+  "soak_approved": false,
+  "native": {
+    "platform": "wayland",
+    "exposed": true,
+    "default_on": true,
+    "disabled_persisted_after_reopen": true,
+    "tab_navigation": true,
+    "geometry": [
+      [
+        800,
+        600
+      ],
+      [
+        1280,
+        800
+      ]
+    ],
+    "reviewed_ids_confirmed": [
+      "27c85b10d511407a95ca771383f4a79d",
+      "5bcd8fb4743e42e8ad41b6309251722d"
+    ],
+    "apply_and_restore_owned_fixture": true,
+    "pending_survived_reopen_and_cancelled_without_effect": true,
+    "host_units_touched": false,
+    "physical_suspend_or_login_claimed": false
+  },
+  "launcher": {
+    "official": "./dev gui",
+    "survived_seconds": 5,
+    "isolated_home": true,
+    "opt_out_preserved": true
+  },
+  "host": {
+    "autostart_preference": true,
+    "desktop_hidden": false,
+    "monitor_enabled": true,
+    "monitor_active": true,
+    "repair_policy_preserved": true,
+    "input_state": "waiting-existing-provider",
+    "baseline_count": 0
+  }
+}

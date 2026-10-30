@@ -21,6 +21,13 @@ Este projeto não depende do HOME, disco, venv, serviços ou skills do host ante
 - Não instalar ferramentas ou serviços globais por conveniência. Não alterar
   perfis de shell, limpar diretórios do usuário, habilitar autostart ou automação.
   `.dev` e `.scratch/dev-tests` têm limites de revisão; nada é apagado automaticamente.
+- Pedido posterior de 29/10–30/10: **início com a sessão ligado por padrão**, com
+  opção persistente na GUI/CLI para desligar. Autoriza o autostart do Fôlego e
+  do seu monitor de entrada, preservando arquivos pessoais. Não amplia grants.
+  Autoriza também retenção dos temporários gerados pelo próprio Fôlego, somente
+  com identidade/encerramento e referências comprovados, em destino persistente
+  limitado; preservar payloads, legados e estados incertos. Não adotar fixtures
+  pytest, limpar caches compartilhados ou interromper a sessão física para QA.
 
 ## Contratos do produto
 

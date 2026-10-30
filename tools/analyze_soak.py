@@ -37,12 +37,16 @@ def main():
     checks["warmup_observed"] = (data["baseline"] is not None and
                                  data["baseline"]["elapsed_s"] >= policy["warmup_s"])
     checks["harness_no_failures"] = not data["failures"]
+    if "source_unchanged" in data:
+        checks["runtime_source_unchanged"] = data["source_unchanged"] is True
     for name, maximum in policy["maximums"].items():
         checks[name] = values[name] is not None and values[name] <= maximum
     checks["no_owned_child_after_shutdown"] = (data["status"] == "complete" and
         data["active_qprocesses"] == 0 and not data["metrics"]["children"])
     counters = data["job_counters"]
     checks["all_worker_results_delivered"] = counters["worker_started"] == counters["worker_completed"]
+    if "planned_workers" in data:
+        checks["all_planned_workers_ran"] = counters["worker_started"] == data["planned_workers"]
     checks["all_cancellations_delivered"] = counters.get("cancel_started", 0) == counters.get("cancel_completed", 0)
     checks["sample_buffer_bounded"] = data["samples"] <= data["samples_cap"]
     checks["queues_bounded"] = data["collector_queue"] <= 1 and data["history_queue"] <= 1
@@ -72,7 +76,10 @@ def main():
         if "job_temp_root" in data:
             root = Path(data["job_temp_root"])
             checks["private_per_attempt_temporaries"] = root == Path(data["state"]) / "general/folego-jobs"
-            runs = list(root.iterdir())
+            runs = [run for run in root.iterdir() if run.name.startswith("run-")]
+            archive = root / ".retained"
+            if archive.exists():
+                runs.extend(run for run in archive.iterdir() if run.name.startswith("run-"))
             values["retained_job_runs"] = len(runs)
             checks["retained_run_count_matches_children"] = len(runs) == (
                 counters["worker_started"] + counters.get("cancel_started", 0))

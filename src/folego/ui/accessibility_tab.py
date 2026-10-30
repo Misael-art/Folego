@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QLab
 
 from .tune_jobs import TuneJobs
 from .workers import Poller
-from ..core.accessibility import LABELS, STALE_SECONDS, ACTION
+from ..core.accessibility import LABELS, STALE_SECONDS, ACTION, sample_age
 from ..orchestration.models import ActionPlan
 
 WORDS = {"observed": "Configuração observada", "degraded": "Revisão necessária",
@@ -32,6 +32,7 @@ def access_argv(action, target, confirm):
 
 class AccessibilityTab(QWidget):
     report_ready = Signal(object)
+    options_requested = Signal()
     def __init__(self, *, inspect_fn=None, jobs=None, confirm_fn=None, parent=None):
         super().__init__(parent)
         self.inspect_fn = inspect_fn
@@ -76,8 +77,8 @@ class AccessibilityTab(QWidget):
         self.auto_button = QPushButton("Habilitar automação de entrada")
         self.auto_button.clicked.connect(self.toggle_automatic)
         self.auto_button.setToolTip("Controle próprio de entrada; pausar a coleta de recursos não desliga estes reparos.")
-        self.install_button = QPushButton("Ativar monitor residente no login")
-        self.install_button.clicked.connect(lambda: self.configure("install"))
+        self.install_button = QPushButton("Opções de início com a sessão")
+        self.install_button.clicked.connect(lambda: self.options_requested.emit())
         self.rearm_button = QPushButton("Rearmar após revisão")
         self.rearm_button.setVisible(False)
         self.rearm_button.clicked.connect(lambda: self.configure("rearm"))
@@ -173,12 +174,13 @@ class AccessibilityTab(QWidget):
                              + f" · {report.get('baseline_count', 0)} dispositivo(s) registrado(s) · monitor residente: "
                              + ("ciclo recente" if report.get("watcher", {}).get("state") == "observed" else "sem sinal recente"))
         self.auto_button.setText("Desabilitar automação de entrada" if enabled else "Habilitar automação de entrada")
-        running = report.get("watcher", {}).get("state") == "observed"
-        self.install_button.setText("Monitor residente ativo" if running else "Ativar monitor residente no login")
-        self.install_button.setEnabled(not running and not self._busy)
+        self.install_button.setEnabled(not self._busy)
         blockers = report.get("blockers", [])
         self.providers.setText("Aguardando: " + "; ".join(blockers) if blockers else
                                "Backend nativo disponível conforme capacidades; sem responsável externo bloqueando.")
+        alerts = report.get("alerts", [])
+        if isinstance(alerts, list) and all(isinstance(value, str) for value in alerts):
+            self.providers.setText(self.providers.text() + ("\n" + "\n".join(alerts) if alerts else ""))
         self.choice.clear()
         for plan in report.get("plans", []):
             self.choice.addItem(plan["params"]["name"], plan)
@@ -201,7 +203,7 @@ class AccessibilityTab(QWidget):
 
     def check_freshness(self):
         if self._report is not None and (self._report.get("mono", 0) <= 0 or
-                not 0 <= time.monotonic() - self._report["mono"] <= STALE_SECONDS):
+                not 0 <= sample_age(self._report) <= STALE_SECONDS):
             self.show_error("amostra antiga; aguarde nova leitura")
 
     def repair_selected(self):

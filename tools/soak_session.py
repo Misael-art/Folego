@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Wall-clock GUI soak with private state, real workers and bounded telemetry.
 
-Run with the wheel's Python and -I. No checkout import is added. All tuning
+Run with the managed GUI Python and -I. No checkout import is added. All tuning
 effects concern this probe's disposable browser fixture. Cancellation kills
 only a sleeping QProcess created here. Host telemetry comes from /proc/self.
 """
@@ -12,6 +12,7 @@ import math
 import os
 import sys
 import time
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -51,7 +52,13 @@ def main():
     args = parser.parse_args()
     if not 3 <= args.duration <= 86400 or args.job_interval < 1 or args.sample_interval < .25:
         parser.error("duration 3..86400; job interval >=1; sample interval >=.25")
-    planned_jobs = math.ceil(args.duration / args.job_interval) + 1
+    # Whole detect/apply/revert cycles finish before shutdown; never start a
+    # mutation in the last worker-deadline window and then call its kill success.
+    quiet = min(15, args.job_interval)
+    planned_jobs = max(0, 1 + math.floor((args.duration - 1 - quiet) / args.job_interval))
+    planned_jobs -= planned_jobs % 3
+    if planned_jobs < 3:
+        parser.error("duration/interval must fit one complete detect/apply/revert cycle")
     if planned_jobs + planned_jobs // 6 > 256:
         parser.error("planned children exceed the retained-run cap of 256; reduce job frequency")
     args.state = args.state.resolve()
@@ -91,12 +98,18 @@ def main():
     from folego.ui.tune_jobs import TuneJobs
     from folego.ui.tmpfs_tab import SAMPLES_KEPT
 
+    def source_signature():
+        files = sorted(Path(folego.__file__).parent.rglob("*.py")) + [Path(__file__)]
+        return {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in files}
+    source_before = source_signature()
+    atomic_json(args.output / "source-manifest.json", source_before)
+
     app = QApplication([])
     app.setApplicationName("folego-soak")
     app.setDesktopFileName("folego-soak")
     app.setQuitOnLastWindowClosed(False)
     apply_theme(app)
-    started = time.monotonic()
+    started = time.clock_gettime(time.CLOCK_BOOTTIME)
     started_utc = datetime.now(timezone.utc).isoformat()
     failures = set()
     counters = collections.Counter()
@@ -117,8 +130,8 @@ def main():
         collection_count += 1
         if collection_count % 30 == 0:
             time.sleep(.20)  # synthetic slow collection, never on the Qt thread
-        high = int((time.monotonic() - started) // 300) % 2
-        return Snapshot(ts=time.time(), mono=time.monotonic(), boot_id="soak-fixture",
+        high = int((time.clock_gettime(time.CLOCK_BOOTTIME) - started) // 300) % 2
+        return Snapshot(ts=time.time(), mono=time.clock_gettime(time.CLOCK_BOOTTIME), boot_id="soak-fixture",
             mem=MemInfo(16_000_000, 800_000 if high else 8_000_000),
             swap_used_kb=0, swap_total_kb=8_000_000,
             pressure_memory=Pressure(22 if high else 0, 0, 0, 0),
@@ -155,7 +168,7 @@ def main():
 
     def record_result(kind, payload):
         with (args.output / "worker-results.jsonl").open("a") as out:
-            out.write(json.dumps({"kind": kind, "elapsed_s": time.monotonic() - started,
+            out.write(json.dumps({"kind": kind, "elapsed_s": time.clock_gettime(time.CLOCK_BOOTTIME) - started,
                 **{key: payload.get(key) for key in
                    ("acao", "ok", "outcome", "operation_id", "reason")}}, ensure_ascii=False) + "\n")
 
@@ -175,6 +188,8 @@ def main():
 
     def start_job():
         nonlocal job_serial
+        if job_serial >= planned_jobs:
+            return
         if jobs.in_flight or cancel_jobs.in_flight:
             failures.add("job still running at next launch interval")
             return
@@ -189,7 +204,7 @@ def main():
 
     def heartbeat():
         nonlocal previous_tick, heartbeat_max_ms, last_heartbeat
-        now = time.monotonic()
+        now = time.clock_gettime(time.CLOCK_BOOTTIME)
         delay = max(0., (now - previous_tick - .05) * 1000)
         previous_tick = now
         last_heartbeat = now
@@ -213,7 +228,7 @@ def main():
 
     def sample(final=False):
         nonlocal baseline, last
-        now = time.monotonic()
+        now = time.clock_gettime(time.CLOCK_BOOTTIME)
         elapsed = now - started
         measured = self_metrics()
         all_widgets = QApplication.allWidgets()
@@ -250,6 +265,7 @@ def main():
                  if denominator else None)
         last = {"status": "complete" if final else "running", "pid": os.getpid(),
             "started_utc": started_utc, "elapsed_s": elapsed, "target_s": args.duration,
+            "elapsed_clock": "CLOCK_BOOTTIME",
             "platform": app.platformName(), "qt": qVersion(), "module": folego.__file__,
             "state": str(args.state), "job_temp_root": str(general / "folego-jobs"),
             "metrics": measured, "initial": initial,
@@ -267,6 +283,8 @@ def main():
             "active_qprocesses": len(jobs.procs) + len(cancel_jobs.procs),
             "job_counters": dict(counters), "last_worker": last_worker,
             "failures": sorted(failures)}
+        last["planned_workers"] = planned_jobs
+        last["source_unchanged"] = source_signature() == source_before if final else None
         with (args.output / "samples.jsonl").open("a") as out:
             out.write(json.dumps(last, ensure_ascii=False) + "\n")
             out.flush()

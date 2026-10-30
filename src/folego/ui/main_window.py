@@ -1,10 +1,10 @@
-"""Main window: six tabs, one title-bar signal, and the polling that feeds them.
+"""Main window: resource, accessibility and session options with bounded workers.
 
 The window owns the poller, the orphan tracker and the three child-process layers
 (tunings, the disk plan and the tmpfs plan); every tab receives plain data and
 calls back here when the user confirms an act. The Reaper stays lazy and the
-tunings tab is never consulted on its own: opening the window must never be
-enough to write a byte or signal a process.
+tunings tab is never consulted on its own. Resource effects remain manual;
+the production entrypoint separately synchronizes the session-start preference.
 """
 import os
 import subprocess
@@ -27,6 +27,7 @@ from .tray import Tray
 from .tune_jobs import TuneJobs
 from .tunings_tab import TuningsTab
 from .accessibility_tab import AccessibilityTab
+from .options_tab import OptionsTab
 from ..core import health
 from ..core.exclusions import ExclusionError, ExclusionList
 from ..core.orphans import OrphanTracker, active_investigation, group_targets
@@ -38,7 +39,7 @@ from ..orchestration.history import HistoryReader
 
 # tab title -> the attribute the dashboard's "Ir para …" jumps to
 TABS = (("central", "dashboard"), ("ajustes", "tunings"),
-        ("órfãos", "orphans"), ("disco", "disk"), ("temporários", "tmpfs"), ("acessibilidade", "accessibility"))
+        ("órfãos", "orphans"), ("disco", "disk"), ("temporários", "tmpfs"), ("acessibilidade", "accessibility"), ("opções", "options"))
 JUMPS = {"memoria": "dashboard", "ajustes": "tunings", "orfaos": "orphans",
          "disco": "disk", "tmpfs": "tmpfs", "accessibility": "accessibility"}
 DISK_TIMEOUT_MS = 120_000  # the real cache walk took 54,7 s on this Deck (M3 log)
@@ -54,7 +55,7 @@ class SidebarTabBar(QTabBar):
         size.transpose()
         # largura do maior rótulo, altura de um item de menu: compacto e sem rolagem
         size.setWidth(max(size.width(), self.fontMetrics().horizontalAdvance(self.tabText(index)) + 40, 150))
-        size.setHeight(max(self.fontMetrics().height() + 22, 40))
+        size.setHeight(max(self.fontMetrics().height() + 28, 40))
         return size
 
     def paintEvent(self, event):
@@ -76,7 +77,7 @@ class MainWindow(QMainWindow):
                  sessions: SessionRegistry | None = None,
                  exclusions: ExclusionList | None = None, journal=None,
                  config_store=None, grant_store=None, compact_factory=None, process_jobs=None,
-                 accessibility_factory=None):
+                 accessibility_factory=None, startup_defaults=False):
         super().__init__()
         self._thresholds = thresholds or title_signal.Thresholds()
         self._journal = journal or Journal()
@@ -141,6 +142,9 @@ class MainWindow(QMainWindow):
         self.accessibility = AccessibilityTab(inspect_fn=accessibility_factory().inspect if accessibility_factory else None,
                                                confirm_fn=confirm_fn)
         self.accessibility.report_ready.connect(self._show_accessibility)
+        self.options = OptionsTab()
+        self.options.operation_verified.connect(self._operation_verified)
+        self._startup_defaults = startup_defaults
 
         self.tabs = QTabWidget()
         self.tabs.setTabBar(SidebarTabBar())
@@ -150,6 +154,7 @@ class MainWindow(QMainWindow):
         for title, attribute in TABS:
             self.tabs.addTab(getattr(self, attribute), title)
         self.setCentralWidget(self.tabs)
+        self.accessibility.options_requested.connect(self._open_options)
 
         self.tray = Tray(self, thresholds=self._thresholds)
         # atalhos locais da aplicação (não dependem de portal global do Wayland)
@@ -165,6 +170,9 @@ class MainWindow(QMainWindow):
     # -------------------------------------------------------------------- polling
 
     def start(self):
+        if self._startup_defaults:
+            self.options.start(sync=True)
+            self._startup_defaults = False
         self._request_history()
         if self._accessibility_factory:
             self.accessibility.start()
@@ -190,6 +198,19 @@ class MainWindow(QMainWindow):
         detail = "; ".join(report.get("blockers", []))
         self.dashboard.input_status.setText("Entrada: " + words.get(report.get("state"), "desconhecida")
                                            + (" · " + detail if detail else " · funcionamento físico não testado"))
+        self.tray.show_accessibility(report)
+
+    def _open_options(self):
+        self.tabs.setCurrentWidget(self.options)
+        self.options.start()
+
+    def _operation_verified(self, payload):
+        if payload.get("outcome") not in ("sucesso", "recusa", "cancelamento"):
+            return
+        for panel in (self.tunings, self.tmpfs, self.disk):
+            panel.resolve_operation(payload)
+        if payload.get("operation_id") == self.accessibility._pending:
+            self.accessibility.completed(payload)
 
     def _show_automation_state(self) -> None:
         """Read-only F6 state; no control here can create or widen a grant."""
@@ -580,6 +601,7 @@ class MainWindow(QMainWindow):
             self._tmpfs_jobs.shutdown()
             self._process_jobs.shutdown()
             self.accessibility.stop()
+            self.options.stop()
             super().closeEvent(event)
             return
         # a live icon means the signal is resident: hide the window, keep watching

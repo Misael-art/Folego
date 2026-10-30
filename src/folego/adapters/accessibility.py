@@ -9,7 +9,7 @@ import signal
 import subprocess
 import time
 
-from ..core.accessibility import SCHEMA, LABELS, parse_devices, device_cards
+from ..core.accessibility import SCHEMA, LABELS, parse_devices, device_cards, observation_clock
 from ..core.sessions import read_boot_id
 
 DEVICE_ROOT = "/org/kde/KWin/InputDevice"
@@ -25,14 +25,14 @@ def bounded_command(argv, *, timeout, **kwargs):
     """Bound both elapsed time and output, including a broken optional tool."""
     proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, env=kwargs.get("env"), start_new_session=True)
-    deadline, buffers = time.monotonic() + timeout, {"out": bytearray(), "err": bytearray()}
+    deadline, buffers = observation_clock() + timeout, {"out": bytearray(), "err": bytearray()}
     completed = False
     try:
         with selectors.DefaultSelector() as selector:
             selector.register(proc.stdout, selectors.EVENT_READ, "out")
             selector.register(proc.stderr, selectors.EVENT_READ, "err")
             while selector.get_map():
-                remaining = deadline - time.monotonic()
+                remaining = deadline - observation_clock()
                 if remaining <= 0:
                     raise subprocess.TimeoutExpired(argv, timeout)
                 for key, _ in selector.select(remaining):
@@ -43,7 +43,7 @@ def bounded_command(argv, *, timeout, **kwargs):
                         buffers[key.data].extend(chunk)
                         if sum(map(len, buffers.values())) > 262144:
                             raise subprocess.SubprocessError("saída excede orçamento")
-        code = proc.wait(timeout=max(.001, deadline - time.monotonic()))
+        code = proc.wait(timeout=max(.001, deadline - observation_clock()))
         completed = True
         return subprocess.CompletedProcess(argv, code, buffers["out"].decode(errors="replace"),
                                            buffers["err"].decode(errors="replace"))
@@ -79,7 +79,7 @@ def present(path):
 
 
 class NativeInput:
-    def __init__(self, *, runner=bounded_command, which=shutil.which, clock=time.monotonic,
+    def __init__(self, *, runner=bounded_command, which=shutil.which, clock=observation_clock,
                  proc_root="/proc", sys_root="/sys", budget=8):
         self.runner, self.which, self.clock = runner, which, clock
         self.proc_root, self.sys_root, self.budget = Path(proc_root), Path(sys_root), budget
@@ -107,7 +107,7 @@ class NativeInput:
     def collect(self):
         began = self.clock()
         self.deadline = began + self.budget
-        report = {"schema": SCHEMA, "sampled_at": time.time(), "mono": began,
+        report = {"schema": SCHEMA, "sampled_at": time.time(), "mono": began, "clock": "boottime",
                   "boot_id": read_boot_id(self.proc_root), "backend": "observe-only",
                   "service_owner": "", "devices": [], "cards": [], "providers": [],
                   "blockers": [], "errors": []}

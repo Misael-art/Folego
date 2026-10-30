@@ -21,7 +21,9 @@ WORKER_MODULE = "folego.actions.tunings.worker"
 MUTATING = ("apply", "revert", "release", "restore", "expire", "recover",
             "quarantine", "quarantine-reviewed", "purge", "signal", "runtime-size",
             "accessibility-repair", "accessibility-enable", "accessibility-disable",
-            "accessibility-capture", "accessibility-rearm", "accessibility-install")
+            "accessibility-capture", "accessibility-rearm", "accessibility-install",
+            "startup-enable", "startup-disable", "startup-sync")
+MUTATING = (*MUTATING, "review-execute", "review-cancel", "review-reconcile", "jobs-retain")
 # .../src — where folego lives for this process. A child started from a
 # .desktop file has no PYTHONPATH, and "-m folego.*" then dies on import.
 PACKAGE_ROOT = str(Path(__file__).resolve().parents[2])
@@ -65,7 +67,7 @@ class TuneJobs:
             return
         try:
             environment = self._environment()
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             done({"acao": acao, "tuning": tuning_id, "ok": False,
                   "exit": 1, "outcome": "recusa",
                   "reason": f"temporários do filho não preparados: {exc}"})
@@ -74,6 +76,8 @@ class TuneJobs:
         proc.setProcessChannelMode(QProcess.ProcessChannelMode.SeparateChannels)
         proc.setProcessEnvironment(environment)
         job = _Job(acao, tuning_id, done)
+        job.manifest = environment.value("FOLEGO_RUN_MANIFEST")
+        job.pid = None
         self._jobs[proc] = job
 
         timer = QTimer(proc)
@@ -82,13 +86,72 @@ class TuneJobs:
         timer.timeout.connect(lambda: self._expire(proc))
         proc.finished.connect(lambda code, status: self._finish(proc))
         proc.errorOccurred.connect(lambda err: self._error(proc, err))
+        proc.started.connect(lambda: setattr(job, "pid", int(proc.processId())))
 
-        argv = list(self._argv_factory(acao, tuning_id, confirm))
+        if acao.startswith("review-"):
+            argv = [sys.executable, "-m", "folego", "review", acao.removeprefix("review-"), "--json"]
+            if acao == "review-plan": argv.extend(["--command", tuning_id])
+            elif acao == "review-execute": argv.extend(["--plan", tuning_id])
+            elif acao in ("review-reconcile", "review-cancel"): argv.append(tuning_id)
+            if confirm:
+                argv.append("--confirmar")
+                if acao == "review-execute": argv.append("--irreversivel")
+        else:
+            argv = list(self._argv_factory(acao, tuning_id, confirm))
+        argv = [sys.executable, "-m", "folego.process.job_child", job.manifest, "--", *argv]
         self.procs.append(proc)
         if job.mutating:
             self.in_flight += 1
         timer.start()
         proc.start(argv[0], argv[1:])
+
+    def review_and_run(self, action, target, *, title, text, confirm_fn, done, expected_scope=None):
+        """Review in a child, confirm those bytes/targets, execute the same ID."""
+        argv = self._argv_factory(action, target, False)
+        if argv[1:3] == ["-m", WORKER_MODULE]:
+            command = ["tune", action, target]
+        elif argv[1:3] == ["-m", "folego"]:
+            command = argv[3:]
+        else:
+            done({"outcome": "recusa", "ok": False, "reason": "comando sem protocolo de revisão"})
+            return
+        def planned(payload):
+            bundle = payload.get("review") if payload else None
+            if not bundle:
+                done(payload or {"outcome": "desconhecido", "reason": "plano ausente"})
+                return
+            from ..orchestration.models import ActionPlan
+            try:
+                plan = ActionPlan.from_dict(bundle["plan"])
+            except (ValueError, KeyError, TypeError):
+                done({"outcome": "recusa", "reason": "plano ilegível"})
+                return
+            summary = bundle.get("evidence", {}).get("summary", [])
+            if expected_scope is not None:
+                expected = sorted(json.dumps(row, sort_keys=True) for row in expected_scope)
+                fields = set().union(*(row.keys() for row in expected_scope)) if expected_scope else set()
+                actual = sorted(json.dumps({key: row.get(key) for key in fields}, sort_keys=True) for row in summary)
+                if expected != actual:
+                    self.run("review-cancel", plan.operation_id, confirm=True, done=lambda _: done(
+                        {"outcome": "recusa", "ok": False, "reason": "alvos/tamanhos mudaram desde a lista; atualizar antes de confirmar"}))
+                    return
+            from datetime import datetime
+            from ..actions.disk.planner import fmt_bytes
+            rows = [" · " + row.get("source", row["key"]) +
+                    (" · " + fmt_bytes(row["bytes"]) if "bytes" in row else "") for row in summary]
+            validity = datetime.fromtimestamp(plan.expires_at).astimezone().strftime("%d/%m %H:%M:%S")
+            detail = "\n\nAlvos da revisão atual:\n" + "\n".join(rows) + f"\n\nOperação {plan.operation_id}\nVálida até {validity}"
+            if not confirm_fn(title, text + detail):
+                self.run("review-cancel", plan.operation_id, confirm=True, done=done)
+                return
+            def completed(result):
+                result = result or {}
+                if result.get("operation_id") not in (None, plan.operation_id):
+                    result = {"outcome": "desconhecido", "ok": False, "reason": "ID do filho difere da revisão; não repetir"}
+                done({"acao": action, "changed": result.get("ok", False),
+                      **result.get("effects", {}), **result, "operation_id": plan.operation_id})
+            self.run("review-execute", json.dumps(bundle), confirm=True, done=completed)
+        self.run("review-plan", json.dumps(command), done=planned)
 
     # ------------------------------------------------------------------ environment
 
@@ -144,7 +207,14 @@ class TuneJobs:
                        "reason": "o filho terminou sem que a resposta "
                                             "pudesse ser lida"}
         self._forget(proc)
-        job.done(payload)
+        try:
+            from ..safely.jobtemp import finish_job
+            finish_job(job.manifest, job.pid, certain=(not job.timed_out and not job.abandoned
+                       and payload.get("outcome") != "desconhecido"))
+        except (OSError, ValueError):
+            pass  # Missing/uncertain lifecycle remains protected, never deleted.
+        if self._parent is None or isValid(self._parent):
+            job.done(payload)
 
     def _forget(self, proc) -> None:
         try:

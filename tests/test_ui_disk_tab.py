@@ -49,7 +49,10 @@ def plan_payload():
 
 
 
-class FakeJobs:
+from review_jobs import ReviewJobs
+
+
+class FakeJobs(ReviewJobs):
     def __init__(self, answer=None, defer=False):
         self.calls = []
         self.answer = answer
@@ -170,7 +173,7 @@ def test_the_tab_starts_as_not_analyzed_not_as_a_fake_job(qapp):
     assert "consultando" in view.summary.text()
 
 
-class RouteJobs:
+class RouteJobs(ReviewJobs):
     """Answers each action with its own payload and records the argv contract."""
 
     def __init__(self, answers):

@@ -90,7 +90,7 @@ o pequeno estado local contém audit e material de selftest, preservados por pre
 | `./dev check` | Duas suítes sequenciais e diff check |
 | `./dev run --help` | CLI instalada no ambiente headless |
 | `./dev doctor` | Diagnóstico somente leitura |
-| `./dev gui` | GUI real, sem habilitar automação ou autostart |
+| `./dev gui` | GUI real; início com a sessão ligado por padrão e configurável na aba opções |
 | `./dev status` | Caminhos e consumo dos diretórios gerenciados |
 | `./dev export --output .recovery/novo` | Snapshot fonte + Git bundle de checkout limpo/commitado |
 
@@ -109,11 +109,18 @@ O runtime da sessão gráfica (`XDG_RUNTIME_DIR`) é preservado para D-Bus/Wayla
 aplicativo e testes recebem temporários próprios em disco. A proteção do produto
 continua verificando o destino no ato de lançar filhos.
 
+Na primeira abertura real, a GUI configura seu autostart XDG e a unit de observação
+de entrada do usuário. A aba **opções** e `./dev run startup disable --confirmar`
+persistem a escolha de desligar no próximo login, sem parar o monitor já aberto.
+Units/entradas pessoais são preservadas. Isso não importa grants antigos, não
+ativa reparos numa instalação nova nem habilita o executor de recursos.
+
 ## Primeiro pedido ao agente no novo host
 
 > Leia AGENTS.md, README.md, docs/HANDOFF.md, docs/DIAGNOSTICO-2026-10-24.md e
 > docs/NOVO-HOST.md. Confira a branch e o commit recuperados. Prepare o ambiente
-> com ./dev e valide primeiro o núcleo sem Qt. Preserve automação desligada e
+> com ./dev e valide primeiro o núcleo sem Qt. Preserve o executor de recursos desligado,
+> respeite a preferência de início com a sessão e a política própria de entrada e
 > não toque em processos/dados de trabalho do host. Escolha a primeira pendência
 > verificável da passagem, faça um incremento integrado com teste de regressão
 > e atualize o estado com evidências reais, sem declarar o soak de duas horas aprovado.

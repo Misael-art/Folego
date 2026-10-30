@@ -46,6 +46,7 @@ estão descritos abaixo.
 | **Widget e bandeja** | Consultar o estado em uma janela compacta e retornar à central. No Plasma/Wayland, a regra opcional do KWin exige confirmação. |
 | **CLI independente de Qt** | Investigar o ambiente e consultar operações diretamente pelo terminal. |
 | **Entrada e acessibilidade** | Observar teclado, ponteiro, trackpads, toque, controles e áudio; solicitar reparo de entrada ou manter um monitor residente opcional, sem depender do PhaseZero. |
+| **Opções e continuidade** | Iniciar com a sessão por padrão, desativar quando quiser, consultar operações pelo código e acompanhar temporários próprios preservados. |
 
 ## Começar
 
@@ -59,6 +60,15 @@ cd Folego
 ./dev setup
 ./dev gui
 ```
+
+Na primeira abertura, o Fôlego configura o **início automático com a sessão**,
+ligado por padrão. A aba **opções** permite desligar e mantém sua escolha nas
+próximas aberturas. O controle cobre a central e a habilitação do monitor de
+entrada no login; desligar não encerra um monitor já aberto. Arquivos pessoais
+de autostart e units sem a marca do Fôlego são preservados.
+
+Iniciar o aplicativo não concede permissões de limpeza ou reparo. A política
+de entrada e os grants de recursos continuam tendo seus próprios controles.
 
 O primeiro setup baixa ferramentas e dependências para `.dev/`. Reserve ao menos
 4 GiB livres. Se faltarem bibliotecas nativas, consulte o plano e aplique-o explicitamente:
@@ -93,6 +103,7 @@ Estas consultas não limpam arquivos nem encerram processos:
 ./dev run session list --json
 ./dev run automation status --json
 ./dev run accessibility status --json
+./dev run startup status --json
 ```
 
 Para acompanhar um comando seu como sessão protegida:
@@ -146,10 +157,61 @@ desabilitar uma entrada intencionalmente, pause os reparos:
 ./dev run accessibility disable --confirmar
 ```
 
+Para controlar o início com a sessão pelo terminal:
+
+```bash
+./dev run startup enable --confirmar
+./dev run startup disable --confirmar
+```
+
 Enumeração não comprova movimento, clique, digitação, toque ou áudio físico.
 Reparos de driver, atalhos Steam, perfis de jogo e entrada antes do login não
 fazem parte desse executor. O [guia de acessibilidade](docs/ACESSIBILIDADE.md)
 explica limites, recuperação, desinstalação e coordenação com outras aplicações.
+
+## Uma revisão, uma operação
+
+As ações de ajustes, liberação de tmpfs, restauração e expiração preparam uma
+revisão durável antes da confirmação. A GUI compara os alvos e tamanhos com a
+lista apresentada, exibe o código e a validade e executa o mesmo plano.
+Mudanças posteriores em conteúdo, backup ou vítimas recusam o efeito.
+
+Na aba **opções**, consulte pelo código, verifique operações pendentes ou cancele
+uma revisão que ainda não iniciou. A confirmação de um resultado libera somente
+o bloqueio da operação correspondente. Resultado desconhecido não autoriza retry.
+Um exemplo pela CLI, sem executar na primeira etapa:
+
+```bash
+./dev run review plan --command '["tune","apply","edge.startup_boost"]' --json
+./dev run review pending --json
+./dev run review reconcile ID --json
+./dev run review cancel ID --confirmar --json
+```
+
+Para executar, passe o objeto `review` completo a `review execute --plan JSON
+--confirmar --json`. Expiração e purga também exigem `--irreversivel`. Os comandos
+diretos dos domínios continuam disponíveis e usam o mesmo coordenador.
+
+## Temporários do próprio Fôlego
+
+Novos jobs registram identidade de raiz/diretório, boot, PID/starttime e sessão.
+Somente execuções encerradas e sem consumidores/referências comprovados podem
+sair dos slots ativos para `.retained`, no mesmo filesystem persistente.
+**O conteúdo é preservado; não há exclusão automática de payloads.**
+
+O limite de 256 slots ativos permanece. A retenção tem orçamento de 1 GiB e
+inventário limitado; esgotamento, montagens, conteúdo protegido, arquivos em uso
+ou observação incompleta exigem revisão. Diretórios antigos sem prova de ciclo
+de vida permanecem protegidos. `.scratch/dev-tests` tem sua própria política e
+não participa dessa manutenção do produto.
+
+```bash
+./dev run jobs status --json
+./dev run jobs retain --confirmar --json
+```
+
+`--root CAMINHO` seleciona uma raiz própria explicitamente. A aba **opções**
+mostra a raiz dos jobs da GUI e permite solicitar a retenção sem apagar dados.
 
 ## Seu trabalho vem primeiro
 

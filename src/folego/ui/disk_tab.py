@@ -79,6 +79,7 @@ class DiskTab(QWidget):
         self.thumbnails_kb: int | None = None
         self._last_status = ""
         self._uncertain = False
+        self._pending_review_id = ""
         self._reviewed_operation = ""
         self._quarantine_loaded = False
 
@@ -224,6 +225,7 @@ class DiskTab(QWidget):
             "entry_id": str(e.get("entry_id", "")),
             "name": str(e.get("original", "")).rsplit("/", 1)[-1] or "—",
             "size": fmt_bytes(e.get("observed_bytes") or e.get("bytes") or 0),
+            "bytes": int(e.get("bytes") or 0),
             "state": str(e.get("state", "?")),
             "original": str(e.get("original", "—")),
             "stored": e.get("state") == "stored",
@@ -316,13 +318,12 @@ class DiskTab(QWidget):
         if item is None or not item["stored"]:
             self._status("selecione uma entrada armazenada antes de restaurar.")
             return
-        if not self._confirm(
+        self._jobs.review_and_run("restore", item["entry_id"], title="Restaurar quarentena",
+                expected_scope=[{"key": item["entry_id"], "source": item["original"], "bytes": item["bytes"]}],
+                confirm_fn=lambda title, text: self._confirm(text), text=
                 f"Restaurar {item['original']} a partir da quarentena?\n"
                 "O conteúdo volta ao caminho original; a origem precisa estar "
-                "livre e não ser substituída."):
-            self._status("Cancelado: nada foi restaurado.")
-            return
-        self._jobs.run("restore", item["entry_id"], confirm=True,
+                "livre e não ser substituída.",
                        done=self._mutation_done)
 
     def purge_selected(self):
@@ -332,21 +333,24 @@ class DiskTab(QWidget):
         if item is None or not item["stored"]:
             self._status("selecione uma entrada armazenada antes de apagar.")
             return
-        if not self._confirm(
+        self._jobs.review_and_run("purge", item["entry_id"], title="Apagar quarentena (irreversível)",
+                expected_scope=[{"key": item["entry_id"], "source": item["original"], "bytes": item["bytes"]}],
+                confirm_fn=lambda title, text: self._confirm(text), text=
                 f"Apagar de vez {item['original']} ({item['size']})?\n"
                 "Esta ação é IRREVERSÍVEL: não haverá restauração. O item só pode "
                 "ser apagado se ainda estiver íntegro e dentro do destino de "
-                "retenção."):
-            self._status("Cancelado: nada foi apagado.")
-            return
-        self._jobs.run("purge", item["entry_id"], confirm=True,
+                "retenção.",
                        done=self._mutation_done)
 
     def _mutation_done(self, payload):
         self._quarantine_pending = False
         payload = payload or {}
+        if payload.get("outcome") == "cancelamento":
+            self._status(payload.get("reason", "cancelado: nenhum efeito solicitado"))
+            return
         if not payload or payload.get("outcome") == "desconhecido":
             self._uncertain = True
+            self._pending_review_id = payload.get("operation_id") or self._reviewed_operation
             self._status("desconhecido: " + str(payload.get("reason") or "o filho não respondeu") +
                 " · operação " + str(payload.get("operation_id") or self._reviewed_operation or "consulte o histórico") +
                 " · não repetir antes de reconciliar")
@@ -370,20 +374,20 @@ class DiskTab(QWidget):
         self.refresh()
         self.refresh_quarantine()
 
+    def resolve_operation(self, payload):
+        key = payload.get("operation_id")
+        if key and key == self._pending_review_id:
+            self._pending_review_id = ""
+            self._uncertain = False
+            self._status("verificado: " + str(payload.get("reason") or "resultado consultado"))
+            self.refresh()
+            self.refresh_quarantine()
+
     def _status(self, text: str):
         self._last_status = text
         self.status.setText(text)
 
     @staticmethod
     def _ask_dialog(text: str) -> bool:
-        dialog = QMessageBox()
-        dialog.setWindowTitle("Fôlego — disco")
-        dialog.setIcon(QMessageBox.Icon.Question)
-        dialog.setText(text)
-        dialog.setMinimumWidth(520)
-        dialog.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        dialog.button(QMessageBox.StandardButton.Yes).setText("Confirmar")
-        dialog.button(QMessageBox.StandardButton.No).setText("Cancelar")
-        dialog.setDefaultButton(QMessageBox.StandardButton.No)
-        answer = dialog.exec()
-        return answer == QMessageBox.StandardButton.Yes
+        from .confirmation import confirm_text
+        return confirm_text("Fôlego — disco", text)

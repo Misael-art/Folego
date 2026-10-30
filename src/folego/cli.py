@@ -235,9 +235,38 @@ def build_parser() -> argparse.ArgumentParser:
         description="Bem-estar do Steam Deck: diagnóstico e higiene com confirmação.")
     commands = parser.add_subparsers(dest="command")
 
+    review = commands.add_parser("review", help="revisão durável, execução e reconciliação pelo mesmo ID")
+    review_sub = review.add_subparsers(dest="sub", required=True)
+    for name in ("plan", "execute", "pending", "reconcile", "cancel"):
+        command = review_sub.add_parser(name)
+        command.add_argument("--json", action="store_true")
+        command.add_argument("--confirmar", action="store_true")
+        command.add_argument("--irreversivel", action="store_true")
+        if name == "plan": command.add_argument("--command", dest="review_command", required=True)
+        if name == "execute": command.add_argument("--plan", required=True)
+        if name in ("reconcile", "cancel"): command.add_argument("operation_id")
+
+    jobs = commands.add_parser("jobs", help="retenção de temporários próprios; nunca adota diretórios legados")
+    jobs_sub = jobs.add_subparsers(dest="sub", required=True)
+    for name in ("status", "retain"):
+        command = jobs_sub.add_parser(name)
+        command.add_argument("--root", default=None)
+        command.add_argument("--json", action="store_true")
+        command.add_argument("--confirmar", action="store_true")
+
+    startup = commands.add_parser("startup", help="início automático com a sessão, ligado por padrão")
+    startup_sub = startup.add_subparsers(dest="sub", required=True)
+    for name in ("status", "enable", "disable", "sync"):
+        command = startup_sub.add_parser(name)
+        command.add_argument("--json", action="store_true")
+        command.add_argument("--confirmar", action="store_true")
+
     access = commands.add_parser("accessibility", help="supervisão de entrada independente de projetos externos")
     access_sub = access.add_subparsers(dest="sub", required=True)
-    for name in ("status", "plan", "enable", "disable", "capture", "rearm", "install", "repair", "reconcile", "watch", "lease", "lease-reconcile"):
+    lease_run = access_sub.add_parser("lease-run", help="inicia aplicação cooperante sob propriedade durável de entrada")
+    lease_run.add_argument("--provider", required=True)
+    lease_run.add_argument("argv", nargs=argparse.REMAINDER)
+    for name in ("status", "plan", "transitions", "enable", "disable", "capture", "rearm", "install", "repair", "reconcile", "watch", "lease", "lease-reconcile"):
         command = access_sub.add_parser(name)
         command.add_argument("--json", action="store_true")
         if name in ("enable", "disable", "capture", "rearm", "install", "repair", "lease", "lease-reconcile"):
@@ -2211,6 +2240,17 @@ def _cmd_accessibility(args):
     from .orchestration.coordinator import CoordinatorBusy
     supervisor = Supervisor()
     try:
+        if args.sub == "lease-run":
+            from .actions.input_lease import run, LeaseRunUnknown
+            try:
+                return run(args.provider, args.argv[1:] if args.argv[:1] == ["--"] else args.argv)
+            except LeaseRunUnknown as exc:
+                sys.stderr.write(str(exc) + "\n")
+                return EXIT_UNKNOWN
+        if args.sub == "transitions":
+            from .actions.accessibility import transition_history
+            print(json.dumps(transition_history(supervisor.store), ensure_ascii=False))
+            return EXIT_OK
         if args.sub in ("status", "plan"):
             report = supervisor.inspect()
             if args.json:
@@ -2261,6 +2301,39 @@ def _dispatch(ns, argv) -> int:
     """A escolha do handler, separada do `main` para o protocolo de erro envolvê-la."""
     if ns.command is None:
         return run_gui(argv)
+    if ns.command == "review":
+        from .orchestration import review
+        if ns.sub == "plan":
+            result = {"ok": True, "outcome": "sucesso", "review": review.prepare(json.loads(ns.review_command))}
+        elif ns.sub == "pending":
+            result = {"ok": True, "outcome": "sucesso", "pending": review.pending()}
+        elif ns.sub == "cancel":
+            outcome = review.cancel(ns.operation_id, confirmed=ns.confirmar)
+            result = {**outcome.to_dict(), "ok": outcome.ok}
+        else:
+            outcome = (review.reconcile(ns.operation_id) if ns.sub == "reconcile" else
+                       review.execute(json.loads(ns.plan), confirmed=ns.confirmar, irreversible=ns.irreversivel))
+            result = {**outcome.to_dict(), "ok": outcome.ok}
+        print(json.dumps(result, ensure_ascii=False))
+        return EXIT_BY_OUTCOME.get(result.get("outcome"), EXIT_REFUSED)
+    if ns.command == "jobs":
+        from .safely.jobtemp import retention_status, retain_completed
+        root = ns.root or os.environ.get("FOLEGO_JOB_ROOT") or str(Path(os.environ.get("TMPDIR", "/tmp")) / "folego-jobs")
+        if ns.sub == "retain" and not ns.confirmar:
+            return _emit_gate_refusal(ns, "jobs", "operação exige --confirmar", EXIT_NEEDS_CONFIRM)
+        result = retention_status(root) if ns.sub == "status" else retain_completed(root)
+        print(json.dumps({"ok": True, "outcome": "sucesso", **result}, ensure_ascii=False))
+        return EXIT_OK
+    if ns.command == "startup":
+        from . import startup
+        if ns.sub == "status":
+            result = startup.status()
+        else:
+            if ns.sub != "sync" and not ns.confirmar:
+                return _emit_gate_refusal(ns, "startup", "operação exige --confirmar", EXIT_NEEDS_CONFIRM)
+            result = startup.configure(None if ns.sub == "sync" else ns.sub == "enable", confirmed=ns.confirmar)
+        print(json.dumps(result, ensure_ascii=False))
+        return EXIT_BY_OUTCOME.get(result.get("outcome"), EXIT_OK if result.get("ok", True) else EXIT_REFUSED)
     if ns.command == "accessibility":
         return _cmd_accessibility(ns)
     if ns.command == "shortcuts":

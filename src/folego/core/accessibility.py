@@ -2,10 +2,24 @@
 import hashlib
 import re
 import sys
+import time
 
 SCHEMA = 1
 ACTION = "accessibility.enable-input"
 STALE_SECONDS = 20
+
+
+def observation_clock():
+    """Linux elapsed time including suspension: old observations stay old."""
+    return time.clock_gettime(time.CLOCK_BOOTTIME)
+
+
+def sample_age(report):
+    clock = report.get("clock", "monotonic")
+    if clock not in ("boottime", "monotonic"):
+        return float("inf")
+    now = observation_clock() if clock == "boottime" else time.monotonic()
+    return now - report["mono"]
 LABELS = {"keyboard": "⌨ Teclado físico", "pointer": "🖱 Mouse / ponteiro",
           "touchpad": "▣ Trackpads", "touch": "☝ Tela de toque",
           "gamepad": "🎮 Controles", "virtual-keyboard": "⌨ Teclado virtual",

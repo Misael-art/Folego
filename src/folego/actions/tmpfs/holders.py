@@ -12,6 +12,7 @@ lista de pids pôde ser lida). `errors` carrega o porquê.
 """
 import errno
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -46,7 +47,7 @@ def _pid_dirs(root: Path, scandir_fn) -> tuple[list, tuple]:
 
 def holder_index(*, proc_root: str | None = None, prefixes=WATCHED, pids=None,
                  scandir_fn=os.scandir, readlink_fn=os.readlink,
-                 include_process_refs=False) -> HolderIndex:
+                 include_process_refs=False, deadline_s=None, max_fds=None) -> HolderIndex:
     root = Path(proc_root or paths.proc_root())
     errors: list = []
     unavailable = False
@@ -59,6 +60,7 @@ def holder_index(*, proc_root: str | None = None, prefixes=WATCHED, pids=None,
             errors.extend(list_errors)
     refs: dict[str, set[int]] = {}
     fd_count = 0
+    deadline = time.monotonic() + deadline_s if deadline_s is not None else None
     def remember(target, pid):
         target = target.removesuffix(" (deleted)")
         for prefix in prefixes:
@@ -68,10 +70,17 @@ def holder_index(*, proc_root: str | None = None, prefixes=WATCHED, pids=None,
                 break
 
     for pid in seen:
+        if deadline is not None and time.monotonic() >= deadline:
+            errors.append("prazo de inventário de referências excedido")
+            break
         if include_process_refs:
             try:
                 remember(readlink_fn(root / str(pid) / "cwd"), pid)
-                for line in (root / str(pid) / "maps").read_text().splitlines():
+                with (root / str(pid) / "maps").open() as stream:
+                    mapping = stream.read(1024**2 + 1) if deadline is not None else stream.read()
+                if deadline is not None and len(mapping) > 1024**2:
+                    raise OSError("mapas excedem orçamento")
+                for line in mapping.splitlines():
                     fields = line.split(maxsplit=5)
                     if len(fields) == 6 and fields[5].startswith("/"):
                         remember(fields[5], pid)
@@ -82,7 +91,13 @@ def holder_index(*, proc_root: str | None = None, prefixes=WATCHED, pids=None,
         fd_dir = root / str(pid) / "fd"
         try:
             with scandir_fn(fd_dir) as it:
-                names = sorted(e.name for e in it)
+                names = []
+                for entry in it:
+                    if ((max_fds is not None and fd_count + len(names) >= max_fds)
+                            or (deadline is not None and time.monotonic() >= deadline)):
+                        errors.append("inventário de descritores excede orçamento")
+                        break
+                    names.append(entry.name)
         except OSError as err:
             # ENOENT = o processo sumiu entre a lista e a leitura: não havia fd
             # aberto para provar. Qualquer outra falha deixa o índice parcial.
@@ -90,6 +105,9 @@ def holder_index(*, proc_root: str | None = None, prefixes=WATCHED, pids=None,
                 errors.append(f"{fd_dir}: {err.strerror or err}")
             continue
         for name in names:
+            if deadline is not None and time.monotonic() >= deadline:
+                errors.append("prazo de descritores excedido")
+                break
             try:
                 target = readlink_fn(os.path.join(str(fd_dir), name))
             except OSError as err:

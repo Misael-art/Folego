@@ -13,7 +13,7 @@ import uuid
 
 from .. import paths
 from ..adapters.accessibility import NativeInput, ProbeError, bounded_read, DEVICE_ROOT, DEVICE_IFACE, PROPERTIES
-from ..core.accessibility import SCHEMA, STALE_SECONDS, ACTION
+from ..core.accessibility import SCHEMA, STALE_SECONDS, ACTION, sample_age
 from ..core.sessions import read_boot_id
 from ..orchestration import Coordinator
 from ..orchestration.models import ActionPlan, ActionResult, ResourceIdentity, Outcome
@@ -55,6 +55,46 @@ def read_object(path):
 def save_object(path, value):
     private_path(path, create=True)
     write_atomic(path, json.dumps(value, ensure_ascii=False).encode(), mode=0o600)
+
+
+def transition_history(store):
+    value = read_object(store.root / "transitions.json")
+    if value is None:
+        return {"schema": SCHEMA, "events": [], "last": None}
+    if (not isinstance(value.get("events"), list) or len(value["events"]) > 32
+            or not isinstance(value.get("last"), dict)):
+        raise ValueError("histórico de transições desconhecido; preservado")
+    return value
+
+
+def record_transition(store, report):
+    """Bounded diagnostic ring, separate from the authoritative operation log."""
+    import hashlib
+    history = transition_history(store)
+    sample = {"boot_id": report["boot_id"], "owner": report["service_owner"],
+              "mono": report["mono"], "clock": report.get("clock", "monotonic"),
+              "backend": report["backend"], "states": {row["key"]: row["state"] for row in report["cards"]},
+              "reason": "; ".join(report["blockers"])[:512]}
+    sample["devices"] = hashlib.sha256(json.dumps([
+        (d["key"], d["enabled"]) for d in report["devices"]], sort_keys=True).encode()).hexdigest()
+    previous = history["last"]
+    kinds = []
+    if previous is None: kinds.append("first-observation")
+    else:
+        if sample["boot_id"] != previous.get("boot_id"): kinds.append("boot")
+        if sample["owner"] != previous.get("owner"): kinds.append("compositor")
+        if sample["devices"] != previous.get("devices"): kinds.append("device-change")
+        if sample["states"] != previous.get("states") or sample["reason"] != previous.get("reason"):
+            kinds.append("state-change")
+        if (sample["boot_id"] == previous.get("boot_id") and sample["clock"] == previous.get("clock")
+                and type(previous.get("mono")) in (int, float) and sample["mono"] - previous["mono"] >= 30):
+            kinds.append("observation-gap")
+    if kinds:
+        history["events"] = [*history["events"], {"kinds": kinds, "ts": time.time(),
+            "states": sample["states"], "reason": sample["reason"], "physical_verified": False}][-32:]
+    history["last"] = sample
+    save_object(store.root / "transitions.json", history)
+    return history["events"][-1] if history["events"] else None
 
 
 class Store:
@@ -126,8 +166,9 @@ def lease_blockers(root=None, *, ignore=None):
         names = []
         for entry in entries:
             names.append(entry.name)
-            if len(names) > 32:
+            if len(names) > 256:
                 return ["inventário de leases excede orçamento"]
+    active = 0
     for name in names:
         if time.monotonic() > deadline:
             return ["prazo de leitura das propriedades excedido"]
@@ -138,11 +179,19 @@ def lease_blockers(root=None, *, ignore=None):
             blockers.append("lease mudou durante a leitura")
             continue
         if (not isinstance(value.get("provider"), str) or value.get("resource") != "input"
-                or value.get("state") not in ("using", "repairing", "released")):
+                or value.get("state") not in ("using", "repairing", "released")
+                or type(value.get("completion_required", False)) is not bool):
             blockers.append("lease com contrato desconhecido")
             continue
         if value["state"] == "released":
+            children = value.get("children", [])
+            if (_alive(value.get("owner")) is None or not isinstance(children, list) or len(children) > 64
+                    or any(_alive(child) is not False for child in children)):
+                blockers.append("lease encerrado com propriedade/filhos não comprovados")
             continue
+        active += 1
+        if active > 32:
+            return ["propriedades ativas excedem orçamento"]
         alive = _alive(value.get("owner"))
         children = value.get("children", [])
         if not isinstance(children, list) or len(children) > 64:
@@ -154,7 +203,7 @@ def lease_blockers(root=None, *, ignore=None):
                     return ["prazo de verificação de filhos excedido"]
                 states.append(_alive(child))
             alive = True if True in states else None if None in states else False
-        if alive is False and value["state"] == "using":
+        if alive is False and value["state"] == "using" and value.get("completion_required", False) is False:
             continue
         # A dead repairer may have left effects. Only explicit reconciliation
         # releases this lease; age or missing PID never proves repair completion.
@@ -163,7 +212,57 @@ def lease_blockers(root=None, *, ignore=None):
     return blockers
 
 
-def publish_lease(provider, pid, state, *, store=None, coordinator=None, child_pids=()):
+def archive_released_leases(root, *, limit=32):
+    """Caller holds coordinator. Keep a private latest closed receipt per slot.
+
+    Never expire using/repairing/unknown records by age or missing heartbeat.
+    Interrupted archival leaves either the released source or closed receipt.
+    """
+    root = Path(root)
+    folder = root / "leases"
+    private_path(folder)
+    if not folder.exists():
+        return 0
+    info = folder.stat()
+    if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
+        raise ValueError("leases sem permissões privadas")
+    count = 0
+    with os.scandir(folder) as entries:
+        for index, entry in enumerate(entries):
+            if index >= 256 or count >= limit:
+                break
+            path = folder / entry.name
+            value = read_object(path)
+            if (not value or value.get("state") != "released" or value.get("resource") != "input"
+                    or not isinstance(value.get("provider"), str)
+                    or _alive(value.get("owner")) is None
+                    or not isinstance(value.get("children", []), list)
+                    or any(_alive(child) is not False for child in value.get("children", []))):
+                continue
+            # Only stable provider slots written by this implementation migrate.
+            key = uuid.uuid5(uuid.NAMESPACE_URL, "folego-input:" + value["provider"]).hex + ".json"
+            if entry.name != key:
+                continue
+            target = root / "leases-closed" / key
+            old = read_object(target)
+            if old and (old.get("state") != "released" or old.get("provider") != value["provider"]
+                        or _alive(old.get("owner")) is None or not isinstance(old.get("children", []), list)
+                        or len(old.get("children", [])) > 64
+                        or any(_alive(child) is not False for child in old.get("children", []))):
+                raise ValueError("recibo encerrado desconhecido; preservado")
+            private_path(target, create=True)
+            os.replace(path, target)
+            for directory in (folder, target.parent):
+                fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    os.fsync(fd)
+                finally:
+                    os.close(fd)
+            count += 1
+    return count
+
+
+def publish_lease(provider, pid, state, *, store=None, coordinator=None, child_pids=(), completion_required=False):
     store, coordinator = store or Store(), coordinator or Coordinator()
     if (state not in ("using", "repairing", "released") or not provider or len(provider) > 80
             or len(child_pids) > 64):
@@ -183,6 +282,7 @@ def publish_lease(provider, pid, state, *, store=None, coordinator=None, child_p
         parts = bounded_read(path / "stat", 8192).rsplit(")", 1)[1].split()
         children.append({"pid": child, "start_ticks": int(parts[19]), "boot_id": owner["boot_id"]})
     with coordinator.lock(wait=.2):
+        archive_released_leases(store.root)
         key = uuid.uuid5(uuid.NAMESPACE_URL, "folego-input:" + provider).hex
         path = store.root / "leases" / (key + ".json")
         previous = read_object(path)
@@ -207,7 +307,8 @@ def publish_lease(provider, pid, state, *, store=None, coordinator=None, child_p
         if state != "released" and lease_blockers(store.root, ignore=path.name):
             raise ValueError("outro proprietário ocupa a entrada")
         value = {"schema": SCHEMA, "provider": provider, "resource": "input", "state": state,
-                 "owner": owner, "children": children, "lease_id": key}
+                 "owner": owner, "children": children, "lease_id": key,
+                 "completion_required": completion_required or bool(previous and previous.get("completion_required"))}
         save_object(path, value)
         return value
 
@@ -237,7 +338,7 @@ def reconcile_lease(key, *, confirmed=False, supervisor=None):
 
 def fresh(report):
     return (type(report.get("schema")) is int and report.get("schema") == SCHEMA and type(report.get("mono")) in (int, float)
-            and 0 <= time.monotonic() - report["mono"] <= STALE_SECONDS
+            and 0 <= sample_age(report) <= STALE_SECONDS
             and isinstance(report.get("boot_id"), str) and bool(report["boot_id"]))
 
 
@@ -273,6 +374,9 @@ class Supervisor:
     def __init__(self, *, native=None, store=None, coordinator=None, now=time.time):
         self.native, self.store = native or NativeInput(), store or Store()
         self.coordinator, self.now = coordinator or Coordinator(), now
+        from ..orchestration.history import PendingReader
+        self._pending_reader = PendingReader(self.coordinator.journal, action=ACTION)
+        self._wait_since = None
 
     def inspect(self):
         report = self.native.collect()
@@ -280,9 +384,14 @@ class Supervisor:
         try:
             report["blockers"].extend(lease_blockers(self.store.root))
             policy = self.store.read()
+            if policy["attempts"]:
+                try:
+                    self.coordinator.journal.path.stat()
+                except FileNotFoundError:
+                    raise ValueError("diário ausente após tentativas registradas; efeitos desconhecidos")
             report["policy"] = {key: policy[key] for key in ("enabled", "circuit")}
             report["baseline_count"] = len(policy["baseline"])
-            report["pending_operations"] = unresolved(self.coordinator.journal)
+            report["pending_operations"] = self._pending_reader.ids()
             if report["pending_operations"]:
                 report["blockers"].append("operação desconhecida; verificar antes de repetir")
             report["plans"] = [plan.to_dict() for plan in plans(report)]
@@ -300,6 +409,21 @@ class Supervisor:
         report["state"] = ("unknown" if report["errors"] else "waiting" if report["blockers"] else
                            "degraded" if any(card["state"] in ("degraded", "unavailable", "unknown")
                                              for card in report["cards"]) else "observed")
+        if report["blockers"]:
+            self._wait_since = self._wait_since or self.now()
+        else:
+            self._wait_since = None
+        report["waiting_seconds"] = max(0, self.now() - self._wait_since) if self._wait_since else 0
+        previous_wait = report["watcher"].get("result", {}).get("waiting_seconds", 0)
+        if type(previous_wait) in (float, int) and report["blockers"]:
+            report["waiting_seconds"] = max(report["waiting_seconds"], previous_wait)
+        report["alerts"] = []
+        if report["policy"].get("enabled") and report["watcher"]["state"] != "observed":
+            report["alerts"].append("Monitor residente sem ciclo recente; verificar início automático e serviço.")
+        if report["policy"].get("circuit"):
+            report["alerts"].append("Reparos suspensos: " + report["policy"]["circuit"])
+        if report["waiting_seconds"] >= 300:
+            report["alerts"].append("Entrada aguardando responsável há mais de cinco minutos; revisar motivo sem forçar liberação.")
         return report
 
     def configure(self, *, enabled=None, capture=False, rearm=False):
@@ -401,10 +525,14 @@ class Supervisor:
             return result
 
     def tick(self):
+        with self.coordinator.lock(wait=.2):
+            archive_released_leases(self.store.root)
         report = self.inspect()
+        self.last_report = report
         policy = self.store.read()
         if not policy["enabled"] or policy["circuit"] or report["blockers"]:
             return {"ok": True, "state": "waiting" if report["blockers"] else "paused",
+                    "waiting_seconds": report["waiting_seconds"],
                     "reason": "; ".join(report["blockers"]) or policy["circuit"] or "automação desabilitada"}
         eligible = [device for device in report["devices"] if device["repairable"]]
         new = [device for device in eligible if device["key"] not in policy["baseline"]]

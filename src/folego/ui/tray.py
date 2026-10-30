@@ -8,6 +8,7 @@ icon is there. Nothing in this class writes: the menu only brings the window up
 or stops the watcher — an act on the system needs a click inside the window.
 """
 from PySide6.QtGui import QAction
+import time
 from PySide6.QtWidgets import QApplication, QMenu, QStyle, QSystemTrayIcon
 
 from . import title_signal
@@ -32,6 +33,8 @@ class Tray:
         self.fallback = ""
         self._context_menu = None
         self._pause_action = None
+        self._input_note = ""
+        self._input_alert = ("", 0)
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -118,4 +121,17 @@ class Tray:
                              f"{title_signal.fmt1(snapshot.pressure_memory.full_avg10)}")
         if snapshot.ts_iso:
             lines.append(f"amostra {snapshot.ts_iso}")
+        if self._input_note:
+            lines.append(self._input_note)
         return "\n".join(lines)
+
+    def show_accessibility(self, report):
+        alerts = report.get("alerts", [])
+        note = "; ".join(alerts)[:512] if alerts else ""
+        self._input_note = "Entrada: " + note if note else ""
+        previous, when = self._input_alert
+        now = time.monotonic()
+        notify = getattr(self.tray, "showMessage", None)
+        if note and notify and (note != previous or now - when >= 300):
+            notify("Fôlego · entrada precisa de atenção", note)
+            self._input_alert = (note, now)

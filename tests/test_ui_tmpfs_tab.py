@@ -27,7 +27,10 @@ def headers(table):
     return [table.horizontalHeaderItem(i).text() for i in range(table.columnCount())]
 
 
-class FakeJobs:
+from review_jobs import ReviewJobs
+
+
+class FakeJobs(ReviewJobs):
     def __init__(self, answers):
         self.answers = answers
         self.calls = []

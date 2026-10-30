@@ -439,13 +439,14 @@ def test_user_unit_preserves_personal_unit_and_install_never_touches_other_units
     path.parent.mkdir(parents=True)
     path.write_text("personal unit")
     calls = []
-    run = lambda argv, **kwargs: calls.append(argv) or SimpleNamespace(returncode=0)
+    run = lambda argv, **kwargs: calls.append(argv) or SimpleNamespace(returncode=0, stdout=str(path))
     with pytest.raises(ValueError, match="pessoal"):
         install(confirmed=True, run=run)
     assert not calls and path.read_text() == "personal unit"
     path.unlink()
     assert install(confirmed=True, run=run)["ok"]
     assert calls == [["/fake/systemctl", "--user", "daemon-reload"],
+                     ["/fake/systemctl", "--user", "show", UNIT, "--property=FragmentPath", "--value"],
                      ["/fake/systemctl", "--user", "enable", "--now", UNIT]]
     assert "PartOf=graphical-session.target" in path.read_text()
 

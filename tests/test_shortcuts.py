@@ -99,3 +99,12 @@ def test_template_matches_the_packaged_desktop_entry():
 def test_checkout_launcher_is_run_sh():
     exe = shortcuts.launcher_executable()
     assert exe is not None and exe.name in {"run.sh", "folego"}
+
+
+def test_installed_module_child_finds_venv_entrypoint_without_shell_path(tmp_path, monkeypatch):
+    executable = make_exe(tmp_path, "folego")
+    monkeypatch.setattr(shortcuts, "__file__", str(tmp_path / "site-packages/folego/shortcuts.py"))
+    monkeypatch.setattr(shortcuts.sys, "executable", str(executable.with_name("python")))
+    monkeypatch.setattr(shortcuts.sys, "argv", [str(tmp_path / "site-packages/folego/__main__.py")])
+    monkeypatch.setattr(shortcuts.shutil, "which", lambda _: None)
+    assert shortcuts.launcher_executable() == executable
