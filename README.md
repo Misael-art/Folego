@@ -194,8 +194,8 @@ diretos dos domínios continuam disponíveis e usam o mesmo coordenador.
 
 ## Temporários do próprio Fôlego
 
-Novos jobs registram identidade de raiz/diretório, boot, PID/starttime e sessão.
-Somente execuções encerradas e sem consumidores/referências comprovados podem
+Os workers de consulta/mutação registram raiz/diretório, boot, PID/starttime e sessão.
+Somente execuções encerradas com ausência de consumidores/referências comprovada podem
 sair dos slots ativos para `.retained`, no mesmo filesystem persistente.
 **O conteúdo é preservado; não há exclusão automática de payloads.**
 
@@ -228,9 +228,13 @@ Há testes de núcleo, CLI, persistência, falhas, processos próprios e Qt offs
 além de evidências de desktop documentadas. Isso não equivale a certificar todos
 os ambientes ou considerar o produto concluído.
 
+Um ensaio contínuo de **duas horas reais** foi aprovado no perfil controlado:
+GUI Wayland com coletor sintético, workers e cancelamentos próprios, arquivo
+restaurado e diário verificado. [Resultados e limites](docs/handoff/validation/session-resilience-2026-10-30/soak/README.md).
+
 Continuam pendentes a política integral de retenção dos temporários administrados,
-a conclusão do fluxo “Dar fôlego”, partes da matriz física de acessibilidade e
-desktop e um ensaio contínuo aprovado de **duas horas**. Não há aceite desse ensaio.
+a conclusão do fluxo “Dar fôlego” e partes da matriz física de acessibilidade e
+desktop. O ensaio controlado não certifica essas condições.
 
 O estado técnico vigente, os comandos verificados e as próximas tarefas ficam em
 [HANDOFF](docs/HANDOFF.md). O [diagnóstico consolidado](docs/DIAGNOSTICO-2026-10-24.md)

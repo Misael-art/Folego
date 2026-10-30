@@ -1,5 +1,9 @@
 # Validação de compositor, instalação GUI e soak
 
+Atualização posterior: [ensaio independente de 30/10 aprovado](../../../handoff/validation/session-resilience-2026-10-30/soak/README.md)
+em perfil controlado de 7200 s. As tentativas históricas abaixo continuam
+arquivadas sem aceite; nenhuma duração foi somada.
+
 **Estado em 24/10/2026: ensaios arquivados; soak de duas horas NÃO aceito.**
 A última tentativa (`soak-private-wayland/report.json`, início em
 18/10/2026 15:08:08 UTC) parou com **2470,47 segundos** registrados, 42 workers

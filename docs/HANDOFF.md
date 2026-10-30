@@ -16,7 +16,7 @@ as pendências históricas equivalentes, sem promover aceites físicos antigos.
   de abrir o gate do comando; conclusão incerta preserva a propriedade, inclusive
   se o launcher morrer. PhaseZero continua opcional.
 - **Temporários próprios:** manifesto ligado à raiz/diretório e processo/sessão;
-  somente encerrados certificados, sem consumidores/referências comprovados,
+  somente encerrados certificados, com ausência de consumidores/referências comprovada,
   podem ir por rename a `.retained`. Payloads não são apagados, legado/ambíguo
   permanece protegido. Cap 256, inventário limitado e orçamento de 1 GiB
   permanecem; esgotamento exige revisão. Não é retenção integral de dados do host.
@@ -39,6 +39,17 @@ passou em 6,07 s. Dois skips por perfil exigem Edge real, ausente nas fixtures.
 Após corrigir o corte do rótulo em foco, repetição Qt: **1263 passed, 2 skipped
 em 42,34 s**. Logs e resumo portátil em
 `handoff/validation/session-resilience-2026-10-30/`.
+
+Após o soak, incluída regressão do ciclo real do QProcess com boot observado:
+somente o teste e a documentação mudaram; produto/harness permaneceram no SHA
+congelado. Suíte Qt final **1264 passed, 2 skipped em 42,15 s**
+(`run-nv7a7fry`), incluindo registro, sessão e certificação do término do filho
+próprio com `/proc` real. O log GUI publicado corresponde a essa última suíte.
+Consulta de retenção na raiz desse filho descartável, com inventário real de
+consumidores/referências: **zero movidos**, pois a propriedade de consumidores
+não pôde ser comprovada neste host. Preservação correta, sem ampliar permissões
+ou ignorar processos; recibo em `retention-real-proc.json`. Isso não homologa
+arquivamento efetivo com todos os consumidores reais presentes.
 
 QA KDE/Wayland própria: 800×600 e 1280×800, navegação por Tab, início ligado,
 desligamento persistido após reabrir, aplicação/restauração real de arquivo
@@ -64,17 +75,38 @@ validada. Política de entrada preexistente preservada, baseline vazio, ciclo
 waiting pelo PhaseZero ativo; nenhum reparo físico provocado. O executor de
 recursos continua desligado. O comando `startup status --json` confere a escolha.
 
-Próximo aceite: ensaio contínuo de 7200 s, fonte congelada, mesmo orçamento
-preexistente, workers/filhos e restauração contabilizados; smoke curto não é
-esse aceite. A matriz física (boot/SDDM, logout/login, suspend/resume, dock,
+**Soak aprovado:** 7200,057 s contínuos, fonte congelada, mesmo orçamento
+preexistente, 120/120 workers, 20/20 cancelamentos, 80 intenções/resultados
+válidos, arquivo restaurado e nenhum filho restante. CPU UI+filhos 1,65% de
+um núcleo, pico de RSS +0,49 MiB, FD +5, widgets +8, heartbeat p99 ≤5 ms e
+máximo 197 ms, leitura 138,20 MiB/h e escrita 33,83 MiB/h, dentro dos limites.
+Não se somaram tentativas. [Relatório, amostras e alcance](handoff/validation/session-resilience-2026-10-30/soak/README.md).
+
+A matriz física (boot/SDDM, logout/login, suspend/resume, dock,
 Steam, leitor de tela e toque) permanece pendente: não suspender/desconectar
 o host de trabalho para produzir prova. Integração de writers interessados
 usa o protocolo opcional; não se altera aplicações de terceiros automaticamente.
+
+Limite do harness de soak: o `/proc` sintético contém montagens mas não boot ID.
+Os manifests de jobs ficam conservadoramente não certificados nesse ambiente;
+o ensaio mede GUI/workers/cancelamentos e não homologa retenção contínua.
+Um teste separado de identidade/término usa filho próprio e `/proc` real.
+Na metade do ensaio havia 24.316 KiB de VmSwap: queda de RSS pode envolver
+paginação e não comprova liberação de heap nem ausência de vazamento.
 
 Demais pendências de produto: concluir “Dar fôlego”, política integral de
 retenção/expiração revisada, limites restantes de coleta/cancelamento e
 compactação autoritativa do diário. A leitura incremental do monitor não é
 compactação nem substitui revalidação na execução. Sem merge/release neste lote.
+
+Checkpoint publicado: `a65b5f7f822ea55c520ad8e6b8598a00df741c5e`, SHA remoto
+conferido na branch padrão `codex/portable-handoff-20261024`. PR #1 atualizado,
+repositório público e MIT confirmados. CI desse SHA: seis jobs de código success
+(push + PR); CodeRabbit/Sourcery skipped. O soak está identificado por
+`run-review-20261029/soak-resilience-7200/launch.json`, com boot/starttime e hashes
+de fonte/política. `tools/watch_soak.py` observou apenas esse processo, sem sinais
+ou retry, e encerrou com análise aprovada. Fonte do produto congelada nesse
+SHA durante todo o ensaio; alterações documentais/testes posteriores não a modificam.
 
 ## Ponto de retomada
 

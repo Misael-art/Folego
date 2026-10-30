@@ -118,3 +118,28 @@ def test_large_confirmation_stays_scrollable_and_defaults_to_cancel(qapp):
     QTimer.singleShot(0, inspect)
     assert confirm_text("Revisão", text) is False
     assert not failures
+
+
+def test_real_child_lifecycle_certifies_only_an_observed_boot(qapp, sandbox, tmp_path, monkeypatch):
+    """The real child/parent handoff must preserve proof, beyond a forged manifest."""
+    import sys
+    from pathlib import Path
+    from folego.safely.jobtemp import _manifest
+    from folego.core.sessions import read_boot_id
+    monkeypatch.setenv("DECKWELLNESS_PROC_ROOT", "/proc")
+    root = tmp_path / "owned-jobs"
+    root.mkdir(mode=0o700)
+    sandbox.update(DECKWELLNESS_PROC_ROOT="/proc", FOLEGO_JOB_ROOT=str(root))
+    source = "import json; print(json.dumps({'ok':True,'outcome':'sucesso'}))"
+    jobs = TuneJobs(env=sandbox, argv_factory=lambda *_: [sys.executable, "-c", source])
+    results = []
+    try:
+        jobs.run("status", "fixture", done=results.append)
+        assert pump(qapp, lambda: bool(results), timeout_ms=10000)
+        assert results[0]["ok"], results
+        manifest = _manifest(next(root.glob("run-*/run.json")))
+        assert manifest["state"] == "complete"
+        assert manifest["child"]["boot_id"] == read_boot_id("/proc")
+        assert manifest["session"] == manifest["child"]["pid"]
+    finally:
+        jobs.shutdown()

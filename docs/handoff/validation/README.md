@@ -1,5 +1,9 @@
 # Validação da migração em 24/10/2026
 
+Validações posteriores de produto: [resiliência e início com a sessão em 30/10](session-resilience-2026-10-30/verification.json),
+com [ensaio controlado de duas horas](session-resilience-2026-10-30/soak/README.md).
+As contagens e os limites históricos desta migração permanecem abaixo.
+
 Cópia limpa do código, prefixo `.dev` inicialmente vazio, HOME privado e PATH
 `/usr/bin:/bin`. O bootstrap baixou uv com SHA-256 fixado e Python 3.14.7
 gerenciado; não usou Python/Qt instalados globalmente. Bibliotecas nativas são

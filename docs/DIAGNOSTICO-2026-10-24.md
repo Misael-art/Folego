@@ -7,7 +7,9 @@ sobre automação desligada continuam válidas para o executor de recursos e
 não substituem esse registro posterior. O início com a sessão passou a ser
 ligado por padrão, com opt-out na aba opções; temporários próprios e revisões
 de operações receberam integração descrita na passagem. Consulte ali o aceite
-vigente do soak; a matriz física permanece sem aceite integral.
+vigente do soak: em 30/10 foi aprovado um perfil controlado de 7200 s, sem
+promover ensaios anteriores nem a matriz física a aceites integrais. A conclusão
+abaixo descreve o marco histórico de migração de 24/10.
 
 ## Conclusão
 

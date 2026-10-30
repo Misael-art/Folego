@@ -12,12 +12,12 @@
     },
     "gui": {
       "status": "passed",
-      "summary": "1263 passed, 2 skipped in 42.34s",
-      "sha256": "5950665bb867f7c73824f3c0c76fd56ad477f4da06582985cc8327cca4c2b76b"
+      "summary": "1264 passed, 2 skipped in 42.15s",
+      "sha256": "12b88117a5613ab2553188968f3b3d20f114f5b4c77cd8fc2c73139c20aecab2"
     }
   },
   "physical_transitions_approved": false,
-  "soak_approved": false,
+  "soak_approved": true,
   "native": {
     "platform": "wayland",
     "exposed": true,
@@ -56,6 +56,55 @@
     "monitor_active": true,
     "repair_policy_preserved": true,
     "input_state": "waiting-existing-provider",
-    "baseline_count": 0
+    "baseline_count": 0,
+    "waiting_alert_observed": true,
+    "desktop_entry_validated": true,
+    "service_restart_failures": 0,
+    "input_repair_intents": 0
+  },
+  "product_sha": "a65b5f7f822ea55c520ad8e6b8598a00df741c5e",
+  "smoke": {
+    "status": "complete",
+    "elapsed_s": 45.009725248000905,
+    "source_unchanged": true,
+    "job_counters": {
+      "worker_started": 6,
+      "worker_completed": 6,
+      "cancel_started": 1,
+      "cancel_completed": 1
+    },
+    "failures": []
+  },
+  "ci": {
+    "sha": "a65b5f7f822ea55c520ad8e6b8598a00df741c5e",
+    "push_and_pr_success_jobs": 6,
+    "reviews_skipped": [
+      "CodeRabbit",
+      "Sourcery"
+    ],
+    "runs": [
+      "https://github.com/Misael-art/Folego/actions/runs/40999625427",
+      "https://github.com/Misael-art/Folego/actions/runs/40999631726"
+    ]
+  },
+  "soak_scope_limit": "synthetic /proc without boot ID; temporary lifecycle remains conservatively unverified in soak; separate real /proc check required",
+  "real_proc_child_lifecycle": {
+    "test": "test_real_child_lifecycle_certifies_only_an_observed_boot",
+    "status": "passed",
+    "scope": "real own QProcess, boot/PID/starttime/session and completion manifest; disposable root"
+  },
+  "soak": {
+    "status": "passed",
+    "product_sha": "a65b5f7f822ea55c520ad8e6b8598a00df741c5e",
+    "analysis": "soak/analysis.json",
+    "elapsed_s": 7200.056755731999,
+    "physical_transitions_approved": false,
+    "continuous_temporary_retention_approved": false
+  },
+  "real_proc_retention": {
+    "archived": 0,
+    "reason": "consumer ownership unknown; owned fixture preserved",
+    "effective_archive_approved": false,
+    "receipt": "retention-real-proc.json"
   }
 }

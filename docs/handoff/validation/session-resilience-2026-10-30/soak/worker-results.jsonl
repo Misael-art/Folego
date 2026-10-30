@@ -1,0 +1,140 @@
+{"kind": "tuning", "elapsed_s": 1.5312965839984827, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 60.54331407900099, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "48ae71971503459bb58129d3bb674101", "reason": null}
+{"kind": "tuning", "elapsed_s": 120.53192595099972, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "30926731ac3746f2a4df03a0a03af1cb", "reason": null}
+{"kind": "tuning", "elapsed_s": 180.58297699399918, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 240.53401421499802, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "147147f9553a4c64aab0f715e193c778", "reason": null}
+{"kind": "cancellation", "elapsed_s": 300.31767138899886, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 300.59418641199954, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "a268a444339244668582cffe9bcff599", "reason": null}
+{"kind": "tuning", "elapsed_s": 360.5578008949997, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 420.6776516360005, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "696c5f073f024406bdfb83e07b13eeee", "reason": null}
+{"kind": "tuning", "elapsed_s": 480.536703709, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "d848d888e5dd426ea0ebcdc940ed27b9", "reason": null}
+{"kind": "tuning", "elapsed_s": 540.6716346540015, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 600.5273184139987, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "a5055deb440f4f8eb7eee08f99289f6d", "reason": null}
+{"kind": "cancellation", "elapsed_s": 660.3132751250014, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 660.537137659001, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "a17212dd270d4c39a639059cd652637a", "reason": null}
+{"kind": "tuning", "elapsed_s": 720.5596968099999, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 780.583059583998, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "ec4ad811000f4e8d86f6a75a43952c93", "reason": null}
+{"kind": "tuning", "elapsed_s": 840.6680145710015, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "539648ad77c942bc8f7251585745bf58", "reason": null}
+{"kind": "tuning", "elapsed_s": 900.5459525670012, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 960.6013481720001, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "ca4c2a460eba4958829c22d4a8fc6caa", "reason": null}
+{"kind": "cancellation", "elapsed_s": 1020.3149902580008, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 1020.5487617779982, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "ae2e542cde7d46f1bb8714e5af9ac518", "reason": null}
+{"kind": "tuning", "elapsed_s": 1080.665216194, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 1140.7372596060013, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "adf459baf9084248b202bd7ae9dc62bd", "reason": null}
+{"kind": "tuning", "elapsed_s": 1200.8551019250008, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "ed7c1b8b615d4b848c48aa571613d41d", "reason": null}
+{"kind": "tuning", "elapsed_s": 1260.6312654329995, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 1321.3284537459986, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "f2e227657f3c4193b8d4ceabf5e85846", "reason": null}
+{"kind": "cancellation", "elapsed_s": 1380.3343686689986, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 1380.5593427669992, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "efe31224b5a141c5beb756293e6b4986", "reason": null}
+{"kind": "tuning", "elapsed_s": 1440.508862748, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 1500.5593564090013, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "d7e3705aae634921a194d7444881d9af", "reason": null}
+{"kind": "tuning", "elapsed_s": 1560.5936575619999, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "12b132c7cc3f489dac10f838fb2e309e", "reason": null}
+{"kind": "tuning", "elapsed_s": 1620.600146255998, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 1680.5322819799985, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "7b2938f92a8a41be9d63e4f43c6c7505", "reason": null}
+{"kind": "cancellation", "elapsed_s": 1740.330169476998, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 1740.5804578829993, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "4d784a82cc764d9e97f0c825df6cd095", "reason": null}
+{"kind": "tuning", "elapsed_s": 1800.5879761840006, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 1860.6068495369982, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "9ec494f46ab64be6b0011456f6be692c", "reason": null}
+{"kind": "tuning", "elapsed_s": 1920.666474583999, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "fd9fd8f66a1a4083b74182dd8031400c", "reason": null}
+{"kind": "tuning", "elapsed_s": 1980.6239388239992, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 2040.8054007930004, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "793068077bd9474e90d82c5b43776247", "reason": null}
+{"kind": "cancellation", "elapsed_s": 2100.341171485001, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 2100.707074201, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "de57ff58f14c4a5d9e543a90be5095c9", "reason": null}
+{"kind": "tuning", "elapsed_s": 2160.6886275409997, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 2220.6989699219994, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "accb73134fb8476fb4294628862ff17b", "reason": null}
+{"kind": "tuning", "elapsed_s": 2280.608622082, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "d32af295660b44afaa1f0a638c39ec41", "reason": null}
+{"kind": "tuning", "elapsed_s": 2340.6088050239996, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 2400.71772755, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "a8846efcc89845308a20a1be328ef0a1", "reason": null}
+{"kind": "cancellation", "elapsed_s": 2460.3381429309993, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 2460.7183093040003, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "db34f9a7670c425ea9f07f546e5c29cb", "reason": null}
+{"kind": "tuning", "elapsed_s": 2520.753249115998, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 2580.774901855999, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "0b0bebc26a7340c2a84ba6a3d76a23a7", "reason": null}
+{"kind": "tuning", "elapsed_s": 2640.6663092889976, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "e84a4657d8164ba78f043a9452512d0f", "reason": null}
+{"kind": "tuning", "elapsed_s": 2700.6114690810027, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 2760.6607442689965, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "e80c515fe3e349fcbac7ddc692d5e108", "reason": null}
+{"kind": "cancellation", "elapsed_s": 2820.351991475003, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 2820.653469642999, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "ba20e5e288be4ababebccc3d17ecbbff", "reason": null}
+{"kind": "tuning", "elapsed_s": 2880.6879437569987, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 2940.801535499999, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "2ae1a9c4bfbc4bc6bc6362b0e3182a88", "reason": null}
+{"kind": "tuning", "elapsed_s": 3000.6762325769996, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "9830ef26831b40f69835d6be653497e2", "reason": null}
+{"kind": "tuning", "elapsed_s": 3060.668257399997, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 3120.6939205199997, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "6d88b93153184ea09adfe19dd89f4255", "reason": null}
+{"kind": "cancellation", "elapsed_s": 3180.331185525003, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 3180.6602188849974, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "574c60e81dfc4b9ea5246833c827e8e3", "reason": null}
+{"kind": "tuning", "elapsed_s": 3240.9666876469964, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 3300.5973415989974, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "47d2afe735264be28f892975f4ebe8d7", "reason": null}
+{"kind": "tuning", "elapsed_s": 3360.634124084001, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "4f15a51bfe664a9d9f2807dba4d1f765", "reason": null}
+{"kind": "tuning", "elapsed_s": 3420.611552043996, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 3480.5750071440016, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "375420c0a33e451981beba9f4005df8d", "reason": null}
+{"kind": "cancellation", "elapsed_s": 3540.3200418590022, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 3540.643854058002, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "31a89bdee56b43a4bebe958d16b9f5ef", "reason": null}
+{"kind": "tuning", "elapsed_s": 3600.587469041002, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 3660.6759230220014, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "812e536f04bf44219d04a373280b5d9e", "reason": null}
+{"kind": "tuning", "elapsed_s": 3720.8586960130015, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "7295463382004bfc9aa39c9451a3772a", "reason": null}
+{"kind": "tuning", "elapsed_s": 3780.6703210410014, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 3840.5787136300023, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "11afef2e23c5428a874ee4037a1da063", "reason": null}
+{"kind": "cancellation", "elapsed_s": 3900.3406562479977, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 3900.705728140998, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "91bf6c6a1daf4110b95ffc273628ad2f", "reason": null}
+{"kind": "tuning", "elapsed_s": 3960.673134918001, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 4020.666365084002, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "80b9efd8192f46cb8bb987b33a518f8a", "reason": null}
+{"kind": "tuning", "elapsed_s": 4080.656370132001, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "aaa0a2d915ef41ff8d95534865482716", "reason": null}
+{"kind": "tuning", "elapsed_s": 4140.634282504001, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 4200.615699651997, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "49d7e49525d34ae2b04f954990667571", "reason": null}
+{"kind": "cancellation", "elapsed_s": 4260.316418958002, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 4260.637047275002, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "888124eb73044c15bbf0a12bc8aafaaa", "reason": null}
+{"kind": "tuning", "elapsed_s": 4320.7627946309985, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 4380.643802843002, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "9c3f9e657b1746a38b59760fe4d3bcd1", "reason": null}
+{"kind": "tuning", "elapsed_s": 4440.617311733, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "1d49f56f39b8423fa04e97461b160944", "reason": null}
+{"kind": "tuning", "elapsed_s": 4501.033843280002, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 4560.669913918999, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "20fec67b123f433ea7945b1096c7c791", "reason": null}
+{"kind": "cancellation", "elapsed_s": 4620.316328063, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 4620.621497982003, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "6d6598d101c241e8b08e58b5b90411f4", "reason": null}
+{"kind": "tuning", "elapsed_s": 4680.642589756997, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 4740.642267081999, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "4764aaba4a774d93914011e82e017d70", "reason": null}
+{"kind": "tuning", "elapsed_s": 4800.618500900997, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "c90a3475a62146dd905be715f861cec6", "reason": null}
+{"kind": "tuning", "elapsed_s": 4860.577793786997, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 4920.675363767998, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "de6c0b2c45694b289a9827ffd8f1b8d0", "reason": null}
+{"kind": "cancellation", "elapsed_s": 4980.311655652, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 4980.622229463999, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "a6aa98974366433a97aa11bee34b8ac9", "reason": null}
+{"kind": "tuning", "elapsed_s": 5040.566166084001, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 5100.599755553001, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "a1a04db623c3415caf171e802a7b82a4", "reason": null}
+{"kind": "tuning", "elapsed_s": 5160.756183185, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "bf3c3acf74554afb8fa954a0c9a2b5df", "reason": null}
+{"kind": "tuning", "elapsed_s": 5220.599825987996, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 5280.680416797997, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "f586813bdfeb45f9b9a8806231d44327", "reason": null}
+{"kind": "cancellation", "elapsed_s": 5340.317526572999, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 5340.657593599997, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "adb8c739f5ab4762880e649e7336eb26", "reason": null}
+{"kind": "tuning", "elapsed_s": 5400.657116156999, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 5460.677500207003, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "1d3d9dc0fedd46ad9c3350d6c344fead", "reason": null}
+{"kind": "tuning", "elapsed_s": 5520.681886620001, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "83b971ed0ee6464ba669359e34da5161", "reason": null}
+{"kind": "tuning", "elapsed_s": 5580.590423924998, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 5640.673987149999, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "a2c314eee8454e1a9db099001daaf9bf", "reason": null}
+{"kind": "cancellation", "elapsed_s": 5700.313836981997, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 5700.588732091997, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "e4829c2c094144ac8a15bf4f49cd3c7e", "reason": null}
+{"kind": "tuning", "elapsed_s": 5760.560371916003, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 5820.670111206997, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "25bacabce8a64fb290c0306a54047179", "reason": null}
+{"kind": "tuning", "elapsed_s": 5880.579498278003, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "cc41c14ccdba4cf6b9390c8c2e12be8c", "reason": null}
+{"kind": "tuning", "elapsed_s": 5940.538787342, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 6000.661776885001, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "612c3a0c8be445e096a9efa34a9e1286", "reason": null}
+{"kind": "cancellation", "elapsed_s": 6060.316129470997, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 6060.573600448002, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "adae5b9116524cb799693d9007b24251", "reason": null}
+{"kind": "tuning", "elapsed_s": 6120.897401307, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 6180.662382658, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "d845680469034229a1d9236e5e70ba0c", "reason": null}
+{"kind": "tuning", "elapsed_s": 6240.597268153997, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "0db7c4c18fbe4fbea377666b59c5ca97", "reason": null}
+{"kind": "tuning", "elapsed_s": 6300.544751635996, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 6360.577070941003, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "d4fbacc18ecb4d988291434a7b611f49", "reason": null}
+{"kind": "cancellation", "elapsed_s": 6420.315842002001, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 6420.707713120002, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "5d56560c0c604d1880d638450441c09a", "reason": null}
+{"kind": "tuning", "elapsed_s": 6480.536836440999, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 6540.599315718999, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "6af1196cfab3407396fb8593d47fe838", "reason": null}
+{"kind": "tuning", "elapsed_s": 6600.684463273003, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "455a97d2fd894c1788b1019c2f800825", "reason": null}
+{"kind": "tuning", "elapsed_s": 6660.6412236979995, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 6720.617917414998, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "ad33e4a432c9406cb3fcfa68dae81115", "reason": null}
+{"kind": "cancellation", "elapsed_s": 6780.313998551999, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 6780.5911862600005, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "3d488bfdfcfa4da1ad0429a63a3b85dd", "reason": null}
+{"kind": "tuning", "elapsed_s": 6840.5401366199985, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 6900.721176616, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "802992a5cde34259a9959956690ad7b7", "reason": null}
+{"kind": "tuning", "elapsed_s": 6960.636777524003, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "9f26263624d64c22a0ba413fd29311ba", "reason": null}
+{"kind": "tuning", "elapsed_s": 7020.549082328998, "acao": "detect", "ok": true, "outcome": null, "operation_id": null, "reason": null}
+{"kind": "tuning", "elapsed_s": 7080.608412297999, "acao": "apply", "ok": true, "outcome": "sucesso", "operation_id": "d175ef02658449f79532a1b05584695d", "reason": null}
+{"kind": "cancellation", "elapsed_s": 7140.312831924999, "acao": "apply", "ok": false, "outcome": "desconhecido", "operation_id": null, "reason": "a janela fechou antes da resposta do filho"}
+{"kind": "tuning", "elapsed_s": 7140.668820456001, "acao": "revert", "ok": true, "outcome": "sucesso", "operation_id": "292a36a77f2b485a9b88fb89ef0d1428", "reason": null}
