@@ -35,7 +35,8 @@ def main() -> int:
         # Wayland app id = desktop file name: the launcher and the KWin widget rule match "folego"
         app.setDesktopFileName("folego")
         apply_theme(app)
-        win = MainWindow(collector_factory=MetricsCollector)
+        from .actions.accessibility import Supervisor
+        win = MainWindow(collector_factory=MetricsCollector, accessibility_factory=Supervisor)
         win.show()
         win.start()
         return app.exec()

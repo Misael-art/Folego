@@ -1,5 +1,12 @@
 # Diagnóstico consolidado e estado da migração
 
+Atualização posterior (29/10): a supervisão restrita de entrada tem autorização,
+implementação e ativação próprias, descritas no [HANDOFF](HANDOFF.md) e no
+[guia de acessibilidade](ACESSIBILIDADE.md). As afirmações históricas abaixo
+sobre automação desligada continuam válidas para o executor de recursos e
+não substituem esse registro posterior. O soak e a matriz física permanecem
+sem aceite.
+
 ## Conclusão
 
 O desenvolvimento avançou e tem regressões/instalação/desktop com evidências,

@@ -1,4 +1,4 @@
-"""Main window: five tabs, one title-bar signal, and the polling that feeds them.
+"""Main window: six tabs, one title-bar signal, and the polling that feeds them.
 
 The window owns the poller, the orphan tracker and the three child-process layers
 (tunings, the disk plan and the tmpfs plan); every tab receives plain data and
@@ -26,6 +26,7 @@ from .tmpfs_tab import TmpfsTab, argv_for
 from .tray import Tray
 from .tune_jobs import TuneJobs
 from .tunings_tab import TuningsTab
+from .accessibility_tab import AccessibilityTab
 from ..core import health
 from ..core.exclusions import ExclusionError, ExclusionList
 from ..core.orphans import OrphanTracker, active_investigation, group_targets
@@ -37,9 +38,9 @@ from ..orchestration.history import HistoryReader
 
 # tab title -> the attribute the dashboard's "Ir para …" jumps to
 TABS = (("central", "dashboard"), ("ajustes", "tunings"),
-        ("órfãos", "orphans"), ("disco", "disk"), ("temporários", "tmpfs"))
+        ("órfãos", "orphans"), ("disco", "disk"), ("temporários", "tmpfs"), ("acessibilidade", "accessibility"))
 JUMPS = {"memoria": "dashboard", "ajustes": "tunings", "orfaos": "orphans",
-         "disco": "disk", "tmpfs": "tmpfs"}
+         "disco": "disk", "tmpfs": "tmpfs", "accessibility": "accessibility"}
 DISK_TIMEOUT_MS = 120_000  # the real cache walk took 54,7 s on this Deck (M3 log)
 RUNTIME_SIZE_TIMEOUT_MS = 180_000  # inclui a digitação da senha no diálogo do polkit
 TMPFS_TIMEOUT_MS = 45_000  # três volumes × o prazo de varredura de 10 s, com folga
@@ -74,7 +75,8 @@ class MainWindow(QMainWindow):
                  confirm_fn=None, jobs=None, disk_jobs=None, tmpfs_jobs=None,
                  sessions: SessionRegistry | None = None,
                  exclusions: ExclusionList | None = None, journal=None,
-                 config_store=None, grant_store=None, compact_factory=None, process_jobs=None):
+                 config_store=None, grant_store=None, compact_factory=None, process_jobs=None,
+                 accessibility_factory=None):
         super().__init__()
         self._thresholds = thresholds or title_signal.Thresholds()
         self._journal = journal or Journal()
@@ -135,6 +137,10 @@ class MainWindow(QMainWindow):
         # a autenticação do polkit pode levar minutos; não herda o prazo de varredura
         self._runtime_jobs = TuneJobs(parent=self, argv_factory=argv_for, timeout_ms=RUNTIME_SIZE_TIMEOUT_MS)
         self.tmpfs = TmpfsTab(jobs=self._tmpfs_jobs, confirm_fn=confirm_fn, runtime_jobs=self._runtime_jobs)
+        self._accessibility_factory = accessibility_factory
+        self.accessibility = AccessibilityTab(inspect_fn=accessibility_factory().inspect if accessibility_factory else None,
+                                               confirm_fn=confirm_fn)
+        self.accessibility.report_ready.connect(self._show_accessibility)
 
         self.tabs = QTabWidget()
         self.tabs.setTabBar(SidebarTabBar())
@@ -160,6 +166,8 @@ class MainWindow(QMainWindow):
 
     def start(self):
         self._request_history()
+        if self._accessibility_factory:
+            self.accessibility.start()
         if self._collector_factory is None or self._poller is not None:
             return
         if not self.tray.install():
@@ -175,6 +183,13 @@ class MainWindow(QMainWindow):
         self._poller.snapshot_ready.connect(self.apply_snapshot)
         self._poller.error.connect(self.show_error)
         self._poller.start()
+
+    def _show_accessibility(self, report):
+        words = {"observed": "configuração observada", "degraded": "revisão necessária",
+                 "waiting": "aguardando responsável", "unknown": "desconhecida"}
+        detail = "; ".join(report.get("blockers", []))
+        self.dashboard.input_status.setText("Entrada: " + words.get(report.get("state"), "desconhecida")
+                                           + (" · " + detail if detail else " · funcionamento físico não testado"))
 
     def _show_automation_state(self) -> None:
         """Read-only F6 state; no control here can create or widen a grant."""
@@ -564,6 +579,7 @@ class MainWindow(QMainWindow):
             self._disk_jobs.shutdown()
             self._tmpfs_jobs.shutdown()
             self._process_jobs.shutdown()
+            self.accessibility.stop()
             super().closeEvent(event)
             return
         # a live icon means the signal is resident: hide the window, keep watching

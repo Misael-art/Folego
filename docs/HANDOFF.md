@@ -383,3 +383,96 @@ oficial de status, sem gravação de configurações, coleta de teclas, restart,
 sinal ou reparo no host. Alteração apenas documental: revisar diff/referências;
 não há nova contagem de testes de produto. Próximo passo concreto: incremento
 1 e contrato comum do incremento 2, preservando os executores oficiais.
+
+## Implementação: supervisão de entrada independente — 2026-10-29
+
+O usuário aprovou avançar e corrigiu a premissa conjuntural: **PhaseZero pode
+não existir no host**. A avaliação acima é histórica; esperar esse projeto
+não é pré-requisito de implementação ou operação. Owner: Fôlego para observação,
+política e reabilitação restrita de entrada no KWin; os responsáveis externos
+continuam donos de seus perfis, drivers e recuperações específicas.
+
+### Incremento integrado
+
+- Nova CLI `accessibility` e sexta aba, cartões com ícone/texto para oito
+  capacidades e estado espelhado na central. Coleta por worker, comandos por
+  QProcess e dados antigos/incompletos sem aprovação implícita. A central ganhou
+  rolagem após a QA Wayland reproduzir altura excessiva com fontes/mensagens
+  reais; navegação e controles continuam acessíveis em 800×600.
+- Backend nativo Linux/KWin, sem Qt em core/actions/CLI e sem executar caminhos
+  do registro de terceiros. Outros desktops e dependências ausentes preservam
+  observações possíveis e informam o reparo não suportado. Identidade inclui
+  boot, dono único D-Bus/UID, event e chave física; duplicidade protege.
+- Único efeito: `enabled=true` de entrada identificada, seguido de leitura.
+  Política própria captura somente estados habilitados, preserva desconectados
+  e incorpora hotplug saudável. Não altera drivers, Steam, atalhos, perfis,
+  áudio, USB, login do sistema, containers ou processos de trabalho.
+- Coordenador/diário existentes, intenção durável, ID estável, reconciliação
+  sem reaplicar, cooldown 60 s, até três tentativas/h e disjuntor persistente.
+  Resultado incerto continua pendente; rearmar exige revisão explícita e
+  configuração habilitada comprovada, sem operações pendentes.
+- Leases genéricos para aplicações cooperantes, com boot/PID/starttime, filhos,
+  slots estáveis e trava comum. Filho vivo/desconhecido e reparador morto
+  preservam propriedade/incerteza. Schemas desconhecidos não liberam recursos.
+  Docker/Podman presentes são consultados com campos restritos de dispositivos;
+  exposição/consulta desconhecida bloqueia. Integrações legadas ativas ou
+  desconhecidas aguardam sem serem interrompidas.
+- Unit de usuário `folego-accessibility.service`, independente da janela,
+  vinculada à sessão gráfica e opcional em instalações novas. A autorização
+  específica de monitoramento/ativação foi registrada no AGENTS; não habilita
+  o executor genérico de recursos nem arquivamento de fixtures.
+
+Operação, matriz por host, pausa, desinstalação e protocolo estão em
+[ACESSIBILIDADE.md](ACESSIBILIDADE.md). O README público distingue claramente
+a política de entrada do executor automático de recursos ainda desligado.
+
+### Evidências e limites
+
+- Gate final `./dev check`, Python 3.14.7 gerenciado, HOME/XDG privados,
+  suítes sequenciais: **994 passed, 2 skipped em 17,69 s** sem Qt e
+  **1236 passed, 2 skipped em 28,37 s** com Qt offscreen; diff check aprovado.
+  Logs/run.json: `run-a1i86z0r` e `run-pooobcvm`. Os dois skips em cada perfil
+  exigem Edge real ausente. Regressão final de consultas: 42 testes headless
+  focados aprovados em 1,30 s antes desse gate completo.
+- Primeira ampliação focada: 79 passed/3 failed. Corrigidos o seam do teste
+  da consulta do diário e o piso da janela, sem afrouxar o aceite. A repetição
+  passou com 82 testes. A QA nativa posterior encontrou 800×652 com mensagens
+  reais: as duas tentativas falhas foram preservadas; rolagem corrigiu a causa.
+- QA KDE/Wayland real em HOME próprio: janela exposta em 800×600 e 1280×800,
+  navegação da central à aba, foco por Tab, cancelamento sem despacho e
+  operação desconhecida impedindo retry. Consulta nativa do host somente
+  leitura: KWin, entradas habilitadas e PhaseZero ativo. Launcher oficial
+  `./dev gui` sobreviveu cinco segundos em HOME próprio; só seu processo
+  foi encerrado. Capturas são do cliente em compositor real, não certificam
+  arraste, toque físico ou leitor de tela.
+- A regressão de prazo/saída usa exclusivamente consultas e descendentes
+  descartáveis. Inclui líder encerrado com filho mantendo pipes: o grupo
+  próprio é encerrado antes de reaproveitar/recolher sua identidade.
+- Fontes, unidades, diário, orçamento, perda de resposta, PID reutilizado,
+  boot anterior, filhos vivos/desconhecidos, containers, host sem PhaseZero,
+  backend ausente e hotplug têm testes. Nenhuma entrada física foi desabilitada
+  como fixture; nenhuma unit de terceiro foi reiniciada.
+
+Evidência local privada em `.scratch/dev-tests/run-review-20261029/`:
+`accessibility-native-3/{report.json,launcher-report.json,activation.json}` e
+capturas; tentativas 1/2 e logs/run.json anteriores permanecem identificados.
+Só gerados próprios concluídos e revisados foram removidos após preservar logs,
+para respeitar o teto de vinte workspaces; guardas não foram ampliadas.
+
+### Ativação autorizada neste host
+
+Executados `./dev run accessibility enable --confirmar --json` e
+`./dev run accessibility install --confirmar --json`. A unit do Fôlego foi
+verificada `enabled`, `active/running`, status 0, com heartbeat recente e zero
+reinícios observados. Política habilitada, baseline vazio e nenhuma operação
+pendente: ciclo **waiting**, aguardando o PhaseZero ativo. Isso confirma a espera,
+não comprova reparo físico ou transição após reboot. Não foram parados os
+guardiões existentes, e o executor automático de recursos continua desligado.
+
+A exclusividade só existe entre participantes do protocolo. Aplicações
+não cooperantes podem intervir após a leitura; inventário não cobre todos os
+descritores, capturas exclusivas ou daemons remotos. Não declarar garantia
+universal de acessibilidade. FTS ausente, boot/SDDM, login/logout, suspensão,
+dock, atalhos Steam, leitor de tela e soak contínuo de duas horas continuam
+pendentes. Próximo passo: integrar writers interessados ao protocolo e validar
+essas transições no alvo físico, sem desligar entradas de trabalho para testes.

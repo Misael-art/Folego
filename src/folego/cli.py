@@ -235,6 +235,28 @@ def build_parser() -> argparse.ArgumentParser:
         description="Bem-estar do Steam Deck: diagnóstico e higiene com confirmação.")
     commands = parser.add_subparsers(dest="command")
 
+    access = commands.add_parser("accessibility", help="supervisão de entrada independente de projetos externos")
+    access_sub = access.add_subparsers(dest="sub", required=True)
+    for name in ("status", "plan", "enable", "disable", "capture", "rearm", "install", "repair", "reconcile", "watch", "lease", "lease-reconcile"):
+        command = access_sub.add_parser(name)
+        command.add_argument("--json", action="store_true")
+        if name in ("enable", "disable", "capture", "rearm", "install", "repair", "lease", "lease-reconcile"):
+            command.add_argument("--confirmar", action="store_true")
+        if name == "repair":
+            command.add_argument("--plan", required=True, help="plano imutável devolvido por plan --json")
+        if name == "reconcile":
+            command.add_argument("operation_id")
+        if name == "lease-reconcile":
+            command.add_argument("lease_id")
+        if name == "watch":
+            command.add_argument("--interval", type=float, default=10)
+            command.add_argument("--cycles", type=int)
+        if name == "lease":
+            command.add_argument("--provider", required=True)
+            command.add_argument("--pid", type=int, required=True)
+            command.add_argument("--state", choices=("using", "repairing", "released"), required=True)
+            command.add_argument("--child-pid", type=int, action="append", default=[])
+
     disk = commands.add_parser("disk", help="higiene de disco (dry-run primeiro)")
     disk_sub = disk.add_subparsers(dest="sub", required=True)
 
@@ -2183,10 +2205,64 @@ def _cmd_shortcuts(args) -> int:
     return EXIT_REFUSED if any(s.status == "failed" for s in states) else EXIT_OK
 
 
+def _cmd_accessibility(args):
+    from .actions.accessibility import Supervisor, publish_lease, reconcile_lease
+    from .orchestration.models import ActionPlan
+    from .orchestration.coordinator import CoordinatorBusy
+    supervisor = Supervisor()
+    try:
+        if args.sub in ("status", "plan"):
+            report = supervisor.inspect()
+            if args.json:
+                print(json.dumps(report, ensure_ascii=False))
+            else:
+                print(f"Entrada: {report['backend']} · automação {'habilitada' if report['policy']['enabled'] else 'desabilitada'}")
+                for card in report["cards"]:
+                    print(f"{card['label']}: {card['state']} · {card['detail']}")
+                for reason in report["blockers"]:
+                    print("aguardando: " + reason)
+            return EXIT_OK if not report["errors"] else EXIT_REFUSED
+        if args.sub == "watch":
+            from .actions.accessibility_service import watch
+            if not 5 <= args.interval <= 120 or (args.cycles is not None and not 1 <= args.cycles <= 10000):
+                raise ValueError("intervalo 5–120 s; cycles precisa ser positivo e limitado")
+            result = watch(supervisor=supervisor, interval=args.interval, cycles=args.cycles)
+        elif args.sub == "reconcile":
+            result = supervisor.reconcile(args.operation_id)
+        elif args.sub == "repair":
+            result = supervisor.repair(ActionPlan.from_dict(json.loads(args.plan)), confirm=args.confirmar)
+        else:
+            if not args.confirmar:
+                return _emit_gate_refusal(args, "accessibility", "operação exige --confirmar", EXIT_NEEDS_CONFIRM)
+            if args.sub == "install":
+                from .actions.accessibility_service import install
+                result = install(confirmed=True)
+            elif args.sub == "lease":
+                result = {"ok": True, "lease": publish_lease(args.provider, args.pid, args.state,
+                                                             child_pids=args.child_pid)}
+            elif args.sub == "lease-reconcile":
+                result = reconcile_lease(args.lease_id, confirmed=True, supervisor=supervisor)
+            else:
+                result = supervisor.configure(enabled=(args.sub == "enable") if args.sub in ("enable", "disable") else None,
+                                              capture=args.sub == "capture", rearm=args.sub == "rearm")
+        if hasattr(result, "outcome"):
+            code = EXIT_BY_OUTCOME[result.outcome]
+            payload = {**result.to_dict(), "ok": result.ok, "exit": code}
+        else:
+            code = EXIT_OK
+            payload = {**result, "outcome": "sucesso", "exit": code}
+        print(json.dumps(payload, ensure_ascii=False))
+        return code
+    except (OSError, ValueError, RuntimeError, CoordinatorBusy) as exc:
+        return _emit_gate_refusal(args, "accessibility", str(exc))
+
+
 def _dispatch(ns, argv) -> int:
     """A escolha do handler, separada do `main` para o protocolo de erro envolvê-la."""
     if ns.command is None:
         return run_gui(argv)
+    if ns.command == "accessibility":
+        return _cmd_accessibility(ns)
     if ns.command == "shortcuts":
         return _cmd_shortcuts(ns)
     if ns.command == "widget-rule":

@@ -38,6 +38,12 @@ Este projeto não depende do HOME, disco, venv, serviços ou skills do host ante
   staging, verificação e recuperação. Preservar origem ou cópia certificada.
 - Preset não amplia grant. Manual/Assistido/Automático são modos distintos.
   Executor automático e arquivamento de fixtures continuam desligados.
+- Exceção autorizada em 29/10: supervisão automática **de entrada**, com política
+  própria e unit `folego-accessibility.service`. Reabilitar somente entradas
+  identificadas previamente habilitadas no KWin, por diário/coordenador,
+  revalidação, orçamento e disjuntor. PhaseZero não é dependência; owners
+  opcionais ativos/desconhecidos protegem o recurso. Não ampliar para drivers,
+  Steam, áudio, boot, limpeza ou sinais. Testes de efeito continuam descartáveis.
 - Testar efeitos só em árvores descartáveis e filhos criados pelo próprio teste.
   Nunca encher runtime real, sinalizar agentes/daemons de trabalho ou recriar
   serviços UUID para produzir evidência.
@@ -56,6 +62,9 @@ Este projeto não depende do HOME, disco, venv, serviços ou skills do host ante
 
 A entrega de migração autorizou commit, push e PR; não autorizou merge,
 publicação de release do produto, autostart ou ações automáticas no host.
+A solicitação posterior de 29/10 autoriza exclusivamente o monitor de entrada
+descrito acima e sua persistência na sessão do usuário; as demais proibições
+permanecem.
 
 ## Coleção Projects: continuidade e organização
 

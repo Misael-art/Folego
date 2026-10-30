@@ -14,7 +14,7 @@ display and reusable by the tray tooltip.
 from PySide6.QtCore import QRectF, Qt, Slot
 from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen
 from PySide6.QtWidgets import (QFrame, QGridLayout, QHBoxLayout, QLabel, QProgressBar,
-                               QPushButton, QVBoxLayout, QWidget)
+                               QPushButton, QScrollArea, QVBoxLayout, QWidget)
 
 from . import title_signal
 from .theme import TOKENS
@@ -211,6 +211,13 @@ class DashboardTab(QWidget):
             "Modo da automação, preset e grants; somente leitura nesta versão")
         self.status = QLabel("")
         self.status.setWordWrap(True)
+        self.input_status = QLabel("Entrada: aguardando verificação de acessibilidade.")
+        self.input_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.input_status.setWordWrap(True)
+        self.input_status.setAccessibleName("Estado da entrada e acessibilidade")
+        self.input_button = QPushButton("Ver entradas")
+        self.input_button.setAccessibleName("Abrir monitor de entrada e reparo de acessibilidade")
+        self.input_button.clicked.connect(lambda: self._jump("accessibility"))
         self.copy_button = QPushButton("Copiar diagnóstico")
         self.copy_button.setAccessibleName(
             "Copiar um diagnóstico legível, sem comandos nem credenciais")
@@ -273,11 +280,16 @@ class DashboardTab(QWidget):
         activity_layout = QVBoxLayout(activity)
         for widget in (self.last_operation, self.automation_status, self.resources, self.details):
             activity_layout.addWidget(widget)
+        input_row = QHBoxLayout()
+        input_row.addWidget(self.input_status, 1)
+        input_row.addWidget(self.input_button)
+        activity_layout.addLayout(input_row)
         footer = QHBoxLayout()
         footer.addWidget(self.status, 1)
         footer.addWidget(self.copy_button, 0)
 
-        layout = QVBoxLayout(self)
+        content = QWidget()
+        layout = QVBoxLayout(content)
         layout.setSpacing(12)
         layout.addWidget(hero)
         layout.addLayout(grid)
@@ -288,6 +300,14 @@ class DashboardTab(QWidget):
         layout.addWidget(activity)
         layout.addStretch(1)
         layout.addLayout(footer)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setAccessibleName("Central de recursos e estado da entrada")
+        scroll.setWidget(content)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(scroll)
 
     def show_snapshot(self, snapshot, *, orphan_count: int = 0,
                       thumbnails_kb: int | None = None,
@@ -461,7 +481,7 @@ class DashboardTab(QWidget):
         """Sanitized copy: verdicts and counts, never commands or credentials."""
         return "\n".join(text for text in (
             self.headline.text(), self.details.text(), self.resources.text(),
-            self.last_operation.text(), self.automation_status.text(),
+            self.last_operation.text(), self.automation_status.text(), self.input_status.text(),
             self.status.text()) if text)
 
     def copy_diagnostic(self):

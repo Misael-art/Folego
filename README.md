@@ -20,9 +20,11 @@ CPU, swap e temporários em uma visão clara e ajuda a investigar o que está
 pressionando a máquina — inclusive quando há agentes de IA, builds e várias
 aplicações trabalhando ao mesmo tempo.
 
-As ações são manuais e passam por confirmação e verificações de proteção.
-**A execução automática permanece desligada.** O projeto está em desenvolvimento;
-os limites de validação estão descritos abaixo.
+As ações de recursos são manuais e passam por confirmação e verificações de
+proteção. **O executor automático de recursos permanece desligado.** A supervisão
+de entrada tem uma política própria, opcional, para reabilitar dispositivos
+identificados no KWin. O projeto está em desenvolvimento; os limites de validação
+estão descritos abaixo.
 
 <div align="center">
 
@@ -43,6 +45,7 @@ os limites de validação estão descritos abaixo.
 | **Ajustes reversíveis** | Revisar ajustes suportados, como opções de segundo plano do navegador, com preservação do estado anterior. |
 | **Widget e bandeja** | Consultar o estado em uma janela compacta e retornar à central. No Plasma/Wayland, a regra opcional do KWin exige confirmação. |
 | **CLI independente de Qt** | Investigar o ambiente e consultar operações diretamente pelo terminal. |
+| **Entrada e acessibilidade** | Observar teclado, ponteiro, trackpads, toque, controles e áudio; solicitar reparo de entrada ou manter um monitor residente opcional, sem depender do PhaseZero. |
 
 ## Começar
 
@@ -89,6 +92,7 @@ Estas consultas não limpam arquivos nem encerram processos:
 ./dev run tmpfs diagnose --json
 ./dev run session list --json
 ./dev run automation status --json
+./dev run accessibility status --json
 ```
 
 Para acompanhar um comando seu como sessão protegida:
@@ -115,6 +119,38 @@ Em uma falha parcial, o resultado informa separadamente o tamanho montado e a
 configuração persistente. A configuração anterior, quando existia, é preservada
 no caminho `previous_config` devolvido pela operação para recuperação explícita.
 
+## Supervisão de entrada
+
+A aba **acessibilidade** mostra o estado de cada capacidade, permite verificar
+novamente e solicitar um reparo. O resumo também aparece na central. As fontes
+são locais: kernel, compositor e, quando disponíveis, serviços de áudio e
+responsáveis externos. PhaseZero e RetroFE são integrações opcionais.
+
+Em **KDE/Wayland**, o reparo suportado reabilita uma entrada identificada no
+KWin. A política automática preserva somente dispositivos antes observados
+habilitados; estado incompleto, outro responsável ou uma operação sem resultado
+bloqueiam a atuação. Em outros desktops, a observação disponível continua,
+com indicação explícita da ausência de backend de reparo.
+
+Para ativar a política e o monitor da sessão do usuário:
+
+```bash
+./dev run accessibility enable --confirmar
+./dev run accessibility install --confirmar
+```
+
+O monitor funciona após fechar a janela e acompanha o login gráfico. Antes de
+desabilitar uma entrada intencionalmente, pause os reparos:
+
+```bash
+./dev run accessibility disable --confirmar
+```
+
+Enumeração não comprova movimento, clique, digitação, toque ou áudio físico.
+Reparos de driver, atalhos Steam, perfis de jogo e entrada antes do login não
+fazem parte desse executor. O [guia de acessibilidade](docs/ACESSIBILIDADE.md)
+explica limites, recuperação, desinstalação e coordenação com outras aplicações.
+
 ## Seu trabalho vem primeiro
 
 - **Intenção antes do efeito.** Mutações coordenadas registram o que será feito e o resultado observado.
@@ -122,7 +158,7 @@ no caminho `previous_config` devolvido pela operação para recuperação explí
 - **Processos têm identidade.** Proteções consideram boot, PID/starttime, sessões, exclusões e ancestrais; SIGKILL é uma ação manual separada.
 - **Dados importantes são protegidos.** Projetos, Git, credenciais, bancos, modelos, volumes e discos virtuais têm restrições próprias.
 - **Recuperação é parte do fluxo.** Cópias de tmpfs exigem destino persistente, espaço, staging e verificação.
-- **Presets não concedem permissão.** Modos Manual, Assistido e Automático são distintos; o executor automático está desligado.
+- **Presets não concedem permissão.** Modos Manual, Assistido e Automático são distintos; o executor automático de recursos está desligado. A política de entrada é separada e precisa de ativação explícita.
 
 ## Estado do projeto
 

@@ -73,6 +73,17 @@ def test_custom_controls_have_accessible_names(window):
     assert window.orphans.protections_label.accessibleName()
 
 
+def test_long_input_owner_diagnostic_does_not_force_taller_window(window, qapp):
+    window._show_accessibility({"state": "waiting", "blockers": [
+        "Outra aplicação ocupa as entradas; aguardando o responsável e seus filhos. " * 8]})
+    window.resize(800, 600)
+    window.show()
+    qapp.processEvents()
+    assert (window.width(), window.height()) == (800, 600)
+    window.dashboard.input_button.click()
+    assert window.tabs.currentWidget() is window.accessibility
+
+
 def test_critical_runtime_and_browser_group_still_fit_800_pixels(window, qapp):
     from folego.core.orphans import GroupMember, GroupTarget
     from folego.core.tmpfs import TmpfsVolume
