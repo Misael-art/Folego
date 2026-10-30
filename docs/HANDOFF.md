@@ -1,5 +1,27 @@
 # Passagem para o próximo agente — atualizada em 30/10/2026
 
+## Teclado virtual sem tela de toque (30/10, tarde)
+
+Causa: FTS ausente ⇒ cliques chegam pelo trackpad; o watcher PhaseZero forçava
+`VirtualKeyboardMode=1` (só toque) a cada 3 s e o modo tablet fica desligado
+porque o controle Deck se declara teclado alfanumérico (`willShowOnActive=false`).
+PhaseZero agora escolhe o modo pelo estado do KWin: **2** (abre ao clicar em campo
+de texto) em desktop sem touchscreen habilitado nem teclado físico (USB/BT; Valve
+`0x28de` e o stub i8042 não contam); **1** com touchscreen, teclado de dock ou
+jogo/emulador ativo (lease/`other_game_active`), para o painel não cobrir o jogo.
+Enumeração ilegível preserva o modo atual. Controle continua com Steam; nenhuma
+entrada é desabilitada ou capturada. Card do Fôlego mostra se o clique abre o
+teclado e fica em revisão quando não abre.
+
+Host: unit `phasezero-input-restore` reiniciada; observado `mode=2`,
+`willShowOnActive=true`, kwinrc=2. `./dev check`: 1038 passed/2 skipped headless,
+1292 passed/2 skipped offscreen; PhaseZero `tests/test_desktop_session.py` 25 passed.
+Pendente: aceite físico do operador (clique em campo → teclado; iniciar jogo →
+sem painel e controle como joystick; dock com teclado → modo 1). Observado também
+`maliit-server` avulso no escopo do app Codex (não iniciado pelo Fôlego/PhaseZero;
+preservado). `.scratch/dev-tests` está no limite de 20 execuções: revisar antes
+do próximo gate.
+
 ## Retomada prioritária: incidente de entrada e autenticação sem dock
 
 Base Fôlego `acbe99ee182d6a8bb00f98d5489fe194c1272672`. Cards agora são botões,

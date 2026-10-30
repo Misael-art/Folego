@@ -175,7 +175,16 @@ class NativeInput:
                 props = self.props(report["service_owner"], "/VirtualKeyboard", "org.kde.kwin.VirtualKeyboard")
                 report["virtual_keyboard"] = {key: props.get(key) for key in ("available", "mode", "active", "visible")}
                 state = "observed" if props.get("available") == "true" else "unavailable"
-                detail = f"modo {props.get('mode', 'desconhecido')}; abertura/digitação não testadas"
+                touch = any("touch" in d["kinds"] and d["enabled"] is True for d in report["devices"])
+                if props.get("mode") == "2":
+                    how = "abre ao clicar em campo de texto"
+                elif touch:
+                    how = "abre automaticamente ao tocar na tela"
+                else:
+                    # Mode 1 needs touchscreen input; trackpad clicks never open it.
+                    state = "degraded" if state == "observed" else state
+                    how = "sem tela de toque: clique não abre; use Abrir teclado"
+                detail = f"modo {props.get('mode', 'desconhecido')}: {how}; digitação não testada"
             except ProbeError:
                 state, detail = "unknown", "consulta do teclado virtual indisponível"
         report["cards"].append({"key": "virtual-keyboard", "label": LABELS["virtual-keyboard"],

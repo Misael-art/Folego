@@ -290,6 +290,17 @@ def test_host_without_phasezero_has_native_capabilities_and_no_phantom_dependenc
     assert next(card for card in value["cards"] if card["key"] == "touch")["state"] == "not-observed"
 
 
+def test_virtual_keyboard_card_says_when_a_click_cannot_open_it(host):
+    native, tools, calls, home = host
+    card = lambda: next(c for c in native.collect()["cards"] if c["key"] == "virtual-keyboard")
+    # No touchscreen and touch-only mode: a trackpad click never opens it.
+    assert card()["state"] == "degraded" and "clique não abre" in card()["detail"]
+    original = native.runner
+    native.runner = lambda argv, **kw: (SimpleNamespace(returncode=0, stdout="available: true\nmode: 2\n")
+                                        if argv[2] == "/VirtualKeyboard" else original(argv, **kw))
+    assert card()["state"] == "observed" and "abre ao clicar" in card()["detail"]
+
+
 def test_other_desktop_headless_and_missing_tools_keep_readonly_observations(host, monkeypatch):
     native, tools, calls, home = host
     tools.clear(); monkeypatch.setenv("XDG_SESSION_TYPE", "x11")
