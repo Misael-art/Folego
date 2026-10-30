@@ -363,9 +363,9 @@ def unresolved(journal):
         raise ValueError("diário inconsistente; nenhuma ação autorizada")
     pending = {}
     for row in records:
-        if row.kind == "intent" and row.plan.action == ACTION:
+        if row.kind == "intent" and row.plan.action.startswith("accessibility."):
             pending[row.operation_id] = True
-        elif row.kind == "result" and row.result.action == ACTION:
+        elif row.kind == "result" and row.result.action.startswith("accessibility."):
             pending[row.operation_id] = row.result.outcome == Outcome.UNKNOWN
     return [key for key, value in pending.items() if value]
 
@@ -375,7 +375,7 @@ class Supervisor:
         self.native, self.store = native or NativeInput(), store or Store()
         self.coordinator, self.now = coordinator or Coordinator(), now
         from ..orchestration.history import PendingReader
-        self._pending_reader = PendingReader(self.coordinator.journal, action=ACTION)
+        self._pending_reader = PendingReader(self.coordinator.journal)
         self._wait_since = None
 
     def inspect(self):
@@ -391,7 +391,9 @@ class Supervisor:
                     raise ValueError("diário ausente após tentativas registradas; efeitos desconhecidos")
             report["policy"] = {key: policy[key] for key in ("enabled", "circuit")}
             report["baseline_count"] = len(policy["baseline"])
-            report["pending_operations"] = self._pending_reader.ids()
+            self._pending_reader.ids()  # A partial/corrupt view never authorizes effects.
+            report["pending_operations"] = [key for key, (action, _) in self._pending_reader.pending.items()
+                                             if action.startswith("accessibility.")]
             if report["pending_operations"]:
                 report["blockers"].append("operação desconhecida; verificar antes de repetir")
             report["plans"] = [plan.to_dict() for plan in plans(report)]
@@ -508,6 +510,10 @@ class Supervisor:
         return self.coordinator.run(plan, execute, wait=.2)
 
     def reconcile(self, operation_id):
+        state = self.coordinator.journal.state_of(operation_id)
+        if state and state.intent and state.intent.action in ("accessibility.activate", "accessibility.save-profile"):
+            from .accessibility_recovery import Recovery
+            return Recovery(self).reconcile(operation_id)
         with self.coordinator.lock(wait=.2):
             state = self.coordinator.journal.state_of(operation_id)
             if state is None or state.intent is None or state.intent.action != ACTION:

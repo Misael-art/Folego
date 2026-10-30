@@ -3,8 +3,10 @@
 O Fôlego observa capacidades do host, apresenta evidências e pode reabilitar
 entradas no KWin. Ele funciona sem PhaseZero, RetroFE, Docker ou Podman.
 Integrações presentes acrescentam evidência ou impedem uma intervenção
-concorrente; não substituem o backend nativo nem executam caminhos registrados
-por terceiros. Não há promessa de disponibilidade física universal.
+concorrente. A observação e o monitor automático não executam caminhos externos.
+Uma solicitação **manual** pode chamar o backend registrado do responsável,
+validando schema, propriedade, permissões e hashes antes do efeito. Não há
+promessa de disponibilidade física universal.
 
 ## Capacidades por ambiente
 
@@ -13,9 +15,10 @@ por terceiros. Não há promessa de disponibilidade física universal.
 | Linux com `/proc/bus/input/devices` legível | Inventário de entradas, identificação de dispositivos e ambiguidade | Nenhum diretamente no kernel |
 | KDE/Wayland com API KWin disponível para o mesmo UID | Estado habilitado e capacidades do compositor | Somente `enabled=true` de uma entrada física identificada e com suporte à propriedade |
 | Outro desktop, X11 ou sessão sem compositor acessível | Inventário disponível; fonte indisponível fica desconhecida | Sem reparo nativo; não há fallback que reinicie o desktop |
-| Steam Deck Jupiter/Galileo observado por DMI | Toque ausente é indisponível; saída de ponteiro do controle é distinguida de gesto físico | Mesma operação restrita do KWin |
-| Teclado virtual KWin | Disponibilidade e modo informado | Sem alterar modo, atalhos ou abrir/digitar automaticamente |
-| PulseAudio/PipeWire via `pactl` | Enumeração de endpoints; fontes monitor excluídas do cartão de microfone | Sem capturar, reproduzir, mudar rota ou mute |
+| Steam Deck Jupiter/Galileo observado por DMI | Toque ausente é indisponível; saída de ponteiro do controle é distinguida de gesto físico | Manual: reparador FTS registrado, apenas no hardware/adapter dedicado reconhecido pelo owner; automático: somente KWin |
+| Teclado virtual KWin | Disponibilidade, modo e visibilidade | Manual: abre explicitamente e verifica visibilidade, restaurando modo por toque; não digita nem registra texto |
+| PulseAudio/PipeWire via `pactl` | Endpoint padrão, mute e ganho; fontes monitor excluídas | Manual: endpoint revisado como padrão, sem mute; volume zero sobe a 25%, ganho existente preservado; sem captura ou reinício |
+| Controles | Enumeração no kernel | Manual: pede modo controle pela URI pública do Steam; fica amarelo enquanto o perfil não for confirmado; não fecha o Steam |
 | Dispositivo removido ou identidade duplicada | Ausente/ambíguo; baseline anterior preservado | Sem inventar dispositivo ou resetar barramento |
 
 “Configuração observada” significa evidência de enumeração/configuração.
@@ -25,10 +28,36 @@ jogo precisam de seus próprios responsáveis e validação física.
 
 ## Usar e pausar
 
-Na aba **acessibilidade**, os cartões combinam ícones e texto, com fontes e
-motivos de espera. **Verificar agora**, **Solicitar reparo** e **Verificar
-operação pendente** usam o mesmo supervisor da CLI. O resumo da central leva
-à aba. I/O de coleta e comandos ficam fora do loop gráfico.
+Na aba **acessibilidade**, cada cartão é um botão, acionável por clique, Tab e
+Espaço. **Habilitar tudo** fica no topo; verificação, registro e opções ficam
+fora da área de rolagem. **Verificar agora** mostra progresso, horário e resumo.
+Verde significa configuração habilitada e verificada nesta sessão, com teste
+físico pendente; amarelo significa conflito/falha ou evidência insuficiente.
+O resultado explica cada capacidade. Um clique sozinho nunca produz verde.
+O campo opcional de digitação não grava seu conteúdo. **Solicitar reparo** aparece
+somente quando há um plano nativo específico. O resumo da central leva à aba.
+I/O de coleta e comandos ficam fora do loop gráfico.
+
+**Registrar configuração para preservar** guarda somente entradas identificadas
+e habilitadas. Um PhaseZero registrado recebe `capture` para preservar suas
+próprias preferências; FTS presente e habilitado pode usar seu `--persist`.
+Essa rotina pode solicitar autenticação, preserva arquivos pessoais e não
+certifica a tela de login. Não amplia grants nem habilita novos executores.
+
+Antes da autenticação de FTS, o campo de teste recebe foco e o owner precisa
+confirmar seu teclado nativo visível. Ele mantém o modo temporário de abertura
+durante a janela de senha, acompanha a troca de foco e restaura o modo anterior
+ao terminar. O watcher do owner cede pela mesma trava, sem disputar o modo.
+Sem painel utilizável, a autenticação não é solicitada. Senha permanece no
+diálogo do sistema e nunca passa pelo Fôlego. Exige as APIs `recover-touch` e
+`persist-touch` do owner atualizado e seu watcher carregado.
+
+O card **Teclado virtual** permanece disponível quando uma operação anterior
+está pendente: abrir o painel explicitamente é uma saída de emergência
+independente do reparo de hardware. Isso não encerra nem repete o ID incerto.
+Enquanto uma rotina está em voo, o próprio owner mantém o teclado durante a
+autenticação. O reparo FTS compartilha o orçamento durável de entrada: 60 s de
+intervalo e no máximo três intervenções por hora; disjuntor bloqueia repetição.
 
 ```bash
 ./dev run accessibility status --json
@@ -80,7 +109,39 @@ Após conferir que é a unit gerenciada pelo Fôlego, ela pode ser removida de
 `$XDG_CONFIG_HOME/systemd/user/` (padrão `~/.config/systemd/user/`), seguida de
 `systemctl --user daemon-reload`. Não remova units de outros projetos.
 
-## Reparo e resultado incerto
+## Solicitação manual por capacidade
+
+O fluxo da GUI prepara um plano fresco e executa exatamente seu ID. Pela CLI:
+
+```bash
+./dev run accessibility activation-plan keyboard --json
+./dev run accessibility activation-plan all --json
+./dev run accessibility activate --plan '{...objeto plan completo...}' --confirmar --json
+./dev run accessibility activation-plan all --save-profile --json
+./dev run accessibility save-profile --plan '{...objeto plan completo...}' --confirmar --json
+./dev run accessibility activation-reconcile ID --json
+```
+
+As chaves são `keyboard`, `pointer`, `touchpad`, `touch`, `gamepad`,
+`virtual-keyboard`, `audio`, `microphone` e `all`. Áudio tem resultado independente
+de conflitos de entrada; resposta perdida interrompe efeitos posteriores e
+bloqueia nova operação. O recibo privado registra etapas/ID, sem teclas ou áudio.
+Reconciliação nunca reaplica rotina sem prova de término.
+
+Quando presente, PhaseZero recebe apenas **`reconcile-input`**, que não restaura
+áudio nem altera Steam ou modo do teclado. Registro antigo sem essa API falha
+explicitamente: atualize o responsável, sem contornar o bloqueio. Lease/jogo
+ativo ou pendente impede a chamada. A espera conservadora do monitor automático
+permanece; a ação manual encaminha o pedido ao responsável conhecido, em vez
+de esperar indefinidamente só porque o observador está aberto.
+
+Se o FTS3528 não aparece no kernel, habilitar uma propriedade KWin não resolve.
+O reparador opcional do owner verifica modelo Jupiter, adapter I²C dedicado,
+outros clientes e processos antes de reanexar o barramento FTS. USB e Valve HID
+ficam fora do alvo. Ausência, incompatibilidade, autenticação recusada ou falha
+continuam amarelas; não existe garantia de recuperar hardware defeituoso.
+
+## Reparo nativo e resultado incerto
 
 O reparo manual precisa de plano atual e confirmação. O JSON de `plan` contém
 `plans`; passe **um objeto dessa lista** ao comando:
@@ -165,7 +226,7 @@ encerrados e a configuração atual habilitada, a reconciliação explícita é:
 ./dev run accessibility lease-reconcile LEASE_ID --confirmar --json
 ```
 
-Integrações legadas são conservadoras: registro PhaseZero inválido/desconhecido
+No **monitor automático**, integrações legadas são conservadoras: registro PhaseZero inválido/desconhecido
 ou guardião registrado ativo bloqueia o reparo; registro válido e inativo permite
 o backend nativo. Recuperações RetroFE pendentes bloqueiam. Essas aplicações
 não são alteradas nem seus serviços interrompidos. No host em que os guardiões

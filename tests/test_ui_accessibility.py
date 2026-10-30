@@ -87,3 +87,65 @@ def test_unknown_protocol_or_wrong_operation_never_clears_pending_id(qapp):
     assert view._pending == "original" and "desconhecido" in view.status.text()
     view.completed({"unexpected": "legacy"})
     assert view._pending == "original"
+
+
+def test_cards_are_buttons_and_primary_action_stays_available_with_observer(qapp):
+    from PySide6.QtWidgets import QPushButton
+    jobs = Jobs()
+    view = AccessibilityTab(jobs=jobs)
+    value = sample(); value.update(plans=[], blockers=["PhaseZero ativo"])
+    view.show_report(value)
+    assert all(isinstance(card, QPushButton) for card in view.cards.values())
+    assert view.enable_all_button.isEnabled()
+    assert not view.native_controls.isVisible(), "No unusable repair selector in the default flow"
+    view.cards["touch"].click()
+    assert jobs.calls[0][0] == "accessibility-activation-plan"
+    assert '"touch"' in jobs.calls[0][1]
+    assert view.cards["touch"].property("recovery") != "ready"
+
+
+def test_click_does_not_turn_green_and_only_matching_verified_result_does(qapp):
+    import json
+    jobs = Jobs()
+    view = AccessibilityTab(jobs=jobs)
+    plan = ActionPlan("accessibility.activate", ResourceIdentity.entry("keyboard"),
+                      {"capabilities":["keyboard"]}).to_dict()
+    view.activate("keyboard")
+    view.activation_planned("keyboard", False, {"plan":plan})
+    assert view.cards["keyboard"].property("recovery") == "busy"
+    view.completed({"operation_id":"wrong", "outcome":"sucesso"})
+    assert view._pending == plan["operation_id"]
+    assert view.cards["keyboard"].property("recovery") == "attention"
+    view.completed({"operation_id":plan["operation_id"], "outcome":"sucesso", "reason":"verificado",
+        "effects":{"boot_id":"boot", "service_owner":":1.2", "capabilities":[{
+            "key":"keyboard", "ready":True, "outcome":"sucesso", "reason":"habilitado"}]}})
+    assert view.cards["keyboard"].property("recovery") == "ready"
+    assert not view._pending
+    view.stop()
+
+
+def test_verify_has_immediate_and_completed_summary_outside_scrolling(qapp):
+    view = AccessibilityTab(jobs=Jobs(), inspect_fn=sample)
+    view.refresh()
+    assert "Verificando" in view.status.text()
+    view.show_report(sample())
+    assert "Verificado às" in view.status.text()
+    assert not view.scroll.isAncestorOf(view.status)
+    assert not view.scroll.isAncestorOf(view.enable_all_button)
+    assert not view.scroll.isAncestorOf(view.capture_button)
+    view.stop()
+
+
+def test_pending_hardware_does_not_disable_keyboard_escape_or_lose_original_id(qapp):
+    view = AccessibilityTab(jobs=Jobs())
+    value=sample(); value["pending_operations"]=["hardware-id"]
+    view.show_report(value)
+    assert not view.cards["touch"].isEnabled()
+    assert view.cards["virtual-keyboard"].isEnabled()
+    view.activate("virtual-keyboard")
+    assert view.keyboard_test.isVisibleTo(view) and view._emergency_previous=="hardware-id"
+    plan=ActionPlan("accessibility.activate",ResourceIdentity.entry("virtual-keyboard"),{}).to_dict()
+    view.activation_planned("virtual-keyboard",False,{"plan":plan})
+    view.completed({"operation_id":plan["operation_id"],"outcome":"parcial","reason":"teclado"})
+    assert view._pending=="hardware-id" and view.cards["virtual-keyboard"].isEnabled()
+    view.stop()

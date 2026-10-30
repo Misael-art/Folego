@@ -76,7 +76,7 @@ def device_cards(devices, *, kernel_known, deck=False):
         detail = ("fonte indisponível" if not kernel_known else
                   f"{len(disabled)} dispositivo(s) desabilitado(s)" if disabled else
                   f"{len(found)} enumerado(s); funcionamento físico não testado" if found else
-                  "não observado; sem autorização para reset de hardware")
+                  "não observado; recuperação manual depende de driver e responsável compatíveis")
         if kind == "touchpad" and deck and not found and kernel_known:
             pointer = [d for d in devices if d.get("deck_controller") and "pointer" in d["kinds"]]
             if pointer:

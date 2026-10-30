@@ -36,3 +36,12 @@ def test_query_missing_id_does_not_create_history(fake_home, capsys):
     assert cli.main(["operation", "missing", "--json"]) == 5
     assert json.loads(capsys.readouterr().out)["state"] is None
     assert not journal.path.exists()
+
+
+def test_accessibility_cli_refuses_plan_from_other_command(fake_home, capsys):
+    plan = ActionPlan("accessibility.activate", ResourceIdentity.entry("all"), {})
+    assert cli.main(["accessibility", "save-profile", "--plan", json.dumps(plan.to_dict()),
+                     "--confirmar", "--json"]) != 0
+    payload = json.loads(capsys.readouterr().out)
+    assert "não corresponde" in payload["reason"]
+    assert not Journal().path.exists()

@@ -1,5 +1,44 @@
 # Passagem para o próximo agente — atualizada em 30/10/2026
 
+## Retomada prioritária: incidente de entrada e autenticação sem dock
+
+Base Fôlego `acbe99ee182d6a8bb00f98d5489fe194c1272672`. Cards agora são botões,
+com habilitação manual por capacidade, resultado vinculado ao ID, verde só por
+configuração verificada e amarelo em conflito/falha. Habilitar tudo, verificação
+com horário/resumo e registro persistente ficam fora da rolagem. CLI/GUI usam o
+coordenador existente, recibo de etapas, revalidação e consulta sem reaplicar.
+
+Integração opcional PhaseZero: `reconcile-input` evita restaurar áudio ao clicar
+em uma entrada; recuperação FTS delegada somente ao helper dedicado. Orçamento
+manual de hardware usa os mesmos 60 s/três por hora. Abertura explícita de teclado
+é permitida como escape durante pendência anterior, sem liberar seu ID. O pedido
+de senha sem teclado relatado pelo operador motivou `recover-touch`/`persist-touch`:
+confirmam teclado visível, mantêm modo temporário na troca de foco e restauram
+após a autenticação; watcher cede pela trava comum. PhaseZero publicado em
+`9ebb6487f036d052ddfa7837bc4200d2bfbfa63a`, PR #129, sem merge/release.
+
+Host: teclado virtual visível confirmado pelo KWin, inclusive com ID de reparo
+incerto; retorno ao modo 1. FTS continua ausente após reset dedicado e novo
+timeout I²C. Tentativa posterior do operador sem dock perdeu autenticação e
+terminou desconhecida (`58176bdf86c94e759e43f661630c5ce8`): preservar ID, não
+repetir hardware nem declarar que nada ocorreu. Campo de teste não grava texto.
+Cinco identidades habilitadas foram salvas; autostart continua true. GUI oficial
+reaberta por saída semântica; monitor próprio e owner atualizados, Steam/RetroFE
+preservados. Digitação no polkit sem dock ainda precisa de aceite do operador.
+
+Gate final `./dev check`: **1037 passed, 2 skipped** headless (29,94 s),
+**1291 passed, 2 skipped** Qt offscreen (50,21 s). PhaseZero focal **22 passed**
+(7,57 s), runtime compatível gerenciado; wrapper core indisponível. Uma tentativa
+intermediária falhou por deadline flutuante de backup; falha preservada, sem
+relaxar limite. QA Wayland própria com efeitos simulados: cards/Tab/Espaço,
+800×600/1280×800, estados e resumo; não homologa toque/login/auth física.
+[Relatório, capturas e alcance](handoff/validation/accessibility-incident-2026-10-30/README.md).
+
+Próximo aceite: operador confirmar teclado e digitação sem dock; investigar FTS
+sem reiniciar a sessão de trabalho para QA, mantendo pendência desconhecida até
+prova de término/revisão apropriada. O soak histórico abaixo não aprova esta nova
+implementação. Limites do executor automático de recursos continuam inalterados.
+
 ## Retomada vigente: resiliência e início com a sessão
 
 Base deste incremento: `26b1567db77648c7a8a0fdbc4c41bd0884cbb2ac`. O usuário

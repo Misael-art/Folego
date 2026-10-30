@@ -263,6 +263,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     access = commands.add_parser("accessibility", help="supervisão de entrada independente de projetos externos")
     access_sub = access.add_subparsers(dest="sub", required=True)
+    from .core.accessibility import LABELS as INPUT_LABELS
+    for name in ("activation-plan", "activate", "save-profile", "activation-reconcile"):
+        command = access_sub.add_parser(name)
+        command.add_argument("--json", action="store_true")
+        command.add_argument("--confirmar", action="store_true")
+        if name == "activation-plan":
+            command.add_argument("capability", choices=(*INPUT_LABELS, "all"))
+            command.add_argument("--save-profile", action="store_true")
+        elif name == "activation-reconcile":
+            command.add_argument("operation_id")
+        else:
+            command.add_argument("--plan", required=True)
     lease_run = access_sub.add_parser("lease-run", help="inicia aplicação cooperante sob propriedade durável de entrada")
     lease_run.add_argument("--provider", required=True)
     lease_run.add_argument("argv", nargs=argparse.REMAINDER)
@@ -2240,6 +2252,24 @@ def _cmd_accessibility(args):
     from .orchestration.coordinator import CoordinatorBusy
     supervisor = Supervisor()
     try:
+        if args.sub in ("activation-plan", "activate", "save-profile", "activation-reconcile"):
+            from .actions.accessibility_recovery import Recovery
+            recovery = Recovery(supervisor)
+            if args.sub == "activation-plan":
+                plan = recovery.prepare(args.capability, save=args.save_profile)
+                print(json.dumps({"ok": True, "outcome": "sucesso", "plan": plan.to_dict()}, ensure_ascii=False))
+                return EXIT_OK
+            if args.sub == "activation-reconcile":
+                result = recovery.reconcile(args.operation_id)
+            else:
+                plan = ActionPlan.from_dict(json.loads(args.plan))
+                expected = "accessibility.save-profile" if args.sub == "save-profile" else "accessibility.activate"
+                if plan.action != expected:
+                    raise ValueError("plano não corresponde ao comando de acessibilidade")
+                result = recovery.execute(plan, confirmed=args.confirmar)
+            code = EXIT_BY_OUTCOME[result.outcome]
+            print(json.dumps({**result.to_dict(), "ok": result.ok, "exit": code}, ensure_ascii=False))
+            return code
         if args.sub == "lease-run":
             from .actions.input_lease import run, LeaseRunUnknown
             try:

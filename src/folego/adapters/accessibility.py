@@ -173,6 +173,7 @@ class NativeInput:
         if report["backend"] == "kwin":
             try:
                 props = self.props(report["service_owner"], "/VirtualKeyboard", "org.kde.kwin.VirtualKeyboard")
+                report["virtual_keyboard"] = {key: props.get(key) for key in ("available", "mode", "active", "visible")}
                 state = "observed" if props.get("available") == "true" else "unavailable"
                 detail = f"modo {props.get('mode', 'desconhecido')}; abertura/digitação não testadas"
             except ProbeError:
@@ -190,6 +191,22 @@ class NativeInput:
                     if plural == "sources":
                         rows = [row for row in rows if not str(row.get("name", "")).endswith(".monitor")]
                     state, detail = ("observed" if rows else "not-observed"), f"{len(rows)} endpoint(s); áudio físico não testado"
+                    if rows:
+                        default = self.call([binary, "get-default-sink" if kind == "audio" else "get-default-source"]).strip()
+                        node = next((row for row in rows if row.get("name") == default), None)
+                        if node is None:
+                            state, detail = "unknown", "endpoint padrão não comprovado; clique para revisar"
+                        elif type(node.get("mute")) is not bool:
+                            state, detail = "unknown", "estado mute desconhecido; clique para revisar"
+                        elif node["mute"]:
+                            state, detail = "degraded", "endpoint padrão silenciado; clique para habilitar"
+                        else:
+                            volume = node.get("volume")
+                            volumes = [v.get("value") if isinstance(v, dict) else None for v in volume.values()] if isinstance(volume, dict) else []
+                            if not volumes or any(type(v) is not int or v < 0 for v in volumes):
+                                state, detail = "unknown", "volume do endpoint padrão desconhecido; clique para revisar"
+                            elif all(v == 0 for v in volumes):
+                                state, detail = "degraded", "volume do endpoint padrão é zero; clique para habilitar"
                 except (ProbeError, ValueError):
                     state, detail = "unknown", "grafo de áudio indisponível"
             report["cards"].append({"key": kind, "label": LABELS[kind], "state": state, "detail": detail})

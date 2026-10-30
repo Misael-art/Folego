@@ -300,6 +300,10 @@ def reconcile(key):
             if state.intent.action == "accessibility.enable-input":
                 from ..actions.accessibility import Supervisor
                 return Supervisor(coordinator=c).reconcile(key)
+            if state.intent.action in ("accessibility.activate", "accessibility.save-profile"):
+                from ..actions.accessibility import Supervisor
+                from ..actions.accessibility_recovery import Recovery
+                return Recovery(Supervisor(coordinator=c)).reconcile(key)
             if state.intent.action == "tmpfs.runtime-size":
                 from ..actions.tmpfs.runtime_size import reconcile as runtime_reconcile
                 return runtime_reconcile(key, coordinator=c, volume_fn=cli._tmpfs_runtime_volume)

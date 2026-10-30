@@ -132,8 +132,14 @@ no caminho `previous_config` devolvido pela operação para recuperação explí
 
 ## Supervisão de entrada
 
-A aba **acessibilidade** mostra o estado de cada capacidade, permite verificar
-novamente e solicitar um reparo. O resumo também aparece na central. As fontes
+A aba **acessibilidade** tem **cards que são botões**: clique em teclado,
+trackpads, toque, controles, teclado virtual, saída de áudio ou microfone para
+habilitar e verificar aquela capacidade. **Habilitar tudo** tenta cada uma e
+apresenta resultados separados. Verde indica configuração verificada no sistema;
+amarelo indica falha, conflito ou ausência de confirmação. O teste físico continua
+necessário. **Verificar agora** mostra horário e resumo; **Registrar configuração
+para preservar** salva as entradas habilitadas e solicita a persistência das
+preferências ao responsável compatível. O resumo também aparece na central. As fontes
 são locais: kernel, compositor e, quando disponíveis, serviços de áudio e
 responsáveis externos. PhaseZero e RetroFE são integrações opcionais.
 
@@ -166,7 +172,10 @@ Para controlar o início com a sessão pelo terminal:
 
 Enumeração não comprova movimento, clique, digitação, toque ou áudio físico.
 Reparos de driver, atalhos Steam, perfis de jogo e entrada antes do login não
-fazem parte desse executor. O [guia de acessibilidade](docs/ACESSIBILIDADE.md)
+fazem parte do executor **automático**. Na ação manual, um reparador FTS dedicado
+e registrado pode recuperar a tela de toque em hardware compatível, com
+autenticação do sistema quando necessária. Nenhuma ação fecha o Steam ou
+reinicia o desktop. O [guia de acessibilidade](docs/ACESSIBILIDADE.md)
 explica limites, recuperação, desinstalação e coordenação com outras aplicações.
 
 ## Uma revisão, uma operação

@@ -55,6 +55,17 @@ Este projeto não depende do HOME, disco, venv, serviços ou skills do host ante
   Nunca encher runtime real, sinalizar agentes/daemons de trabalho ou recriar
   serviços UUID para produzir evidência.
 
+### Recuperação manual autorizada em 30/10
+
+O incidente de entrada autoriza cards acionáveis e **Habilitar tudo**: solicitação
+manual ao owner registrado, habilitação KWin, abertura explícita do teclado,
+configuração do endpoint de áudio revisado e reparador FTS dedicado do owner.
+Registrar configuração pode preservar entradas habilitadas e preferências no
+owner, inclusive a persistência FTS suportada. Usar intenção/ID, revalidação e
+resultado por capacidade; desconhecido bloqueia repetição. Não autoriza fechar
+Steam, reset USB, alterar perfis às cegas ou reiniciar a sessão como teste.
+A supervisão automática continua restrita ao contrato anterior de entrada.
+
 ## Organização do desenvolvimento
 
 1. Escolha uma pendência de `docs/HANDOFF.md`; reproduza o contrato que falha.
