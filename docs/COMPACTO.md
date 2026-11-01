@@ -10,7 +10,7 @@ workers e seu próprio auxiliar de entrada.
 ## Sessões de IA
 
 Passe o mouse sobre Codex, Web, Claude ou Grok para consultar cada conta. Clique
-no indicador para atualizar. Verde significa mais de 60% da cota disponível;
+no indicador para abrir a aplicação ou seu terminal existente. Verde significa mais de 60% da cota disponível;
 amarelo, de 21% a 60%; vermelho, até 20%. Cinza é desconhecido, vencido ou parcial,
 inclusive se uma das contas agrupadas não tem uma observação válida.
 
@@ -52,6 +52,44 @@ permanecem no lugar. Nenhum token deve ser colocado nessa configuração. Schema
 desconhecido, conta ilegível ou orçamento excedido aparecem como desconhecidos.
 O limite é 16 contas adicionais e 40 rollouts com caudas de até 64 KiB por conta.
 Para consultar sem Qt: `./dev run ai status --json`.
+
+## Entregas para revisitar
+
+Um pequeno número acima de cada indicador mostra quantas sessões principais
+concluíram uma entrega desde a primeira ativação deste monitor. Duas sessões
+concluídas mostram **2**; eventos repetidos, ferramentas e subagentes internos
+não aumentam a contagem. O próximo pedido na mesma sessão retira o aviso antigo;
+uma nova conclusão pode gerar outro aviso. Não se importa todo o histórico.
+
+A consulta ocorre a cada cinco segundos enquanto o widget está visível, em
+worker independente da franquia. São aceitos eventos nativos explícitos:
+`task_complete` do Codex/Web, resposta final `end_turn` com texto do Claude e
+`turn_completed/end_turn` do Grok. Falhas, cancelamentos ou silêncio não provam
+entrega. **?** indica ausência de evidência; **2+** indica pelo menos duas
+conclusões verificadas, com outras sessões ainda não verificadas. Não se exibe
+zero quando a leitura está parcial. O Codex usa seu índice SQLite em modo de
+leitura; diretórios adicionais de clientes ativos podem ser identificados pelas
+variáveis nativas de caminho dos próprios processos, sem importar PhaseZero.
+
+O clique procura a janela desktop ou o terminal ancestral do processo local,
+com classe e identidade verificadas. Em KDE/Wayland usa `kdotool`; em X11,
+`xdotool`. Se não houver janela, pode solicitar uma única abertura pelo atalho
+nativo instalado (`gtk-launch`). Sem janela/atalho identificado, informa a
+indisponibilidade. Nenhum comando é enviado aos agentes e nenhuma sessão é
+encerrada. A abertura mostra a aplicação para o usuário escolher a sessão;
+não seleciona automaticamente uma conversa ou aba interna do terminal.
+
+Os avisos exibidos só são marcados como vistos após confirmação de foco da
+janela. Falha preserva a contagem; uma conclusão posterior ao clique não é
+apagada por ele. O estado pertence ao Fôlego em
+`$XDG_STATE_HOME/folego/ai-deliveries.json` (padrão
+`~/.local/state/folego/ai-deliveries.json`), privado, com marco inicial e recibos
+em hash, sem texto de conversas ou credenciais. Reiniciar preserva os avisos.
+Estado ilegível ou schema desconhecido não é sobrescrito.
+
+Orçamentos do monitor de entregas: 64 raízes, 128 sessões por raiz, caudas de
+64 KiB e até 2048 recibos. Inventário excedido, registro incompleto ou conclusão
+fora da cauda legível deixam a observação parcial, sem amostragem silenciosa.
 
 ## Abas de ações rápidas
 

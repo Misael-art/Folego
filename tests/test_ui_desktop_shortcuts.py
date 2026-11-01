@@ -99,3 +99,32 @@ def test_native_keyboard_position_requires_same_physical_pixels(qapp, monkeypatc
     keyboard.bus.unregisterObject("/keyboard")
     keyboard.bus.unregisterService(keyboard.service)
     controller.close()
+
+
+def test_delivery_badge_is_independent_of_quota_and_click_opens_application(qapp):
+    from PySide6.QtCore import QObject, Signal
+    class Opener(QObject):
+        result = Signal(str)
+        feedback = Signal(str)
+        def __init__(self): super().__init__(); self.requests = []
+        def request(self, action, value): self.requests.append((action, value))
+        def close(self): pass
+    class Monitor:
+        def collect(self): return []
+    opener = Opener()
+    strip = AIStrip(collect_fn=lambda: [], deliveries=Monitor(), opener=opener)
+    pending = [{'session': 'test', 'event': 'done'}]
+    strip.set_deliveries([dict(provider='codex', count=2, pending=pending)])
+    assert strip.badges['codex'].text() == '2'
+    strip.failed('quota unavailable')
+    assert strip.badges['codex'].text() == '2'
+    strip.buttons['codex'].click()
+    assert opener.requests == [('agent-open', ('codex', pending))]
+    strip.set_deliveries([dict(provider='codex', count=2, pending=pending, complete=False)])
+    assert strip.badges['codex'].text() == '2+'
+    assert 'Pelo menos' in strip.buttons['codex'].accessibleName()
+    strip._delivery_failed('unknown log')
+    assert strip.badges['codex'].text() == '?'
+    strip.buttons['codex'].click()
+    assert opener.requests[-1] == ('agent-open', ('codex', []))
+    strip.shutdown()

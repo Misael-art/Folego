@@ -1,0 +1,9 @@
+{
+  "src/folego/core/agent_deliveries.py": "a1b9b102ca1d653a970947cc956bb40b64fc9c3bb59aaa0c9f25b8979ed51934",
+  "src/folego/adapters/agent_apps.py": "5117cb34695041ee6d204b81e65cec974718add4dfe5fdb53b967df918671d62",
+  "src/folego/ui/ai_strip.py": "161e71ec451cbfe10b96ba079cdc7d6fa860f77b4ac86c80be1d584988f8bea7",
+  "tests/test_agent_deliveries.py": "2e36b74e1f523f6b31dad337a7b1aa0682a5fde4f62d161873f78b99a937dde5",
+  "tests/test_agent_apps.py": "90a244b380c4c136a4c4364d3840014a4a4bb91da770c1f74bb1086cd64a0bd9",
+  "tests/test_ui_desktop_shortcuts.py": "64bfd6dc9aa2f00e6a0745aaf5ca66ba8d6b7d0a28715ba97777fda939604787",
+  "tools/verify_agent_deliveries.py": "3d292cc39d4bc2e1ec4066b0e97cee83748e6a1d30eb7fc079166b1ff3cfb592"
+}
