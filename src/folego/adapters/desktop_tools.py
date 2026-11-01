@@ -98,6 +98,11 @@ class DesktopTools:
         return "Solicitação de tecla enviada ao aplicativo em foco"
 
     def perform(self, action, value=None):
+        if action == 'keyboard-prepare':
+            if self.env.get('XDG_SESSION_TYPE') == 'wayland':
+                from .keyboard_focus import ensure
+                return ensure(self.env, self.run, app_id=value or 'folego')
+            return 'Teclado preparado'
         if action in ('select_all', 'delete_all'):
             from .editable_text import edit_focused
             return edit_focused(action, env=self.env)
@@ -142,7 +147,7 @@ class DesktopTools:
                           + "if (matches.length === 1) { const w = matches[0]; w.keepAbove = true;"
                           + ("function report(){ const g=w.frameGeometry; callDBus(" + json.dumps(service)
                              + ', "/keyboard", "org.folego.Keyboard", "placed", '
-                             + json.dumps(caption) + ", JSON.stringify([g.x,g.y,g.width,g.height])); }"
+                             + json.dumps(caption) + ", JSON.stringify([g.x,g.y,g.width,g.height,!w.wantsInput])); }"
                              + "w.frameGeometryChanged.connect(report);" if service else "")
                           + f" w.frameGeometry = {{x:{x},y:{y},width:{width},height:{height}}}; "
                           + ("report();" if service else "")

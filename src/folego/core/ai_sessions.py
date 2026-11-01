@@ -19,7 +19,6 @@ from pathlib import Path
 import time
 import urllib.request
 import urllib.error
-import tomllib
 
 MAX_AGE = 900
 MAX_FILE = 512 * 1024
@@ -416,93 +415,46 @@ def claude(config, now, fetch, *, cache=None):
     return result
 
 
-def active_accounts(accounts, discover, home):
-    """Native client paths, independent of the program which launched them."""
-    for process in discover():
-        if process['provider'] != 'codex': continue
-        root = process['roots'].get('CODEX_HOME')
-        if not root: continue
-        # A private HOME (QA or a portable installation) must not inspect the
-        # physical user's accounts discovered in another home.
-        if not Path(root).is_absolute() or not Path(root).resolve().is_relative_to(home.resolve()): continue
-        provider = 'codex'
-        try:
-            with (Path(root) / 'config.toml').open('rb') as stream:
-                config = tomllib.loads(stream.read(MAX_TAIL).decode())
-            if str(config.get('model', '')).startswith('chatgpt-web/'): provider = 'web'
-        except (OSError, ValueError): pass
-        accounts.append(dict(provider=provider, path=root))
-    unique = {}
-    for account in accounts:
-        if not isinstance(account, dict) or account.get('provider') not in ('codex', 'web'):
-            raise ValueError('conta inválida')
-        path = Path(account['path']).expanduser()
-        if not path.is_absolute(): raise ValueError('caminho inválido')
-        unique[(account['provider'], str(path.resolve()))] = dict(account, path=str(path))
-    if len(unique) > 20: raise ValueError('contas acima do orçamento')
-    return list(unique.values())
-
-
 def collect(env=None, *, now=None, fetch=http_json, discover=None):
+    from .ai_accounts import inventory, settings
     native = env is None
-    env = dict(os.environ if env is None else env)
+    env = dict(os.environ if native else env)
     now = time.time() if now is None else now
-    home = Path(env.get("HOME") or Path.home())
-    config_root = Path(env.get("XDG_CONFIG_HOME") or home / ".config")
-    config_path = config_root / "folego/ai-sessions.json"
-    settings = {}
-    if config_path.exists():
-        try:
-            settings = read_json(config_path)
-            if settings.get("schema") != 1:
-                raise ValueError("schema desconhecido")
-        except (OSError, ValueError):
-            return [unknown(p, "Configuração de IAs ilegível/schema desconhecido") for p in NAMES]
-    roots = settings.get("accounts", [])
-    if not isinstance(roots, list) or len(roots) > 16:
-        return [unknown(p, "Inventário de contas inválido/acima do orçamento") for p in NAMES]
-    accounts = [dict(provider="codex", path=env.get("CODEX_HOME") or str(home / ".codex"))]
-    web_default = home / ".local/share/codex-web-gpt/codex-home"
-    accounts.append(dict(provider="web", path=str(web_default)))
-    accounts.extend(roots)
     try:
-        if discover is None:
+        configuration = settings(env)
+        if discover is None and native:
             from .agent_deliveries import running_agents
-            discover = running_agents if native else lambda: []
-        accounts = active_accounts(accounts, discover, home)
+            discover = running_agents
+        accounts = inventory(env, discover=discover)
     except (OSError, ValueError, TypeError, KeyError):
-        return [unknown(p, 'Inventário de contas inválido/acima do orçamento') for p in NAMES]
+        return [unknown(p, 'Inventário de contas não confirmado; confira a configuração') for p in NAMES]
     result = []
     for account in accounts:
-        if not isinstance(account, dict) or account.get("provider") not in ("codex", "web"):
-            return [unknown(p, "Configuração de conta inválida") for p in NAMES]
-        provider = account["provider"]
+        provider = account['provider']
         try:
-            path = Path(account["path"]).expanduser()
-            if not path.is_absolute():
-                raise ValueError("caminho não absoluto")
-            item = codex(path, now, provider=provider, label=account.get("label"), fetch=fetch)
-            result.append(item)
+            if provider in ('codex', 'web'):
+                item = codex(account['path'], now, provider=provider, fetch=fetch)
+            elif provider == 'claude':
+                item = claude(account['path'], now, fetch, cache=_CLAUDE_CACHE)
+            else:
+                item = unknown(provider, 'Percentual não disponibilizado nesta fonte')
+                item['paid_until'] = timestamp(configuration.get('grok_paid_until')) if account['default'] else None
         except (OSError, ValueError, TypeError, KeyError, AttributeError):
-            result.append(unknown(provider, "Fonte ausente, ilegível ou fora do orçamento"))
-    try:
-        result.append(claude(env.get("CLAUDE_CONFIG_DIR") or home / ".claude", now, fetch, cache=_CLAUDE_CACHE))
-    except (OSError, ValueError, TypeError, AttributeError):
-        result.append(unknown("claude", "Uso indisponível; verifique o login no Claude"))
-    grok = unknown("grok", "O provedor não informa o percentual de cota nesta fonte")
-    grok["paid_until"] = timestamp(settings.get("grok_paid_until"))
-    grok["plan"] = "data informada pelo usuário" if grok["paid_until"] else None
-    result.append(grok)
-    billing = settings.get('billing', {})
-    if not isinstance(billing, dict): billing = {}
-    for item in result:
-        day = billing.get(item['provider'], {}).get('monthly_day') if isinstance(billing.get(item['provider'], {}), dict) else None
+            item = unknown(provider, 'Fonte indisponível; confira o login no cliente')
+        item.update(account_id=account['account_id'], label=account['label'], default=account['default'])
+        billing = configuration.get('billing_accounts', {})
+        reference = billing.get(account['account_id'], {}) if isinstance(billing, dict) else {}
+        if isinstance(billing, dict) and account['account_id'] not in billing and account['default']:
+            legacy = configuration.get('billing', {})
+            reference = legacy.get(provider, {}) if isinstance(legacy, dict) else {}
+        day = reference.get('monthly_day') if isinstance(reference, dict) else None
         if type(day) is int and 1 <= day <= 31:
-            item.update(billing_day=day, billing_source='data informada pelo usuário; não verificada pelo provedor')
+            item.update(billing_day=day, billing_source='referência pessoal; confirme no provedor')
+        result.append(item)
     return result
 
 
-def set_billing_day(provider, day, *, env=None):
+def set_billing_day(provider, day, account=None, *, env=None):
     if provider not in NAMES or type(day) is not int or not 0 <= day <= 31:
         raise ValueError('dia de renovação inválido')
     env = dict(os.environ if env is None else env)
@@ -511,14 +463,21 @@ def set_billing_day(provider, day, *, env=None):
     value = read_json(path) if path.exists() else dict(schema=1)
     if value.get('schema') != 1 or not isinstance(value.get('billing', {}), dict):
         raise ValueError('Configuração desconhecida; arquivo preservado')
-    billing = value.setdefault('billing', {})
-    reference = billing.get(provider, {})
+    if account is not None:
+        from .ai_accounts import inventory
+        if not any(a['account_id'] == account and a['provider'] == provider for a in inventory(env)):
+            raise ValueError('Conta não identificada; referência preservada')
+    field, key = ('billing_accounts', account) if account else ('billing', provider)
+    if not isinstance(value.get(field, {}), dict):
+        raise ValueError('Referências de contas desconhecidas; arquivo preservado')
+    billing = value.setdefault(field, {})
+    reference = billing.get(key, {})
     if not isinstance(reference, dict): raise ValueError('Referência mensal desconhecida; arquivo preservado')
     reference = dict(reference)
     if day: reference['monthly_day'] = day
     else: reference.pop('monthly_day', None)
-    if reference: billing[provider] = reference
-    else: billing.pop(provider, None)
+    if reference or account: billing[key] = reference
+    else: billing.pop(key, None)
     path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
     if path.is_symlink() or path.parent.is_symlink():
         raise ValueError('Configuração simbólica; arquivo preservado')

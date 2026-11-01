@@ -100,6 +100,10 @@ def test_native_keyboard_position_requires_same_physical_pixels(qapp, monkeypatc
     keyboard._placement_event.clear()
     keyboard.placed(keyboard.windowTitle(), json.dumps([0, 313, 949, 280]))
     assert keyboard.confirmed_geometry is None and not keyboard._placement_event.is_set()
+    keyboard.placed(keyboard.windowTitle(), json.dumps([0, 313, 948, 280, False]))
+    assert keyboard.confirmed_geometry is None and not keyboard._placement_event.is_set()
+    keyboard.placed(keyboard.windowTitle(), json.dumps([0, 313, 948, 280, True]))
+    assert keyboard.confirmed_geometry == keyboard._geometry
     keyboard.bus.unregisterObject("/keyboard")
     keyboard.bus.unregisterService(keyboard.service)
     controller.close()

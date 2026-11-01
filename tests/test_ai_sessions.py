@@ -214,13 +214,15 @@ def test_billing_reference_preserves_configuration_and_unknown_schema(tmp_path):
 
 
 def test_native_account_discovery_is_deduplicated_and_private_home_scoped(tmp_path):
+    from folego.core.ai_accounts import inventory
     root = tmp_path / 'profile'
     root.mkdir()
     (root/'config.toml').write_text('model="chatgpt-web/test"')
     found = lambda: [dict(provider='codex', roots=dict(CODEX_HOME=str(root)))] * 2
-    accounts = ai.active_accounts([], found, tmp_path)
-    assert len(accounts) == 1 and accounts[0]['provider'] == 'web'
-    assert ai.active_accounts([], found, tmp_path/'private-home') == []
+    accounts = inventory(env(tmp_path), discover=found)
+    assert len([a for a in accounts if a['path'] == str(root)]) == 1
+    assert next(a for a in accounts if a['path'] == str(root))['provider'] == 'web'
+    assert not any(a['path'] == str(root) for a in inventory(env(tmp_path/'private-home'), discover=found))
 
 
 def test_claude_rate_limit_reuses_only_fresh_same_account_and_honors_backoff(tmp_path):

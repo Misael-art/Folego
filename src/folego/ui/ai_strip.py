@@ -1,10 +1,8 @@
 """Quota indicators, new completed sessions and verified application opening."""
-import html
-
-from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtCore import Qt, QTimer, QUrl, QEvent, QPoint
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap, QDesktopServices
 from PySide6.QtWidgets import (QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QWidget,
-                              QMenu, QInputDialog, QDialog, QTextBrowser)
+                              QMenu, QInputDialog, QWidgetAction)
 
 from ..core import ai_sessions
 from .theme import TOKENS
@@ -12,12 +10,15 @@ from .workers import Poller
 from .desktop_shortcuts import DesktopController
 from ..core.agent_deliveries import DeliveryMonitor
 from ..adapters.agent_apps import AgentApps
+from .ai_account_panel import AccountPanel
 
 
 class AIStrip(QWidget):
     def __init__(self, parent=None, *, collect_fn=None, deliveries=None, opener=None):
         super().__init__(parent)
         self.items = [ai_sessions.unknown(p) for p in ai_sessions.NAMES]
+        self.account_menu = None
+        self.account_panel = None
         self.buttons = {}
         self.badges = {}
         self.deliveries = deliveries or DeliveryMonitor()
@@ -34,6 +35,7 @@ class AIStrip(QWidget):
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.setAccessibleName(ai_sessions.NAMES[provider] + ": cota desconhecida")
             button.setStyleSheet("padding:3px 0;border:none;background:transparent;")
+            button.installEventFilter(self)
             button.clicked.connect(lambda checked=False, p=provider: self.open_agent(p))
             button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
             button.customContextMenuRequested.connect(lambda point, p=provider: self.options(p, point))
@@ -87,10 +89,17 @@ class AIStrip(QWidget):
     def _delivery_failed(self, _message):
         self.set_deliveries([dict(provider=p, count=None, pending=[]) for p in ai_sessions.NAMES])
 
-    def open_agent(self, provider):
+    def default_item(self, provider):
+        items = [i for i in self.items if i['provider'] == provider]
+        return next((i for i in items if i.get('default')), items[0] if items else {})
+
+    def open_agent(self, provider, account=None):
+        account = account or self.default_item(provider).get('account_id')
         row = next((r for r in self.delivery_items if r['provider'] == provider), {})
         pending = row.get('pending', []) if row.get('count') is not None else []
-        self.opener.request('agent-open', (provider, list(pending)))
+        if account:
+            pending = [p for p in pending if p.get('account_id') == account]
+        self.opener.request('agent-open', (provider, list(pending), account) if account else (provider, list(pending)))
 
     def _opened(self, _message):
         self.delivery_poller.request()
@@ -100,7 +109,7 @@ class AIStrip(QWidget):
         button = self.buttons[provider]
         menu = QMenu(button)
         menu.addAction('Atualizar dados', self.refresh)
-        menu.addAction('Detalhes de todas as contas…', lambda: self.details(provider))
+        menu.addAction('Contas, uso e renovação…', lambda: QTimer.singleShot(0, lambda: self.details(provider)))
         menu.addAction('Definir dia da renovação mensal…', lambda: self.billing(provider))
         urls = {'codex': 'https://chatgpt.com/codex/settings/usage',
                 'web': 'https://chatgpt.com/#settings/Account',
@@ -110,21 +119,47 @@ class AIStrip(QWidget):
         menu.deleteLater()
 
     def details(self, provider):
-        dialog = QDialog(self)
-        dialog.setWindowTitle(ai_sessions.NAMES[provider] + ' · uso e renovação')
-        layout = QVBoxLayout(dialog)
-        text = QTextBrowser(dialog)
-        text.setPlainText('\n\n'.join(ai_sessions.describe(item) for item in self.items if item['provider'] == provider))
-        layout.addWidget(text)
-        dialog.resize(480, 420)
-        dialog.exec()
-        dialog.deleteLater()
+        if self.account_menu is not None:
+            self.account_menu.close()
+        button = self.buttons[provider]
+        menu = QMenu(button)
+        panel = AccountPanel(provider, [i for i in self.items if i['provider'] == provider])
+        area = button.screen().availableGeometry()
+        panel.setFixedSize(min(560, area.width() - 20), min(470, area.height() - 24))
+        panel.open_requested.connect(lambda p, a: (menu.close(), self.open_agent(p, a)))
+        panel.billing_requested.connect(lambda p, a: (menu.close(), self.billing(p, a)))
+        panel.refresh_requested.connect(self.refresh)
+        action = QWidgetAction(menu)
+        action.setDefaultWidget(panel)
+        menu.addAction(action)
+        self.account_menu, self.account_panel = menu, panel
+        menu.aboutToHide.connect(lambda: self._panel_hidden(menu))
+        point = button.mapToGlobal(QPoint(0, button.height()))
+        point.setX(max(area.left(), min(point.x(), area.right() + 1 - panel.width() - 4)))
+        point.setY(max(area.top(), min(point.y(), area.bottom() + 1 - panel.height() - 4)))
+        menu.popup(point)
 
-    def billing(self, provider):
-        current = next((i.get('billing_day', 0) for i in self.items if i['provider'] == provider), 0)
+    def _panel_hidden(self, menu):
+        if self.account_menu is menu:
+            self.account_menu = None
+            self.account_panel = None
+        menu.deleteLater()
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Type.ToolTip:
+            provider = next((p for p, b in self.buttons.items() if b is watched), None)
+            if provider:
+                self.details(provider)
+                return True
+        return super().eventFilter(watched, event)
+
+    def billing(self, provider, account=None):
+        item = next((i for i in self.items if account and i.get('account_id') == account), self.default_item(provider))
+        account = item.get('account_id')
+        current = item.get('billing_day', 0)
         day, accepted = QInputDialog.getInt(self, 'Renovação mensal · ' + ai_sessions.NAMES[provider],
              'Dia da cobrança mensal (1–31; 0 remove).\nReferência pessoal, sem confirmação de cobrança pelo provedor.', current, 0, 31)
-        if accepted: self.opener.request('agent-billing', (provider, day))
+        if accepted: self.opener.request('agent-billing', (provider, day, account) if account else (provider, day))
 
     def _notice(self, message):
         # The compact card owns visible transient feedback, separate from alerts.
@@ -136,8 +171,7 @@ class AIStrip(QWidget):
         colors = dict(green=TOKENS.ok, yellow=TOKENS.warning, red=TOKENS.danger, unknown=TOKENS.muted)
         for provider, button in self.buttons.items():
             items = [item for item in self.items if item.get("provider") == provider]
-            values = [ai_sessions.effective(item) for item in items]
-            left = min(values) if values and all(v is not None for v in values) else None
+            left = ai_sessions.effective(self.default_item(provider))
             pixmap = QPixmap(10, 10)
             pixmap.fill(Qt.GlobalColor.transparent)
             painter = QPainter(pixmap)
@@ -159,11 +193,14 @@ class AIStrip(QWidget):
             completed = 'conclusões não verificadas' if count is None else f'{count} novas entregas para revisitar'
             if count and partial: completed = 'Pelo menos ' + completed + '; outras sessões não verificadas'
             button.setAccessibleName(ai_sessions.NAMES[provider] + ": " + summary + ' · ' + completed)
-            detail = "\n\n".join(ai_sessions.describe(item) for item in items) or "Sem observação"
-            detail += '\n\n' + completed + '\nClique para abrir a aplicação/terminal e marcar estes avisos como vistos.'
-            detail += '\nContagem de novas sessões concluídas desde a ativação do monitor; ferramentas não contam.'
-            detail += '\nBotão direito: atualizar, detalhes das contas e renovação mensal.'
-            button.setToolTip("<p style='white-space:pre-wrap'>" + html.escape(detail) + "</p>")
+            button.setToolTip('Uso e renovação por conta · clique para abrir o cliente da conta padrão')
+        if self.account_panel is not None:
+            panel = self.account_panel
+            items = [i for i in self.items if i['provider'] == panel.provider]
+            if {i.get('account_id', '') for i in items} == set(panel.account_buttons):
+                panel.update_items(items)
+            else:
+                self.account_menu.close()
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -174,12 +211,14 @@ class AIStrip(QWidget):
         self.delivery_poller.request()
 
     def hideEvent(self, event):
+        if self.account_menu is not None: self.account_menu.close()
         self.poller.pause()
         self.freshness.stop()
         self.delivery_poller.pause()
         super().hideEvent(event)
 
     def shutdown(self):
+        if self.account_menu is not None: self.account_menu.close()
         self.freshness.stop()
         self.poller.stop()
         self.delivery_poller.stop()

@@ -67,3 +67,23 @@ def test_cli_window_requires_live_ancestry_and_terminal_class(monkeypatch):
     assert all('--all' in c and '--class' in c for c in calls if '--pid' in c)
     processes[0]['identity'] = (30, 20, 99)
     assert apps._windows('/bin/kdotool', 'grok') == []
+
+
+def test_account_specific_open_never_falls_back_to_another_profile(monkeypatch, tmp_path):
+    import json
+    from folego.core.ai_accounts import account_id
+    root = tmp_path / 'work'
+    config = tmp_path / '.config/folego/ai-sessions.json'
+    config.parent.mkdir(parents=True)
+    config.write_text(json.dumps(dict(schema=1, accounts=[dict(provider='codex', path=str(root), label='Work')])))
+    calls = []
+    def run(argv, **kwargs):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, WINDOW if 'search' in argv else '', '')
+    monkeypatch.setattr('folego.adapters.agent_apps.shutil.which', lambda name: '/bin/' + name)
+    apps = AgentApps(Monitor(), env=dict(HOME=str(tmp_path), XDG_SESSION_TYPE='wayland'), run=run, discover=lambda: [])
+    monkeypatch.setattr(apps, '_window_account', lambda *args: False)
+    with pytest.raises(RuntimeError, match='desta conta'):
+        apps.perform('agent-open', ('codex', [], account_id('codex', root)))
+    assert not any(c[0].endswith('gtk-launch') or 'windowactivate' in c for c in calls)
+    assert not apps.monitor.seen

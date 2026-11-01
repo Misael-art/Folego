@@ -16,7 +16,6 @@ import sqlite3
 import stat
 import threading
 import time
-import tomllib
 
 from .. import paths
 from ..safely.atomicfile import write_atomic
@@ -76,22 +75,8 @@ def running_agents(proc=Path('/proc')):
 
 
 def account_roots(env):
-    home = Path(env.get('HOME') or Path.home())
-    config = Path(env.get('XDG_CONFIG_HOME') or home / '.config') / 'folego/ai-sessions.json'
-    accounts = [dict(provider='codex', path=env.get('CODEX_HOME') or str(home / '.codex')),
-                dict(provider='web', path=str(home / '.local/share/codex-web-gpt/codex-home'))]
-    if config.exists():
-        data = read_json(config)
-        if data.get('schema') != 1 or not isinstance(data.get('accounts', []), list):
-            raise ValueError('configuração de contas desconhecida')
-        accounts.extend(data.get('accounts', []))
-    accounts.extend([dict(provider='claude', path=env.get('CLAUDE_CONFIG_DIR') or str(home / '.claude')),
-                     dict(provider='grok', path=env.get('GROK_HOME') or str(home / '.grok'))])
-    for account in accounts:
-        if (not isinstance(account, dict) or account.get('provider') not in NAMES
-                or not isinstance(account.get('path'), str) or not Path(account['path']).is_absolute()):
-            raise ValueError('conta ou caminho desconhecido')
-    return accounts
+    from .ai_accounts import inventory
+    return inventory(env)
 
 
 def _children(directory, limit=256):
@@ -273,30 +258,9 @@ class DeliveryMonitor:
 
     def _accounts(self, now):
         if self.roots is not None and now - self.roots_at < 20: return self.roots
-        accounts = account_roots(self.env)
-        home = Path(self.env.get('HOME') or Path.home()).resolve()
-        for process in self.discover():
-            selected = list(process['roots'].values())
-            if any(not Path(p).is_absolute() or not Path(p).resolve().is_relative_to(home) for p in selected):
-                continue
-            if process['provider'] in ('claude', 'grok'):
-                key = 'CLAUDE_CONFIG_DIR' if process['provider'] == 'claude' else 'GROK_HOME'
-                if process['roots'].get(key):
-                    accounts.append(dict(provider=process['provider'], path=process['roots'][key]))
-            root = process['roots'].get('CODEX_HOME')
-            if process['provider'] == 'codex' and root:
-                provider = 'codex'
-                config = Path(root) / 'config.toml'
-                try:
-                    with config.open('rb') as stream: value = tomllib.loads(stream.read(MAX_TAIL).decode())
-                    if str(value.get('model', '')).startswith('chatgpt-web/'):
-                        provider = 'web'
-                except (OSError, ValueError): pass
-                accounts.append(dict(provider=provider, path=root))
-        if len(accounts) > 64: raise ValueError('contas acima do orçamento')
-        if any(not Path(a['path']).is_absolute() for a in accounts):
-            raise ValueError('caminho nativo não absoluto')
-        self.roots = list({(a['provider'], str(Path(a['path']).expanduser().resolve())) for a in accounts})
+        from .ai_accounts import inventory
+        accounts = inventory(self.env, discover=self.discover)
+        self.roots = [(a['provider'], a['path']) for a in accounts]
         self.roots_at = now
         return self.roots
 
@@ -318,7 +282,10 @@ class DeliveryMonitor:
                         visited.add(str(path))
                         try:
                             receipt = self._receipt(provider, path, primary, value, now)
-                            if receipt: row['pending'].append(receipt)
+                            if receipt:
+                                from .ai_accounts import account_id
+                                receipt['account_id'] = account_id(provider, root)
+                                row['pending'].append(receipt)
                         except (OSError, ValueError, TypeError):
                             row['complete'] = False
                 except (OSError, ValueError, TypeError, sqlite3.Error):

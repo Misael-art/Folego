@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot, ClassInfo
 from PySide6.QtGui import QGuiApplication, QIcon
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QStyle, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QStyle, QVBoxLayout, QWidget, QMenu
 
 from ..adapters.desktop_tools import DesktopTools
 from .theme import TOKENS, control_icon
@@ -95,6 +95,9 @@ class VirtualKeyboard(QWidget):
         self.confirmed_geometry = None
         self.observed_geometry = None
         self._placement_event = threading.Event()
+        self._ready = os.environ.get('XDG_SESSION_TYPE') != 'wayland'
+        self._requested_screen = None
+        self._opening = False
         self.setStyleSheet(f"QWidget {{ background:{TOKENS.surface};color:{TOKENS.text};font-size:11pt; }}"
                            f"QPushButton {{ background:{TOKENS.surface_alt};border:1px solid {TOKENS.border};"
                            "border-radius:5px; padding:5px; min-height:26px; }"
@@ -127,6 +130,7 @@ class VirtualKeyboard(QWidget):
             row.addWidget(self._button(text, lambda checked=False, key=code: self._key(key)), stretch)
         layout.addLayout(row)
         controller.result.connect(self.status.setText)
+        controller.result.connect(self._prepared)
         self._pending_position = False
         controller.busy_changed.connect(self._after_busy)
         QGuiApplication.instance().screenRemoved.connect(self._screen_removed)
@@ -147,19 +151,24 @@ class VirtualKeyboard(QWidget):
         self.shift = not self.shift
 
     def _key(self, code):
+        if os.environ.get('XDG_SESSION_TYPE') == 'wayland' and self.confirmed_geometry is None:
+            self.status.setText('Aguarde a confirmação de posição e foco do teclado')
+            return
         self.controller.request("key", [42, code] if self.shift else [code])
 
     @Slot(str, str)
     def placed(self, caption, serialized):
         try:
-            observed = tuple(json.loads(serialized))
+            payload = tuple(json.loads(serialized))
+            observed = payload[:4]
         except (ValueError, TypeError):
             return
         self.observed_geometry = observed
         # KWin's fractional logical geometry must match the same physical pixels
         # as Qt's integral coordinates, including a desktop scale such as 135%.
         ratio = self.devicePixelRatioF()
-        same_pixels = (len(observed) == 4 and self._geometry is not None
+        same_pixels = (len(payload) in (4, 5) and (len(payload) == 4 or payload[4] is True)
+                       and len(observed) == 4 and self._geometry is not None
                        and all(round(actual * ratio) == round(wanted * ratio)
                                for actual, wanted in zip(observed, self._geometry)))
         if caption == self.windowTitle() and same_pixels:
@@ -175,6 +184,12 @@ class VirtualKeyboard(QWidget):
             raise ValueError("posição inválida")
         screen = screen or QGuiApplication.primaryScreen()
         self._position = position
+        if not self._ready:
+            self._requested_screen = screen
+            if not self._opening:
+                app = QGuiApplication.instance()
+                self._opening = self.controller.request('keyboard-prepare', app.desktopFileName() or app.applicationName())
+            return
         self.confirmed_geometry = None
         self._placement_event.clear()
         if screen is None:
@@ -192,6 +207,14 @@ class VirtualKeyboard(QWidget):
             # Wait only for mapping of our own surface; the worker never blocks Qt.
             self._pending_position = True
             QTimer.singleShot(150, self._position_request)
+
+    def _prepared(self, message):
+        if self._opening and self.controller.action == 'keyboard-prepare':
+            self._opening = False
+            if message.startswith('Teclado preparado'):
+                self._ready = True
+                # Let KWin consume its reconfigure before mapping this surface.
+                QTimer.singleShot(400, lambda: self.show_at(self._position, self._requested_screen))
 
     def _after_busy(self, busy):
         if not busy and self._pending_position:
@@ -225,11 +248,12 @@ class ShortcutTabs(QWidget):
         editing = QHBoxLayout()
         editing.setSpacing(3)
         for action, text, color in (("select_all", "Selecionar tudo", "#28596b"),
-                                    ("delete_all", "Apagar tudo", "#8a4554")):
+                                    ("delete_all", "Apagar tudo", "#8a4554"),
+                                    ("prompts", "Prompts", "#51477d")):
             button = QPushButton(text)
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            button.setAccessibleName(text + " no campo de texto em foco")
-            button.setToolTip(text + " no campo de texto editável em foco; preserva a área de transferência")
+            button.setAccessibleName(text if action == 'prompts' else text + " no campo de texto em foco")
+            button.setToolTip('Escolher um prompt para copiar' if action == 'prompts' else text + " no campo de texto editável em foco; preserva a área de transferência")
             button.setStyleSheet(f"background:{color};color:white;border:none;border-radius:5px;"
                                  "font-size:8pt;padding:2px;min-height:18px;")
             button.clicked.connect(lambda checked=False, key=action: self.activate(key))
@@ -276,8 +300,27 @@ class ShortcutTabs(QWidget):
     def activate(self, action):
         if action == "keyboard":
             self.open_keyboard("bottom")
+        elif action == 'prompts':
+            self.show_prompts()
         else:
             self.controller.request(action)
+
+    def show_prompts(self):
+        from ..core.development_prompts import PROMPTS
+        menu = QMenu(self.buttons['prompts'])
+        for prompt in PROMPTS:
+            menu.addAction(prompt.title, lambda checked=False, key=prompt.key: self.copy_prompt(key))
+        menu.aboutToHide.connect(menu.deleteLater)
+        menu.popup(self.buttons['prompts'].mapToGlobal(self.buttons['prompts'].rect().bottomLeft()))
+
+    def copy_prompt(self, key):
+        from ..core.development_prompts import text
+        clipboard = QGuiApplication.clipboard()
+        if clipboard is None:
+            self.controller.feedback.emit('Área de transferência indisponível')
+            return
+        clipboard.setText(text(key))
+        self.controller.feedback.emit('Prompt copiado · cole no agente de sua escolha')
 
     def open_keyboard(self, position):
         if self.keyboard is None:

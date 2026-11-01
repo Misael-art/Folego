@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import time
 
 
@@ -19,6 +20,11 @@ def main():
     parser.add_argument("--offscreen", action="store_true")
     parser.add_argument("--input", action="store_true")
     args = parser.parse_args()
+    if args.input and not args.offscreen and os.environ.get('XDG_SESSION_TYPE') == 'wayland':
+        # Explicit native QA prepares only the product-owned keyboard rule in
+        # the physical session, before isolating every account/data directory.
+        from folego.adapters.keyboard_focus import ensure
+        ensure(dict(os.environ), subprocess.run)
     root = args.state.resolve()
     root.mkdir(mode=0o700, parents=True, exist_ok=False)
     for key, folder in (("HOME", "home"), ("XDG_CONFIG_HOME", "config"),
@@ -31,8 +37,9 @@ def main():
         os.environ.pop(key, None)
     if args.offscreen:
         os.environ["QT_QPA_PLATFORM"] = "offscreen"
+        os.environ['XDG_SESSION_TYPE'] = 'offscreen'
     from PySide6.QtCore import QTimer, QCoreApplication, QEvent
-    from PySide6.QtWidgets import QApplication, QLineEdit, QToolTip
+    from PySide6.QtWidgets import QApplication, QLineEdit, QTextEdit, QLabel, QMenu
     from folego.core import ai_sessions as ai
     from folego.core.snapshot import MemInfo, Snapshot
     from folego.core.tmpfs import TmpfsVolume
@@ -42,7 +49,8 @@ def main():
     from folego.ui.title_signal import TitleSignal
 
     app = QApplication([])
-    app.setApplicationName('folego-owned-qa')
+    app.setApplicationName('folego')
+    app.setDesktopFileName('folego')
     apply_theme(app)
     target = QLineEdit()
     target.setWindowTitle("Fôlego QA — campo próprio")
@@ -69,6 +77,14 @@ def main():
     items = [ai.unknown(p) for p in ai.NAMES]
     for item, used in ((items[0], 72), (items[2], 18)):
         item.update(observed_at=now, windows=[ai.quota_window("Sessão", used, now + 3600, now)])
+    for item in items:
+        item.update(account_id=item['provider'] + '-principal', label='Principal', default=True)
+    other = ai.unknown('codex', label='Trabalho · projetos')
+    other.update(account_id='codex-work', default=False, observed_at=now,
+                 windows=[ai.quota_window('Sessão (5 h)', 92, now + 600, now),
+                          ai.quota_window('Semana', 48, now + 86400, now)])
+    items.append(other)
+    items[0]['windows'].append(ai.quota_window('Semana', 43, now + 86400, now))
     items[0].update(reset_credits=dict(available=2, observed_at=now, expires_at=now + 86400),
                     extra_credits='9.99', billing_day=15, billing_source='referência de demonstração')
     view.ai_strip.poller._collect = lambda: items
@@ -81,6 +97,7 @@ def main():
     app.processEvents()
     view.ai_strip.set_items(items)
     records = []
+    external = None
     def wait(predicate, seconds=8):
         end = time.monotonic() + seconds
         while time.monotonic() < end:
@@ -88,19 +105,88 @@ def main():
             if predicate(): return
             time.sleep(.02)
         raise AssertionError("QA deadline")
+    def pointer_click(button, click=True):
+        if os.environ.get('XDG_SESSION_TYPE') != 'wayland':
+            point = button.mapToGlobal(button.rect().center())
+            subprocess.run(['xdotool', 'mousemove', str(point.x()), str(point.y()), 'click', '1'], check=True)
+            return
+        import re
+        point = button.mapToGlobal(button.rect().center())
+        desired = (point.x(), point.y())
+        backend = view.shortcut_tabs.controller.backend
+        binary, _ = backend._input()
+        def cursor():
+            raw = subprocess.check_output(['kdotool', 'getmouselocation'], text=True).strip()
+            match = re.search(r'x[:=]\s*([-0-9.]+).*y[:=]\s*([-0-9.]+)', raw)
+            assert match, raw
+            return float(match[1]), float(match[2])
+        factors = [view.devicePixelRatioF()] * 2
+        for _ in range(12):
+            current = cursor()
+            delta = [desired[i] - current[i] for i in range(2)]
+            if max(map(abs, delta)) <= 1: break
+            amounts = [round(delta[i] * factors[i]) for i in range(2)]
+            subprocess.run([binary, 'mousemove', '--', *(str(n) for n in amounts)],
+                           env=backend.env, check=True, capture_output=True)
+            time.sleep(.06)
+            app.processEvents()
+            after = cursor()
+            for i in range(2):
+                actual = after[i] - current[i]
+                if abs(actual) > 1 and amounts[i]:
+                    factors[i] = max(.2, min(4, abs(amounts[i] / actual)))
+        assert max(abs(cursor()[i] - desired[i]) for i in range(2)) <= 1, 'pointer unconfirmed; click blocked'
+        if click:
+            subprocess.run([binary, 'click', '0xC0'], env=backend.env, check=True, capture_output=True)
     try:
         wait(lambda: view.isVisible())
+        if args.input and os.environ.get('XDG_SESSION_TYPE') == 'wayland':
+            view.move(20, 130)
+            own = root / 'place-owned-widget.js'
+            own.write_text('const w=workspace.windowList().find(w=>w.pid==='+str(os.getpid())+' && w.caption==="Fôlego — widget");if(w) w.frameGeometry={x:20,y:130,width:280,height:'+str(view.height())+'};')
+            name = 'folego-qa-widget-'+str(os.getpid())
+            sid = subprocess.check_output(['qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.loadScript',str(own),name],text=True).strip()
+            try:
+                subprocess.run(['qdbus6','org.kde.KWin','/Scripting/Script'+sid,'org.kde.kwin.Script.run'],check=True,capture_output=True)
+                wait(lambda: abs(view.x()-20)<=1 and abs(view.y()-130)<=1)
+            finally:
+                subprocess.run(['qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript',name],check=True,capture_output=True)
         view.adjustSize()
         from PySide6.QtCore import Qt, QEvent, QPoint
         from PySide6.QtGui import QHelpEvent
         assert view.testAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips)
         button = view.ai_strip.buttons['codex']
+        if args.input and os.environ.get('XDG_SESSION_TYPE') == 'wayland':
+            pointer_click(button, click=False)
         help_event = QHelpEvent(QEvent.Type.ToolTip, QPoint(5, 5), button.mapToGlobal(QPoint(5, 5)))
-        app.sendEvent(button, help_event)
-        wait(lambda: QToolTip.isVisible())
-        assert 'Tickets de reposição: 2' in QToolTip.text() and 'Renovação mensal' in QToolTip.text()
-        records.append(dict(tooltip='Qt help event in non-focusing widget', fields=['quota', 'reset', 'tickets', 'monthly']))
-        QToolTip.hideText()
+        if not (args.input and os.environ.get('XDG_SESSION_TYPE') == 'wayland'):
+            app.sendEvent(button, help_event)
+        wait(lambda: view.ai_strip.account_panel is not None and view.ai_strip.account_menu.isVisible())
+        # Allow the mapped Wayland popup to receive its fractional output scale.
+        settle = time.monotonic() + .3
+        while time.monotonic() < settle:
+            app.processEvents()
+            time.sleep(.01)
+        panel = view.ai_strip.account_panel
+        assert panel.selected == 'codex-principal'
+        assert any('2 disponíveis' in w.text() for w in panel.findChildren(QLabel))
+        assert any('Assinatura · dia 15' in w.text() for w in panel.findChildren(QLabel))
+        panel.grab().save(str(root / 'accounts-default.png'))
+        panel.account_buttons['codex-work'].click()
+        app.processEvents()
+        assert panel.selected == 'codex-work'
+        assert any(w.text() == '92% usado' for w in panel.findChildren(QLabel))
+        panel.grab().save(str(root / 'accounts-other.png'))
+        records.append(dict(accounts='interactive default and secondary card', fields=['quota', '5h', 'weekly', 'tickets', 'monthly']))
+        view.ai_strip.account_menu.close()
+        app.processEvents()
+        view.shortcut_tabs.buttons['prompts'].click()
+        wait(lambda: any(m.isVisible() for m in view.findChildren(QMenu)))
+        menus = [m for m in view.findChildren(QMenu) if m.isVisible()]
+        assert len(menus[-1].actions()) >= 10
+        menus[-1].grab().save(str(root / 'prompts.png'))
+        menus[-1].close()
+        records.append(dict(prompts='menu titles available; no physical clipboard fixture'))
         view.grab().save(str(root / "compact.png"))
         assert view.width() == 280
         for button in view.shortcut_tabs.buttons.values():
@@ -144,10 +230,14 @@ def main():
             wait(lambda: target.isActiveWindow() and target.hasFocus())
             controller = view.shortcut_tabs.controller
             wait(lambda: controller.future is None)
-            controller.request("key", [30])
+            pointer_click(next(b for b in keyboard.letters if b.text() == 'A'))
             wait(lambda: controller.future is None)
             wait(lambda: target.text() == "a", seconds=3)
-            records.append({"input": "native key into owned focused field"})
+            assert target.hasFocus() and not keyboard.isActiveWindow()
+            pointer_click(next(b for b in keyboard.letters if b.text() == 'B'))
+            wait(lambda: target.text() == 'ab', seconds=3)
+            assert target.hasFocus()
+            records.append({"input": "real pointer clicks A/B into owned focused field; keyboard stayed inactive"})
             target.setText('Texto de QA com acentos')
             view.shortcut_tabs.buttons['select_all'].click()
             wait(lambda: controller.future is None)
@@ -157,7 +247,50 @@ def main():
             wait(lambda: controller.future is None)
             wait(lambda: target.text() == '', seconds=3)
             records.append(dict(editing='native AT-SPI select/delete only the owned focused field'))
+            if os.environ.get('XDG_SESSION_TYPE') == 'wayland':
+                caption = 'Fôlego QA — editor externo ' + str(os.getpid())
+                external = subprocess.Popen([sys.executable, str(Path(__file__).with_name('qa_text_target.py')),
+                                             '--caption', caption], env=dict(os.environ),
+                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                service = 'org.folego.QAText.p' + str(external.pid)
+                def remote(method):
+                    return subprocess.run(['qdbus6', service, '/target', 'org.folego.QAText.' + method],
+                                          capture_output=True, text=True, timeout=3)
+                wait(lambda: remote('value').returncode == 0)
+                def focus_external():
+                    script = root / 'focus-external.js'
+                    script.write_text('const w=workspace.windowList().find(w=>w.pid==='+str(external.pid)+
+                                      ' && w.caption==='+json.dumps(caption)+');if(w){w.frameGeometry={x:340,y:380,width:440,height:140};workspace.activeWindow=w;}')
+                    name = 'folego-qa-external-' + str(os.getpid())
+                    sid = subprocess.check_output(['qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.loadScript',str(script),name],text=True).strip()
+                    try:
+                        subprocess.run(['qdbus6','org.kde.KWin','/Scripting/Script'+sid,'org.kde.kwin.Script.run'],check=True,capture_output=True)
+                    finally:
+                        subprocess.run(['qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript',name],check=True,capture_output=True)
+                    assert remote('focus').returncode == 0
+                    def active_owned():
+                        active = subprocess.check_output(['kdotool','getactivewindow'], text=True).strip()
+                        return subprocess.check_output(['kdotool','getwindowpid',active],text=True).strip() == str(external.pid)
+                    wait(active_owned)
+                view.shortcut_tabs.top_button.click()
+                wait(lambda: keyboard.confirmed_geometry == keyboard._geometry and controller.future is None)
+                focus_external()
+                pointer_click(next(b for b in keyboard.letters if b.text() == 'C'))
+                wait(lambda: remote('value').stdout.strip() == 'c')
+                assert not keyboard.isActiveWindow()
+                pointer_click(next(b for b in keyboard.findChildren(type(button)) if b.text() == 'Shift'))
+                pointer_click(next(b for b in keyboard.letters if b.text() == 'D'))
+                wait(lambda: remote('value').stdout.strip() == 'cD')
+                pointer_click(next(b for b in keyboard.findChildren(type(button)) if b.text() == 'Apagar'))
+                wait(lambda: remote('value').stdout.strip() == 'c')
+                assert remote('quit').returncode == 0
+                external.wait(timeout=5)
+                external = None
+                records.append(dict(external_input='real pointer C, Shift+D and backspace into owned separate process; top keyboard retained external focus'))
             if os.environ.get("XDG_SESSION_TYPE") == "x11":
+                from folego.core.development_prompts import text
+                view.shortcut_tabs.copy_prompt('diagnose')
+                assert app.clipboard().text() == text('diagnose')
                 target.setText("Folego QA")
                 target.selectAll()
                 controller.request("copy")
@@ -184,6 +317,13 @@ def main():
             "feedback": view.feedback_label.text()}, indent=2))
         raise
     finally:
+        if external is not None:
+            subprocess.run(['qdbus6', 'org.folego.QAText.p' + str(external.pid), '/target',
+                            'org.folego.QAText.quit'], capture_output=True, timeout=3)
+            try: external.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                external.terminate()  # exact disposable Popen child only
+                external.wait(timeout=5)
         view.force_close()
         target.close()
         for window in list(app.topLevelWidgets()):

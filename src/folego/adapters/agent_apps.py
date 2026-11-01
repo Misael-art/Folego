@@ -12,6 +12,7 @@ import time
 
 from ..core.agent_deliveries import identity, running_agents
 from ..core.ai_sessions import NAMES
+from ..core.ai_accounts import inventory, process_account, ROOT_KEYS
 
 CLASSES = {
     'codex': r'^(codex-desktop|Codex)$',
@@ -37,16 +38,41 @@ class AgentApps:
             raise RuntimeError('O desktop não confirmou a abertura da aplicação; avisos preservados')
         return result.stdout.strip()
 
-    def _windows(self, binary, provider):
+    def _window_account(self, binary, window, account):
+        text = self._call([binary, 'getwindowpid', window])
+        if not text.isdigit() or identity(int(text)) is None: return False
+        try:
+            with Path('/proc', text, 'environ').open('rb') as stream:
+                raw = stream.read(256 * 1024 + 1)
+            if len(raw) > 256 * 1024: return False
+            key = ROOT_KEYS[account['provider']].encode() + b'='
+            root = next((v[len(key):].decode() for v in raw.split(b'\0') if v.startswith(key)), None)
+            if root is None:
+                native_home = next((v[5:].decode() for v in raw.split(b'\0') if v.startswith(b'HOME=')), None)
+                if not native_home or not Path(native_home).is_absolute(): return False
+                home = Path(native_home)
+                root = str(home / ('.codex' if account['provider'] == 'codex' else '.' + account['provider']))
+                if account['provider'] == 'web': return False
+            return str(Path(root).resolve()) == account['path']
+        except (OSError, ValueError):
+            return False
+
+    def _windows(self, binary, provider, account=None):
         ids = self._call([binary, 'search', '--class', CLASSES[provider]], search=True).splitlines()
         pattern = r'\{[0-9a-fA-F-]{36}\}' if self.wayland else r'[0-9]+'
         existing = list(dict.fromkeys(i for i in ids if re.fullmatch(pattern, i)))[:16]
+        if account is not None:
+            existing = [w for w in existing if self._window_account(binary, w, account)]
         if existing: return existing
+        ids = []
         # CLI processes: their terminal's owner must be in their live ancestry.
         for process in self.discover():
             if process['provider'] != ('codex' if provider == 'web' else provider) or process['server']:
                 continue
             if identity(process['pid']) != process['identity']: continue
+            if account is not None:
+                actual_provider, actual_path = process_account(process, self.env)
+                if actual_provider != provider or actual_path != account['path']: continue
             if provider in ('codex', 'web'):
                 home = process['roots'].get('CODEX_HOME', '')
                 config = Path(home) / 'config.toml'
@@ -86,13 +112,24 @@ class AgentApps:
         if action == 'agent-billing':
             from ..core.ai_sessions import set_billing_day
             return set_billing_day(*value, env=self.env)
-        provider, pending = value
+        provider, pending, *selected = value
         if action != 'agent-open' or provider not in CLASSES:
             raise ValueError('Aplicação desconhecida')
         binary = shutil.which('kdotool' if self.wayland else 'xdotool')
         if not binary: raise RuntimeError('Abertura indisponível: controle de janelas do desktop ausente')
-        windows = self._windows(binary, provider)
+        account = None
+        if selected and selected[0]:
+            account = next((a for a in inventory(self.env, discover=self.discover)
+                            if a['provider'] == provider and a['account_id'] == selected[0]), None)
+            if account is None: raise RuntimeError('Conta não identificada; avisos preservados')
+            pending = [p for p in pending if p.get('account_id') == account['account_id']]
+        windows = self._windows(binary, provider, account)
         if not windows:
+            if account is not None:
+                home = Path(self.env.get('HOME') or Path.home())
+                canonical = str((home / ('.codex' if provider == 'codex' else '.' + provider)).resolve())
+                if not account['default'] or provider == 'web' or account['path'] != canonical:
+                    raise RuntimeError('Nenhuma janela desta conta identificada; abra o perfil no cliente. Avisos preservados')
             launcher = LAUNCHERS[provider]
             home = Path(self.env.get('HOME') or Path.home())
             data = Path(self.env.get('XDG_DATA_HOME') or home / '.local/share')
@@ -105,7 +142,7 @@ class AgentApps:
             # Observe the single launch; never repeat it after a timeout.
             deadline = time.monotonic() + 8
             while time.monotonic() < deadline:
-                windows = self._windows(binary, provider)
+                windows = self._windows(binary, provider, account)
                 if windows: break
                 time.sleep(.2)
             if not windows:
