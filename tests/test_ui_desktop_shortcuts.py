@@ -40,6 +40,10 @@ def test_tabs_use_distinct_keyboard_hit_targets_without_sticky_position(qapp, mo
         tabs.buttons[action].click()
         drain(qapp, controller)
     assert [call[0] for call in backend.calls] == ["copy", "paste", "print"]
+    for action in ('select_all', 'delete_all'):
+        tabs.buttons[action].click()
+        drain(qapp, controller)
+        assert backend.calls[-1][0] == action
     tabs.shutdown()
 
 
@@ -101,7 +105,7 @@ def test_native_keyboard_position_requires_same_physical_pixels(qapp, monkeypatc
     controller.close()
 
 
-def test_delivery_badge_is_independent_of_quota_and_click_opens_application(qapp):
+def test_delivery_badge_is_independent_of_quota_and_click_opens_application(qapp, monkeypatch):
     from PySide6.QtCore import QObject, Signal
     class Opener(QObject):
         result = Signal(str)
@@ -127,4 +131,7 @@ def test_delivery_badge_is_independent_of_quota_and_click_opens_application(qapp
     assert strip.badges['codex'].text() == '?'
     strip.buttons['codex'].click()
     assert opener.requests[-1] == ('agent-open', ('codex', []))
+    monkeypatch.setattr('folego.ui.ai_strip.QInputDialog.getInt', lambda *a, **k: (15, True))
+    strip.billing('codex')
+    assert opener.requests[-1] == ('agent-billing', ('codex', 15))
     strip.shutdown()

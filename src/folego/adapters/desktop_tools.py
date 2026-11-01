@@ -98,6 +98,9 @@ class DesktopTools:
         return "Solicitação de tecla enviada ao aplicativo em foco"
 
     def perform(self, action, value=None):
+        if action in ('select_all', 'delete_all'):
+            from .editable_text import edit_focused
+            return edit_focused(action, env=self.env)
         if action == "copy":
             # Standard alternate editing keys: Ctrl+C in a terminal can signal
             # its foreground job. Copy must never turn into an interrupt.

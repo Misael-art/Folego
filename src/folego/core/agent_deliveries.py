@@ -274,7 +274,11 @@ class DeliveryMonitor:
     def _accounts(self, now):
         if self.roots is not None and now - self.roots_at < 20: return self.roots
         accounts = account_roots(self.env)
+        home = Path(self.env.get('HOME') or Path.home()).resolve()
         for process in self.discover():
+            selected = list(process['roots'].values())
+            if any(not Path(p).is_absolute() or not Path(p).resolve().is_relative_to(home) for p in selected):
+                continue
             if process['provider'] in ('claude', 'grok'):
                 key = 'CLAUDE_CONFIG_DIR' if process['provider'] == 'claude' else 'GROK_HOME'
                 if process['roots'].get(key):

@@ -1,0 +1,36 @@
+{
+  "widget_visible": true,
+  "editing_buttons_visible": true,
+  "providers": [
+    {
+      "provider": "Codex",
+      "visible": true,
+      "tickets_field": true,
+      "monthly_field": true,
+      "claude_rate_limited": false
+    },
+    {
+      "provider": "Codex Web",
+      "visible": true,
+      "tickets_field": true,
+      "monthly_field": true,
+      "claude_rate_limited": false
+    },
+    {
+      "provider": "Claude",
+      "visible": true,
+      "tickets_field": true,
+      "monthly_field": true,
+      "claude_rate_limited": false
+    },
+    {
+      "provider": "Grok",
+      "visible": true,
+      "tickets_field": true,
+      "monthly_field": true,
+      "claude_rate_limited": false
+    }
+  ],
+  "restart": "old GUI exit left its event loop alive; identity/argv/pidfd verified, SIGTERM once, flock release observed; ./dev gui launched; widget mode selected by native accessible action",
+  "other_agents_stopped": false
+}

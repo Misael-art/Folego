@@ -527,6 +527,11 @@ class MainWindow(QMainWindow):
         if set_visible is not None:
             set_visible(False)
         self.close()
+        # A hidden central window and a Tool widget do not emit lastWindowClosed.
+        # Quit must end the event loop explicitly after the normal shutdown path.
+        app = QGuiApplication.instance()
+        if app is not None:
+            app.quit()
 
     # ----------------------------------------------------------------------- acts
 

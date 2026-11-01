@@ -1,9 +1,10 @@
 """Quota indicators, new completed sessions and verified application opening."""
 import html
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
-from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QWidget
+from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap, QDesktopServices
+from PySide6.QtWidgets import (QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QWidget,
+                              QMenu, QInputDialog, QDialog, QTextBrowser)
 
 from ..core import ai_sessions
 from .theme import TOKENS
@@ -34,6 +35,8 @@ class AIStrip(QWidget):
             button.setAccessibleName(ai_sessions.NAMES[provider] + ": cota desconhecida")
             button.setStyleSheet("padding:3px 0;border:none;background:transparent;")
             button.clicked.connect(lambda checked=False, p=provider: self.open_agent(p))
+            button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            button.customContextMenuRequested.connect(lambda point, p=provider: self.options(p, point))
             self.buttons[provider] = button
             column = QVBoxLayout()
             column.setSpacing(0)
@@ -91,6 +94,37 @@ class AIStrip(QWidget):
 
     def _opened(self, _message):
         self.delivery_poller.request()
+        self.refresh()
+
+    def options(self, provider, point):
+        button = self.buttons[provider]
+        menu = QMenu(button)
+        menu.addAction('Atualizar dados', self.refresh)
+        menu.addAction('Detalhes de todas as contas…', lambda: self.details(provider))
+        menu.addAction('Definir dia da renovação mensal…', lambda: self.billing(provider))
+        urls = {'codex': 'https://chatgpt.com/codex/settings/usage',
+                'web': 'https://chatgpt.com/#settings/Account',
+                'claude': 'https://claude.ai/settings/usage', 'grok': 'https://grok.com/usage'}
+        menu.addAction('Consultar no site do provedor', lambda: QDesktopServices.openUrl(QUrl(urls[provider])))
+        menu.exec(button.mapToGlobal(point))
+        menu.deleteLater()
+
+    def details(self, provider):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(ai_sessions.NAMES[provider] + ' · uso e renovação')
+        layout = QVBoxLayout(dialog)
+        text = QTextBrowser(dialog)
+        text.setPlainText('\n\n'.join(ai_sessions.describe(item) for item in self.items if item['provider'] == provider))
+        layout.addWidget(text)
+        dialog.resize(480, 420)
+        dialog.exec()
+        dialog.deleteLater()
+
+    def billing(self, provider):
+        current = next((i.get('billing_day', 0) for i in self.items if i['provider'] == provider), 0)
+        day, accepted = QInputDialog.getInt(self, 'Renovação mensal · ' + ai_sessions.NAMES[provider],
+             'Dia da cobrança mensal (1–31; 0 remove).\nReferência pessoal, sem confirmação de cobrança pelo provedor.', current, 0, 31)
+        if accepted: self.opener.request('agent-billing', (provider, day))
 
     def _notice(self, message):
         # The compact card owns visible transient feedback, separate from alerts.
@@ -128,6 +162,7 @@ class AIStrip(QWidget):
             detail = "\n\n".join(ai_sessions.describe(item) for item in items) or "Sem observação"
             detail += '\n\n' + completed + '\nClique para abrir a aplicação/terminal e marcar estes avisos como vistos.'
             detail += '\nContagem de novas sessões concluídas desde a ativação do monitor; ferramentas não contam.'
+            detail += '\nBotão direito: atualizar, detalhes das contas e renovação mensal.'
             button.setToolTip("<p style='white-space:pre-wrap'>" + html.escape(detail) + "</p>")
 
     def showEvent(self, event):

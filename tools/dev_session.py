@@ -45,7 +45,8 @@ def test_environment(run: Path) -> dict[str, str]:
     env = os.environ.copy()
     for key in ("PYTHONPATH", "PYTHONHOME", "PYTEST_ADDOPTS", "PYTEST_PLUGINS",
                 "QT_PLUGIN_PATH", "QML2_IMPORT_PATH", "DECKWELLNESS_PROC_ROOT",
-                "DECKWELLNESS_SYS_ROOT", "FOLEGO_RUN_ID"):
+                "DECKWELLNESS_SYS_ROOT", "FOLEGO_RUN_ID", "CODEX_HOME",
+                "CLAUDE_CONFIG_DIR", "GROK_HOME"):
         env.pop(key, None)
     home = run / "home"
     env.update(HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"),

@@ -85,6 +85,7 @@ class VirtualKeyboard(QWidget):
         super().__init__(parent, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
                          Qt.WindowType.WindowDoesNotAcceptFocus | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips)
         self.setWindowTitle("Fôlego — teclado " + uuid.uuid4().hex)
         self.setAccessibleName("Teclado virtual do Fôlego")
         self.controller = controller
@@ -218,9 +219,26 @@ class ShortcutTabs(QWidget):
         self.controller = controller or DesktopController(self)
         self.keyboard = None
         self.buttons = {}
-        layout = QHBoxLayout(self)
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(3, 0, 3, 0)
-        layout.setSpacing(3)
+        layout.setSpacing(2)
+        editing = QHBoxLayout()
+        editing.setSpacing(3)
+        for action, text, color in (("select_all", "Selecionar tudo", "#28596b"),
+                                    ("delete_all", "Apagar tudo", "#8a4554")):
+            button = QPushButton(text)
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            button.setAccessibleName(text + " no campo de texto em foco")
+            button.setToolTip(text + " no campo de texto editável em foco; preserva a área de transferência")
+            button.setStyleSheet(f"background:{color};color:white;border:none;border-radius:5px;"
+                                 "font-size:8pt;padding:2px;min-height:18px;")
+            button.clicked.connect(lambda checked=False, key=action: self.activate(key))
+            self.buttons[action] = button
+            editing.addWidget(button, 1)
+        layout.addLayout(editing)
+        tabs = QHBoxLayout()
+        tabs.setSpacing(3)
+        layout.addLayout(tabs)
         for key, text, color, icon in (("copy", "Copiar", "#2e78a7", "edit-copy"),
                                         ("paste", "Colar", "#287963", "edit-paste"),
                                         ("print", "Print", "#8f651f", "camera-photo"),
@@ -253,7 +271,7 @@ class ShortcutTabs(QWidget):
                 self.top_button.setStyleSheet("border-left:1px solid #b99ce1;border-radius:4px;")
                 self.top_button.clicked.connect(lambda: self.open_keyboard("top"))
                 row.addWidget(self.top_button)
-            layout.addWidget(tab, 3 if key == "keyboard" else 2)
+            tabs.addWidget(tab, 3 if key == "keyboard" else 2)
 
     def activate(self, action):
         if action == "keyboard":

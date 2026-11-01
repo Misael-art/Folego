@@ -133,3 +133,143 @@ def test_cli_ai_status_is_headless_and_uses_same_data(tmp_path, monkeypatch, cap
     monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
     assert cli.main(["ai", "status", "--json"]) == 0
     assert len(json.loads(capsys.readouterr().out)["meters"]) == 4
+
+
+def codex_auth(home):
+    import base64
+    root = home / '.codex'
+    root.mkdir(exist_ok=True)
+    encoded = base64.urlsafe_b64encode(json.dumps(dict(exp=NOW + 3600)).encode()).decode().rstrip('=')
+    path = root / 'auth.json'
+    path.write_text(json.dumps(dict(tokens=dict(access_token='test.' + encoded + '.fixture', account_id='account-fixture'))))
+    return root, path
+
+
+def test_live_codex_reads_quota_tickets_and_balance_without_redeeming(tmp_path):
+    root, path = codex_auth(tmp_path)
+    original = path.read_bytes()
+    urls = []
+    def fetch(url, headers):
+        urls.append(url)
+        if url.endswith('/usage'):
+            return dict(account_id='account-fixture', plan_type='pro',
+                rate_limit=dict(primary_window=dict(used_percent=72, reset_at=NOW + 3600, limit_window_seconds=604800)),
+                rate_limit_reset_credits=dict(available_count=2), credits=dict(balance='9.99'))
+        return dict(available_count=2, credits=[dict(status='available', expires_at=NOW + 86400)])
+    item = ai.codex(root, NOW, fetch=fetch)
+    assert item['remaining'] == 28 and item['windows'][0]['name'] == 'Semana'
+    assert item['reset_credits']['available'] == 2 and item['extra_credits'] == '9.99'
+    description = ai.describe(item, NOW)
+    assert 'Tickets de reposição: 2' in description and 'Renovação mensal: data não informada' in description
+    assert all('/consume' not in url for url in urls)
+    assert 'fixture' not in json.dumps(item) and path.read_bytes() == original
+    assert 'consulta vencida' in ai.describe(item, NOW + 901)
+
+
+def test_live_codex_rotation_never_reuses_previous_account_response(tmp_path):
+    root, path = codex_auth(tmp_path)
+    def fetch(url, headers):
+        path.write_text('{}')
+        return dict(rate_limit=dict(primary_window=dict(used_percent=10, reset_at=NOW + 3600)))
+    item = ai.codex(root, NOW, fetch=fetch)
+    assert item['remaining'] is None and 'alterada' in item['reason']
+
+
+def test_failed_ticket_details_preserve_summary_without_inventing_validity(tmp_path):
+    root, _ = codex_auth(tmp_path)
+    def fetch(url, headers):
+        if url.endswith('/usage'): return dict(rate_limit_reset_credits=dict(available_count=1))
+        raise OSError('unavailable')
+    item = ai.codex(root, NOW, fetch=fetch)
+    assert item['reset_credits']['available'] == 1
+    assert 'validade: não informada' in ai.describe(item, NOW)
+
+
+def test_claude_profile_and_extra_usage_have_separate_monthly_meaning(tmp_path):
+    root, _ = credentials(tmp_path)
+    def fetch(url, headers):
+        if url.endswith('/profile'):
+            return dict(organization=dict(subscription_status='active', subscription_created_at='2026-10-31T12:00:00Z'))
+        return dict(five_hour=dict(utilization=18, resets_at=NOW + 1000),
+                    extra_usage=dict(is_enabled=True, monthly_limit=2000, used_credits=500, utilization=25))
+    item = ai.claude(root, NOW, fetch)
+    assert item['billing_day'] == 31 and item['extra_usage']['utilization'] == 25
+    text = ai.describe(item, NOW)
+    assert 'estimativa' in text and '25% do limite mensal' in text
+
+
+def test_billing_reference_preserves_configuration_and_unknown_schema(tmp_path):
+    configuration = tmp_path / '.config/folego/ai-sessions.json'
+    configuration.parent.mkdir(parents=True)
+    original = dict(schema=1, accounts=[], grok_paid_until='2026-12-01T00:00:00Z')
+    configuration.write_text(json.dumps(original))
+    ai.set_billing_day('grok', 31, env=env(tmp_path))
+    settings = json.loads(configuration.read_text())
+    assert settings['grok_paid_until'] == original['grok_paid_until']
+    assert next(i for i in ai.collect(env(tmp_path), now=NOW) if i['provider']=='grok')['billing_day'] == 31
+    assert ai.next_monthly(31, dt.datetime(2027, 2, 1, tzinfo=dt.timezone.utc).timestamp()) == '28/02/2027'
+    configuration.write_text('{"schema":99}')
+    with pytest.raises(ValueError): ai.set_billing_day('grok', 10, env=env(tmp_path))
+    assert configuration.read_text() == '{"schema":99}'
+
+
+def test_native_account_discovery_is_deduplicated_and_private_home_scoped(tmp_path):
+    root = tmp_path / 'profile'
+    root.mkdir()
+    (root/'config.toml').write_text('model="chatgpt-web/test"')
+    found = lambda: [dict(provider='codex', roots=dict(CODEX_HOME=str(root)))] * 2
+    accounts = ai.active_accounts([], found, tmp_path)
+    assert len(accounts) == 1 and accounts[0]['provider'] == 'web'
+    assert ai.active_accounts([], found, tmp_path/'private-home') == []
+
+
+def test_claude_rate_limit_reuses_only_fresh_same_account_and_honors_backoff(tmp_path):
+    from urllib.error import HTTPError
+    root, path = credentials(tmp_path)
+    credentials_value = json.loads(path.read_text())
+    credentials_value['claudeAiOauth']['expiresAt'] = (NOW + 10000) * 1000
+    path.write_text(json.dumps(credentials_value))
+    cache = {}
+    def success(url, headers):
+        if url.endswith('/profile'): return {}
+        return dict(five_hour=dict(utilization=18, resets_at=NOW + 1000))
+    first = ai.claude(root, NOW, success, cache=cache)
+    calls = []
+    def limited(url, headers):
+        calls.append(url)
+        raise HTTPError(url, 429, 'Limited', {'Retry-After': '300'}, None)
+    result = ai.claude(root, NOW + 301, limited, cache=cache)
+    assert result['remaining'] == first['remaining'] and result['observed_at'] == NOW
+    assert 'limitada' in result['reason'] and len(calls) == 1
+    ai.claude(root, NOW + 302, limited, cache=cache)
+    assert len(calls) == 1
+    result = ai.claude(root, NOW + 902, limited, cache=cache)
+    assert result['remaining'] is None and '429' in result['reason']
+    changed = json.loads(path.read_text())
+    changed['claudeAiOauth']['accessToken'] = 'another-account-fixture'
+    path.write_text(json.dumps(changed))
+    assert ai.claude(root, NOW + 1, limited, cache=cache)['remaining'] is None
+    assert 'private-' not in str(cache) and 'another-account' not in str(cache)
+
+
+def test_cached_claude_reset_revalidates_remaining_without_new_network(tmp_path):
+    root, _ = credentials(tmp_path)
+    cache = {}
+    def success(url, headers):
+        return {} if url.endswith('/profile') else dict(five_hour=dict(utilization=18, resets_at=NOW + 30))
+    ai.claude(root, NOW, success, cache=cache)
+    def no_request(*args): pytest.fail('fresh cache triggered a new network request')
+    assert ai.claude(root, NOW + 31, no_request, cache=cache)['remaining'] is None
+
+
+def test_claude_retry_after_is_not_shortened_to_one_hour(tmp_path):
+    from urllib.error import HTTPError
+    root, _ = credentials(tmp_path)
+    cache = {}
+    calls = []
+    def limited(url, headers):
+        calls.append(url)
+        raise HTTPError(url, 429, 'Limited', {'Retry-After': '7200'}, None)
+    ai.claude(root, NOW, limited, cache=cache)
+    ai.claude(root, NOW + 61, limited, cache=cache)
+    assert len(calls) == 1 and next(iter(cache.values()))['retry_at'] == NOW + 7200

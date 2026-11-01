@@ -230,3 +230,15 @@ def test_old_missing_indexed_session_does_not_create_a_historical_backlog(tmp_pa
     with sqlite3.connect(root / 'state_5.sqlite') as db: db.execute('update threads set updated_at=?', (NOW + 1,))
     clock[0] += 1
     assert row(view)['count'] is None
+
+
+def test_private_home_never_adopts_real_native_account_paths(tmp_path):
+    private = tmp_path / 'private'
+    private.mkdir()
+    external = tmp_path / 'external'
+    path = codex(external)
+    append(path, event('task_complete', NOW + 1))
+    view = DeliveryMonitor(env={'HOME': str(private)}, state=private/'state.json',
+          clock=lambda: NOW, discover=lambda: [dict(provider='codex', roots=dict(CODEX_HOME=str(external/'.codex')))])
+    assert row(view)['count'] is None
+    assert all(str(external) not in directory for _, directory in view._accounts(NOW))

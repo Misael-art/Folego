@@ -14,18 +14,28 @@ no indicador para abrir a aplicação ou seu terminal existente. Verde significa
 amarelo, de 21% a 60%; vermelho, até 20%. Cinza é desconhecido, vencido ou parcial,
 inclusive se uma das contas agrupadas não tem uma observação válida.
 
-- Codex: leitura limitada dos registros `rate_limits` que o cliente grava em
-  seu diretório de sessões. A menor disponibilidade das janelas conhecidas
-  determina a cor. Observação de mais de 15 minutos, futura ou com reposição já
+- Codex: consulta somente leitura aos endpoints de uso e tickets do próprio
+  provedor, com a credencial local já existente e ainda válida. Exibe consumo,
+  reposição com data/hora e contagem regressiva, tickets disponíveis com validade
+  quando informada e saldo extra. Não resgata tickets. Se a consulta não estiver
+  disponível, tenta os registros `rate_limits` locais e identifica a fonte.
+  A menor disponibilidade das janelas conhecidas determina a cor. Observação de mais de 15 minutos, futura ou com reposição já
   vencida deixa de fornecer um percentual atual. Não se inventa 100% no reset.
 - Claude: consulta de uso ao endpoint OAuth da Anthropic com a credencial local
   já existente. Credencial expirada ou alterada durante a consulta invalida a
   resposta. Não se renova, copia ou grava a credencial; redirecionamentos HTTP
-  são recusados. Não há rede no loop gráfico.
+  são recusados. Inclui uso extra e teto mensal quando retornados. A referência
+  mensal derivada do início da assinatura ativa é **estimativa**, não recibo de
+  cobrança. Leituras de uso são reaproveitadas por 5 minutos; perfil por 6 horas.
+  HTTP 429 suspende novas consultas pelo prazo informado, com observação recente
+  da mesma conta quando ainda válida. Estado vencido não vira percentual atual.
+  Não há rede no loop gráfico.
 - Codex Web e Grok: esta fonte não oferece uma franquia percentual confirmada.
   Permanecem cinza. Metadados de assinatura, quando disponíveis, aparecem como
   tal, separados da reposição de cota. A data de Grok pode ser informada pelo
-  usuário; isso não confirma pagamento ou cota.
+  usuário; isso não confirma pagamento ou cota. Esses campos continuam
+  indisponíveis nas fontes consultadas; não se usam tokens gastos na conversa
+  como percentual da franquia do plano.
 - Token presente não prova renovação futura válida. O painel distingue a
   observação aceita pelo provedor de metadados locais e validade não verificada.
   Cupons/créditos não fornecidos pela fonte continuam não informados.
@@ -50,8 +60,28 @@ Para outras contas, crie `$XDG_CONFIG_HOME/folego/ai-sessions.json` (por padrão
 Pode apontar para um diretório já criado por outro launcher; os arquivos
 permanecem no lugar. Nenhum token deve ser colocado nessa configuração. Schema
 desconhecido, conta ilegível ou orçamento excedido aparecem como desconhecidos.
-O limite é 16 contas adicionais e 40 rollouts com caudas de até 64 KiB por conta.
+O limite é 16 contas configuradas adicionais, 20 raízes totais e 40 rollouts com
+caudas de até 64 KiB por conta no fallback. Clientes Codex/Web ativos também
+podem fornecer seus diretórios nativos, com deduplicação e escopo no HOME
+selecionado. HOME privado não adota contas nativas do HOME físico.
 Para consultar sem Qt: `./dev run ai status --json`.
+
+As dicas aparecem mesmo com outro aplicativo em foco. O botão direito no
+indicador abre **Atualizar dados**, **Detalhes de todas as contas** (janela com
+rolagem), **Definir dia da renovação mensal** e **Consultar no site do provedor**.
+O clique esquerdo continua abrindo a aplicação/terminal. A referência mensal
+pessoal aceita dias 1–31, ajusta meses curtos e persiste na configuração própria;
+0 remove somente essa referência. Ela é identificada como informada pelo usuário,
+sem confirmar cobrança. Exemplo adicional na mesma configuração:
+
+```json
+"billing": {"codex": {"monthly_day": 15}, "grok": {"monthly_day": 31}}
+```
+
+**Reposição da franquia**, **ticket de reposição**, **saldo/uso extra** e
+**renovação mensal da assinatura** são informações distintas. A presença de um
+token de login não preenche a data de cobrança. A indisponibilidade de uma fonte
+é explicitada, sem fabricar percentual ou cupom.
 
 ## Entregas para revisitar
 
@@ -93,6 +123,16 @@ fora da cauda legível deixam a observação parcial, sem amostragem silenciosa.
 
 ## Abas de ações rápidas
 
+**Selecionar tudo** e **Apagar tudo** ficam em uma linha fina acima das abas.
+Atuam somente no campo editável em foco, identificado pelo AT-SPI e pelo
+proprietário da janela ativa. Apagar remove o texto do campo inteiro, não só a
+seleção. Não leem seu conteúdo, não usam a área de transferência, não enviam
+Enter nem apagam arquivos. Foco/campo alterado recusa a operação; não há repetição
+automática. Campos sem acessibilidade e terminais sem interface editável informam
+indisponibilidade, sem substituir a operação por atalhos globais de terminal.
+Dependências opcionais: `libatspi`/AT-SPI 2 e `kdotool` no KDE/Wayland ou
+`xdotool` em X11 com gerenciador de janelas. Não há instalação automática.
+
 **Copiar** solicita a cópia da seleção do aplicativo em foco. **Colar** solicita
 a colagem nele. Usam os atalhos alternativos de edição Ctrl+Insert e Shift+Insert;
 assim, copiar nunca envia Ctrl+C para interromper um trabalho no terminal. O
@@ -122,13 +162,18 @@ automático. Nenhum desses controles habilita o executor de recursos.
 
 ## Distribuição e evidência
 
-Esta entrega é **0.2.0b1**, uma prévia para Linux, Python 3.14 e Qt/PySide6.
+A release publicada é **0.2.0b1**, uma prévia para Linux, Python 3.14 e Qt/PySide6.
 Baixe a versão marcada na página Releases do GitHub, confira `SHA256SUMS` e use
 o código-fonte para `./dev setup` e `./dev gui`, ou instale o wheel em um ambiente
 Python 3.14 próprio com a dependência GUI. Não há AppImage/Flatpak nesta prévia.
 As dependências opcionais acima não são instaladas silenciosamente.
 
-[Validação deste incremento](handoff/validation/compact-ui-2026-11-01/README.md).
+A release v0.2.0b1 corresponde ao código anterior; contadores, revisão do hover
+e edição de campo estão na branch/PR para validação, sem alterar essa tag.
+
+[Interface inicial](handoff/validation/compact-ui-2026-11-01/README.md) ·
+[Contadores](handoff/validation/agent-deliveries-2026-11-01/README.md) ·
+[Hover e edição](handoff/validation/ai-details-editing-2026-11-01/README.md).
 O histórico e as pendências gerais continuam em [HANDOFF](HANDOFF.md); a prévia
 não certifica a matriz física de entrada, login, hardware ou todas as aplicações
 de destino, nem resolve as pendências do motor de recursos registradas ali.

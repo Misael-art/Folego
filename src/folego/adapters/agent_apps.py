@@ -83,6 +83,9 @@ class AgentApps:
         raise RuntimeError('A aplicação não recebeu foco; avisos preservados')
 
     def perform(self, action, value):
+        if action == 'agent-billing':
+            from ..core.ai_sessions import set_billing_day
+            return set_billing_day(*value, env=self.env)
         provider, pending = value
         if action != 'agent-open' or provider not in CLASSES:
             raise ValueError('Aplicação desconhecida')

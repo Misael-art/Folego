@@ -27,10 +27,12 @@ def main():
         target = root / folder
         target.mkdir(mode=0o700)
         os.environ[key] = str(target)
+    for key in ('CODEX_HOME', 'CLAUDE_CONFIG_DIR', 'GROK_HOME'):
+        os.environ.pop(key, None)
     if args.offscreen:
         os.environ["QT_QPA_PLATFORM"] = "offscreen"
     from PySide6.QtCore import QTimer, QCoreApplication, QEvent
-    from PySide6.QtWidgets import QApplication, QLineEdit
+    from PySide6.QtWidgets import QApplication, QLineEdit, QToolTip
     from folego.core import ai_sessions as ai
     from folego.core.snapshot import MemInfo, Snapshot
     from folego.core.tmpfs import TmpfsVolume
@@ -40,6 +42,7 @@ def main():
     from folego.ui.title_signal import TitleSignal
 
     app = QApplication([])
+    app.setApplicationName('folego-owned-qa')
     apply_theme(app)
     target = QLineEdit()
     target.setWindowTitle("Fôlego QA — campo próprio")
@@ -66,6 +69,8 @@ def main():
     items = [ai.unknown(p) for p in ai.NAMES]
     for item, used in ((items[0], 72), (items[2], 18)):
         item.update(observed_at=now, windows=[ai.quota_window("Sessão", used, now + 3600, now)])
+    items[0].update(reset_credits=dict(available=2, observed_at=now, expires_at=now + 86400),
+                    extra_credits='9.99', billing_day=15, billing_source='referência de demonstração')
     view.ai_strip.poller._collect = lambda: items
     sample = Snapshot(ts=now, mono=time.monotonic(), mem=MemInfo(16 * 1024**2, 6 * 1024**2),
                       swap_used_kb=1024, swap_total_kb=8192, pressure_memory=None, pressure_io=None,
@@ -86,6 +91,16 @@ def main():
     try:
         wait(lambda: view.isVisible())
         view.adjustSize()
+        from PySide6.QtCore import Qt, QEvent, QPoint
+        from PySide6.QtGui import QHelpEvent
+        assert view.testAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips)
+        button = view.ai_strip.buttons['codex']
+        help_event = QHelpEvent(QEvent.Type.ToolTip, QPoint(5, 5), button.mapToGlobal(QPoint(5, 5)))
+        app.sendEvent(button, help_event)
+        wait(lambda: QToolTip.isVisible())
+        assert 'Tickets de reposição: 2' in QToolTip.text() and 'Renovação mensal' in QToolTip.text()
+        records.append(dict(tooltip='Qt help event in non-focusing widget', fields=['quota', 'reset', 'tickets', 'monthly']))
+        QToolTip.hideText()
         view.grab().save(str(root / "compact.png"))
         assert view.width() == 280
         for button in view.shortcut_tabs.buttons.values():
@@ -133,6 +148,15 @@ def main():
             wait(lambda: controller.future is None)
             wait(lambda: target.text() == "a", seconds=3)
             records.append({"input": "native key into owned focused field"})
+            target.setText('Texto de QA com acentos')
+            view.shortcut_tabs.buttons['select_all'].click()
+            wait(lambda: controller.future is None)
+            wait(lambda: target.selectedText() == 'Texto de QA com acentos', seconds=3)
+            assert target.hasFocus()
+            view.shortcut_tabs.buttons['delete_all'].click()
+            wait(lambda: controller.future is None)
+            wait(lambda: target.text() == '', seconds=3)
+            records.append(dict(editing='native AT-SPI select/delete only the owned focused field'))
             if os.environ.get("XDG_SESSION_TYPE") == "x11":
                 target.setText("Folego QA")
                 target.selectAll()

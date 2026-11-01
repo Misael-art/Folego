@@ -1,0 +1,58 @@
+[
+  {
+    "provider": "codex",
+    "percentage_available": true,
+    "reset_available": true,
+    "reset_tickets_available": true,
+    "monthly_reference_available": false,
+    "remote_read": true
+  },
+  {
+    "provider": "web",
+    "percentage_available": false,
+    "reset_available": false,
+    "reset_tickets_available": false,
+    "monthly_reference_available": false,
+    "remote_read": false
+  },
+  {
+    "provider": "web",
+    "percentage_available": false,
+    "reset_available": false,
+    "reset_tickets_available": false,
+    "monthly_reference_available": false,
+    "remote_read": false
+  },
+  {
+    "provider": "codex",
+    "percentage_available": true,
+    "reset_available": true,
+    "reset_tickets_available": true,
+    "monthly_reference_available": false,
+    "remote_read": true
+  },
+  {
+    "provider": "codex",
+    "percentage_available": true,
+    "reset_available": true,
+    "reset_tickets_available": true,
+    "monthly_reference_available": false,
+    "remote_read": true
+  },
+  {
+    "provider": "claude",
+    "percentage_available": false,
+    "reset_available": false,
+    "reset_tickets_available": false,
+    "monthly_reference_available": false,
+    "remote_read": false
+  },
+  {
+    "provider": "grok",
+    "percentage_available": false,
+    "reset_available": false,
+    "reset_tickets_available": false,
+    "monthly_reference_available": false,
+    "remote_read": false
+  }
+]
