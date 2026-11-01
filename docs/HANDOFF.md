@@ -1,5 +1,63 @@
 # Passagem para o próximo agente — atualizada em 01/11/2026
 
+## Widget compacto, monitor de IAs e prévia publicada — 01/11/2026
+
+Implementação: `5ce16b1c05001ad3552c3cd26cd30ccdbfc73f63`, na branch
+`codex/portable-handoff-20261024`. O usuário aprovou os mockups e autorizou
+implementação, commit, push, PR e release nesta rodada. Essa autorização permite
+esta prévia de distribuição, sem merge ou ampliação de grants/automação.
+
+Entregue: widget de **280 × 216 px** no estado normal, controles de janela no
+cabeçalho, recursos em duas linhas, faixa de IAs com detalhes por hover e abas
+coloridas Copiar/Colar/Print/Teclado. A aba abre sempre embaixo; só a seta abre
+no topo. Teclado próprio sem foco, posição confirmada pelo KWin e auxiliar de
+entrada transitório próprio quando o host já permite uinput. Copiar usa
+Ctrl+Insert, evitando Ctrl+C que interromperia tarefas de terminal. Captura abre
+seleção de região do Spectacle e preserva a instância em andamento.
+
+IAs têm coleta própria, independente do PhaseZero, também disponível em
+`folego ai status --json`: Codex local e Claude por endpoint de uso de primeira
+parte. Orçamentos de leitura, descarte por troca de conta, falha e vencimento;
+reset passado não significa cota cheia. Web/Grok sem percentual confirmado
+ficam desconhecidos. Token presente não prova renovação válida; não há refresh
+ou cópia/gravação de credenciais. Consulte [configuração e dependências](COMPACTO.md).
+
+Validação neste host: `./dev check` **1061 passed, 2 skipped** headless (18,47 s)
+e **1320 passed, 2 skipped** Qt (34,04 s). Após tipografia final, nova suíte Qt:
+**1320 passed, 2 skipped** (32,88 s); foco de 63 casos aprovado. Skips exigem
+Edge real. Corrigido o isolamento do teste antigo de tuning que ligava o
+argumento padrão antes do monkeypatch; produção não perdeu nenhuma proteção.
+
+KDE/Wayland real: embaixo → topo → embaixo, geometria fracionária e digitação
+em campo próprio. X11 privado: entrada, copiar/colar e Spectacle. Bootstrap
+oficial: central → widget → central → saída, exit 0, HOME/XDG próprios e
+systemctl simulado. Wheel instalado sem modo editable, CLI sem Qt e GUI com
+runtime Qt 6.12.0 já gerenciado. Consulta real Codex/Claude aprovada somente
+leitura; nenhum metadado de conta publicado. Tentativas falhas foram preservadas,
+com correções de IPC curto, pixels fracionários e encerramento explícito de Qt.
+
+[Release **v0.2.0b1**](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b1)
+publicada como **prévia** em 01/11/2026 14:04 UTC, tag/SHA remoto conferidos:
+`5ce16b1c05001ad3552c3cd26cd30ccdbfc73f63`. Assets: fonte completo, wheel,
+sdist e SHA256SUMS; tamanhos e digests SHA-256 remotos comparados aos locais.
+O fonte completo de 11.072.417 bytes foi revisado como artefato de distribuição,
+sem cache, estado ou credenciais; não virou blob novo do Git. A CLI/GUI do wheel
+foram verificadas fora do checkout; dependências grandes não foram baixadas.
+
+CI desse SHA: **seis jobs de código success**, CodeRabbit/Sourcery skipped.
+PR de continuidade [#1](https://github.com/Misael-art/Folego/pull/1) reutilizado,
+ainda draft, sem merge. Este registro posterior conserva o mesmo código da tag.
+[Logs, capturas, comparação visual, recibos e limites](handoff/validation/compact-ui-2026-11-01/README.md).
+
+Limites: esta prévia não resolve os quatro defeitos de contrato da avaliação
+abaixo, nem certifica hardware/login/transições, todas as aplicações de destino
+ou soak desta revisão. O executor automático de recursos permanece desligado.
+A sessão de trabalho e os serviços reais não foram reiniciados para QA; reabrir
+o Fôlego carrega a interface nova. Workspaces de QA concluídos revisados foram
+preservados integralmente em `.scratch/dev-tests-reviewed`, sem apagar fixtures
+ou aumentar limites. Próximo incremento recomendado continua sendo o P1 da cauda
+do diário e os demais contratos abaixo, com regressões e aceite próprios.
+
 ## Avaliação de filosofia, contratos e oportunidades — 01/11/2026
 
 Base examinada: `6732c4e140d714d2e06a7f95a2a44a0747823fbe`, conferida na
