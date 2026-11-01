@@ -1,4 +1,87 @@
-# Passagem para o próximo agente — atualizada em 30/10/2026
+# Passagem para o próximo agente — atualizada em 01/11/2026
+
+## Avaliação de filosofia, contratos e oportunidades — 01/11/2026
+
+Base examinada: `6732c4e140d714d2e06a7f95a2a44a0747823fbe`, conferida na
+branch remota `codex/portable-handoff-20261024`; working tree inicialmente limpo.
+Pedido de entendimento e avaliação, sem correção de código de produção nesta
+rodada. As correções de 29/10 e o soak controlado de 30/10 foram considerados;
+os achados históricos já corrigidos não foram reapresentados como bugs atuais.
+PR #1 conferido aberto/draft, sem merge, com a mesma branch/SHA. Checks da base:
+seis jobs de código `success`; CodeRabbit e Sourcery `skipped`. Esse estado remoto
+não substitui a suíte local impedida pelo orçamento de QA descrito abaixo.
+
+Propósito observado: tornar a pressão de recursos compreensível e permitir
+intervenções revisadas que preservem trabalho e recuperação. A supervisão de
+entrada amplia esse propósito para a continuidade do desktop, com owner e
+autorização próprios. A arquitetura separa coleta/decisão de Qt, usa o
+coordenador comum e conserva a distinção entre recusa, efeito parcial e resultado
+desconhecido. O executor automático de recursos continua desligado.
+
+Achados atuais, reproduzidos em memória com I/O e efeitos externos simulados:
+
+1. **P1 — diário aceita cauda JSON sem terminador e autoriza novo executor.**
+   `orchestration/journal.py:Journal.load` usa `splitlines()` sem recusar a última
+   linha sem `\n`, ao contrário de `HistoryReader`. Uma escrita interrompida após
+   o JSON e antes do terminador é aceita sem problemas; o próximo append cola
+   dois objetos na mesma linha. Prova pelo `Coordinator.run`: diário inicial
+   com um registro aceito, executor chamado, resultado `desconhecido` e diário
+   final com JSON ilegível. Caminhos diretos pelo coordenador podem atingir o
+   efeito sem uma intenção novamente interpretável. Recusar a cauda antes de
+   qualquer append/efeito; cobrir a fronteira com regressão no coordenador.
+2. **P2 — swap ilegível ou malformada é apresentada como ausente e válida.**
+   `core/procfs.py:read_swaps` retorna lista vazia em falha e ignora linhas
+   inválidas; `core/collector.py` marca a fonte `ok` apenas porque o arquivo
+   existe. Nas duas provas: total/uso zero, qualidade `ok`, saúde `green` com as
+   demais métricas normais. O card de swap apresenta “sem swap/zram”. Diferenciar
+   inventário vazio comprovado de erro/parcialidade até a apresentação.
+3. **P2 — corrida pode contrariar a preferência de início do monitor.**
+   `startup.py:configure` solta a trava após salvar preferência/autostart e antes
+   de instalar/desabilitar a unit. Prova com duas threads e serviço simulado:
+   habilitação pausa antes de instalar; desabilitação termina; habilitação
+   antiga retoma. Resultado: preferência false, `Hidden=true`, monitor habilitado
+   e ambas as chamadas com `sucesso`. Serializar/revalidar também a etapa da unit
+   para que uma escolha anterior não se sobreponha à preferência mais recente.
+4. **P2 — reconciliação não arquiva revisão cujo resultado já está no diário.**
+   Se o executor cai após gravar o resultado e antes de `_close`,
+   `orchestration/review.py:reconcile` retorna o resultado conhecido sem encerrar
+   o bundle `started`. Prova: sucesso devolvido e `_close` não chamado. A revisão
+   deixa de aparecer em `pending()`, mas continua ocupando a pasta limitada a
+   256 entradas em `prepare`. Finalizar o recibo de modo idempotente, preservando
+   evidência e conflitos; consultar/reexecutar o mesmo ID não deve vazar slots.
+
+Lacunas/oportunidades de produto e operação:
+
+- “Resolver agora: memória” apenas solicita `memoria`, mapeada para a própria
+  central; falta uma investigação útil como próximo passo. Concluir “Dar fôlego”
+  preservando análise → mesmo plano/ID → confirmação → verificação → recuperação.
+- O motor de saúde usa sobretudo RAM/PSI de memória e tmpfs; CPU e PSI de I/O
+  já são coletados, mas não compõem o veredito. Tornar explícito o alcance do
+  indicador e desenvolver diagnósticos desses recursos com evidência.
+- Algumas sugestões prometem alívio ao fechar Edge/limpar `/tmp` apenas a partir
+  de PSI alto. Vincular a orientação ao consumidor medido e distinguir hipótese
+  de efeito verificado, sem ampliar grants ou habilitar automação de recursos.
+- Retenção própria já existe, mas a passagem registra zero movimentos no ensaio
+  com consumidores reais por observação incompleta. Fechar esse aceite e a
+  recuperação de capacidade sem ignorar consumidores, adotar fixtures ou apagar
+  estados desconhecidos. O diário autoritativo ainda é relido integralmente em
+  consultas/appends; o leitor incremental de apresentação não resolve esse custo.
+- A passagem conserva uma tabela histórica de “próximos incrementos” com itens
+  posteriormente atendidos. Distinguir um resumo vigente do histórico para
+  reduzir retrabalho; matriz física de entrada/desktop continua pendente.
+
+Validação desta avaliação: quatro categorias de prova (duas variantes para
+swap), usando `.dev/venv-headless/bin/python` 3.14.7, mocks e estado em memória;
+nenhum efeito real de arquivo de usuário, systemd, processo alheio ou compositor.
+`./dev test-headless tests/test_orchestration_journal.py
+tests/test_snapshot_quality.py tests/test_session_resilience.py` foi recusado
+**antes de coletar testes**, pelo teto preexistente de **20 workspaces de QA**.
+Não se elevou limite, removeu evidência nem substituiu essa suíte por pytest fora
+do wrapper. Espaço observado antes: 187 GiB livres, 4,1 GiB de RAM disponível;
+nenhuma operação pesada foi iniciada. As provas em memória não certificam efeitos
+reais nem uma correção. Revisão documental e `git diff --check` são os gates deste
+incremento. Próximo lote recomendado: corrigir o P1 do diário e os três P2 com
+regressões focadas, após revisão apropriada da capacidade de QA existente.
 
 ## Teclado virtual e tela de toque (30/10, tarde)
 
