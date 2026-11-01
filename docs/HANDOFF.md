@@ -1,5 +1,36 @@
 # Passagem para o próximo agente — atualizada em 01/11/2026
 
+## Comparação com PhaseZero e contexto Claude — 01/11/2026
+
+Código: `ae87aaad7e751c9151cbbd601fd8b4e2032d9c4c`, sobre
+`64313445e25f9fff4d932b2dc702889e0f7a77b6`, mesma branch/PR #1. O usuário
+indicou `/home/misael/Projects/PhaseZero/` como referência da solicitação de IAs.
+Comparados quota_meter.py/tray e handoff na revisão PhaseZero `53d62e2d`:
+Web conta mensagens locais de 3/24 h; Grok usa dia mensal informado. Não há ali
+fonte adicional de percentual de franquia desses serviços. Alterações existentes
+do outro projeto foram preservadas; Fôlego não depende dele em execução.
+
+Adaptada a identidade do cache Claude aos metadados nativos `oauthAccount`:
+conta/organização em `~/.claude.json`, além da credencial/diretório. Baseline
+reproduziu 90% de A herdados por B (esperado 40%) com o mesmo token. Contexto
+alterado agora descarta uso/perfil anteriores e respostas durante a troca;
+metadata ilegível bloqueia reutilização. Retry-After continua válido para o
+mesmo token, inclusive A → B → A, sem compartilhar a cota entre organizações.
+
+`./dev check` final: **1099 passed, 2 skipped** headless (18,25 s),
+**1360 passed, 2 skipped** Qt (32,86 s). Suítes sequenciais, Python 3.14.7,
+HOME/XDG/TMP privados; conta/organização reais não foram trocadas para QA.
+Quatro novas regressões e reprodução da base com fonte imutável do Git.
+[Evidências e limites](handoff/validation/ai-details-editing-2026-11-01/README.md).
+
+A inspeção do plugin AT-SPI não respondeu e foi cancelada antes de qualquer ação.
+Reabertura pela bandeja nativa/DBusMenu com owner/PID conferidos: **Sair** encerrou
+GUI e seu próprio auxiliar de entrada normalmente, com liberação do flock e sem
+sinais. Nova GUI oficial deixada no modo compacto, posição dentro da tela.
+Nenhum agente/serviço alheio encerrado; regras KWin e grants preservados.
+Web/Grok e validação física por aplicação continuam nos limites abaixo.
+Sem novo release/merge; a prévia v0.2.0b1 continua no código anterior.
+
 ## Hover das IAs, edição de campo e saída real — 01/11/2026
 
 Código: `079d39e08a2b8261649a36152cf3a50959ffc33b`, sobre
