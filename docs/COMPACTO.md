@@ -9,10 +9,16 @@ workers e seu próprio auxiliar de entrada.
 
 ## Sessões de IA
 
-Passe o mouse sobre Codex, Web, Claude ou Grok para consultar cada conta. Clique
-no indicador para abrir a aplicação ou seu terminal existente. Verde significa mais de 60% da cota disponível;
-amarelo, de 21% a 60%; vermelho, até 20%. Cinza é desconhecido, vencido ou parcial,
-inclusive se uma das contas agrupadas não tem uma observação válida.
+Passe o mouse sobre Codex, Web, Claude ou Grok para abrir o painel de contas.
+A conta padrão aparece primeiro; escolha outra na lista à esquerda. O percentual
+gasto, tickets e referência da assinatura ficam em destaque; cada janela mostra
+seu próprio reset e tempo restante. Detalhes adicionais têm rolagem. Clique fora
+ou use Escape para fechar. O clique direto no indicador abre o cliente da conta
+padrão; **Abrir cliente** no painel usa a conta selecionada.
+
+A bolinha representa a conta padrão: verde significa mais de 60% disponível;
+amarelo, de 21% a 60%; vermelho, até 20%. Cinza é desconhecido, vencido ou parcial.
+Uma outra conta não altera a cor da padrão; seu estado aparece ao selecioná-la.
 
 - Codex: consulta somente leitura aos endpoints de uso e tickets do próprio
   provedor, com a credencial local já existente e ainda válida. Exibe consumo,
@@ -44,8 +50,16 @@ inclusive se uma das contas agrupadas não tem uma observação válida.
   Cupons/créditos não fornecidos pela fonte continuam não informados.
 
 Fôlego usa configuração própria e não importa, inicia ou administra PhaseZero.
-Os diretórios nativos padrão são `$CODEX_HOME` ou `~/.codex`,
-`~/.local/share/codex-web-gpt/codex-home` e `$CLAUDE_CONFIG_DIR` ou `~/.claude`.
+Os diretórios nativos principais são `~/.codex`,
+`~/.local/share/codex-web-gpt/codex-home`, `~/.claude` e `~/.grok`.
+Raízes de `$CODEX_HOME`, `$CLAUDE_CONFIG_DIR` e `$GROK_HOME` acrescentam contas;
+não substituem a principal. Processos locais podem fornecer suas raízes nativas.
+Quando existe, o registro opcional `phasezero/ai-accounts/codex-profiles/profiles.json`
+em XDG_DATA_HOME fornece nomes e caminhos dos perfis Codex/Web, inclusive inativos.
+Perfis arquivados não são adotados automaticamente. Não se executa código, inicia
+serviço ou copia login do PhaseZero. Sem esse registro, os diretórios nativos e
+a configuração própria continuam funcionando. Registro desconhecido protege as
+fontes e aparece como inventário não confirmado.
 Para outras contas, crie `$XDG_CONFIG_HOME/folego/ai-sessions.json` (por padrão,
 `~/.config/folego/ai-sessions.json`). Caminhos devem ser absolutos. Exemplo:
 
@@ -54,7 +68,8 @@ Para outras contas, crie `$XDG_CONFIG_HOME/folego/ai-sessions.json` (por padrão
   "schema": 1,
   "accounts": [
     {"provider": "codex", "label": "Codex trabalho", "path": "/caminho/conta/codex-home"},
-    {"provider": "web", "label": "Web pessoal", "path": "/caminho/conta-web/codex-home"}
+    {"provider": "web", "label": "Web pessoal", "path": "/caminho/conta-web/codex-home"},
+    {"provider": "claude", "label": "Claude trabalho", "path": "/caminho/claude-work", "default": true}
   ],
   "grok_paid_until": "2026-11-30T23:59:59-03:00"
 }
@@ -63,19 +78,25 @@ Para outras contas, crie `$XDG_CONFIG_HOME/folego/ai-sessions.json` (por padrão
 Pode apontar para um diretório já criado por outro launcher; os arquivos
 permanecem no lugar. Nenhum token deve ser colocado nessa configuração. Schema
 desconhecido, conta ilegível ou orçamento excedido aparecem como desconhecidos.
-O limite é 16 contas configuradas adicionais, 20 raízes totais e 40 rollouts com
-caudas de até 64 KiB por conta no fallback. Clientes Codex/Web ativos também
-podem fornecer seus diretórios nativos, com deduplicação e escopo no HOME
-selecionado. HOME privado não adota contas nativas do HOME físico.
+O limite é 16 contas configuradas adicionais, 32 raízes totais e 40 rollouts com
+caudas de até 64 KiB por conta no fallback. Há deduplicação por provedor/caminho.
+`default: true` escolhe explicitamente uma padrão por provedor; duas padrões
+são configuração inválida. Sem override, prefere a principal existente e depois
+a primeira raiz existente. A descoberta de processos fica no HOME selecionado;
+HOME privado não adota contas nativas do HOME físico.
 Para consultar sem Qt: `./dev run ai status --json`.
 
-As dicas aparecem mesmo com outro aplicativo em foco. O botão direito no
-indicador abre **Atualizar dados**, **Detalhes de todas as contas** (janela com
-rolagem), **Definir dia da renovação mensal** e **Consultar no site do provedor**.
-O clique esquerdo continua abrindo a aplicação/terminal. A referência mensal
+O painel aparece mesmo com outro aplicativo em foco. O botão direito no
+indicador abre **Atualizar dados**, **Contas, uso e renovação**,
+**Definir dia da renovação mensal** e **Consultar no site do provedor**.
+A referência mensal
 pessoal aceita dias 1–31, ajusta meses curtos e persiste na configuração própria;
 0 remove somente essa referência. Ela é identificada como informada pelo usuário,
-sem confirmar cobrança. Exemplo adicional na mesma configuração:
+sem confirmar cobrança. A GUI grava a referência por `account_id` em
+`billing_accounts`, sem compartilhar a data com outras contas. O ID opaco aparece
+na consulta JSON. Remover uma referência por conta também suprime a referência
+legada daquele provedor para essa conta. A configuração anterior continua aceita
+para a padrão quando não há override:
 
 ```json
 "billing": {"codex": {"monthly_day": 15}, "grok": {"monthly_day": 31}}
@@ -105,28 +126,30 @@ leitura; diretórios adicionais de clientes ativos podem ser identificados pelas
 variáveis nativas de caminho dos próprios processos, sem importar PhaseZero.
 
 O clique procura a janela desktop ou o terminal ancestral do processo local,
-com classe e identidade verificadas. Em KDE/Wayland usa `kdotool`; em X11,
+com conta, classe e identidade verificadas. Em KDE/Wayland usa `kdotool`; em X11,
 `xdotool`. Se não houver janela, pode solicitar uma única abertura pelo atalho
-nativo instalado (`gtk-launch`). Sem janela/atalho identificado, informa a
+nativo instalado (`gtk-launch`) para uma conta principal com raiz padrão.
+Perfis adicionais não fazem fallback para o launcher de outra conta.
+Sem janela/atalho identificado, informa a
 indisponibilidade. Nenhum comando é enviado aos agentes e nenhuma sessão é
 encerrada. A abertura mostra a aplicação para o usuário escolher a sessão;
 não seleciona automaticamente uma conversa ou aba interna do terminal.
 
-Os avisos exibidos só são marcados como vistos após confirmação de foco da
-janela. Falha preserva a contagem; uma conclusão posterior ao clique não é
+Os avisos da conta aberta só são marcados como vistos após confirmação de foco da
+janela. Avisos de outras contas permanecem. Falha preserva a contagem; uma conclusão posterior ao clique não é
 apagada por ele. O estado pertence ao Fôlego em
 `$XDG_STATE_HOME/folego/ai-deliveries.json` (padrão
 `~/.local/state/folego/ai-deliveries.json`), privado, com marco inicial e recibos
 em hash, sem texto de conversas ou credenciais. Reiniciar preserva os avisos.
 Estado ilegível ou schema desconhecido não é sobrescrito.
 
-Orçamentos do monitor de entregas: 64 raízes, 128 sessões por raiz, caudas de
+Orçamentos do monitor de entregas: inventário compartilhado de 32 raízes, 128 sessões por raiz, caudas de
 64 KiB e até 2048 recibos. Inventário excedido, registro incompleto ou conclusão
 fora da cauda legível deixam a observação parcial, sem amostragem silenciosa.
 
 ## Abas de ações rápidas
 
-**Selecionar tudo** e **Apagar tudo** ficam em uma linha fina acima das abas.
+**Selecionar tudo**, **Apagar tudo** e **Prompts** ficam em uma linha fina acima das abas.
 Atuam somente no campo editável em foco, identificado pelo AT-SPI e pelo
 proprietário da janela ativa. Apagar remove o texto do campo inteiro, não só a
 seleção. Não leem seu conteúdo, não usam a área de transferência, não enviam
@@ -142,6 +165,13 @@ assim, copiar nunca envia Ctrl+C para interromper um trabalho no terminal. O
 aplicativo de destino precisa aceitar esses atalhos. O Fôlego não lê nem grava
 o conteúdo da área de transferência ou as teclas em logs.
 
+**Prompts** abre uma lista de 11 títulos: diagnóstico real, continuidade,
+implementação, investigação de erro, revisão, testes, desempenho, segurança,
+usabilidade, passagem de contexto e prontidão para PR/distribuição. Escolher um
+copia seu texto para a área de transferência; depois cole no agente desejado.
+Não cola, executa ou envia pedidos automaticamente. Os textos são genéricos,
+respeitam as instruções e autorizações do projeto e pedem evidências verificáveis.
+
 **Print** abre a seleção de região do Spectacle. Conclua, salve ou cancele na
 ferramenta de captura; o Fôlego não escolhe um destino nem declara uma imagem
 salva sem confirmação. Um clique repetido não abre outra captura em andamento.
@@ -154,8 +184,14 @@ layout ativo do sistema, com Shift, números, Tab, espaço, apagar e Enter.
 Não muda a preferência do teclado virtual nativo nem a abertura automática
 por toque do desktop. Botões e teclado preservam o foco do aplicativo de destino.
 
-Em KDE/Wayland, o posicionamento exige KWin e `qdbus6`; a confirmação compara os
-mesmos pixels físicos, inclusive com escala fracionária. A entrada exige
+Em KDE/Wayland, o posicionamento exige KWin e `qdbus6`. Ao abrir o teclado, um
+worker prepara a regra própria `folego-virtual-keyboard`, com app-id Fôlego e
+título específico do teclado, usando `kwriteconfig6`/`kreadconfig6`. Ela impede
+o teclado de tomar foco; as demais regras ficam preservadas. O hint Qt sozinho
+não impedia o clique de ativar o teclado neste KWin. A confirmação do compositor
+compara os mesmos pixels físicos, inclusive com escala fracionária, e verifica
+que a superfície não aceita foco. Sem confirmação, as teclas não são enviadas.
+A entrada exige
 `ydotool`, `ydotoold` e permissão **já existente** para `/dev/uinput`. O Fôlego
 cria um auxiliar transitório próprio e seu socket privado de IPC, encerrando-o
 ao sair; não instala serviço, amplia permissões ou reutiliza um daemon alheio.
@@ -171,12 +207,13 @@ o código-fonte para `./dev setup` e `./dev gui`, ou instale o wheel em um ambie
 Python 3.14 próprio com a dependência GUI. Não há AppImage/Flatpak nesta prévia.
 As dependências opcionais acima não são instaladas silenciosamente.
 
-A release v0.2.0b1 corresponde ao código anterior; contadores, revisão do hover
-e edição de campo estão na branch/PR para validação, sem alterar essa tag.
+A release v0.2.0b1 corresponde ao código anterior; contadores, contas, painel,
+teclado e prompts estão na branch/PR para validação, sem alterar essa tag.
 
 [Interface inicial](handoff/validation/compact-ui-2026-11-01/README.md) ·
 [Contadores](handoff/validation/agent-deliveries-2026-11-01/README.md) ·
-[Hover e edição](handoff/validation/ai-details-editing-2026-11-01/README.md).
+[Hover e edição](handoff/validation/ai-details-editing-2026-11-01/README.md) ·
+[Contas, teclado e prompts](handoff/validation/ai-accounts-keyboard-prompts-2026-11-01/README.md).
 O histórico e as pendências gerais continuam em [HANDOFF](HANDOFF.md); a prévia
 não certifica a matriz física de entrada, login, hardware ou todas as aplicações
 de destino, nem resolve as pendências do motor de recursos registradas ali.

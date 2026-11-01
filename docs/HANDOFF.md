@@ -1,5 +1,57 @@
 # Passagem para o próximo agente — atualizada em 01/11/2026
 
+## Contas, teclado por clique e biblioteca de prompts — 01/11/2026
+
+Código: `3aae6c9692b2b5b312561e7a90cd8b4e01778f5b`, sobre `b5e400330495d1ca42985f519b4c5044ab07de2e`,
+mesma branch e PR #1. Pedido atual: contas padrão/adicionais, painel legível,
+teclado que digita nos campos e prompts robustos para copiar. Inventário nativo
+compartilhado por cotas/entregas/abertura; registro opcional PhaseZero somente
+leitura para labels e raízes, sem importar/executar o outro projeto. Inclui
+perfis inativos, preserva Web local coexistente e exclui arquivados automáticos.
+Referência mensal e recibos passam a respeitar a conta selecionada; abertura
+sem vínculo comprovado não cai no perfil de outra conta. Neste host: três
+Codex e três Web; as três Codex retornaram cotas/tickets. Web/Grok continuam
+sem percentual verificável; Claude não retornou cota atual nesta observação.
+
+Hover abre painel interativo com padrão primeiro, seletor à esquerda, consumo
+em destaque, tickets/assinatura próximos ao topo e resets por janela. Widget
+mantém 280 px. **Prompts**, junto de selecionar/apagar, oferece 11 textos de
+boas práticas genéricos; escolher copia, sem colar/enviar automaticamente.
+
+Clique real reproduziu o teclado tomando foco (texto vazio), lacuna do teste
+anterior que apenas chamava o envio da tecla. Regra própria KWin restrita a
+app-id/título do teclado, preparada em worker, impede foco. Confirmação nativa
+inclui posição em pixels físicos e recusa de foco; sem ela, teclas não são
+enviadas. QA real passou com A/B em campo próprio e C, Shift+D e apagar em
+editor de outro processo descartável, sem o teclado ficar ativo, inclusive no
+topo. Nenhuma permissão/serviço de entrada novo. Prompts também foram copiados
+e colados integralmente em Xvfb próprio; clipboard físico não foi fixture.
+
+`./dev check` final: **1113 passed, 2 skipped** headless (18,19 s),
+**1378 passed, 2 skipped** Qt (33,00 s), Python 3.14.7 gerenciado, sequencial,
+HOME/XDG/TMP privados. Sete workspaces concluídos foram revisados e preservados
+integralmente em `.scratch/dev-tests-reviewed/20261101-ai-ui`, sem descarte nem
+ampliação dos limites. [Evidências/manifesto](handoff/validation/ai-accounts-keyboard-prompts-2026-11-01/README.md).
+
+**Pendência de reparo do ambiente causada pelo QA:** ensaios exploratórios de
+Xvfb/D-Bus privados iniciaram o daemon antes de isolar seu ambiente de ativação.
+Um subserviço adotou o pathname físico `/run/user/1000/at-spi/bus_0`; o owner
+original `at-spi-dbus-bus.service` permaneceu vivo, mas novas conexões ficaram
+recusadas. A tentativa Wayland posterior confirmou hover por ponteiro real e
+teclas, depois recusou selecionar/apagar por indisponibilidade AT-SPI. Não é
+aprovação integral nem se soma a tentativas anteriores. Autorização específica
+foi pedida via pergunta assíncrona para `systemctl --user restart
+at-spi-dbus-bus.service`; **aguardar resposta antes do reinício**. Não executar
+novamente os ensaios exploratórios. O verificador dedicado de clipboard usa
+D-Bus desconectado e Xvfb próprio; passou sem acessar esses canais físicos.
+
+Instância real anterior do Fôlego preservada enquanto o reparo aguarda resposta;
+não declarar reabertura da versão nova. Próximo passo: com autorização, conferir
+owner/identidade, restaurar somente a unit registrada, validar seu endpoint,
+repetir o fluxo Wayland em campos próprios e só então sair/reabrir Fôlego pela
+bandeja nativa. Não reiniciar sessão, clientes de IA, agentes, drivers ou outros
+serviços. Sem novo release/merge; v0.2.0b1 continua no código anterior.
+
 ## Comparação com PhaseZero e contexto Claude — 01/11/2026
 
 Código: `ae87aaad7e751c9151cbbd601fd8b4e2032d9c4c`, sobre
