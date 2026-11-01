@@ -1,0 +1,80 @@
+{
+  "platform": "wayland",
+  "size": [
+    280,
+    275
+  ],
+  "cases": [
+    {
+      "accounts": "interactive default and secondary card",
+      "fields": [
+        "quota",
+        "5h",
+        "weekly",
+        "tickets",
+        "monthly"
+      ]
+    },
+    {
+      "prompts": "menu titles available; no physical clipboard fixture"
+    },
+    {
+      "position": "bottom",
+      "requested": [
+        0,
+        309,
+        948,
+        284
+      ],
+      "confirmed": [
+        0,
+        309,
+        948,
+        284
+      ],
+      "visible": true
+    },
+    {
+      "position": "top",
+      "requested": [
+        0,
+        0,
+        948,
+        284
+      ],
+      "confirmed": [
+        0,
+        0,
+        948,
+        284
+      ],
+      "visible": true
+    },
+    {
+      "position": "bottom",
+      "requested": [
+        0,
+        313,
+        948,
+        280
+      ],
+      "confirmed": [
+        0,
+        313,
+        948,
+        280
+      ],
+      "visible": true
+    },
+    {
+      "input": "real pointer clicks A/B into owned focused field; keyboard stayed inactive"
+    },
+    {
+      "editing": "native AT-SPI select/delete only the owned focused field"
+    },
+    {
+      "external_input": "real pointer C, Shift+D and backspace into owned separate process; top keyboard retained external focus"
+    }
+  ],
+  "passed": true
+}

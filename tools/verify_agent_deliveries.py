@@ -43,7 +43,16 @@ def main():
     target.show()
     home = root / 'home'
     monitor = DeliveryMonitor(discover=lambda: [])
-    monitor.collect()  # notification epoch, before any synthetic completion
+    config = root / 'config/folego/ai-sessions.json'
+    config.parent.mkdir(parents=True, exist_ok=True)
+    second = home / '.codex-work'
+    config.write_text(json.dumps(dict(schema=1, accounts=[dict(provider='codex', path=str(second), label='Trabalho')])))
+    monitor.collect()  # configured roots and epoch, before synthetic completions
+    from folego.core.ai_accounts import inventory
+    from folego.core import ai_sessions as ai
+    accounts = inventory()
+    default_id = next(a['account_id'] for a in accounts if a['provider'] == 'codex' and a['default'])
+    work_id = next(a['account_id'] for a in accounts if a['path'] == str(second))
     now = dt.datetime.now(dt.timezone.utc).isoformat()
     def write(path, records):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -52,6 +61,9 @@ def main():
         write(home / f'.codex/sessions/2026/11/01/rollout-{n}.jsonl', [
             dict(type='session_meta', payload=dict(id=str(n), source='cli')),
             dict(timestamp=now, type='event_msg', payload=dict(type='task_complete', turn_id=str(n)))])
+    write(second / 'sessions/2026/11/01/rollout-work.jsonl', [
+        dict(type='session_meta', payload=dict(id='work', source='cli')),
+        dict(timestamp=now, type='event_msg', payload=dict(type='task_complete', turn_id='work'))])
     for n in range(5):
         write(home / f'.claude/projects/qa/{n}.jsonl', [
             dict(timestamp=now, type='assistant', uuid=str(n),
@@ -60,7 +72,7 @@ def main():
         dict(timestamp=now, params=dict(update=dict(sessionUpdate='turn_completed',
                                                   stop_reason='end_turn', prompt_id='qa')))])
     class OwnedApps(AgentApps):
-        def _windows(self, binary, provider):
+        def _windows(self, binary, provider, account=None):
             result = self._call([binary, 'search', '--all', '--pid', str(os.getpid()),
                                  '--name', '^Folego deliveries QA owned target$'], search=True)
             return result.splitlines()
@@ -76,7 +88,12 @@ def main():
     strip.deliveries = monitor
     strip.delivery_poller._collect = monitor.collect
     strip.opener.backend = OwnedApps(monitor)
-    strip.poller._collect = lambda: []  # no credential/network reads in QA
+    items = []
+    for account in accounts:
+        item = ai.unknown(account['provider'], label=account['label'])
+        item.update(account_id=account['account_id'], default=account['default'])
+        items.append(item)
+    strip.poller._collect = lambda: items  # no credential/network reads in QA
     def wait(predicate):
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
@@ -86,20 +103,24 @@ def main():
         raise AssertionError('native delivery QA deadline')
     try:
         view.show_compact()
-        wait(lambda: strip.badges['codex'].text() == '2' and strip.badges['claude'].text() == '5')
+        wait(lambda: strip.badges['codex'].text() == '3' and strip.badges['claude'].text() == '5')
         assert strip.badges['grok'].text() == '1'
         view.adjustSize()
         assert view.width() == 280
         view.grab().save(str(root / 'before.png'))
+        strip.set_items(items)
         strip.buttons['codex'].click()
-        wait(lambda: target.isActiveWindow() and strip.badges['codex'].text() == '')
+        wait(lambda: target.isActiveWindow() and strip.badges['codex'].text() == '1')
+        assert next(r for r in monitor.collect() if r['provider'] == 'codex')['pending'][0]['account_id'] == work_id
+        strip.open_agent('codex', work_id)
+        wait(lambda: strip.badges['codex'].text() == '')
         assert strip.badges['claude'].text() == '5' and strip.badges['grok'].text() == '1'
         reopened = DeliveryMonitor(discover=lambda: []).collect()
         assert next(r for r in reopened if r['provider'] == 'codex')['count'] == 0
         view.grab().save(str(root / 'after.png'))
         result = dict(passed=True, platform=app.platformName(), size=[view.width(), view.height()],
-                      before=dict(codex=2, claude=5, grok=1), after=dict(codex=0, claude=5, grok=1),
-                      focused_owned_target=True, durable_receipt=True,
+                      before=dict(codex=3, claude=5, grok=1), after=dict(codex=0, claude=5, grok=1),
+                      focused_owned_target=True, durable_receipt=True, account_scoped_ack=True, after_default_codex=1,
                       scope='synthetic transcripts; owned native window; provider lookup substituted')
         (root / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
         print(json.dumps(result))

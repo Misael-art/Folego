@@ -201,14 +201,16 @@ automático. Nenhum desses controles habilita o executor de recursos.
 
 ## Distribuição e evidência
 
-A release publicada é **0.2.0b1**, uma prévia para Linux, Python 3.14 e Qt/PySide6.
+A versão **0.2.0b2** é uma prévia para Linux, Python 3.14 e Qt/PySide6.
 Baixe a versão marcada na página Releases do GitHub, confira `SHA256SUMS` e use
 o código-fonte para `./dev setup` e `./dev gui`, ou instale o wheel em um ambiente
 Python 3.14 próprio com a dependência GUI. Não há AppImage/Flatpak nesta prévia.
 As dependências opcionais acima não são instaladas silenciosamente.
 
-A release v0.2.0b1 corresponde ao código anterior; contadores, contas, painel,
-teclado e prompts estão na branch/PR para validação, sem alterar essa tag.
+Ela inclui contadores, seleção de contas, painel de cotas, correção do teclado
+por clique e biblioteca de prompts. A tag v0.2.0b1 preserva o código anterior.
+Baixe a fonte completa e SHA256SUMS; com os arquivos desejados na mesma pasta,
+`sha256sum --ignore-missing -c SHA256SUMS` verifica os que foram baixados.
 
 [Interface inicial](handoff/validation/compact-ui-2026-11-01/README.md) ·
 [Contadores](handoff/validation/agent-deliveries-2026-11-01/README.md) ·

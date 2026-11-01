@@ -1,0 +1,12 @@
+{
+  "state": "restored",
+  "unit": "at-spi-dbus-bus.service",
+  "before_active": true,
+  "identity_revalidated": true,
+  "owner_matched_before": true,
+  "restart_returncode": 0,
+  "services_restarted": 1,
+  "after_active": true,
+  "endpoint_reachable": true,
+  "other_applications_stopped": false
+}

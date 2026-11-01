@@ -1,5 +1,34 @@
 # Passagem para o próximo agente — atualizada em 01/11/2026
 
+## Recuperação autorizada e preparação 0.2.0b2 — 01/11/2026
+
+Pedido posterior autoriza substituir a instância, validar e publicar nova release.
+O AT-SPI foi restaurado por um único reinício da unit registrada, após conferir
+owner/PID/starttime e gravar intenção. Endpoint e owner D-Bus voltaram a responder;
+nenhum agente/cliente de IA foi encerrado. A pendência abaixo está resolvida.
+
+QA completo KDE/Wayland: hover por ponteiro real, troca de conta, teclado embaixo/
+topo/embaixo, cliques A/B em campo próprio, selecionar/apagar via AT-SPI e
+C/Shift+D/apagar em editor de outro processo descartável. Contadores 3/5/1,
+abertura da padrão preserva 1 entrega da segunda conta e abertura desta conclui
+só os avisos Codex, com recibo durável. Lookup de cliente substituído por janela
+própria; não certifica todas as aplicações reais. Print abriu Spectacle próprio,
+não duplicou pedido e foi encerrado sem salvar região; não prova arraste/salvar.
+Clipboard: produção copiou e colou prompt integral em Xvfb próprio sem D-Bus físico.
+
+Versão e lock avançam a **0.2.0b2**. `./dev check`: **1113 passed, 2 skipped**
+headless (25,78 s), **1378 passed, 2 skipped** Qt (40,00 s), sequencial e isolado.
+Instalação offline inicial sem metadata Qt no cache falhou; com requisitos com
+hashes exportados do lock em ambientes novos passou, CLI sem Qt e remoção GUI
+preservando todos os hashes do HOME de teste. Python gerenciado, sem downloads
+novos. Nove workspaces anteriores foram preservados em revisão; os finais
+são `run-fqx12mll` e `run-1i0zasue`.
+
+[Provas e limites](handoff/validation/ai-accounts-keyboard-prompts-2026-11-01/README.md).
+Artefatos finais, SHA do tag, checks remotos, substituição da GUI e URL do release
+serão registrados no fechamento deste lote. Sem merge; o executor automático de
+recursos e a matriz física geral continuam nos limites anteriores.
+
 ## Contas, teclado por clique e biblioteca de prompts — 01/11/2026
 
 Código: `3aae6c9692b2b5b312561e7a90cd8b4e01778f5b`, sobre `b5e400330495d1ca42985f519b4c5044ab07de2e`,

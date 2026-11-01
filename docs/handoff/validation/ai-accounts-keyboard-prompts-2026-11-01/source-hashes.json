@@ -17,5 +17,9 @@
   "tests/test_ui_ai_account_panel.py": "c1b3e872fc230a6c42bf191d5572f9d07fe3d3e58c401115c4075147165fe19e",
   "tests/test_agent_apps.py": "664aa2add5259915f8449fe09eb344999c640e6453f2e751f98aefe0e2d08bd9",
   "tests/test_ai_sessions.py": "54d5638835f454d2b3765b19b5f10f961a14895a328ba96f9802232d144ed82d",
-  "tests/test_ui_desktop_shortcuts.py": "e912dc286902799c4e10437e49efd53c4a57f0d00057f75d06a8b98a48a798fe"
+  "tests/test_ui_desktop_shortcuts.py": "e912dc286902799c4e10437e49efd53c4a57f0d00057f75d06a8b98a48a798fe",
+  "pyproject.toml": "52d7498ea7f5e0a0a9d07f49824f6044c44af4f96380e14486e3e47b7b186926",
+  "uv.lock": "f7d25c4b235a0de524b0401fa9122b35d8da57332593dfb84aa8819904a827ad",
+  "tools/verify_agent_deliveries.py": "9cc85f8237943a504212805165c90bbdd05426c2690543eb94f1c2cdd050e94e",
+  "tools/verify_installation.py": "997dff455b8334562c36041b44c9d28413702dbaccc2fb9f8593322d73bf5c9b"
 }

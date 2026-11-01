@@ -74,28 +74,43 @@ rtk proxy env PYTHONPATH=src .dev/venv-gui/bin/python tools/verify_compact_ui.py
 rtk proxy env PYTHONPATH=src .dev/venv-gui/bin/python tools/verify_prompt_clipboard.py --state .scratch/ai-ui-clipboard-NOVO
 ```
 
-## Incidente de isolamento a resolver
+## Recuperação e candidata 0.2.0b2
 
-Dois ensaios exploratórios do harness completo em Xvfb/D-Bus privados falharam
-na edição AT-SPI e foram preservados. O daemon D-Bus foi iniciado antes do
-isolamento de seu ambiente de ativação; um subserviço de acessibilidade adotou
-o caminho de IPC físico `/run/user/1000/at-spi/bus_0`. O serviço físico original
-`at-spi-dbus-bus.service` permaneceu ativo, mas novas conexões ao seu pathname
-passaram a receber `Connection refused`. A
-[tentativa Wayland posterior](native-atspi-failure.json) protegeu o texto e
-informou indisponibilidade. Não foi convertida em sucesso.
+O pedido posterior do usuário autorizou substituir a versão atual, garantir os
+fluxos no host e publicar o release. O owner/identidade do AT-SPI foram conferidos
+novamente, com intenção durável antes de um único reinício da unit registrada.
+[Recuperação](atspi-recovery.json): serviço ativo, proprietário D-Bus coerente e
+endpoint novamente acessível. Nenhum cliente de IA ou sessão foi encerrado.
+A falha anterior permanece registrada acima, sem ser convertida em sucesso.
 
-Foi solicitada autorização específica para restaurar o canal pelo owner
-registrado, `systemctl --user restart at-spi-dbus-bus.service`, antes de qualquer
-reinício desse serviço. Não executar novamente os ensaios exploratórios nem
-reiniciar serviços para fabricar QA. O verificador dedicado de clipboard usa
-somente Xvfb próprio e endereço de D-Bus desconectado; preserva o clipboard e o
-canal de acessibilidade físicos. Esta seção deve registrar o desfecho da
-autorização e a nova verificação; até lá, a sessão física tem essa pendência.
+[Execução completa após o reparo](native-restored.json): oito casos aprovados
+no KDE/Wayland real, incluindo hover por ponteiro, contas, menu de prompts,
+posições, teclas em dois processos e selecionar/apagar por AT-SPI. As capturas
+abaixo são dessa execução, com dados sintéticos e escala fracionária estabilizada.
+[Entregas por conta](account-deliveries.json): 3 Codex/5 Claude/1 Grok; abrir a
+padrão deixa 1 Codex da outra conta pendente; abrir a segunda zera só Codex, com
+foco nativo confirmado e recibos duráveis. Lookup do cliente é substituído por
+janela própria; não se abriu nem encerrou um agente real.
+
+[Print](capture-smoke.json): nova captura Spectacle identificada por PID próprio,
+segundo pedido não duplicou a instância. O filho de QA foi encerrado após a
+verificação; não se enviaram teclas a uma captura inativa nem se salvou região.
+Não é certificado de arraste físico/edição/salvamento na ferramenta externa.
+O [clipboard](prompt-clipboard.json) voltou a passar no Xvfb próprio desconectado
+do D-Bus físico. Os ensaios exploratórios anteriores permanecem preservados.
+
+`./dev check` com versão b2: **1113 passed, 2 skipped** sem Qt (25,78 s) e
+**1378 passed, 2 skipped** Qt (40,00 s), workspaces `run-fqx12mll` e
+`run-1i0zasue`. O verificador de instalação agora usa Python gerenciado e aceita
+requisitos GUI com hashes exportados do uv.lock: reutiliza cache local sem baixar
+Qt ou relaxar a verificação. Uma tentativa sem essas referências falhou no cache
+incompleto de metadata; foi preservada. A instalação/removal offline em ambientes
+novos passou, com CLI sem Qt e hashes dos dados privados preservados após remover
+o pacote GUI. Artefatos finais e substituição da GUI serão registrados no
+fechamento da publicação.
 
 Não certifica login físico X11, todas as aplicações de destino, arraste físico,
-duas horas de soak ou a matriz de hardware. Sem merge/release novo; v0.2.0b1
-permanece anterior a estas mudanças.
+duas horas de soak ou a matriz de hardware. A publicação b2 é uma prévia deste marco de interface; v0.2.0b1 preserva o código anterior. Sem merge.
 
 ## Capturas com dados sintéticos
 

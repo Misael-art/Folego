@@ -50,24 +50,32 @@ estão descritos abaixo.
 
 O **modo compacto** tem 280 px de largura, recursos em duas linhas e controles
 de janela no cabeçalho. A faixa de IAs acompanha Codex, Codex Web, Claude e Grok
-no próprio Fôlego; passe o mouse para consultar uso, reposição da cota, plano e
-qualidade da observação. Cinza significa que o dado não foi confirmado.
+no próprio Fôlego; passe o mouse para abrir o painel na conta padrão e escolha
+outras na lista lateral. Consumo, resets, tickets e referência da assinatura
+ficam separados. Cinza significa que o dado não foi confirmado.
 
 As abas coloridas **Copiar, Colar, Print e Teclado** atuam por clique. A aba do
 teclado abre sempre na parte inferior; somente sua seta abre no topo. A altura
 pode crescer para preservar alertas e mensagens. [Uso, configuração de contas,
 dependências e limites](docs/COMPACTO.md).
 
-![Widget compacto do Fôlego, com dados de demonstração](docs/handoff/validation/compact-ui-2026-11-01/compact.png)
+**Selecionar tudo, Apagar tudo e Prompts** ficam logo acima das abas. A biblioteca
+oferece 11 prompts de desenvolvimento: escolha um título para copiar e cole no
+agente desejado. O teclado virtual preserva o foco do campo de destino no KWin.
+
+![Widget compacto do Fôlego, com dados de demonstração](docs/handoff/validation/ai-accounts-keyboard-prompts-2026-11-01/compact.png)
 
 ## Começar
 
 O alvo é **Linux**, com KDE Plasma para a integração completa com o desktop.
 O wrapper gerencia Python **3.14.7**, uv e dependências fixadas em `uv.lock`.
 Não é necessário ativar um ambiente virtual ou instalar pacotes Python globalmente.
+A [prévia 0.2.0b2](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b2)
+oferece fonte completa, wheel, sdist e SHA256SUMS. A fonte completa inclui o wrapper
+e o lockfile; os pacotes Python exigem Python 3.14 e a dependência GUI opcional.
 
 ```bash
-git clone https://github.com/Misael-art/Folego.git
+git clone --branch v0.2.0b2 https://github.com/Misael-art/Folego.git
 cd Folego
 ./dev setup
 ./dev gui

@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -31,6 +32,10 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cache-root", type=Path)
     parser.add_argument("--offline", action="store_true")
+    parser.add_argument("--python", type=Path, default=Path(sys.executable),
+                        help="Managed Python for disposable package environments")
+    parser.add_argument("--gui-requirements", type=Path,
+                        help="Hashed GUI requirements exported from uv.lock for offline installation")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     uv = shutil.which("uv")
@@ -47,10 +52,14 @@ def main():
     for label, prefix in (("cli", cli), ("removal", removal)):
         if prefix.exists():
             raise RuntimeError(f"refusing to replace existing environment: {prefix}")
-        run([uv, "venv", "--python", "/usr/bin/python", prefix], env=env,
+        run([uv, "venv", "--python", args.python, prefix], env=env,
             log=args.output / f"{label}-venv.log")
-        package = str(args.wheel.resolve()) + ("[gui]" if label == "removal" else "")
         offline = ["--offline"] if args.offline else []
+        if label == "removal" and args.gui_requirements:
+            run([uv, "pip", "sync", *offline, "--require-hashes", "--python", prefix / "bin/python",
+                 args.gui_requirements], env=env, log=args.output / "gui-locked-dependencies.log")
+            report["gui_requirements_sha256"] = hashlib.sha256(args.gui_requirements.read_bytes()).hexdigest()
+        package = str(args.wheel.resolve()) + ("[gui]" if label == "removal" else "")
         run([uv, "pip", "install", *offline, "--python", prefix / "bin/python", package], env=env,
             log=args.output / f"{label}-install.log")
     probe = """
