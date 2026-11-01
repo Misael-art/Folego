@@ -1,0 +1,12 @@
+{
+  "status": "passed",
+  "cli_without_qt": true,
+  "gui_uninstall": "passed",
+  "state_files_preserved": 4,
+  "autostart_created": false,
+  "gui_requirements_sha256": "ab4d547171dbabb1b62733d5a95def703fe7a9f83b592c1ed4ce4beb92134b13",
+  "initial_wheel_sha256": "88f57622b367df3175c50d3991efee4336e7caab2d9ffde84137461b3f1c4969",
+  "managed_python": "3.14.7",
+  "qt": "6.12.0",
+  "scope": "fresh venvs on this host, locked offline dependencies; not a clean Linux distribution"
+}

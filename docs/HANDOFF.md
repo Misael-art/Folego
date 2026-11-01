@@ -25,8 +25,13 @@ novos. Nove workspaces anteriores foram preservados em revisão; os finais
 são `run-fqx12mll` e `run-1i0zasue`.
 
 [Provas e limites](handoff/validation/ai-accounts-keyboard-prompts-2026-11-01/README.md).
-Artefatos finais, SHA do tag, checks remotos, substituição da GUI e URL do release
-serão registrados no fechamento deste lote. Sem merge; o executor automático de
+O wheel final tem 129 módulos idênticos ao checkout, sem arquivos privados.
+Instalado sem editable/PYTHONPATH, passou nos oito casos KDE/Wayland. O harness
+agora sincroniza geometria/movimento e confere a superfície própria antes de
+clicar; falhas intermediárias de hover foram preservadas. A GUI antiga saiu pela
+bandeja, liberou o lock; b2 oficial foi aberta e deixada no compacto na posição
+anterior (25,39; 280×275 lógicos), sem sinal manual e sem encerrar clientes de IA.
+SHA do tag, checks remotos e URL do release serão registrados após publicar. Sem merge; o executor automático de
 recursos e a matriz física geral continuam nos limites anteriores.
 
 ## Contas, teclado por clique e biblioteca de prompts — 01/11/2026

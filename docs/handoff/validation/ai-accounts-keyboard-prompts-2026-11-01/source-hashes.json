@@ -9,7 +9,7 @@
   "src/folego/ui/ai_strip.py": "f06a3fe714cd649d9264a900b7d0757b95b425e9ba1a618eb13fc3cd41c573c2",
   "src/folego/ui/ai_account_panel.py": "af5ecd773031213583aa3213c20c4258597e25ca8e9e4bc1e7a499e04a448010",
   "src/folego/ui/desktop_shortcuts.py": "bdd1308ebc2009cbfb938768c68598acd70038b1edc9a46bed466cdf8dc1c51f",
-  "tools/verify_compact_ui.py": "6c1d7b9ec1366bb154f19114d49cbe24e5719039e09302f4da7e12c04780775a",
+  "tools/verify_compact_ui.py": "dbb976b535bc283f04ab641fa4130011ed783025d1fceff9b153f63975ac6d02",
   "tools/qa_text_target.py": "147a0ef9c12de28d0bc7a6f5f07a2b71b5ec183cba6acb098a8e30de704c0b5d",
   "tools/verify_prompt_clipboard.py": "2468a7586235441119b01ef646cf17d2c4e45e86aabb4207dc0e58edbab1439a",
   "tests/test_ai_accounts.py": "e77ecf5e1a2131280b2da3556d0419fe8215c1275938966eeb40a99c7b7294f4",

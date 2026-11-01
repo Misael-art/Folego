@@ -106,8 +106,19 @@ requisitos GUI com hashes exportados do uv.lock: reutiliza cache local sem baixa
 Qt ou relaxar a verificação. Uma tentativa sem essas referências falhou no cache
 incompleto de metadata; foi preservada. A instalação/removal offline em ambientes
 novos passou, com CLI sem Qt e hashes dos dados privados preservados após remover
-o pacote GUI. Artefatos finais e substituição da GUI serão registrados no
-fechamento da publicação.
+o pacote GUI. [Wheel final](package-check-b2.json): 129 módulos byte a byte iguais ao checkout,
+sem arquivos privados, mais fonte completa com dev/uv.lock. O teste de instalação
+usou um build inicial; o wheel final foi instalado novamente e
+[passou nos oito casos nativos](installed-wheel-ui.json) sem PYTHONPATH, usando
+somente o pacote instalado. Tentativas iniciais do hover foram preservadas:
+o harness agora aguarda mapeamento/geometria nativos, eleva só a janela própria,
+calcula o alvo após preparar a entrada, gera movimento real e confere PID/título
+sob o ponteiro antes de clicar. Nenhum gate foi afrouxado.
+[Instalação/removal](installation-b2.json) e [substituição real](replacement-b2.json).
+A GUI anterior saiu pela bandeja sem sinal manual, liberou o lock; a b2 foi aberta
+pelo wrapper oficial e deixada no compacto, com posição anterior preservada e
+controles dentro da tela. Os artefatos de release são os arquivos verificados;
+a publicação e SHA do tag ficam no registro final da passagem.
 
 Não certifica login físico X11, todas as aplicações de destino, arraste físico,
 duas horas de soak ou a matriz de hardware. A publicação b2 é uma prévia deste marco de interface; v0.2.0b1 preserva o código anterior. Sem merge.

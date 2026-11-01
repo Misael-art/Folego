@@ -111,10 +111,16 @@ def main():
             subprocess.run(['xdotool', 'mousemove', str(point.x()), str(point.y()), 'click', '1'], check=True)
             return
         import re
-        point = button.mapToGlobal(button.rect().center())
-        desired = (point.x(), point.y())
         backend = view.shortcut_tabs.controller.backend
         binary, _ = backend._input()
+        app.processEvents()
+        point = button.mapToGlobal(button.rect().center())
+        desired = (point.x(), point.y())
+        if not click:
+            # A pointer already at the new surface's centre still needs a real
+            # motion event to start Qt's hover timer after mapping/raising it.
+            subprocess.run([binary, 'mousemove', '--', '4', '0'], env=backend.env, check=True, capture_output=True)
+            app.processEvents()
         def cursor():
             raw = subprocess.check_output(['kdotool', 'getmouselocation'], text=True).strip()
             match = re.search(r'x[:=]\s*([-0-9.]+).*y[:=]\s*([-0-9.]+)', raw)
@@ -136,11 +142,25 @@ def main():
                 if abs(actual) > 1 and amounts[i]:
                     factors[i] = max(.2, min(4, abs(amounts[i] / actual)))
         assert max(abs(cursor()[i] - desired[i]) for i in range(2)) <= 1, 'pointer unconfirmed; click blocked'
+        native = subprocess.check_output(['kdotool', 'getmouselocation'], text=True).strip()
+        surface = re.search(r'window[:=]\s*(\{[0-9a-fA-F-]+\})', native)
+        assert surface is not None, 'pointer surface unknown; click blocked'
+        owner = subprocess.check_output(['kdotool', 'getwindowpid', surface[1]], text=True).strip()
+        assert owner == str(os.getpid()), 'pointer is outside the owned QA process; click blocked'
         if click:
+            title = subprocess.check_output(['kdotool', 'getwindowname', surface[1]], text=True).strip()
+            assert title == button.window().windowTitle(), 'pointer is outside the intended QA surface; click blocked'
             subprocess.run([binary, 'click', '0xC0'], env=backend.env, check=True, capture_output=True)
     try:
         wait(lambda: view.isVisible())
         if args.input and os.environ.get('XDG_SESSION_TYPE') == 'wayland':
+            native_windows = []
+            def mapped_widget():
+                result = subprocess.run(['kdotool', 'search', '--all', '--pid', str(os.getpid()),
+                                         '--name', '^Fôlego — widget$'], capture_output=True, text=True, timeout=3)
+                native_windows[:] = result.stdout.strip().splitlines()
+                return len(native_windows) == 1
+            wait(mapped_widget)
             view.move(20, 130)
             own = root / 'place-owned-widget.js'
             own.write_text('const w=workspace.windowList().find(w=>w.pid==='+str(os.getpid())+' && w.caption==="Fôlego — widget");if(w) w.frameGeometry={x:20,y:130,width:280,height:'+str(view.height())+'};')
@@ -148,7 +168,14 @@ def main():
             sid = subprocess.check_output(['qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.loadScript',str(own),name],text=True).strip()
             try:
                 subprocess.run(['qdbus6','org.kde.KWin','/Scripting/Script'+sid,'org.kde.kwin.Script.run'],check=True,capture_output=True)
-                wait(lambda: abs(view.x()-20)<=1 and abs(view.y()-130)<=1)
+                def placement_confirmed():
+                    import re
+                    result = subprocess.run(['kdotool', 'getwindowgeometry', native_windows[0]],
+                                            capture_output=True, text=True, timeout=3)
+                    position = re.search(r'Position:\s*([-0-9.]+),([-0-9.]+)', result.stdout)
+                    return position is not None and abs(float(position[1])-20)<=1 and abs(float(position[2])-130)<=1
+                wait(placement_confirmed)
+                subprocess.run(['kdotool', 'windowraise', native_windows[0]], check=True, capture_output=True)
             finally:
                 subprocess.run(['qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript',name],check=True,capture_output=True)
         view.adjustSize()

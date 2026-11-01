@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0b2",
+  "source_sha": "eda22c99c3c5451df972afe816b8f06e346e3f64",
+  "modules_matched": 129,
+  "private_files": "absent",
+  "assets": {
+    "folego-0.2.0b2.tar.gz": {
+      "bytes": 511498,
+      "sha256": "2b944e2b0a87f46d59bb2719b3b91ebd67e07cc92bf7c8b0882592dcccf7e608"
+    },
+    "folego-0.2.0b2-py3-none-any.whl": {
+      "bytes": 356243,
+      "sha256": "b212b2321e5dc2f767c8426cde999abd9da2521193995806bdfb8d7d57199e0e"
+    },
+    "Folego-0.2.0b2-source.tar.gz": {
+      "bytes": 11503393,
+      "sha256": "f50d0d13c1cfa0f814f1030a845560b0e6c0f144079e2731d4f497b073f85af2"
+    }
+  }
+}
