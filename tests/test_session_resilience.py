@@ -89,7 +89,10 @@ def test_closed_temporaries_archive_without_payload_deletion_and_unknown_is_pres
 
 def test_tuning_review_binds_content_and_stable_id_and_replays_without_effect(fake_home, monkeypatch):
     from folego.actions.tunings.engine import TuningEngine
-    monkeypatch.setattr("folego.actions.tunings.engine.browser.edge_running", lambda: None)
+    # Constructor defaults bind at import. Inject the dependency explicitly;
+    # this disposable-file test must never inspect a real browser process.
+    monkeypatch.setattr("folego.actions.tunings.engine.TuningEngine",
+                        lambda *args, **kwargs: TuningEngine(*args, edge_running=lambda: None, **kwargs))
     path = fake_home / ".config/microsoft-edge/Local State"
     path.parent.mkdir(parents=True)
     path.write_text('{"startup_boost":{"enabled":true}}')

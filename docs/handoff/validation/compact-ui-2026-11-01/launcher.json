@@ -1,0 +1,1 @@
+{"exit": 0, "stages": ["official-main-to-compact", "compact-to-main"], "systemctl": "stub, no host service mutation"}

@@ -5,7 +5,7 @@
 - Linux com `/proc` e `/sys` (BigLinux/KDE, SteamOS/Steam Deck).
 - Python **3.14.x** (bootstrap fixado em 3.14.7).
 - CLI: sem Qt (usa só a biblioteca padrão).
-- GUI: PySide6 **6.6+**; o ambiente do projeto usa 6.11.2.
+- GUI: PySide6 **6.6+**; o ambiente do projeto usa 6.12.0.
 - Wayland: capacidades de posicionamento/keep-above são declaradas não
   comprovadas; a janela compacta e a bandeja são a alternativa.
 - Ferramentas externas são opcionais: `git`, `docker`, `podman`, `virsh`,
@@ -32,7 +32,7 @@ instalado é `folego`; sem subcomando ele abre a GUI.
 
 ## Launcher desktop (opcional)
 
-Ao abrir a GUI, o Fôlego verifica os atalhos `folego.desktop` no menu (`$XDG_DATA_HOME/applications`) e na Área de trabalho (`XDG_DESKTOP_DIR` de `user-dirs.dirs`): cria o que faltar, atualiza só os que ele mesmo criou (`X-Folego-Managed=true`) quando a instalação muda de lugar e preserva atalhos do usuário. Nunca cria autostart. Manualmente: `folego shortcuts`. O arquivo [folego.desktop](folego.desktop) é o modelo de referência (o teste garante que o gerado em `src/folego/shortcuts.py` coincide).
+Ao abrir a GUI, o Fôlego verifica os atalhos `folego.desktop` no menu (`$XDG_DATA_HOME/applications`) e na Área de trabalho (`XDG_DESKTOP_DIR` de `user-dirs.dirs`): cria o que faltar, atualiza só os que ele mesmo criou (`X-Folego-Managed=true`) quando a instalação muda de lugar e preserva atalhos do usuário. A opção de início com a sessão, ligada por padrão, é administrada separadamente em opções. Manualmente: `folego shortcuts`. O arquivo [folego.desktop](folego.desktop) é o modelo de referência (o teste garante que o gerado em `src/folego/shortcuts.py` coincide).
 Quando a instalação é um venv, gere um launcher preso ao entrypoint absoluto,
 para funcionar sem depender de um shell com o venv ativado:
 
@@ -50,9 +50,9 @@ Para instalar só para o usuário:
 install -Dm644 packaging/folego.desktop ~/.local/share/applications/folego.desktop
 ```
 
-Para autostart opcional, copie o mesmo arquivo para
-`~/.config/autostart/folego.desktop` e revise `Exec=`/`Hidden=`. O Fôlego **não**
-instala autostart sozinho; `doctor` apenas reporta se o arquivo existe.
+A primeira abertura configura o início com a sessão por padrão; a aba opções e
+`folego startup disable --confirmar` persistem a escolha de desligar, preservando
+entradas pessoais. O gerador de launcher isolado não configura autostart.
 
 ## Remoção preservando dados
 
@@ -108,5 +108,8 @@ nem à validação de instalação GUI/launcher em outra distribuição.
   leitor de tela e login físico X11 permanecem pendentes.
 - A instalação em uma máquina Linux limpa e o ensaio prolongado de memória/
   QProcess ainda são evidências pendentes de F8.
+- A prévia 0.2.0b1 tem wheel, sdist e SHA256SUMS na release do GitHub.
+  O código-fonte do tag inclui `dev` e `uv.lock`; o sdist Python não substitui
+  esse checkout para o bootstrap. Veja [o guia do compacto](../docs/COMPACTO.md).
 - O empacotamento não inclui assinatura, repositório APT/Flatpak nem integração
   com a loja; isso fica para a distribuição.

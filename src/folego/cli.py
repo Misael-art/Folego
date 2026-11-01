@@ -235,6 +235,10 @@ def build_parser() -> argparse.ArgumentParser:
         description="Bem-estar do Steam Deck: diagnóstico e higiene com confirmação.")
     commands = parser.add_subparsers(dest="command")
 
+    ai = commands.add_parser("ai", help="cotas e validade das IAs; somente leitura")
+    ai.add_argument("sub", choices=["status"])
+    ai.add_argument("--json", action="store_true")
+
     review = commands.add_parser("review", help="revisão durável, execução e reconciliação pelo mesmo ID")
     review_sub = review.add_subparsers(dest="sub", required=True)
     for name in ("plan", "execute", "pending", "reconcile", "cancel"):
@@ -2328,7 +2332,15 @@ def _cmd_accessibility(args):
 
 
 def _dispatch(ns, argv) -> int:
-    """A escolha do handler, separada do `main` para o protocolo de erro envolvê-la."""
+    """Dispatch without importing Qt in CLI invocations."""
+    if ns.command == "ai":
+        from .core.ai_sessions import collect, describe
+        items = collect()
+        if ns.json:
+            print(json.dumps({"schema": 1, "meters": items}, ensure_ascii=False))
+        else:
+            print("\n\n".join(describe(item) for item in items))
+        return EXIT_OK
     if ns.command is None:
         return run_gui(argv)
     if ns.command == "review":

@@ -1,32 +1,19 @@
-"""Compact control: one glance at the motor, no acts on the system.
+"""Compact resource/AI monitor with explicit desktop shortcuts.
 
-It is the floating "widget mode": a small frameless card (mini gauge, one line
-of RAM/CPU/swap/temporaries and a button back to the central window) that never
-takes focus. On X11 it asks to stay on top and restores its position itself; on
-Wayland the compositor owns both, so keep-above and the corner placement come
-from an optional KWin window rule (`kwin_rule`), and dragging uses the native
-system move.
-
-The compact window is the fallback when a Wayland compositor cannot prove
-absolute placement or keep-above. It shows the same signal as the title, keeps
-the last completed operation in a separate line (a success never erases a
-persistent alert), and offers only navigation, pause and quit. There is no
-quick mutation: automation is still disabled until F6 grants exist.
-
-Dragging moves the window and nothing else; buttons are the only controls that
-do anything, so a drag cannot become a click. The saved position is clamped to a
-currently connected screen before every show, which handles monitor hotplug.
+The widget never takes focus. Resource mutations remain manual in the central
+window; the colored tabs request copy, paste, capture or the app-owned keyboard.
+Wayland placement is compositor-owned; X11 positions are clamped to live screens.
 """
 import os
 
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
                                QWidget)
 
 from . import title_signal
 from .desktop_caps import detect
-from .theme import TOKENS
+from .theme import TOKENS, control_icon
 
 POSITION_KEY = "compact/position"
 WIDGET_TITLE = "Fôlego — widget"
@@ -93,102 +80,131 @@ class CompactWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setWindowTitle(WIDGET_TITLE)
         self.setAccessibleName("Widget do Fôlego")
-        self.setFixedWidth(320)
+        self.setFixedWidth(280)
         self.setStyleSheet(
-            f"QFrame#widgetCard {{ background: {TOKENS.surface}; border: 1px solid {TOKENS.border};"
-            f" border-radius: 14px; }}"
-            f"QLabel {{ background: transparent; color: {TOKENS.text}; }}"
-            f"QLabel#headline {{ font-size: 10pt; font-weight: 600; }}"
-            f"QLabel#quality {{ color: {TOKENS.muted}; }}"
-            f"QPushButton {{ background: {TOKENS.surface_alt}; color: {TOKENS.text};"
-            f" border: 1px solid {TOKENS.border}; border-radius: 12px; padding: 3px 8px; }}"
-            f"QPushButton#open {{ background: {TOKENS.accent}; color: {TOKENS.accent_text};"
-            f" border: none; border-radius: 15px; padding: 6px 14px; font-weight: 600; }}"
-            f"QPushButton:hover {{ border-color: {TOKENS.accent}; }}"
-            f"QPushButton:focus {{ border: 2px solid {TOKENS.focus}; }}")
-
+            "QWidget {font-size:9pt;}"
+            f"QFrame#widgetCard {{background:{TOKENS.surface};border:1px solid {TOKENS.border};border-radius:12px;}}"
+            f"QLabel {{background:transparent;color:{TOKENS.text};}}"
+            f"QLabel#quality {{color:{TOKENS.muted};}}"
+            f"QPushButton {{background:{TOKENS.surface_alt};color:{TOKENS.text};border:1px solid {TOKENS.border};"
+            "border-radius:7px;padding:2px 4px;}"
+            f"QPushButton:hover {{border-color:{TOKENS.accent};}}")
+        from PySide6.QtGui import QIcon
+        from PySide6.QtWidgets import QStyle
+        from .ai_strip import AIStrip
+        from .desktop_shortcuts import ShortcutTabs
+        from .dashboard_tab import HealthGauge
         self.signal_label = QLabel("Aguardando leitura…")
-        self.signal_label.setObjectName("headline")
-        self.signal_label.setWordWrap(True)
-        self.signal_label.setAccessibleName("Saúde atual")
+        self.signal_label.setVisible(False)  # complete title remains in the tooltip
         self.detail_label = QLabel("sem amostra ainda")
-        self.detail_label.setObjectName("quality")
         self.detail_label.setWordWrap(True)
-        self._automation_text = ("automação manual · preset equilibrado · "
-                                 "nenhum grant ativo")
+        self.detail_label.setObjectName("quality")
+        self.detail_label.setStyleSheet(f"color:{TOKENS.text};font-weight:500;")
+        self._automation_text = "automação manual · preset equilibrado · nenhum grant ativo"
         self.mode_label = QLabel()
-        self.mode_label.setObjectName("quality")
-        self.mode_label.setWordWrap(True)
-        self._render_mode()
         self.operation_label = QLabel("operação: nenhuma nesta sessão")
-        self.operation_label.setObjectName("quality")
-        self.operation_label.setWordWrap(True)
         self.caps_label = QLabel(self._caps.note)
-        self.caps_label.setObjectName("quality")
-        self.caps_label.setWordWrap(True)
-        # a nota técnica do Wayland vai para o tooltip: o widget mostra só o básico
-        self.caps_label.setVisible(False)
-
-        self.open_button = QPushButton("⤢  Abrir Fôlego")
-        self.open_button.setObjectName("open")
+        for label in (self.mode_label, self.operation_label, self.caps_label):
+            label.setVisible(False)
+        self._render_mode()
+        self.status_label = QLabel("Aguardando")
+        self.status_label.setWordWrap(True)
+        self.alert_label = QLabel()
+        self.alert_label.setWordWrap(True)
+        self.alert_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.alert_label.hide()
+        self.free_label = QLabel("RAM sem leitura")
+        self.free_label.setObjectName("quality")
+        self.free_label.setWordWrap(True)
+        self.open_button = QPushButton()
+        self.open_button.setIcon(control_icon(self.style(), "window-maximize", QStyle.StandardPixmap.SP_TitleBarMaxButton))
         self.open_button.setAccessibleName("Voltar à janela central do Fôlego")
-        self.open_button.setToolTip("Volta à interface completa e fecha o widget")
+        self.open_button.setToolTip("Ampliar: abrir a central do Fôlego")
         self.open_button.clicked.connect(self._open_central)
-        self.hide_button = QPushButton("—")
+        self.hide_button = QPushButton()
+        self.hide_button.setIcon(control_icon(self.style(), "window-minimize", QStyle.StandardPixmap.SP_TitleBarMinButton))
         self.hide_button.setAccessibleName("Ocultar somente o widget (continua na bandeja)")
         self.hide_button.setToolTip("Ocultar o widget; o Fôlego continua na bandeja")
         self.hide_button.clicked.connect(self._hide_safely)
-        self.pause_button = QPushButton("⏸")
-        self.pause_button.setAccessibleName(
-            "Pausar ou retomar a coleta de telemetria")
-        self.pause_button.setToolTip("Pausar monitoramento")
-        self.pause_button.clicked.connect(self._toggle_pause)
-        self.quit_button = QPushButton("✕")
+        self.quit_button = QPushButton()
+        self.quit_button.setIcon(control_icon(self.style(), "window-close", QStyle.StandardPixmap.SP_TitleBarCloseButton))
         self.quit_button.setAccessibleName("Sair do Fôlego e parar o monitoramento")
         self.quit_button.setToolTip("Sair do Fôlego")
         self.quit_button.clicked.connect(self._window.quit)
-        for small in (self.hide_button, self.pause_button, self.quit_button):
-            small.setFixedSize(30, 26)
-        for button in (self.open_button, self.hide_button, self.pause_button, self.quit_button):
-            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # o widget nunca recebe foco
-
-        from .dashboard_tab import HealthGauge
+        self.pause_button = QPushButton("Pausar")
+        self.pause_button.setIcon(control_icon(self.style(), "media-playback-pause", QStyle.StandardPixmap.SP_MediaPause))
+        self.pause_button.setAccessibleName("Pausar ou retomar a coleta de telemetria")
+        self.pause_button.setToolTip("Pausar monitoramento")
+        self.pause_button.clicked.connect(self._toggle_pause)
+        for button in (self.open_button, self.hide_button, self.quit_button):
+            button.setFixedSize(26, 26)
+        for button in (self.open_button, self.hide_button, self.quit_button, self.pause_button):
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.gauge = HealthGauge(compact=True)
-        # estado secundário fica no tooltip: o widget mostra só o básico
-        for label in (self.mode_label, self.operation_label):
-            label.setVisible(False)
-        self.signal_label.setMaximumHeight(self.fontMetrics().height() * 3)
-
+        self.gauge.setFixedSize(68, 68)
+        gauge_column = QVBoxLayout()
+        gauge_column.setSpacing(0)
+        gauge_column.addWidget(self.gauge)
         header = QHBoxLayout()
         header.setSpacing(4)
-        header.addWidget(self.signal_label, 1)
-        for small in (self.pause_button, self.hide_button, self.quit_button):
-            header.addWidget(small, 0, Qt.AlignmentFlag.AlignTop)
+        brand = QLabel("Fôlego")
+        brand.setStyleSheet("font-size:10pt;font-weight:600;")
+        header.addWidget(brand, 1)
+        for button in (self.hide_button, self.open_button, self.quit_button):
+            header.addWidget(button)
         body = QHBoxLayout()
-        body.addWidget(self.gauge, 0)
-        right = QVBoxLayout()
-        right.addWidget(self.detail_label)
-        right.addStretch(1)
-        right.addWidget(self.open_button, 0, Qt.AlignmentFlag.AlignRight)
-        body.addLayout(right, 1)
+        body.setSpacing(10)
+        body.addLayout(gauge_column)
+        readings = QVBoxLayout()
+        readings.setSpacing(3)
+        readings.addWidget(self.status_label)
+        readings.addWidget(self.detail_label)
+        body.addLayout(readings, 1)
+        self.ai_strip = AIStrip(self)
+        footer = QHBoxLayout()
+        footer.addWidget(self.pause_button)
+        footer.addStretch(1)
+        footer.addWidget(self.free_label)
         card = QFrame()
         card.setObjectName("widgetCard")
         inner = QVBoxLayout(card)
-        inner.setContentsMargins(12, 10, 12, 12)
-        inner.setSpacing(6)
+        inner.setContentsMargins(10, 6, 10, 6)
+        inner.setSpacing(4)
         inner.addLayout(header)
         inner.addLayout(body)
-        inner.addWidget(self.mode_label)
-        inner.addWidget(self.operation_label)
-        inner.addWidget(self.caps_label)
+        inner.addWidget(self.alert_label)
+        self.feedback_label = QLabel()
+        self.feedback_label.setWordWrap(True)
+        self.feedback_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.feedback_label.hide()
+        inner.addWidget(self.feedback_label)
+        self.feedback_timer = QTimer(self)
+        self.feedback_timer.setSingleShot(True)
+        self.feedback_timer.timeout.connect(self._clear_feedback)
+        inner.addWidget(self.ai_strip)
+        inner.addLayout(footer)
+        self.shortcut_tabs = ShortcutTabs(self)
+        self.shortcut_tabs.controller.feedback.connect(self._shortcut_result)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         layout.addWidget(card)
+        layout.addWidget(self.shortcut_tabs)
         app = QGuiApplication.instance()
         app.screenRemoved.connect(self._screen_changed)
         app.screenAdded.connect(self._watch_screen)
         for screen in app.screens():
             self._watch_screen(screen)
+
+    def _shortcut_result(self, message):
+        self.feedback_label.setText(message)
+        self.feedback_label.show()
+        self.feedback_timer.start(7000)
+        self.adjustSize()
+
+    def _clear_feedback(self):
+        self.feedback_label.hide()
+        self.adjustSize()
 
     # ------------------------------------------------------------------ reading
 
@@ -197,38 +213,45 @@ class CompactWindow(QWidget):
         self.signal_label.setText(signal.text)
         from .dashboard_tab import headroom_pct
         self.gauge.set_state(headroom_pct(snapshot), signal.level)
-        parts = []
+        from .dashboard_tab import VERDICT
+        verdict, color = VERDICT.get(signal.level, VERDICT["unknown"])
+        self.status_label.setText(verdict)
+        self.status_label.setStyleSheet(f"color:{color};font-weight:600;")
+        memory = "RAM —"
+        self.free_label.setText("RAM sem leitura")
+        if snapshot.mem is not None and snapshot.mem.mem_total_kb > 0:
+            used = 1 - snapshot.mem.mem_available_kb / snapshot.mem.mem_total_kb
+            memory = f"RAM {used * 100:.0f}%"
+            free = snapshot.mem.mem_available_kb / title_signal.MB
+            self.free_label.setText(f"{title_signal.fmt1(free)} GB livres")
+        cpu = "CPU —" if snapshot.cpu_busy_frac is None else f"CPU {snapshot.cpu_busy_frac * 100:.0f}%"
+        swap = "Swap —"
+        if snapshot.swap_total_kb and (not snapshot.sources or snapshot.source("swaps").status == "ok"):
+            swap = f"Swap {snapshot.swap_used_kb * 100 // snapshot.swap_total_kb}%"
+        measured = [v for v in snapshot.tmpfs if v.quality == "ok" and v.total_bytes]
+        temp = f"Temp {max(v.used_frac for v in measured) * 100:.0f}%" if measured else "Temp —"
+        self.detail_label.setText(f"{memory}   {cpu}\n{swap}   {temp}")
+        alerts = []
         for volume in snapshot.tmpfs:
             if volume.quality != "ok":
-                parts.append(f"{volume.path}: capacidade desconhecida")
+                alerts.append(f"{volume.path}: capacidade desconhecida")
             elif volume.is_runtime and (volume.used_frac >= .9 or
                     (volume.inodes_total > 0 and volume.inodes_avail == 0)):
-                parts.append("Runtime da sessão crítico — aplicativos podem não abrir")
-        if snapshot.mem is not None:
-            used = 1 - snapshot.mem.mem_available_kb / max(1, snapshot.mem.mem_total_kb)
-            free_gb = snapshot.mem.mem_available_kb / title_signal.MB
-            parts.append(f"RAM {used * 100:.0f}% (livre {title_signal.fmt1(free_gb)} GB)")
-        if snapshot.cpu_busy_frac is None:
-            parts.append("CPU ainda sem delta")
-        else:
-            parts.append(f"CPU {snapshot.cpu_busy_frac * 100:.0f}%")
-        if snapshot.swap_total_kb:
-            parts.append(f"Swap {snapshot.swap_used_kb * 100 // snapshot.swap_total_kb}%")
-        measured = [v for v in snapshot.tmpfs if v.quality == "ok" and v.total_bytes]
-        if measured:
-            parts.append(f"Temp {max(v.used_frac for v in measured) * 100:.0f}%")
-        if snapshot.sources:
-            degraded = [item for item in snapshot.sources
-                        if item.status in ("partial", "missing", "error")]
-            if degraded:
-                parts.append("coleta parcial: " +
-                             ", ".join(item.name for item in degraded[:3]))
-        self.detail_label.setText("\n".join(parts) or "sem detalhes")
+                alerts.append("Runtime crítico — aplicativos podem não abrir")
+        degraded = [item.name for item in snapshot.sources if item.status != "ok"]
+        if degraded:
+            alerts.append("Coleta parcial: " + ", ".join(degraded[:3]))
+        if signal.level == "unknown":
+            alerts.append("Leitura desconhecida/antiga; aguardando nova observação")
+        self.alert_label.setText("\n".join(alerts))
+        self.alert_label.setVisible(bool(alerts))
         self._sync_tooltip()
+        self.adjustSize()
+        self._screen_changed()
 
     def _sync_tooltip(self):
         self.setToolTip("\n".join(text for text in (
-            self.mode_label.text(), self.operation_label.text(),
+            self.signal_label.text(), self.mode_label.text(), self.operation_label.text(),
             self._caps.note if self._caps.compact_fallback else "") if text))
 
     def _open_central(self):
@@ -262,7 +285,7 @@ class CompactWindow(QWidget):
 
     def set_paused(self, paused: bool):
         self._paused = bool(paused)
-        self.pause_button.setText("▶" if paused else "⏸")
+        self.pause_button.setText("Retomar" if paused else "Pausar")
         self.pause_button.setToolTip("Retomar monitoramento" if paused else "Pausar monitoramento")
         self.pause_button.setAccessibleDescription("monitoramento pausado" if paused else "monitoramento ativo")
         self._render_mode()
@@ -336,6 +359,8 @@ class CompactWindow(QWidget):
         self.hide()
 
     def force_close(self):
+        self.ai_strip.shutdown()
+        self.shortcut_tabs.shutdown()
         self._force_close = True
         self.close()
 

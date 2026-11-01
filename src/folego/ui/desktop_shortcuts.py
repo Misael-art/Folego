@@ -1,0 +1,275 @@
+"""Compact manual desktop controls; workers own all native I/O."""
+import json
+import os
+import threading
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+
+from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot, ClassInfo
+from PySide6.QtGui import QGuiApplication, QIcon
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QStyle, QVBoxLayout, QWidget
+
+from ..adapters.desktop_tools import DesktopTools
+from .theme import TOKENS, control_icon
+
+
+class DesktopController(QObject):
+    result = Signal(str)
+    feedback = Signal(str)
+    busy_changed = Signal(bool)
+
+    def __init__(self, parent=None, *, backend=None):
+        super().__init__(parent)
+        self.backend = backend or DesktopTools()
+        self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="folego-input")
+        self.future = None
+        self.closed = False
+        self.action = ""
+        self.timer = QTimer(self)
+        self.timer.setInterval(20)
+        self.timer.timeout.connect(self._drain)
+        QGuiApplication.instance().aboutToQuit.connect(self.close)
+        pool, backend = self.pool, self.backend
+        self._disposed = [False]
+        disposed = self._disposed
+        def dispose():
+            if not disposed[0]:
+                disposed[0] = True
+                try:
+                    pool.submit(backend.close)
+                except RuntimeError:
+                    backend.close()  # interpreter teardown after the executor joined
+                pool.shutdown(wait=False, cancel_futures=False)
+        self._dispose = dispose
+        self.destroyed.connect(dispose)
+
+    def request(self, action, value=None):
+        if self.closed or self.future is not None:
+            self.result.emit("Aguarde a solicitação atual; nenhuma tecla ficou na fila")
+            return False
+        self.future = self.pool.submit(self.backend.perform, action, value)
+        self.action = action
+        self.busy_changed.emit(True)
+        self.timer.start()
+        return True
+
+    def _drain(self):
+        if self.future is None or not self.future.done():
+            return
+        self.timer.stop()
+        future, self.future = self.future, None
+        try:
+            message = future.result()
+            if message and self.action not in ("key", "position"):
+                self.feedback.emit(message)
+        except Exception as exc:
+            # Native diagnostics never include key contents or stderr.
+            message = str(exc) if isinstance(exc, (RuntimeError, ValueError)) else "Solicitação não confirmada; confira o desktop"
+            self.feedback.emit(message)
+        self.busy_changed.emit(False)
+        if message:
+            self.result.emit(message)
+
+    def close(self):
+        if not self.closed:
+            self.closed = True
+            self.timer.stop()
+            # Runs after the sole in-flight task. No UI access from this worker.
+            self._dispose()
+
+
+@ClassInfo(**{"D-Bus Interface": "org.folego.Keyboard"})
+class VirtualKeyboard(QWidget):
+    """A non-focusing keyboard. Main tab always bottom; separate arrow top."""
+    def __init__(self, controller, parent=None):
+        super().__init__(parent, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
+                         Qt.WindowType.WindowDoesNotAcceptFocus | Qt.WindowType.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.setWindowTitle("Fôlego — teclado " + uuid.uuid4().hex)
+        self.setAccessibleName("Teclado virtual do Fôlego")
+        self.controller = controller
+        self.shift = False
+        self._geometry = None
+        self._position = "bottom"
+        self.confirmed_geometry = None
+        self.observed_geometry = None
+        self._placement_event = threading.Event()
+        self.setStyleSheet(f"QWidget {{ background:{TOKENS.surface};color:{TOKENS.text};font-size:11pt; }}"
+                           f"QPushButton {{ background:{TOKENS.surface_alt};border:1px solid {TOKENS.border};"
+                           "border-radius:5px; padding:5px; min-height:26px; }"
+                           f"QPushButton:hover {{border-color:{TOKENS.accent};}}")
+        layout = QVBoxLayout(self)
+        header = QHBoxLayout()
+        self.status = QLabel("Teclado · QWERTY · aplicativo em foco")
+        self.status.setWordWrap(True)
+        header.addWidget(self.status, 1)
+        hide = self._button("Fechar", self.hide)
+        hide.setIcon(QIcon.fromTheme("window-close"))
+        header.addWidget(hide)
+        layout.addLayout(header)
+        self.letters = []
+        for text, codes in (("1234567890", range(2, 12)), ("qwertyuiop", range(16, 26)),
+                            ("asdfghjkl", range(30, 39)), ("zxcvbnm", range(44, 51))):
+            row = QHBoxLayout()
+            row.setSpacing(4)
+            for char, code in zip(text, codes):
+                button = self._button(char.upper(), lambda checked=False, key=code: self._key(key))
+                self.letters.append(button)
+                row.addWidget(button)
+            layout.addLayout(row)
+        row = QHBoxLayout()
+        shift = self._button("Shift", self._shift)
+        shift.setCheckable(True)
+        row.addWidget(shift)
+        for text, code, stretch in (("Tab", 15, 0), ("Espaço", 57, 3),
+                                     ("Apagar", 14, 0), ("Enter", 28, 0)):
+            row.addWidget(self._button(text, lambda checked=False, key=code: self._key(key)), stretch)
+        layout.addLayout(row)
+        controller.result.connect(self.status.setText)
+        self._pending_position = False
+        controller.busy_changed.connect(self._after_busy)
+        QGuiApplication.instance().screenRemoved.connect(self._screen_removed)
+        from PySide6.QtDBus import QDBusConnection
+        self.bus = QDBusConnection.sessionBus()
+        self.service = f"org.folego.Keyboard.p{os.getpid()}"
+        self.registered = self.bus.registerService(self.service)
+        if self.registered:
+            self.bus.registerObject("/keyboard", self, QDBusConnection.RegisterOption.ExportAllSlots)
+
+    def _button(self, text, callback):
+        button = QPushButton(text)
+        button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        button.clicked.connect(callback)
+        return button
+
+    def _shift(self):
+        self.shift = not self.shift
+
+    def _key(self, code):
+        self.controller.request("key", [42, code] if self.shift else [code])
+
+    @Slot(str, str)
+    def placed(self, caption, serialized):
+        try:
+            observed = tuple(json.loads(serialized))
+        except (ValueError, TypeError):
+            return
+        self.observed_geometry = observed
+        # KWin's fractional logical geometry must match the same physical pixels
+        # as Qt's integral coordinates, including a desktop scale such as 135%.
+        ratio = self.devicePixelRatioF()
+        same_pixels = (len(observed) == 4 and self._geometry is not None
+                       and all(round(actual * ratio) == round(wanted * ratio)
+                               for actual, wanted in zip(observed, self._geometry)))
+        if caption == self.windowTitle() and same_pixels:
+            self.confirmed_geometry = self._geometry
+            self._placement_event.set()
+            self.status.setText("Teclado aberto " + ("no topo" if self._position == "top" else "na parte inferior"))
+        else:
+            self.observed_geometry = observed
+            self.status.setText("Posição não confirmada; confira o teclado")
+
+    def show_at(self, position, screen=None):
+        if position not in ("top", "bottom"):
+            raise ValueError("posição inválida")
+        screen = screen or QGuiApplication.primaryScreen()
+        self._position = position
+        self.confirmed_geometry = None
+        self._placement_event.clear()
+        if screen is None:
+            self.status.setText("Tela indisponível")
+            return
+        area = screen.availableGeometry()
+        self.resize(min(960, area.width()), min(max(220, self.sizeHint().height()), area.height()))
+        x = area.x() + (area.width() - self.width()) // 2
+        y = area.top() if position == "top" else area.bottom() + 1 - self.height()
+        self._geometry = (x, y, self.width(), self.height())
+        self.move(x, y)
+        self.show()
+        if os.environ.get("XDG_SESSION_TYPE") == "wayland":
+            self.status.setText("Abrindo teclado na posição solicitada…")
+            # Wait only for mapping of our own surface; the worker never blocks Qt.
+            self._pending_position = True
+            QTimer.singleShot(150, self._position_request)
+
+    def _after_busy(self, busy):
+        if not busy and self._pending_position:
+            QTimer.singleShot(0, self._position_request)
+
+    def _position_request(self):
+        if self._pending_position and self.isVisible() and self.controller.future is None:
+            self._pending_position = False
+            self.controller.request("position", (self.windowTitle(), self._geometry,
+                                                   self.service if self.registered else None,
+                                                   self._placement_event))
+
+    def _screen_removed(self, screen):
+        if self.isVisible():
+            self.show_at(self._position)
+
+    def closeEvent(self, event):
+        self.hide()
+        event.ignore()
+
+
+class ShortcutTabs(QWidget):
+    def __init__(self, parent=None, *, controller=None):
+        super().__init__(parent)
+        self.controller = controller or DesktopController(self)
+        self.keyboard = None
+        self.buttons = {}
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(3, 0, 3, 0)
+        layout.setSpacing(3)
+        for key, text, color, icon in (("copy", "Copiar", "#2e78a7", "edit-copy"),
+                                        ("paste", "Colar", "#287963", "edit-paste"),
+                                        ("print", "Print", "#8f651f", "camera-photo"),
+                                        ("keyboard", "Teclado", "#7255ab", "input-keyboard")):
+            tab = QFrame()
+            tab.setStyleSheet(f"QFrame {{background:{color};border-bottom-left-radius:9px;"
+                             "border-bottom-right-radius:9px;} QPushButton {background:transparent;"
+                             "color:white;border:none;padding:3px 1px;min-height:26px;}"
+                             "QPushButton:hover {background:rgba(255,255,255,35);}")
+            row = QHBoxLayout(tab)
+            row.setContentsMargins(1, 0, 1, 0)
+            row.setSpacing(0)
+            button = QPushButton(text)
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            button.setAccessibleName(text)
+            button.setToolTip({"copy": "Copiar a seleção do aplicativo em foco",
+                               "paste": "Colar no aplicativo em foco",
+                               "print": "Selecionar uma região para captura de tela",
+                               "keyboard": "Abrir sempre na parte inferior da tela"}[key])
+            button.clicked.connect(lambda checked=False, action=key: self.activate(action))
+            self.buttons[key] = button
+            row.addWidget(button, 1)
+            if key == "keyboard":
+                self.top_button = QPushButton()
+                self.top_button.setIcon(control_icon(self.style(), "go-up", QStyle.StandardPixmap.SP_ArrowUp))
+                self.top_button.setFixedWidth(22)
+                self.top_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+                self.top_button.setAccessibleName("Abrir teclado no topo da tela")
+                self.top_button.setToolTip("Somente esta seta abre o teclado no topo da tela")
+                self.top_button.setStyleSheet("border-left:1px solid #b99ce1;border-radius:4px;")
+                self.top_button.clicked.connect(lambda: self.open_keyboard("top"))
+                row.addWidget(self.top_button)
+            layout.addWidget(tab, 3 if key == "keyboard" else 2)
+
+    def activate(self, action):
+        if action == "keyboard":
+            self.open_keyboard("bottom")
+        else:
+            self.controller.request(action)
+
+    def open_keyboard(self, position):
+        if self.keyboard is None:
+            self.keyboard = VirtualKeyboard(self.controller)
+        self.keyboard.show_at(position, self.screen())
+
+    def shutdown(self):
+        if self.keyboard is not None:
+            self.keyboard.hide()
+            if self.keyboard.registered:
+                self.keyboard.bus.unregisterObject("/keyboard")
+                self.keyboard.bus.unregisterService(self.keyboard.service)
+        self.controller.close()

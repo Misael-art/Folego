@@ -1,0 +1,49 @@
+{
+  "platform": "xcb",
+  "size": [
+    280,
+    254
+  ],
+  "cases": [
+    {
+      "position": "bottom",
+      "requested": [
+        32,
+        488,
+        960,
+        280
+      ],
+      "confirmed": null,
+      "visible": true
+    },
+    {
+      "position": "top",
+      "requested": [
+        32,
+        0,
+        960,
+        280
+      ],
+      "confirmed": null,
+      "visible": true
+    },
+    {
+      "position": "bottom",
+      "requested": [
+        32,
+        488,
+        960,
+        280
+      ],
+      "confirmed": null,
+      "visible": true
+    },
+    {
+      "input": "native key into owned focused field"
+    },
+    {
+      "clipboard": "copy/paste in private X server"
+    }
+  ],
+  "passed": true
+}

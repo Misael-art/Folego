@@ -1,0 +1,61 @@
+{
+  "platform": "wayland",
+  "size": [
+    280,
+    216
+  ],
+  "cases": [
+    {
+      "position": "bottom",
+      "requested": [
+        0,
+        309,
+        948,
+        284
+      ],
+      "confirmed": [
+        0,
+        309,
+        948,
+        284
+      ],
+      "visible": true
+    },
+    {
+      "position": "top",
+      "requested": [
+        0,
+        0,
+        948,
+        284
+      ],
+      "confirmed": [
+        0,
+        0,
+        948,
+        284
+      ],
+      "visible": true
+    },
+    {
+      "position": "bottom",
+      "requested": [
+        0,
+        313,
+        948,
+        280
+      ],
+      "confirmed": [
+        0,
+        313,
+        948,
+        280
+      ],
+      "visible": true
+    },
+    {
+      "input": "native key into owned focused field"
+    }
+  ],
+  "passed": true
+}

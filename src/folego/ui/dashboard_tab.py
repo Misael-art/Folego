@@ -98,7 +98,12 @@ class HealthGauge(QWidget):
         font.setBold(False)
         painter.setFont(font)
         painter.setPen(QColor(self.color))
-        if not self._compact:
+        if self._compact:
+            font.setPointSizeF(font.pointSizeF() * .8)
+            painter.setFont(font)
+            painter.drawText(rect.adjusted(0, side * .22, 0, side * .22), Qt.AlignmentFlag.AlignCenter,
+                             "folga")
+        else:
             painter.drawText(rect.adjusted(0, side * 0.22, 0, side * 0.22), Qt.AlignmentFlag.AlignCenter,
                              f"{self.verdict} · folga")
         painter.end()

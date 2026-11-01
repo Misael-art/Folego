@@ -1,0 +1,18 @@
+{
+  "pyproject.toml": "b269efe448e473690857f10f3b1c19a1905914c5977fdb189c128f4e6e0cf4cc",
+  "src/folego/adapters/desktop_tools.py": "7d26e84e131d39aa5a4f8b462b6476cc7e74883e232238c87252088fbb804ba3",
+  "src/folego/app.py": "2afeb9f19f7a764d2c402fb0dd4c06fc9a71e1d4cdcd9eb78748d03e55dc6b36",
+  "src/folego/cli.py": "9f6cf48a1fd3b264299a4c11e4edff494e85cf6cc728320767ea1def8b5041c1",
+  "src/folego/core/ai_sessions.py": "a52e0046b7d0fabc05068d54e0a9ec579a7b801815e4e7ea44e0fb613a4179d9",
+  "src/folego/ui/ai_strip.py": "cf2dc9ca87d22015af75fb35ad56c028cd0f5b82f02ea63df45c7e19c4e5d79d",
+  "src/folego/ui/compact.py": "00e62efb498fece67392756eb2d81d985b475e49899a85d86bbd32b0ee858bb9",
+  "src/folego/ui/dashboard_tab.py": "0f2bbda275e103b7c3dc0e7db113a5a96acc3170c6113ae3a294d3090e65e24f",
+  "src/folego/ui/desktop_shortcuts.py": "1ee4e56fd5e04d8f02d36318a7418585b72db507d1eab6b7c4041ad37bec0963",
+  "src/folego/ui/theme.py": "2279c6df033be66dab8bb7c68c5eab3422992d63f17c0314fbf217450d5d27f8",
+  "tests/test_ai_sessions.py": "3b23d7d9c70f1b191d3e67c5250b0bab0acc6964370693bf05d94798a2abec86",
+  "tests/test_desktop_tools.py": "07112507bba4688cd3e48fc67a56ca22368bd50d90a8b11043195e284d4f26af",
+  "tests/test_session_resilience.py": "252af7676d9629b867d088ca06e94647c3ae08234a925b3edbba7c00bda01506",
+  "tests/test_ui_desktop_shortcuts.py": "e866d52ca0977536abd584a9cecdcf477009dfaa143f4c9044c637e72a209faf",
+  "tools/verify_compact_ui.py": "110b05fca71fcb32f4dccc4198561472d968bf3a75978671b55192455f8f2299",
+  "uv.lock": "009d4a09399137fee5ce94b37144693d39065c42296bc17bcbee9de07b455c91"
+}

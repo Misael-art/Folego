@@ -48,6 +48,18 @@ estão descritos abaixo.
 | **Entrada e acessibilidade** | Observar teclado, ponteiro, trackpads, toque, controles e áudio; solicitar reparo de entrada ou manter um monitor residente opcional, sem depender do PhaseZero. |
 | **Opções e continuidade** | Iniciar com a sessão por padrão, desativar quando quiser, consultar operações pelo código e acompanhar temporários próprios preservados. |
 
+O **modo compacto** tem 280 px de largura, recursos em duas linhas e controles
+de janela no cabeçalho. A faixa de IAs acompanha Codex, Codex Web, Claude e Grok
+no próprio Fôlego; passe o mouse para consultar uso, reposição da cota, plano e
+qualidade da observação. Cinza significa que o dado não foi confirmado.
+
+As abas coloridas **Copiar, Colar, Print e Teclado** atuam por clique. A aba do
+teclado abre sempre na parte inferior; somente sua seta abre no topo. A altura
+pode crescer para preservar alertas e mensagens. [Uso, configuração de contas,
+dependências e limites](docs/COMPACTO.md).
+
+![Widget compacto do Fôlego, com dados de demonstração](docs/handoff/validation/compact-ui-2026-11-01/compact.png)
+
 ## Começar
 
 O alvo é **Linux**, com KDE Plasma para a integração completa com o desktop.

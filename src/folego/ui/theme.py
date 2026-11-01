@@ -8,7 +8,7 @@ no animation, so ``prefers-reduced-motion`` has nothing to disable.
 """
 from dataclasses import dataclass
 
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtGui import QColor, QPalette, QIcon, QPainter
 from PySide6.QtWidgets import QApplication
 
 
@@ -31,6 +31,17 @@ class Tokens:
 
 
 TOKENS = Tokens()
+
+
+def control_icon(style, name, fallback):
+    """Native theme/Qt icons with a readable monochrome mask on dark surfaces."""
+    icon = QIcon.fromTheme(name, style.standardIcon(fallback))
+    pixmap = icon.pixmap(16, 16)
+    painter = QPainter(pixmap)
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+    painter.fillRect(pixmap.rect(), QColor(TOKENS.text))
+    painter.end()
+    return QIcon(pixmap)
 
 STYLESHEET = f"""
 QWidget {{

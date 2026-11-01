@@ -1,6 +1,7 @@
 """App bootstrap: python -m folego."""
 import sys
 
+from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication
 
 from .core.collector import MetricsCollector
@@ -39,6 +40,15 @@ def main() -> int:
         win = MainWindow(collector_factory=MetricsCollector, accessibility_factory=Supervisor, startup_defaults=True)
         win.show()
         win.start()
-        return app.exec()
+        try:
+            return app.exec()
+        finally:
+            win.quit()
+            # Dispose native top-level windows while Python wrappers still live
+            # (including the separately registered, non-focusing keyboard).
+            windows = list(app.topLevelWidgets())
+            for window in windows:
+                window.deleteLater()
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     finally:
         lock.release()
