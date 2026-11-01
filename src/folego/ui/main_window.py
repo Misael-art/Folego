@@ -29,6 +29,7 @@ from .tunings_tab import TuningsTab
 from .accessibility_tab import AccessibilityTab
 from .options_tab import OptionsTab
 from .custom_prompts_tab import CustomPromptsTab
+from .ai_monitor import AIMonitor
 from ..core import health
 from ..core.exclusions import ExclusionError, ExclusionList
 from ..core.orphans import OrphanTracker, active_investigation, group_targets
@@ -118,6 +119,7 @@ class MainWindow(QMainWindow):
         self._last_snapshot = None
         self._last_signal = None
         self._collection_error = ""
+        self.ai_monitor = AIMonitor(self)
         self._jobs = jobs if jobs is not None else TuneJobs(parent=self)
         self._disk_jobs = disk_jobs if disk_jobs is not None else TuneJobs(
             parent=self, argv_factory=plan_argv, timeout_ms=DISK_TIMEOUT_MS)
@@ -145,6 +147,8 @@ class MainWindow(QMainWindow):
                                                confirm_fn=confirm_fn)
         self.accessibility.report_ready.connect(self._show_accessibility)
         self.options = OptionsTab()
+        self.options.sound_preview.connect(self.ai_monitor.alerts.preview)
+        self.ai_monitor.alerts.feedback.connect(self.options.sound_feedback)
         self.custom_prompts = CustomPromptsTab()
         self.options.operation_verified.connect(self._operation_verified)
         self._startup_defaults = startup_defaults
@@ -173,6 +177,7 @@ class MainWindow(QMainWindow):
     # -------------------------------------------------------------------- polling
 
     def start(self):
+        self.ai_monitor.start()
         if self._startup_defaults:
             self.options.start(sync=True)
             self._startup_defaults = False
@@ -614,6 +619,7 @@ class MainWindow(QMainWindow):
             self._process_jobs.shutdown()
             self.accessibility.stop()
             self.options.stop()
+            self.ai_monitor.shutdown()
             self.custom_prompts.shutdown()
             super().closeEvent(event)
             return

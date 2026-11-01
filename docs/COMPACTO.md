@@ -4,8 +4,9 @@ O widget tem 280 px de largura em pixels lógicos do desktop. Recursos ficam em
 duas linhas; alertas completos e mensagens podem aumentar a altura. Minimizar
 oculta o widget com um caminho de retorno; ampliar abre a central; fechar sai
 do Fôlego. Pausar controla a telemetria de recursos. A consulta de IAs é separada
-e funciona enquanto o widget está visível. Fechar o aplicativo encerra seus
-workers e seu próprio auxiliar de entrada.
+e continua enquanto o Fôlego está aberto, inclusive com o widget oculto ou a
+central em primeiro plano. Fechar o aplicativo encerra seus workers e seu próprio
+auxiliar de entrada; um som em andamento conclui a restauração do volume.
 
 ## Sessões de IA
 
@@ -147,15 +148,57 @@ Orçamentos do monitor de entregas: inventário compartilhado de 32 raízes, 128
 64 KiB e até 2048 recibos. Inventário excedido, registro incompleto ou conclusão
 fora da cauda legível deixam a observação parcial, sem amostragem silenciosa.
 
+## Sons dos agentes e da franquia
+
+Na janela principal, abra **opções → Captura e avisos sonoros**. **Sons de
+conclusão dos agentes e de franquia** vem ligado. Codex, Codex Web, Claude e
+Grok têm quatro melodias curtas distintas. Escolha o aviso na lista e use
+**Testar som** para ouvir, inclusive quando os avisos automáticos estão desligados.
+
+Há três outros toques: atenção ao cruzar **20% restantes**, notas descendentes
+quando a franquia chega a **zero** e uma melodia ascendente quando a fonte confirma
+a disponibilidade novamente. Todas as contas são acompanhadas; considera-se a
+menor disponibilidade das janelas válidas de cada conta. Se a leitura salta de
+mais de 20% direto para zero, toca o aviso de esgotamento. Uma data de reset
+vencida, dado desconhecido ou uma estimativa de assinatura não significa reposição.
+Web/Grok continuam sem alertas percentuais quando a fonte não informa a franquia.
+
+Os avisos ocorrem na próxima observação válida. A primeira leitura estabelece
+uma referência silenciosa, sem tocar todas as entregas antigas ao abrir. Uma
+conclusão nativa com horário posterior à abertura ainda toca, mesmo quando é a
+primeira sessão legível daquele provedor. Eventos
+repetidos, abrir uma conta e falhas de leitura não repetem os sons. Desligar os
+avisos continua atualizando a referência; religar não reproduz o histórico mudo.
+Conclusões simultâneas do mesmo provedor são agrupadas enquanto aguardam som.
+A fila é limitada às sete identidades sonoras, reproduzidas em sequência.
+
+**Elevar o volume a pelo menos 85% durante o som e restaurar depois** também vem
+ligado. Se a saída já estiver acima disso, não a reduz. O Fôlego guarda os valores
+de cada canal e o estado mudo, identifica a saída padrão, eleva/desmuta só durante
+o aviso e restaura ao terminar, inclusive se a reprodução falhar. Um ajuste de
+volume ou mudo feito pelo usuário durante o aviso é preservado. Desmarcar mantém
+o volume e mudo atuais. Não muda o dispositivo padrão, perfis ou serviços de áudio.
+
+Requer `pactl` e `paplay` no PulseAudio/PipeWire local. A intenção fica em
+`$XDG_STATE_HOME/folego/audio-volume.json`, privada, antes de alterar volume.
+Ao iniciar, um registro pendente é reconciliado somente com servidor, saída,
+boot e valores ainda comprovados. Estado desconhecido, saída substituída ou
+registro de outro boot preservam o volume atual e informam a pendência em opções;
+não se restaura às cegas nem se repete o som incerto.
+
 ## Abas de ações rápidas
 
 **Selecionar tudo**, **Apagar tudo** e **Prompts** ficam em uma linha fina acima das abas.
 Atuam somente no campo editável em foco, identificado pelo AT-SPI e pelo
 proprietário da janela ativa. Apagar remove o texto do campo inteiro, não só a
-seleção. Não leem seu conteúdo, não usam a área de transferência, não enviam
+seleção. Não copiam nem registram seu conteúdo, não usam a área de transferência, não enviam
 Enter nem apagam arquivos. Foco/campo alterado recusa a operação; não há repetição
 automática. Campos sem acessibilidade e terminais sem interface editável informam
-indisponibilidade, sem substituir a operação por atalhos globais de terminal.
+indisponibilidade. Em Chromium, que expõe texto sem a interface EditableText,
+selecionam o campo exato por AT-SPI, verificam a seleção inteira e o foco e
+enviam um único Backspace. Não usam Ctrl+A como fallback global. A confirmação
+consulta o tamanho e, quando há um único caractere, aceita o terminador de linha
+do campo vazio. Uma falha informa resultado não confirmado, sem repetição automática.
 Dependências opcionais: `libatspi`/AT-SPI 2 e `kdotool` no KDE/Wayland ou
 `xdotool` em X11 com gerenciador de janelas. Não há instalação automática.
 
@@ -199,6 +242,14 @@ tag publicada v0.2.0b2.
 ferramenta de captura; o Fôlego não escolhe um destino nem declara uma imagem
 salva sem confirmação. Um clique repetido não abre outra captura em andamento.
 Uma captura que está sendo editada permanece na ferramenta ao sair do Fôlego.
+
+Em **opções → Captura e avisos sonoros**, **Incluir widget flutuante no print**
+vem marcado, mantendo o comportamento anterior. Desmarque para ocultar o widget
+e o teclado antes de abrir a captura pelo botão Print do Fôlego. Eles retornam
+quando você fecha o Spectacle, inclusive ao cancelar; no KDE/Wayland a posição
+anterior do widget é restabelecida e limitada à área útil da tela. Uma falha ao
+abrir o Spectacle também restaura o widget. A opção não controla capturas iniciadas
+por outros programas ou pelo atalho global do desktop.
 
 **Teclado** abre o teclado próprio do Fôlego na parte inferior da tela atual;
 a seta separada abre no topo. A posição não fica memorizada: o próximo clique

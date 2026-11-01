@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import stat
@@ -140,6 +141,25 @@ class DesktopTools:
                                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                              start_new_session=True)
             return "Selecione a região na ferramenta de captura"
+        if action == 'capture-status':
+            return dict(operation='capture-status', active=self.capture is not None and self.capture.poll() is None)
+        if action == 'capture-place':
+            geometry = tuple(value)
+            backend = self
+            class OwnGeometry:
+                def wait(self, seconds):
+                    end = time.monotonic() + seconds
+                    while time.monotonic() < end:
+                        windows = backend._call(['kdotool', 'search', '--all', '--pid', str(os.getpid()),
+                                                 '--name', '^Fôlego — widget$']).splitlines()
+                        if len(windows) == 1:
+                            raw = backend._call(['kdotool', 'getwindowgeometry', windows[0]])
+                            numbers = re.search(r'Position:\s*([-0-9.]+),([-0-9.]+)\s+Geometry:\s*([-0-9.]+)x([-0-9.]+)', raw)
+                            if numbers and all(abs(float(actual) - wanted) <= 1 for actual, wanted in zip(numbers.groups(), geometry)):
+                                return True
+                        time.sleep(.04)
+                    return False
+            return self.position('Fôlego — widget', geometry, confirmation=OwnGeometry())
         if action == "position":
             return self.position(*value)
         raise ValueError("atalho desconhecido")
@@ -165,7 +185,7 @@ class DesktopTools:
         raise RuntimeError('Pedido enviado; área de trabalho não confirmada. Não houve repetição')
 
     def position(self, caption, geometry, service=None, confirmation=None):
-        """KWin can move only this process's uniquely titled keyboard window."""
+        """KWin can move only this process's uniquely titled keyboard or widget."""
         binary = shutil.which("qdbus6")
         if not binary:
             raise RuntimeError("Posicionamento Wayland não confirmado: qdbus6/KWin ausente")

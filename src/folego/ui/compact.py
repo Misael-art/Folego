@@ -161,7 +161,7 @@ class CompactWindow(QWidget):
         readings.addWidget(self.status_label)
         readings.addWidget(self.detail_label)
         body.addLayout(readings, 1)
-        self.ai_strip = AIStrip(self)
+        self.ai_strip = AIStrip(self, monitor=getattr(window, 'ai_monitor', None))
         footer = QHBoxLayout()
         footer.addWidget(self.pause_button)
         footer.addStretch(1)
@@ -184,9 +184,17 @@ class CompactWindow(QWidget):
         self.feedback_timer.timeout.connect(self._clear_feedback)
         inner.addWidget(self.ai_strip)
         inner.addLayout(footer)
-        self.shortcut_tabs = ShortcutTabs(self)
+        self._capture_waiting = False
+        self._capture_restore = False
+        self._keyboard_restore = False
+        self.capture_timer = QTimer(self)
+        self.capture_timer.setInterval(350)
+        self.capture_timer.timeout.connect(self._capture_status)
+        self.shortcut_tabs = ShortcutTabs(self, capture_handler=self._print)
         self.shortcut_tabs.customize_requested.connect(self._customize_prompts)
         self.shortcut_tabs.controller.feedback.connect(self._shortcut_result)
+        self.shortcut_tabs.controller.payload.connect(self._capture_result)
+        self.shortcut_tabs.controller.failed.connect(self._capture_failed)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -208,6 +216,70 @@ class CompactWindow(QWidget):
         open_editor = getattr(self._window, 'open_custom_prompts', self._window.raise_to_user)
         open_editor()
         self.hide()
+
+    def _print(self):
+        from .desktop_preferences import enabled, SHOW_IN_CAPTURE
+        controller = self.shortcut_tabs.controller
+        if self._capture_waiting or controller.future is not None:
+            self._shortcut_result('Aguarde a captura ou solicitação atual')
+            return
+        try: include = enabled(SHOW_IN_CAPTURE, self._store)
+        except ValueError as exc:
+            self._shortcut_result(str(exc)); return
+        self._capture_waiting = True
+        self._capture_restore = not include and self.isVisible()
+        self._capture_xy = (self.x(), self.y())
+        keyboard = self.shortcut_tabs.keyboard
+        self._keyboard_restore = not include and keyboard is not None and keyboard.isVisible()
+        if self._keyboard_restore: keyboard.hide()
+        if self._capture_restore: self.hide()
+        # Let the compositor present the hidden surfaces before Spectacle takes
+        # its initial image. The timer remains alive while this widget is hidden.
+        QTimer.singleShot(220 if not include else 0, self._launch_capture)
+
+    def _launch_capture(self):
+        if not self._capture_waiting: return
+        if not self.shortcut_tabs.controller.request('print'):
+            self._finish_capture()
+            return
+        self.capture_timer.start()
+
+    def _capture_status(self):
+        controller = self.shortcut_tabs.controller
+        if controller.future is None: controller.request('capture-status')
+
+    def _capture_result(self, value):
+        if value.get('operation') == 'capture-status' and not value['active']:
+            self._finish_capture()
+
+    def _capture_failed(self, _message):
+        if self.shortcut_tabs.controller.action == 'print': self._finish_capture()
+
+    def _finish_capture(self):
+        self.capture_timer.stop()
+        self._capture_waiting = False
+        restore, self._capture_restore = self._capture_restore, False
+        keyboard, self._keyboard_restore = self._keyboard_restore, False
+        if restore and not self._force_close:
+            self.show_compact()
+            if self._caps.session_type == 'wayland': QTimer.singleShot(80, self._restore_capture_position)
+        if keyboard and not self._force_close: QTimer.singleShot(150, self._restore_capture_keyboard)
+
+    def _restore_capture_position(self):
+        if self._force_close or not self.isVisible(): return
+        if self.shortcut_tabs.controller.future is not None:
+            QTimer.singleShot(50, self._restore_capture_position); return
+        area = self.screen().availableGeometry()
+        x, y = clamp_position(*self._capture_xy, self.width(), self.height(),
+                              [(area.x(), area.y(), area.width(), area.height())])
+        self.shortcut_tabs.controller.request('capture-place', (x, y, self.width(), self.height()))
+
+    def _restore_capture_keyboard(self):
+        if self._force_close or self._capture_waiting: return
+        if self.shortcut_tabs.controller.future is not None:
+            QTimer.singleShot(50, self._restore_capture_keyboard); return
+        keyboard = self.shortcut_tabs.keyboard
+        if keyboard is not None: keyboard.show_at(keyboard._position, self.screen())
 
     def _clear_feedback(self):
         self.feedback_label.hide()
@@ -366,6 +438,9 @@ class CompactWindow(QWidget):
         self.hide()
 
     def force_close(self):
+        self.capture_timer.stop()
+        self._capture_waiting = False
+        self._capture_restore = self._keyboard_restore = False
         self.ai_strip.shutdown()
         self.shortcut_tabs.shutdown()
         self._force_close = True

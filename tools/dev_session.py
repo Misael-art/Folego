@@ -56,6 +56,7 @@ def test_environment(run: Path) -> dict[str, str]:
                TMPDIR=str(run / "general"),
                PYTEST_DEBUG_TEMPROOT=str(run / "pytest-root"),
                HYPOTHESIS_STORAGE_DIRECTORY=str(run / "hypothesis"),
+               PULSE_SERVER='unix:' + str(run / 'no-audio-server'),
                QT_QPA_PLATFORM="offscreen")
     return env
 

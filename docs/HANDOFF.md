@@ -1,5 +1,56 @@
 # Passagem para o próximo agente — atualizada em 01/11/2026
 
+## Apagar em Chromium, opção de captura e sons — 01/11/2026
+
+Sobre `cc2f3bf993d0e49726da399ae16bc6c24c2f39d5`, mesma raiz/branch/PR #1.
+Edição corrigida em `6396a527c03e1ed7e44a74a7ce5e8f2e942241ee`.
+Chrome próprio reproduziu a falta de EditableText apesar de Text/entry editável.
+Agora seleciona o campo exato por AT-SPI, aguarda a seleção inteira, revalida
+foco/identidade/tamanho e envia um Backspace. Sem Ctrl+A global, clipboard ou
+conteúdo em logs; confirmação trata o terminador de campo vazio. Quatro casos
+DOM passaram: contenteditable com estado controlado/textarea, com/sem seleção.
+
+Opções, com rolagem e controles legíveis: **Incluir widget flutuante no print**
+marcado por padrão. Desmarcado oculta widget/teclado antes do Spectacle próprio
+e os restaura ao fechar/cancelar, inclusive posição confirmada no KWin. Somente
+Print do Fôlego; não afeta atalhos/capturas externas. Falha de abertura restaura.
+
+Sons ligados por padrão: quatro melodias de conclusão e três de franquia (20%,
+zero, reposição confirmada), preview e opt-out na GUI. Monitor único compartilhado
+com central/widget, ativo enquanto o app estiver aberto. Todas as contas;
+desconhecido/vencido não cria transição, histórico antigo não toca ao iniciar e
+primeira conclusão nativa posterior à abertura ainda avisa mesmo se o provedor
+antes era indisponível. IDs deduplicados e fila limitada a sete identidades.
+
+Volume temporário de pelo menos 85%, desmute e restauração por canal/mudo,
+preservando ajuste concorrente do usuário. Usa saída já padrão, sem mudar perfil,
+serviço ou grants. Intenção privada antes do efeito, servidor/saída/boot revalidados,
+registro pendente reconciliado na abertura; desconhecido bloqueia restauração
+cega. Registo em `~/.local/state/folego/audio-volume.json`. Código Qt só na UI;
+núcleo/CLI continuam independentes. O wrapper de testes agora isola também Pulse.
+
+`./dev check` final: **1148 passed, 2 skipped** headless (29,23 s), **1422 passed,
+2 skipped** Qt (52,45 s), Python 3.14.7 gerenciado, sequencial, HOME/XDG/TMP
+privados. KDE/Wayland: **11 casos** com captura incluída/oculta, fechamento do
+filho Spectacle sem salvar região e retorno do widget/teclado/posição. Áudio:
+sete sons reais em PipeWire/Pulse/WirePlumber próprios, saída nula, namespaces,
+runtime físico e dispositivos ocultos; canais/mudo originais restaurados.
+Leitura somente consulta de recibo na instância real também confirmou restauração
+e igualdade com os valores anteriores. Não foi disparado preview físico pelo QA.
+[Provas, screenshots, falhas e limites](handoff/validation/editing-capture-audio-2026-11-01/README.md).
+
+GUI substituída por saída normal da bandeja, lock liberado e launcher oficial.
+Instância final **1211686**, starttime **1722544**, compacto em (19;132,185),
+280×274,815, central oculta; posição escolhida pelo usuário preservada. Histórico
+de substituição em `.scratch/capture-sounds/final/replacement.json`; nunca usar
+PID deste registro sem nova identidade/boot. Nenhum cliente de IA, agente ou
+serviço de áudio/entrada físico foi encerrado. Auxiliares de QA encerrados.
+
+Versão continua posterior à tag v0.2.0b2, sem novo release/merge. Próximo passo:
+usuário validar o campo específico do Codex e audibilidade/identidades com
+**opções → Testar som**. Provas não certificam todos os clientes, saída física,
+imagem final salva ou capturas externas. Limites do motor de recursos permanecem.
+
 ## Custom: textos e macros pessoais — 01/11/2026
 
 Incremento sobre `eeba357f287da7a4f18c879d6a8665e810d02954`, na mesma raiz,

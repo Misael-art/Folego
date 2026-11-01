@@ -1,7 +1,8 @@
 """Session startup preference; all system/file operations run in a worker."""
 import sys
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QCheckBox, QComboBox, QLineEdit, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QLineEdit, QLabel, QPushButton,
+                              QVBoxLayout, QHBoxLayout, QScrollArea, QGroupBox, QLayout, QWidget)
 from .tune_jobs import TuneJobs
 
 
@@ -18,9 +19,12 @@ def options_argv(action, target, confirm):
 
 class OptionsTab(QWidget):
     operation_verified = Signal(object)
+    sound_preview = Signal(str)
     def __init__(self, *, jobs=None):
         super().__init__()
         self._stopped = False
+        self._desktop_options = False
+        self._sound_message = 'Sons distintos por agente; alerta em 20%, fim da franquia e reposição confirmada.'
         self.jobs = jobs or TuneJobs(parent=self, argv_factory=options_argv, timeout_ms=30000)
         self.choice = QCheckBox("Iniciar Fôlego automaticamente com a sessão")
         self.choice.setChecked(True)
@@ -53,10 +57,66 @@ class OptionsTab(QWidget):
                       "Não amplia permissões de reparo ou limpeza. Desligar afeta o próximo login; "
                       "o monitor já aberto pode continuar observando.")
         text.setWordWrap(True)
-        box = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        area = QScrollArea()
+        area.setWidgetResizable(True)
+        content = QWidget()
+        box = QVBoxLayout(content)
+        box.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
+        self.settings_box = box
         for widget in (self.choice, text, self.status, self.verify, self.pending, self.operation_id, self.reconcile, self.cancel, self.operation_status, self.retention, self.retain):
             box.addWidget(widget)
         box.addStretch(1)
+        area.setWidget(content)
+        outer.addWidget(area)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.build_desktop_options()
+
+    def build_desktop_options(self):
+        if self._desktop_options: return
+        from .desktop_preferences import enabled, set_enabled, SHOW_IN_CAPTURE, SOUNDS, RAISE_VOLUME
+        self._desktop_options = True
+        group = QGroupBox('Captura e avisos sonoros')
+        layout = QVBoxLayout(group)
+        layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
+        self.capture_choice = QCheckBox('Incluir widget flutuante no print')
+        self.sound_choice = QCheckBox('Sons de conclusão dos agentes e de franquia')
+        self.volume_choice = QCheckBox('Elevar o volume a pelo menos 85% durante o som e restaurar depois')
+        self.sound_status = QLabel(self._sound_message)
+        self.sound_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.sound_status.setWordWrap(True)
+        def changed(key, checked):
+            try: set_enabled(key, checked)
+            except RuntimeError as exc: self.sound_feedback(str(exc))
+        for control, key in ((self.capture_choice, SHOW_IN_CAPTURE), (self.sound_choice, SOUNDS), (self.volume_choice, RAISE_VOLUME)):
+            try: control.setChecked(enabled(key))
+            except ValueError as exc:
+                control.setTristate(True); control.setCheckState(Qt.CheckState.PartiallyChecked)
+                self.sound_feedback(str(exc))
+            control.clicked.connect(lambda checked=False, k=key: changed(k, checked))
+            layout.addWidget(control)
+        hint = QLabel('Desmarque a opção de print para ocultar o widget ao capturar pelo Fôlego. '
+                      'Ele retorna quando você fecha o Spectacle. Alterações de volume feitas por você durante um som são preservadas.')
+        hint.setWordWrap(True); layout.addWidget(hint)
+        preview = QHBoxLayout()
+        self.sound_kind = QComboBox()
+        for key, text in (('codex', 'Codex · entrega concluída'), ('web', 'Codex Web · entrega concluída'),
+                          ('claude', 'Claude · entrega concluída'), ('grok', 'Grok · entrega concluída'),
+                          ('low', 'Atenção · 20% restantes'), ('empty', 'Franquia esgotada'), ('restored', 'Franquia disponível novamente')):
+            self.sound_kind.addItem(text, key)
+        self.sound_kind.setAccessibleName('Som para testar')
+        self.test_sound = QPushButton('Testar som')
+        self.test_sound.clicked.connect(lambda: self.sound_preview.emit(self.sound_kind.currentData()))
+        preview.addWidget(self.sound_kind, 1); preview.addWidget(self.test_sound)
+        layout.addLayout(preview); layout.addWidget(self.sound_status)
+        self.settings_box.insertWidget(0, group)
+
+    def sound_feedback(self, message):
+        if self._stopped: return
+        self._sound_message = message
+        if self._desktop_options: self.sound_status.setText(message)
 
     def start(self, *, sync=False):
         if self._stopped: return

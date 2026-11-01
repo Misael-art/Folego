@@ -6,23 +6,24 @@ from PySide6.QtWidgets import (QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QW
 
 from ..core import ai_sessions
 from .theme import TOKENS
-from .workers import Poller
 from .desktop_shortcuts import DesktopController
-from ..core.agent_deliveries import DeliveryMonitor
+from .ai_monitor import AIMonitor
 from ..adapters.agent_apps import AgentApps
 from .ai_account_panel import AccountPanel
 
 
 class AIStrip(QWidget):
-    def __init__(self, parent=None, *, collect_fn=None, deliveries=None, opener=None):
+    def __init__(self, parent=None, *, collect_fn=None, deliveries=None, opener=None, monitor=None):
         super().__init__(parent)
-        self.items = [ai_sessions.unknown(p) for p in ai_sessions.NAMES]
+        self.monitor = monitor or AIMonitor(self, collect_fn=collect_fn, deliveries=deliveries)
+        self._owns_monitor = monitor is None
+        self.items = self.monitor.items
         self.account_menu = None
         self.account_panel = None
         self.buttons = {}
         self.badges = {}
-        self.deliveries = deliveries or DeliveryMonitor()
-        self.delivery_items = []
+        self.deliveries = self.monitor.deliveries
+        self.delivery_items = self.monitor.delivery_items
         self.opener = opener or DesktopController(self, backend=AgentApps(self.deliveries))
         self.opener.result.connect(self._opened)
         self.opener.feedback.connect(self._notice)
@@ -57,19 +58,18 @@ class AIStrip(QWidget):
             column.addWidget(badge_row)
             column.addWidget(button)
             layout.addLayout(column, 1)
-        self.delivery_poller = Poller(self.deliveries.collect, interval_s=5, parent=self, offload=True)
-        self.destroyed.connect(self.delivery_poller._stop.set)
-        self.delivery_poller.snapshot_ready.connect(self.set_deliveries)
-        self.delivery_poller.error.connect(self._delivery_failed)
-        self.poller = Poller(collect_fn or ai_sessions.collect, interval_s=60, parent=self, offload=True)
-        # Destruction must stop the Python worker without touching deleted timers.
-        self.destroyed.connect(self.poller._stop.set)
-        self.poller.snapshot_ready.connect(self.set_items)
-        self.poller.error.connect(self.failed)
+        self.monitor.deliveries_ready.connect(self.set_deliveries)
+        self.monitor.quotas_ready.connect(self.set_items)
         self.freshness = QTimer(self)
         self.freshness.setInterval(1000)
         self.freshness.timeout.connect(self.render)
         self.render()
+
+    @property
+    def poller(self): return self.monitor.poller
+
+    @property
+    def delivery_poller(self): return self.monitor.delivery_poller
 
     def refresh(self):
         self.poller.request()
@@ -204,22 +204,19 @@ class AIStrip(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        self.poller.start()
+        if self._owns_monitor: self.monitor.start()
         self.freshness.start()
         self.refresh()
-        self.delivery_poller.start()
         self.delivery_poller.request()
 
     def hideEvent(self, event):
         if self.account_menu is not None: self.account_menu.close()
-        self.poller.pause()
+        if self._owns_monitor: self.monitor.pause()
         self.freshness.stop()
-        self.delivery_poller.pause()
         super().hideEvent(event)
 
     def shutdown(self):
         if self.account_menu is not None: self.account_menu.close()
         self.freshness.stop()
-        self.poller.stop()
-        self.delivery_poller.stop()
+        if self._owns_monitor: self.monitor.shutdown()
         self.opener.close()

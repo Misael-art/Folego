@@ -1,0 +1,7 @@
+{
+  "scope": "read-only production audio receipt; no physical audio preview triggered by QA",
+  "status": "restored",
+  "same_output": true,
+  "volume_matches_before": true,
+  "mute_matches_before": true
+}

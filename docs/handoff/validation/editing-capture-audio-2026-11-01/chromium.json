@@ -1,0 +1,42 @@
+{
+  "passed": true,
+  "cases": [
+    {
+      "element": "editor",
+      "selected": false,
+      "empty": true,
+      "actual": "",
+      "saved": "",
+      "selection": "",
+      "feedback": "Todo o texto do campo apagado"
+    },
+    {
+      "element": "editor",
+      "selected": true,
+      "empty": true,
+      "actual": "",
+      "saved": "",
+      "selection": "",
+      "feedback": "Todo o texto do campo apagado"
+    },
+    {
+      "element": "plain",
+      "selected": false,
+      "empty": true,
+      "actual": "",
+      "saved": "",
+      "selection": "",
+      "feedback": "Todo o texto do campo apagado"
+    },
+    {
+      "element": "plain",
+      "selected": true,
+      "empty": true,
+      "actual": "",
+      "saved": "",
+      "selection": "",
+      "feedback": "Todo o texto do campo apagado"
+    }
+  ],
+  "scope": "owned Chrome profile, DOM checked after controlled-input reconciliation"
+}

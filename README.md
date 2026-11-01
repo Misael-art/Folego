@@ -65,6 +65,9 @@ agente desejado. O teclado virtual preserva o foco do campo de destino no KWin.
 O último item, **Custom**, reúne textos e macros pessoais. Na janela principal,
 aba **prompts**, use **+ Texto** ou **+ Macro** para cadastrar. Os exemplos são
 o texto exato `123` (sem espaços) e **Mostrar área de trabalho**.
+Na aba **opções**, escolha se o widget deve aparecer no print e teste os sons
+de conclusão por agente, de 20% restantes, esgotamento e reposição confirmada.
+O volume pode subir temporariamente a 85% e retornar aos valores anteriores.
 
 ![Widget compacto do Fôlego, com dados de demonstração](docs/handoff/validation/ai-accounts-keyboard-prompts-2026-11-01/compact.png)
 

@@ -1,0 +1,76 @@
+{
+  "passed": true,
+  "tones": [
+    "codex",
+    "web",
+    "claude",
+    "grok",
+    "low",
+    "empty",
+    "restored"
+  ],
+  "during_playback": [
+    {
+      "volumes": [
+        55706,
+        55706
+      ],
+      "mute": false,
+      "pcm_bytes": 57600
+    },
+    {
+      "volumes": [
+        55706,
+        55706
+      ],
+      "mute": false,
+      "pcm_bytes": 57600
+    },
+    {
+      "volumes": [
+        55706,
+        55706
+      ],
+      "mute": false,
+      "pcm_bytes": 63360
+    },
+    {
+      "volumes": [
+        55706,
+        55706
+      ],
+      "mute": false,
+      "pcm_bytes": 55680
+    },
+    {
+      "volumes": [
+        55706,
+        55706
+      ],
+      "mute": false,
+      "pcm_bytes": 49920
+    },
+    {
+      "volumes": [
+        55706,
+        55706
+      ],
+      "mute": false,
+      "pcm_bytes": 74880
+    },
+    {
+      "volumes": [
+        55706,
+        55706
+      ],
+      "mute": false,
+      "pcm_bytes": 70080
+    }
+  ],
+  "restored_channels": [
+    22937,
+    29491
+  ],
+  "restored_mute": true,
+  "scope": "owned PipeWire/Pulse/WirePlumber and null sink, PID/network namespaces, physical runtime and sound devices hidden"
+}

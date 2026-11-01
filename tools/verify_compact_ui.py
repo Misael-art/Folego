@@ -19,6 +19,7 @@ def main():
     parser.add_argument("--state", type=Path, required=True)
     parser.add_argument("--offscreen", action="store_true")
     parser.add_argument("--input", action="store_true")
+    parser.add_argument('--capture', action='store_true', help='Owned Spectacle lifecycle, cancel without saving')
     args = parser.parse_args()
     if args.input and not args.offscreen and os.environ.get('XDG_SESSION_TYPE') == 'wayland':
         # Explicit native QA prepares only the product-owned keyboard rule in
@@ -73,7 +74,9 @@ def main():
         def open_custom_prompts(self):
             editor.show()
     class Store:
-        def value(self, key, default=None): return default
+        def value(self, key, default=None):
+            from folego.ui.desktop_preferences import enabled, SHOW_IN_CAPTURE
+            return enabled(key) if key == SHOW_IN_CAPTURE else default
         def setValue(self, key, value): pass
         def sync(self): pass
     host = Host()
@@ -298,6 +301,7 @@ def main():
             wait(lambda: target.text() == 'ab', seconds=3)
             assert target.hasFocus()
             records.append({"input": "real pointer clicks A/B into owned focused field; keyboard stayed inactive"})
+            wait(lambda: controller.future is None)
             target.setText('Texto de QA com acentos')
             view.shortcut_tabs.buttons['select_all'].click()
             wait(lambda: controller.future is None)
@@ -360,6 +364,60 @@ def main():
                 wait(lambda: controller.future is None)
                 assert target.text() == "Folego QA"
                 records.append({"clipboard": "copy/paste in private X server"})
+        if args.capture:
+            assert args.input and os.environ.get('XDG_SESSION_TYPE') == 'wayland'
+            from folego.ui.options_tab import OptionsTab
+            from folego.core.agent_deliveries import identity
+            class Jobs:
+                def run(self, *args, **kwargs): pass
+                def shutdown(self): pass
+            preferences = OptionsTab(jobs=Jobs())
+            preferences.resize(730, 510); preferences.show(); app.processEvents()
+            assert preferences.capture_choice.isChecked() and preferences.sound_kind.count() == 7
+            preferences.grab().save(str(root / 'capture-sound-options.png'))
+            if view.shortcut_tabs.keyboard is not None: view.shortcut_tabs.keyboard.hide()
+            backend = view.shortcut_tabs.controller.backend
+            for include in (True, False):
+                preferences.show()
+                if preferences.capture_choice.isChecked() != include: preferences.capture_choice.click()
+                preferences.hide(); view.show_compact(); app.processEvents()
+                wait(lambda: view.isVisible() and view.shortcut_tabs.controller.future is None)
+                if not include:
+                    view.shortcut_tabs.keyboard.show_at('top', view.screen())
+                    wait(lambda: view.shortcut_tabs.keyboard.confirmed_geometry is not None and view.shortcut_tabs.controller.future is None)
+                place = root / 'place-capture-widget.js'
+                place.write_text('const w=workspace.windowList().find(w=>w.pid==='+str(os.getpid())+' && w.caption==="Fôlego — widget");if(w){w.keepAbove=true;w.frameGeometry={x:20,y:130,width:280,height:'+str(view.height())+'};}')
+                name='folego-qa-capture-'+str(os.getpid())
+                sid=subprocess.check_output(['qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.loadScript',str(place),name],text=True).strip()
+                try:
+                    subprocess.run(['qdbus6','org.kde.KWin','/Scripting/Script'+sid,'org.kde.kwin.Script.run'],check=True,capture_output=True)
+                    wait(lambda: abs(view.x()-20)<=1 and abs(view.y()-130)<=1 and view.windowHandle().isExposed())
+                finally:
+                    subprocess.run(['qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript',name],check=True,capture_output=True)
+                pointer_click(view.shortcut_tabs.buttons['print'])
+                wait(lambda: backend.capture is not None and backend.capture.poll() is None)
+                capture = backend.capture; owner = identity(capture.pid); assert owner is not None
+                def capture_active():
+                    result = subprocess.run(['kdotool','getactivewindow'],capture_output=True,text=True)
+                    if result.returncode: return False
+                    result = subprocess.run(['kdotool','getwindowpid',result.stdout.strip()],capture_output=True,text=True)
+                    return result.returncode == 0 and result.stdout.strip() == str(capture.pid)
+                wait(capture_active)
+                assert view.isVisible() == include
+                if not include:
+                    assert not view.windowHandle().isExposed()
+                    native = subprocess.run(['kdotool','search','--all','--pid',str(os.getpid()),'--name','^Fôlego — widget$'],capture_output=True,text=True)
+                    assert not native.stdout.strip(), 'Hidden widget is still mapped in compositor'
+                assert capture_active() and identity(capture.pid) == owner
+                backend.keys([1])  # Escape only to the exact owned capture child
+                wait(lambda: capture.poll() is not None and view.isVisible() and not view._capture_waiting)
+                if not include:
+                    wait(lambda: view.shortcut_tabs.controller.action == 'capture-place' and view.shortcut_tabs.controller.future is None)
+                    assert abs(view.x()-20)<=1 and abs(view.y()-130)<=1
+                    wait(lambda: view.shortcut_tabs.keyboard.isVisible() and view.shortcut_tabs.keyboard.confirmed_geometry is not None and view.shortcut_tabs.controller.future is None)
+                else: wait(lambda: view.shortcut_tabs.controller.future is None)
+                records.append(dict(capture_include_widget=include, native_tool_closed=True, widget_restored=True, region_saved=False))
+            preferences.stop(); preferences.close()
         view.open_button.click()
         assert host.raised == 1 and not view.isVisible()
         view.force_close()
@@ -379,6 +437,9 @@ def main():
             "feedback": view.feedback_label.text()}, indent=2))
         raise
     finally:
+        capture = view.shortcut_tabs.controller.backend.capture
+        if capture is not None and capture.poll() is None:
+            capture.terminate(); capture.wait(timeout=5)  # exact QA-created Popen only
         editor.shutdown()
         editor.close()
         if external is not None:

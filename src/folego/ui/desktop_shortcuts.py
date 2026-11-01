@@ -256,9 +256,10 @@ class VirtualKeyboard(QWidget):
 
 class ShortcutTabs(QWidget):
     customize_requested = Signal()
-    def __init__(self, parent=None, *, controller=None):
+    def __init__(self, parent=None, *, controller=None, capture_handler=None):
         super().__init__(parent)
         self.controller = controller or DesktopController(self)
+        self.capture_handler = capture_handler
         self.keyboard = None
         self.buttons = {}
         self.prompt_menu = None
@@ -325,6 +326,8 @@ class ShortcutTabs(QWidget):
             self.open_keyboard("bottom")
         elif action == 'prompts':
             self.show_prompts()
+        elif action == 'print' and self.capture_handler is not None:
+            self.capture_handler()
         else:
             self.controller.request(action)
 
