@@ -1,0 +1,8 @@
+{
+  "base_sha": "64313445e25f9fff4d932b2dc702889e0f7a77b6",
+  "source_sha256": "d143181be30260469e1d1b972d1da3a7a0465e84cbfb98d5364e95a17dc6c456",
+  "fixture": "same credential; organization A to B",
+  "expected_remaining": 40,
+  "baseline_remaining": 90,
+  "reproduced": true
+}

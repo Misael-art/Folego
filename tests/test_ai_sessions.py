@@ -273,3 +273,67 @@ def test_claude_retry_after_is_not_shortened_to_one_hour(tmp_path):
     ai.claude(root, NOW, limited, cache=cache)
     ai.claude(root, NOW + 61, limited, cache=cache)
     assert len(calls) == 1 and next(iter(cache.values()))['retry_at'] == NOW + 7200
+
+
+def test_claude_account_organization_change_invalidates_usage_and_profile(tmp_path):
+    root, credentials_path = credentials(tmp_path)
+    before = credentials_path.read_bytes()
+    metadata = root.with_suffix('.json')
+    metadata.write_text(json.dumps(dict(oauthAccount=dict(accountUuid='fixture-account', organizationUuid='org-A'))))
+    cache, calls = {}, []
+    def fetch(url, headers):
+        calls.append(url)
+        account = json.loads(metadata.read_text())['oauthAccount']['organizationUuid']
+        if url.endswith('/profile'):
+            return dict(organization=dict(subscription_status='active', subscription_created_at=
+                '2026-10-15T00:00:00Z' if account == 'org-A' else '2026-10-20T00:00:00Z'))
+        return dict(five_hour=dict(utilization=10 if account == 'org-A' else 60, resets_at=NOW + 1000))
+    first = ai.claude(root, NOW, fetch, cache=cache)
+    metadata.write_text(json.dumps(dict(oauthAccount=dict(accountUuid='fixture-account', organizationUuid='org-B'))))
+    second = ai.claude(root, NOW + 1, fetch, cache=cache)
+    assert (first['remaining'], second['remaining']) == (90, 40)
+    assert (first['billing_day'], second['billing_day']) == (15, 20)
+    assert len(calls) == 4 and len(cache) == 1
+    assert credentials_path.read_bytes() == before
+    assert 'org-A' not in str(cache) and 'org-B' not in str(cache)
+
+
+def test_claude_context_change_during_http_discards_response(tmp_path):
+    root, _ = credentials(tmp_path)
+    metadata = root.with_suffix('.json')
+    metadata.write_text(json.dumps(dict(oauthAccount=dict(organizationUuid='org-A'))))
+    def fetch(url, headers):
+        metadata.write_text(json.dumps(dict(oauthAccount=dict(organizationUuid='org-B'))))
+        return dict(five_hour=dict(utilization=10, resets_at=NOW + 1000))
+    result = ai.claude(root, NOW, fetch, cache={})
+    assert result['remaining'] is None and 'alterada' in result['reason']
+
+
+def test_malformed_claude_account_metadata_does_not_reuse_cache(tmp_path):
+    root, _ = credentials(tmp_path)
+    cache = {}
+    def fetch(url, headers):
+        return {} if url.endswith('/profile') else dict(five_hour=dict(utilization=10, resets_at=NOW + 1000))
+    ai.claude(root, NOW, fetch, cache=cache)
+    root.with_suffix('.json').write_text('{')
+    with pytest.raises(ValueError): ai.claude(root, NOW + 1, fetch, cache=cache)
+
+
+def test_claude_context_change_keeps_retry_after_for_the_same_token(tmp_path):
+    from urllib.error import HTTPError
+    root, _ = credentials(tmp_path)
+    metadata = root.with_suffix('.json')
+    metadata.write_text(json.dumps(dict(oauthAccount=dict(organizationUuid='org-A'))))
+    cache, calls = {}, []
+    def limited(url, headers):
+        calls.append(url)
+        raise HTTPError(url, 429, 'Limited', {'Retry-After': '7200'}, None)
+    ai.claude(root, NOW, limited, cache=cache)
+    metadata.write_text(json.dumps(dict(oauthAccount=dict(organizationUuid='org-B'))))
+    result = ai.claude(root, NOW + 1, limited, cache=cache)
+    assert result['remaining'] is None and len(calls) == 1
+    assert next(iter(cache.values()))['retry_at'] == NOW + 7200
+    metadata.write_text(json.dumps(dict(oauthAccount=dict(organizationUuid='org-A'))))
+    ai.claude(root, NOW + 2, limited, cache=cache)
+    ai.claude(root, NOW + 3, limited, cache=cache)
+    assert len(calls) == 1 and next(iter(cache.values()))['retry_at'] == NOW + 7200

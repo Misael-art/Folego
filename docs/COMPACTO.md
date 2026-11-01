@@ -29,6 +29,9 @@ inclusive se uma das contas agrupadas não tem uma observação válida.
   cobrança. Leituras de uso são reaproveitadas por 5 minutos; perfil por 6 horas.
   HTTP 429 suspende novas consultas pelo prazo informado, com observação recente
   da mesma conta quando ainda válida. Estado vencido não vira percentual atual.
+  A identidade do cache inclui também a conta/organização em `~/.claude.json`:
+  mudar a organização invalida uso e perfil anteriores mesmo sem trocar o token.
+  A espera por HTTP 429 continua valendo para a mesma credencial durante essa troca.
   Não há rede no loop gráfico.
 - Codex Web e Grok: esta fonte não oferece uma franquia percentual confirmada.
   Permanecem cinza. Metadados de assinatura, quando disponíveis, aparecem como

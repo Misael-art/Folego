@@ -292,6 +292,19 @@ def http_json(url, headers):
     return value
 
 
+def claude_account_context(config):
+    """Native account/organization metadata; no PhaseZero state is consulted."""
+    path = Path(config).with_suffix('.json')
+    try:
+        metadata = read_json(path)
+    except FileNotFoundError:
+        return dict(present=False)
+    account = metadata.get('oauthAccount')
+    if account is not None and not isinstance(account, dict):
+        raise ValueError('metadados da conta Claude desconhecidos')
+    return dict(present=True, account=account)
+
+
 def claude(config, now, fetch, *, cache=None):
     result = unknown("claude", "Login do Claude não encontrado")
     credentials = read_json(Path(config) / ".credentials.json")
@@ -302,15 +315,32 @@ def claude(config, now, fetch, *, cache=None):
     if not expiry or expiry <= now:
         result["reason"] = "Login expirado/sem validade comprovada; renove no Claude"
         return result
+    context = claude_account_context(config)
+    def unchanged():
+        try:
+            return (read_json(Path(config) / '.credentials.json') == credentials
+                    and claude_account_context(config) == context)
+        except (OSError, ValueError):
+            return False
     cache = {} if cache is None else cache
-    credential_key = (str(Path(config).resolve()), hashlib.sha256(json.dumps(credentials, sort_keys=True).encode()).hexdigest())
-    entry = cache.get(credential_key, {})
+    material = json.dumps([credentials, context], sort_keys=True).encode()
+    credential_key = (str(Path(config).resolve()), hashlib.sha256(material).hexdigest())
+    auth_scope = hashlib.sha256(oauth['accessToken'].encode()).hexdigest()
+    retry_at = 0
+    for old_key in list(cache):
+        if old_key[0] == credential_key[0] and old_key != credential_key:
+            old = cache.pop(old_key)
+            if old.get('auth_scope') == auth_scope:
+                retry_at = max(retry_at, old.get('retry_at', 0))
+    entry = cache.get(credential_key, dict(auth_scope=auth_scope, retry_at=retry_at))
+    if retry_at > now:
+        cache[credential_key] = entry
     previous = entry.get('item')
     age = now - previous['observed_at'] if previous else float('inf')
     limited = entry.get('retry_at', 0) > now
     if (previous and 0 <= age < 300) or limited:
         if previous and 0 <= age <= MAX_AGE:
-            if read_json(Path(config) / '.credentials.json') != credentials:
+            if not unchanged():
                 return unknown('claude', 'Conta alterada durante a consulta')
             previous = copy.deepcopy(previous)
             previous['remaining'] = effective(previous, now)
@@ -331,11 +361,11 @@ def claude(config, now, fetch, *, cache=None):
             try: delay = parsedate_to_datetime(raw_delay).timestamp() - now
             except (ValueError, TypeError, OverflowError): delay = 180
         delay = max(60, delay) if math.isfinite(delay) else 180
-        if read_json(Path(config) / '.credentials.json') != credentials:
-            return unknown('claude', 'Conta alterada durante a consulta')
         entry['retry_at'] = now + delay
         if len(cache) >= 16 and credential_key not in cache: cache.pop(next(iter(cache)))
         cache[credential_key] = entry
+        if not unchanged():
+            return unknown('claude', 'Conta alterada durante a consulta')
         if previous and 0 <= age <= MAX_AGE:
             previous = copy.deepcopy(previous)
             previous['remaining'] = effective(previous, now)
@@ -344,7 +374,7 @@ def claude(config, now, fetch, *, cache=None):
         result['reason'] = 'Claude limitou as consultas (HTTP 429); nova tentativa após ' + dt.datetime.fromtimestamp(now + delay).astimezone().strftime('%H:%M')
         return result
     # A credential/account rotation during HTTP invalidates that response.
-    if read_json(Path(config) / ".credentials.json") != credentials:
+    if not unchanged():
         result["reason"] = "Conta alterada durante a consulta; aguardando nova observação"
         return result
     for key, name in (("five_hour", "Sessão"), ("seven_day", "Semana"),
@@ -378,7 +408,7 @@ def claude(config, now, fetch, *, cache=None):
             entry['profile_at'] = 0
     if entry.get('profile_day'):
         result.update(billing_day=entry['profile_day'], billing_source='estimativa pelo início da assinatura; confirme no provedor')
-    if read_json(Path(config) / '.credentials.json') != credentials:
+    if not unchanged():
         return unknown('claude', 'Conta alterada durante a consulta')
     result["remaining"] = effective(result, now)
     if len(cache) >= 16 and credential_key not in cache: cache.pop(next(iter(cache)))
