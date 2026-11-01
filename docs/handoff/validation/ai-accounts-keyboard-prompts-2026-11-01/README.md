@@ -118,7 +118,16 @@ sob o ponteiro antes de clicar. Nenhum gate foi afrouxado.
 A GUI anterior saiu pela bandeja sem sinal manual, liberou o lock; a b2 foi aberta
 pelo wrapper oficial e deixada no compacto, com posição anterior preservada e
 controles dentro da tela. Os artefatos de release são os arquivos verificados;
-a publicação e SHA do tag ficam no registro final da passagem.
+a [prévia v0.2.0b2 foi publicada](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b2)
+a partir de `4802b79217390e4b6eb6f350ed0c0ab37a5ae005`, em 01/11 às 22:14:25 UTC.
+[Recibo e assets](release-b2.json), [seis checks de código aprovados](ci-b2.json)
+e [downloads públicos verificados](public-downloads-b2.json): os quatro arquivos
+foram baixados sem autenticação e conferidos por tamanho/SHA-256, com SHA256SUMS
+aprovado para os três pacotes. A tag remota foi conferida no SHA exato. O runtime
+dos pacotes é o de `eda22c9`; diferenças até o tag são QA/documentação, sem mudanças
+nos 129 módulos Python. A [GUI real atualizada](live-gui-b2.json) expôs os sete
+botões de ação e os quatro indicadores por acessibilidade nativa. Esse teste
+inspecionou labels da própria aplicação, sem editar campos ou ler o clipboard.
 
 Não certifica login físico X11, todas as aplicações de destino, arraste físico,
 duas horas de soak ou a matriz de hardware. A publicação b2 é uma prévia deste marco de interface; v0.2.0b1 preserva o código anterior. Sem merge.

@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "version": "0.2.0b2",
+  "visible_action_buttons": 7,
+  "provider_indicators": [
+    "Claude",
+    "Codex",
+    "Codex Web",
+    "Grok"
+  ],
+  "scope": "real updated Folego; native accessible app labels inspected; no content fields edited or clipboard read"
+}

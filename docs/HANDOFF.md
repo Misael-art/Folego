@@ -1,5 +1,48 @@
 # Passagem para o próximo agente — atualizada em 01/11/2026
 
+## Release 0.2.0b2 publicada e instância substituída — 01/11/2026
+
+[Release v0.2.0b2](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b2),
+prévia publicada em **01/11/2026 22:14:25 UTC**, tag/commit exato
+`4802b79217390e4b6eb6f350ed0c0ab37a5ae005`. Autorização explícita do usuário
+para substituir a versão atual, testar e distribuir. Sem merge. PR #1 existente
+atualizado; permanece draft pelas pendências gerais fora deste marco de UI.
+
+Fonte completa (11.505.841 bytes, com dev/uv.lock), wheel (356.243), sdist
+(511.498) e SHA256SUMS (281) enviados. Digests GitHub iguais aos locais; os
+quatro downloads públicos foram baixados sem autenticação e conferidos por
+SHA-256/tamanho; manifesto aprovado e tag remota no SHA esperado.
+[Recibo dos assets](handoff/validation/ai-accounts-keyboard-prompts-2026-11-01/release-b2.json),
+[downloads](handoff/validation/ai-accounts-keyboard-prompts-2026-11-01/public-downloads-b2.json)
+e [CI do tag](handoff/validation/ai-accounts-keyboard-prompts-2026-11-01/ci-b2.json).
+Seis checks de código aprovados; CodeRabbit/Sourcery skipped. v0.2.0b1 preservada.
+
+`./dev check` b2: **1113 passed, 2 skipped** headless (25,78 s),
+**1378 passed, 2 skipped** Qt (40,00 s), Python 3.14.7 gerenciado, sequencial e
+isolado. Wheel: 129 módulos idênticos ao checkout, nenhum arquivo privado;
+CLI instalada sem Qt e remoção GUI preservando todos os hashes do HOME de teste.
+Qt reaproveitado offline por requisitos com hashes do lock. Wheel final instalado
+sem editable/PYTHONPATH passou nos oito casos KDE/Wayland. Contadores por conta,
+clipboard isolado e abertura/deduplicação de Print também verificados. Fonte de
+runtime `eda22c9` é byte a byte igual ao tag; commits posteriores são QA/docs.
+
+AT-SPI restaurado após autorização e intenção/owner revalidados. GUI anterior
+saiu pela bandeja sem sinal manual e liberou o lock. A b2 oficial está aberta no
+compacto, na posição anterior (25,39; 280×275 lógicos), com central oculta.
+Acessibilidade nativa confirmou sete botões e quatro indicadores visíveis na
+instância nova. Nenhum agente, terminal ou sessão de trabalho encerrado;
+preferências/grants do produto preservados. Auxiliares de QA encerrados.
+
+Limites: Web/Grok sem fonte de percentual/reset/tickets; Claude sem percentual
+atual na observação real anterior. Datas estimadas/pessoais não confirmam cobrança.
+O teste de Print cobre abertura e deduplicação, sem salvar região. Não certifica
+todos os clientes de destino, arraste físico, login X11, hardware ou outra
+distribuição. Motor de recursos, matriz física e pendências gerais permanecem
+no escopo anterior; não declarar o produto estável ou o executor automático ativo.
+Próximo passo: validação do usuário nas aplicações que utiliza; continuar as
+pendências gerais sem alterar a tag publicada. Registros abaixo preservam a
+preparação e tentativas históricas; a pendência AT-SPI foi resolvida.
+
 ## Recuperação autorizada e preparação 0.2.0b2 — 01/11/2026
 
 Pedido posterior autoriza substituir a instância, validar e publicar nova release.

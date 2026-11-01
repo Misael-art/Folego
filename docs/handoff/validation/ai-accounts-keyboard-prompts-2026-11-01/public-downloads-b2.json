@@ -1,0 +1,31 @@
+{
+  "passed": true,
+  "source_sha": "4802b79217390e4b6eb6f350ed0c0ab37a5ae005",
+  "tag_verified": true,
+  "files": [
+    {
+      "name": "folego-0.2.0b2-py3-none-any.whl",
+      "bytes": 356243,
+      "sha256": "b212b2321e5dc2f767c8426cde999abd9da2521193995806bdfb8d7d57199e0e",
+      "passed": true
+    },
+    {
+      "name": "Folego-0.2.0b2-source.tar.gz",
+      "bytes": 11505841,
+      "sha256": "77ea73ea59d9e2c17590e6c2fc78c7e6f31dcd2a119a0fee831c235903e48bb1",
+      "passed": true
+    },
+    {
+      "name": "folego-0.2.0b2.tar.gz",
+      "bytes": 511498,
+      "sha256": "2b944e2b0a87f46d59bb2719b3b91ebd67e07cc92bf7c8b0882592dcccf7e608",
+      "passed": true
+    },
+    {
+      "name": "SHA256SUMS",
+      "bytes": 281,
+      "sha256": "654726e8f6aaf24a1c31ca3599c7296e6976729f176714595fae2c1318301929",
+      "passed": true
+    }
+  ]
+}

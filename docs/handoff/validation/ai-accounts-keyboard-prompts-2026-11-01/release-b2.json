@@ -1,0 +1,35 @@
+{
+  "id": 430889445,
+  "tag_name": "v0.2.0b2",
+  "html_url": "https://github.com/Misael-art/Folego/releases/tag/v0.2.0b2",
+  "published_at": "2026-11-01T22:14:25Z",
+  "target_commitish": "4802b79217390e4b6eb6f350ed0c0ab37a5ae005",
+  "prerelease": true,
+  "draft": false,
+  "assets": [
+    {
+      "name": "folego-0.2.0b2-py3-none-any.whl",
+      "size": 356243,
+      "digest": "sha256:b212b2321e5dc2f767c8426cde999abd9da2521193995806bdfb8d7d57199e0e",
+      "browser_download_url": "https://github.com/Misael-art/Folego/releases/download/v0.2.0b2/folego-0.2.0b2-py3-none-any.whl"
+    },
+    {
+      "name": "Folego-0.2.0b2-source.tar.gz",
+      "size": 11505841,
+      "digest": "sha256:77ea73ea59d9e2c17590e6c2fc78c7e6f31dcd2a119a0fee831c235903e48bb1",
+      "browser_download_url": "https://github.com/Misael-art/Folego/releases/download/v0.2.0b2/Folego-0.2.0b2-source.tar.gz"
+    },
+    {
+      "name": "folego-0.2.0b2.tar.gz",
+      "size": 511498,
+      "digest": "sha256:2b944e2b0a87f46d59bb2719b3b91ebd67e07cc92bf7c8b0882592dcccf7e608",
+      "browser_download_url": "https://github.com/Misael-art/Folego/releases/download/v0.2.0b2/folego-0.2.0b2.tar.gz"
+    },
+    {
+      "name": "SHA256SUMS",
+      "size": 281,
+      "digest": "sha256:654726e8f6aaf24a1c31ca3599c7296e6976729f176714595fae2c1318301929",
+      "browser_download_url": "https://github.com/Misael-art/Folego/releases/download/v0.2.0b2/SHA256SUMS"
+    }
+  ]
+}
