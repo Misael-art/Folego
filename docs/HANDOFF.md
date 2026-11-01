@@ -1,5 +1,48 @@
 # Passagem para o próximo agente — atualizada em 01/11/2026
 
+## Avisos de entregas e Fôlego reaberto — 01/11/2026
+
+Implementação: `91125ecb4417293f8fdf4f9773b9ea0c7009f3c5`, sobre
+`c9d1af66b0466ed751f718cbbde231d444b67d33`, na mesma branch/PR #1. Pedido
+posterior do usuário autoriza os contadores e o encerramento/reabertura somente
+do Fôlego para validação. Nenhuma aplicação de agente ou terminal foi encerrada.
+
+O widget conserva 280 px de largura e acrescenta 14 px acima das franquias:
+contagem por sessões principais concluídas, desde a primeira ativação do novo
+monitor, deduplicada e persistente. Fontes nativas Codex/Web, Claude e Grok,
+worker separado a cada 5 s; ferramentas/subagentes não contam. Ausência de
+evidência aparece como `?`; mínimo positivo parcial como `2+`. O próximo pedido
+retira o aviso antigo; nova conclusão gera novo aviso. Recibos em hash próprios,
+sem conversas/credenciais. Estado desconhecido não é substituído.
+
+Clique abre a aplicação desktop ou seu terminal ancestral identificado, com
+revalidação de PID/starttime e confirmação de foco antes de marcar somente os
+avisos exibidos como vistos. Falha preserva a contagem; conclusão posterior ao
+clique permanece. Nenhum comando é enviado aos agentes. Um atalho nativo pode
+ser aberto uma vez quando não há janela identificada. Não seleciona conversa
+ou aba interna. Dependências e orçamentos no [guia](COMPACTO.md).
+
+`./dev check` no código final: **1079 passed, 2 skipped** headless (20,57 s) e
+**1339 passed, 2 skipped** Qt (37,21 s), sequenciais, Python 3.14.7 gerenciado,
+HOME/XDG/TMP privados. Skips ainda exigem Edge real. KDE/Wayland real: sessões
+sintéticas 2/5/1, clique do widget → foco de janela própria → recibo persistente,
+sem apagar avisos dos demais provedores. A busca de produção somente leitura
+encontrou janelas locais dos quatro provedores; o foco real de cada um fica para
+validação do usuário. Tentativa inicial sem isolamento de `CODEX_HOME` preservada
+e roteiro corrigido. [Evidências e limites](handoff/validation/agent-deliveries-2026-11-01/README.md).
+
+A instância antiga, oculta e sem SNI registrado, não respondeu à saída AT-SPI.
+Após conferir identidade/argv, SIGTERM único por pidfd e liberação de flock
+confirmada; `./dev gui` lançou a atual uma vez. Modo widget acionado pela GUI;
+AT-SPI confirmou os quatro indicadores novos visíveis. Fôlego deixado aberto
+no HOME real para o usuário validar, sem mudar grants ou opções de início.
+
+Este incremento pertence ao código/PR; **v0.2.0b1 continua apontando ao código
+anterior**. Sem novo release ou merge nesta rodada. Limites gerais e próximos
+contratos pendentes abaixo permanecem. Os workspaces de QA próprios concluídos
+foram preservados integralmente quando revisados para retenção, sem afrouxar
+orçamentos. Próximo passo: validação do usuário no widget deixado aberto.
+
 ## Widget compacto, monitor de IAs e prévia publicada — 01/11/2026
 
 Implementação: `5ce16b1c05001ad3552c3cd26cd30ccdbfc73f63`, na branch
