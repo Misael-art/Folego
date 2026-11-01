@@ -13,14 +13,26 @@ from ..adapters.desktop_tools import DesktopTools
 from .theme import TOKENS, control_icon
 
 
+def _show_desktop_request():
+    """Worker-side I/O on the GUI's process-long session bus connection."""
+    from PySide6.QtDBus import QDBusConnection, QDBusMessage
+    message = QDBusMessage.createMethodCall('org.kde.KWin', '/KWin', 'org.kde.KWin', 'showDesktop')
+    message.setArguments([True])
+    reply = QDBusConnection.sessionBus().call(message, timeout=2000)
+    if reply.type() == QDBusMessage.MessageType.ErrorMessage:
+        raise RuntimeError('Pedido ao desktop não confirmado; não houve repetição')
+
+
 class DesktopController(QObject):
     result = Signal(str)
+    payload = Signal(object)
+    failed = Signal(str)
     feedback = Signal(str)
     busy_changed = Signal(bool)
 
     def __init__(self, parent=None, *, backend=None):
         super().__init__(parent)
-        self.backend = backend or DesktopTools()
+        self.backend = backend or DesktopTools(desktop_show=_show_desktop_request)
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="folego-input")
         self.future = None
         self.closed = False
@@ -60,11 +72,15 @@ class DesktopController(QObject):
         future, self.future = self.future, None
         try:
             message = future.result()
+            if isinstance(message, dict):
+                self.payload.emit(message)
+                message = message.get('message', '')
             if message and self.action not in ("key", "position"):
                 self.feedback.emit(message)
         except Exception as exc:
             # Native diagnostics never include key contents or stderr.
             message = str(exc) if isinstance(exc, (RuntimeError, ValueError)) else "Solicitação não confirmada; confira o desktop"
+            self.failed.emit(message)
             self.feedback.emit(message)
         self.busy_changed.emit(False)
         if message:
@@ -237,11 +253,16 @@ class VirtualKeyboard(QWidget):
 
 
 class ShortcutTabs(QWidget):
+    customize_requested = Signal()
     def __init__(self, parent=None, *, controller=None):
         super().__init__(parent)
         self.controller = controller or DesktopController(self)
         self.keyboard = None
         self.buttons = {}
+        self.prompt_menu = None
+        self.custom_menu = None
+        self.controller.payload.connect(self._custom_result)
+        self.controller.failed.connect(self._custom_failed)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(3, 0, 3, 0)
         layout.setSpacing(2)
@@ -310,16 +331,57 @@ class ShortcutTabs(QWidget):
         menu = QMenu(self.buttons['prompts'])
         for prompt in PROMPTS:
             menu.addAction(prompt.title, lambda checked=False, key=prompt.key: self.copy_prompt(key))
-        menu.aboutToHide.connect(menu.deleteLater)
+        menu.addSeparator()
+        self.custom_menu = menu.addMenu('Custom')
+        self.custom_menu.addAction('Carregando…').setEnabled(False)
+        self.prompt_menu = menu
+        menu.aboutToHide.connect(lambda: self._prompts_closed(menu))
         menu.popup(self.buttons['prompts'].mapToGlobal(self.buttons['prompts'].rect().bottomLeft()))
+        if not self.controller.request('custom-load'):
+            self._custom_failed('Aguarde e reabra o menu Custom')
+
+    def _prompts_closed(self, menu):
+        if self.prompt_menu is menu:
+            self.prompt_menu = None
+            self.custom_menu = None
+        menu.deleteLater()
+
+    def _custom_failed(self, message):
+        if self.custom_menu is not None and self.controller.action == 'custom-load':
+            self.custom_menu.clear()
+            self.custom_menu.addAction('Biblioteca indisponível').setEnabled(False)
+            self.custom_menu.addAction('Editar textos e macros…', lambda: self.customize_requested.emit())
+
+    def _custom_result(self, payload):
+        if payload.get('operation') == 'custom-copy':
+            self._copy_text(payload['text'])
+        if payload.get('operation') != 'custom-load' or self.custom_menu is None: return
+        menu = self.custom_menu
+        menu.clear()
+        for kind, label in (('text', 'Textos'), ('macro', 'Macros')):
+            menu.addSection(label)
+            rows = [i for i in payload['entries'] if i['kind'] == kind]
+            for item in rows:
+                title = item['title']
+                shown = menu.fontMetrics().elidedText(title, Qt.TextElideMode.ElideRight, 300)
+                action = menu.addAction(shown)
+                action.setToolTip(title)
+                value = dict(id=item['id'], revision=payload['revision'])
+                action.triggered.connect(lambda checked=False, selected=value: self.controller.request('custom-use', selected))
+            if not rows: menu.addAction('Nenhum item cadastrado').setEnabled(False)
+        menu.addSeparator()
+        menu.addAction('Editar textos e macros…', lambda: self.customize_requested.emit())
 
     def copy_prompt(self, key):
         from ..core.development_prompts import text
+        self._copy_text(text(key))
+
+    def _copy_text(self, value):
         clipboard = QGuiApplication.clipboard()
         if clipboard is None:
             self.controller.feedback.emit('Área de transferência indisponível')
             return
-        clipboard.setText(text(key))
+        clipboard.setText(value)
         self.controller.feedback.emit('Prompt copiado · cole no agente de sua escolha')
 
     def open_keyboard(self, position):

@@ -28,6 +28,7 @@ from .tune_jobs import TuneJobs
 from .tunings_tab import TuningsTab
 from .accessibility_tab import AccessibilityTab
 from .options_tab import OptionsTab
+from .custom_prompts_tab import CustomPromptsTab
 from ..core import health
 from ..core.exclusions import ExclusionError, ExclusionList
 from ..core.orphans import OrphanTracker, active_investigation, group_targets
@@ -39,7 +40,8 @@ from ..orchestration.history import HistoryReader
 
 # tab title -> the attribute the dashboard's "Ir para …" jumps to
 TABS = (("central", "dashboard"), ("ajustes", "tunings"),
-        ("órfãos", "orphans"), ("disco", "disk"), ("temporários", "tmpfs"), ("acessibilidade", "accessibility"), ("opções", "options"))
+        ("órfãos", "orphans"), ("disco", "disk"), ("temporários", "tmpfs"), ("acessibilidade", "accessibility"),
+        ("prompts", "custom_prompts"), ("opções", "options"))
 JUMPS = {"memoria": "dashboard", "ajustes": "tunings", "orfaos": "orphans",
          "disco": "disk", "tmpfs": "tmpfs", "accessibility": "accessibility"}
 DISK_TIMEOUT_MS = 120_000  # the real cache walk took 54,7 s on this Deck (M3 log)
@@ -143,6 +145,7 @@ class MainWindow(QMainWindow):
                                                confirm_fn=confirm_fn)
         self.accessibility.report_ready.connect(self._show_accessibility)
         self.options = OptionsTab()
+        self.custom_prompts = CustomPromptsTab()
         self.options.operation_verified.connect(self._operation_verified)
         self._startup_defaults = startup_defaults
 
@@ -203,6 +206,10 @@ class MainWindow(QMainWindow):
     def _open_options(self):
         self.tabs.setCurrentWidget(self.options)
         self.options.start()
+
+    def open_custom_prompts(self):
+        self.tabs.setCurrentWidget(self.custom_prompts)
+        self.raise_to_user()
 
     def _operation_verified(self, payload):
         if payload.get("outcome") not in ("sucesso", "recusa", "cancelamento"):
@@ -607,6 +614,7 @@ class MainWindow(QMainWindow):
             self._process_jobs.shutdown()
             self.accessibility.stop()
             self.options.stop()
+            self.custom_prompts.shutdown()
             super().closeEvent(event)
             return
         # a live icon means the signal is resident: hide the window, keep watching

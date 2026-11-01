@@ -1,0 +1,42 @@
+{
+  "README.md": {
+    "bytes": 3814,
+    "sha256": "cff8b27411f841b8cfb96cfb033e24078190889c66ad0230fcd9b07af9446138"
+  },
+  "clipboard.json": {
+    "bytes": 217,
+    "sha256": "7bb687490330a61f916c2b3dd34dd94424e2fe5f86a9a755f3f1cad86011e4ee"
+  },
+  "custom-editor.png": {
+    "bytes": 48513,
+    "sha256": "1a683036e57b7358d71c514e8b6d639bd5b9445f7ce8c66677ec0291fd83fda6"
+  },
+  "custom-macro-editor.png": {
+    "bytes": 69072,
+    "sha256": "0a95ac7f64ba17a4b84e3bf6274098524ad0f845e0b5b1cdc9614a15e5127ebd"
+  },
+  "custom-menu.png": {
+    "bytes": 11105,
+    "sha256": "c5ef1f3fe6a3e7362b989005ddb577a5291f54f8770ee499f72b0234294a3c0a"
+  },
+  "headless.txt": {
+    "bytes": 1313,
+    "sha256": "b613561f17956a2f429570a7c21b3f2d1d5924ff55cf7258af814c3a42b0b973"
+  },
+  "live-gui.json": {
+    "bytes": 182,
+    "sha256": "d0f567cf44d3a0a6fb53135ba3434e96e2ea036d9761e1f49248d05ee0986038"
+  },
+  "macros.json": {
+    "bytes": 252,
+    "sha256": "087dd33ccb553090c84388f45b283332973667d7ffa83e5243c969c536392b46"
+  },
+  "native-ui.json": {
+    "bytes": 1473,
+    "sha256": "4e70c7e48f40368bce83239203dd9f39ff3cbcb848b4fe71824ae152b1a8eba9"
+  },
+  "qt.txt": {
+    "bytes": 1633,
+    "sha256": "cc42d7fb0c23ba1c0c281812eea143359184a03397c8e476eb7b8f68b9937085"
+  }
+}

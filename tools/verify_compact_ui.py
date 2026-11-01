@@ -47,6 +47,7 @@ def main():
     from folego.ui.desktop_caps import detect
     from folego.ui.theme import apply_theme
     from folego.ui.title_signal import TitleSignal
+    from folego.ui.custom_prompts_tab import CustomPromptsTab
 
     app = QApplication([])
     app.setApplicationName('folego')
@@ -56,6 +57,9 @@ def main():
     target.setWindowTitle("Fôlego QA — campo próprio")
     target.resize(450, 80)
     target.show()
+    editor = CustomPromptsTab()
+    editor.setWindowTitle('Fôlego QA — textos e macros próprios')
+    editor.resize(760, 470)
     class Host:
         raised = 0
         paused = False
@@ -66,6 +70,8 @@ def main():
             return self.paused
         def quit(self):
             app.quit()
+        def open_custom_prompts(self):
+            editor.show()
     class Store:
         def value(self, key, default=None): return default
         def setValue(self, key, value): pass
@@ -212,7 +218,34 @@ def main():
         menus = [m for m in view.findChildren(QMenu) if m.isVisible()]
         assert len(menus[-1].actions()) >= 10
         menus[-1].grab().save(str(root / 'prompts.png'))
+        tabs = view.shortcut_tabs
+        wait(lambda: tabs.custom_menu is not None and any(a.text() == '123' for a in tabs.custom_menu.actions()))
+        assert tabs.prompt_menu.actions()[-1].text() == 'Custom'
+        custom = tabs.custom_menu
+        custom.popup(tabs.prompt_menu.mapToGlobal(tabs.prompt_menu.rect().topRight()))
+        app.processEvents()
+        custom.grab().save(str(root / 'custom-menu.png'))
+        next(a for a in custom.actions() if a.text() == 'Editar textos e macros…').trigger()
         menus[-1].close()
+        wait(lambda: editor.isVisible() and editor.readable and not editor.busy)
+        assert editor.text.toPlainText() == '123'
+        editor.grab().save(str(root / 'custom-editor.png'))
+        editor.add_text.click()
+        editor.title.setText('Texto de QA')
+        editor.text.setPlainText('Texto personalizado\n123')
+        editor.save.click()
+        wait(lambda: not editor.busy and len(editor.entries) == 3)
+        editor.add_macro.click()
+        editor.title.setText('Atalho de QA')
+        editor.action.setCurrentIndex(1)
+        editor.shortcut.setText('Ctrl+Alt+T')
+        editor.save.click()
+        wait(lambda: not editor.busy and len(editor.entries) == 4)
+        editor.grab().save(str(root / 'custom-macro-editor.png'))
+        editor.shutdown()
+        editor.close()
+        view.show_compact()
+        records.append(dict(custom='last submenu, literal 123, standard editor and saved text/macro without execution'))
         records.append(dict(prompts='menu titles available; no physical clipboard fixture'))
         view.grab().save(str(root / "compact.png"))
         assert view.width() == 280
@@ -330,6 +363,8 @@ def main():
         view.open_button.click()
         assert host.raised == 1 and not view.isVisible()
         view.force_close()
+        editor.shutdown()
+        editor.close()
         backend = view.shortcut_tabs.controller.backend
         wait(lambda: backend.daemon is None)
         target.close()
@@ -344,6 +379,8 @@ def main():
             "feedback": view.feedback_label.text()}, indent=2))
         raise
     finally:
+        editor.shutdown()
+        editor.close()
         if external is not None:
             subprocess.run(['qdbus6', 'org.folego.QAText.p' + str(external.pid), '/target',
                             'org.folego.QAText.quit'], capture_output=True, timeout=3)

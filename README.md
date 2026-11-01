@@ -62,6 +62,9 @@ dependências e limites](docs/COMPACTO.md).
 **Selecionar tudo, Apagar tudo e Prompts** ficam logo acima das abas. A biblioteca
 oferece 11 prompts de desenvolvimento: escolha um título para copiar e cole no
 agente desejado. O teclado virtual preserva o foco do campo de destino no KWin.
+O último item, **Custom**, reúne textos e macros pessoais. Na janela principal,
+aba **prompts**, use **+ Texto** ou **+ Macro** para cadastrar. Os exemplos são
+o texto exato `123` (sem espaços) e **Mostrar área de trabalho**.
 
 ![Widget compacto do Fôlego, com dados de demonstração](docs/handoff/validation/ai-accounts-keyboard-prompts-2026-11-01/compact.png)
 

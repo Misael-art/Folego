@@ -172,6 +172,29 @@ copia seu texto para a área de transferência; depois cole no agente desejado.
 Não cola, executa ou envia pedidos automaticamente. Os textos são genéricos,
 respeitam as instruções e autorizações do projeto e pedem evidências verificáveis.
 
+O último item, **Custom**, abre um submenu de textos e macros pessoais.
+**123** copia exatamente `123`, sem espaços. **Mostrar área de trabalho**
+mostra o desktop do KDE/KWin sem fechar aplicações; se ele já estiver visível,
+permanece assim. A ação usa a conexão persistente do Fôlego com o compositor.
+O encerramento dessa conexão permite ao KWin restaurar as janelas.
+
+Use **Editar textos e macros…** ou a aba **prompts** da janela principal.
+**+ Texto** cria um título e um texto para copiar; **+ Macro** permite escolher
+Mostrar área de trabalho ou um atalho como `Ctrl+Alt+T`, `Meta+D` e `Ctrl+Shift+F5`.
+Clique em **Salvar** para disponibilizar no menu. Salvar não executa a macro.
+Atalhos são uma combinação de teclas enviada ao aplicativo em foco, com o layout
+ativo do sistema; não são comandos de shell nem sequências de várias combinações.
+**Remover item** retira o item selecionado e **Atualizar** relê a biblioteca.
+
+O arquivo privado é `$XDG_CONFIG_HOME/folego/custom-prompts.json` (padrão
+`~/.config/folego/custom-prompts.json`), com até 32 itens, títulos de 80 caracteres
+e textos de 16.000 caracteres, limitado a 512 KiB. Os exemplos aparecem apenas
+quando o arquivo ainda não existe; abrir o menu não cria arquivo. Uma biblioteca
+salva vazia continua vazia. Erros ou schemas desconhecidos preservam o arquivo
+e bloqueiam gravações; alterações concorrentes exigem atualizar. Um menu antigo
+não executa um item modificado: reabra Custom. Este incremento é posterior à
+tag publicada v0.2.0b2.
+
 **Print** abre a seleção de região do Spectacle. Conclua, salve ou cancele na
 ferramenta de captura; o Fôlego não escolhe um destino nem declara uma imagem
 salva sem confirmação. Um clique repetido não abre outra captura em andamento.

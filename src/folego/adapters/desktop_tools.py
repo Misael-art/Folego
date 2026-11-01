@@ -19,9 +19,10 @@ from .. import paths
 
 
 class DesktopTools:
-    def __init__(self, *, env=None, run=subprocess.run):
+    def __init__(self, *, env=None, run=subprocess.run, desktop_show=None):
         self.env = dict(os.environ if env is None else env)
         self.run = run
+        self.desktop_show = desktop_show
         self.daemon = None
         self.directory = None
         self.socket = None
@@ -88,7 +89,11 @@ class DesktopTools:
             args = [f"{key}:1" for key in codes] + [f"{key}:0" for key in reversed(codes)]
             self._call([binary, "key", "--key-delay", "5", *args])
         else:
-            symbols = {29: "ctrl", 42: "shift", 15: "Tab", 57: "space", 14: "BackSpace", 28: "Return", 110: "Insert"}
+            symbols = {29: "ctrl", 42: "shift", 56: "alt", 125: "super", 15: "Tab", 57: "space",
+                       14: "BackSpace", 28: "Return", 110: "Insert", 1: 'Escape', 111: 'Delete',
+                       102: 'Home', 107: 'End', 105: 'Left', 106: 'Right', 103: 'Up', 108: 'Down',
+                       104: 'Prior', 109: 'Next'}
+            symbols.update({code: f'F{i}' for i, code in enumerate([*range(59, 69), 87, 88], 1)})
             for text, values in (("1234567890", range(2, 12)), ("qwertyuiop", range(16, 26)),
                                  ("asdfghjkl", range(30, 39)), ("zxcvbnm", range(44, 51))):
                 symbols.update(zip(values, text))
@@ -98,6 +103,15 @@ class DesktopTools:
         return "Solicitação de tecla enviada ao aplicativo em foco"
 
     def perform(self, action, value=None):
+        if action in ('custom-load', 'custom-save', 'custom-use'):
+            from ..core.custom_prompts import CustomPrompts, shortcut_codes
+            store = CustomPrompts(env=self.env)
+            if action == 'custom-load': return store.read()
+            if action == 'custom-save': return store.save(value['entries'], value['revision'])
+            entry = store.resolve(value['id'], value['revision'])
+            if entry['kind'] == 'text': return dict(operation='custom-copy', text=entry['text'])
+            if entry['action'] == 'keys': return self.keys(shortcut_codes(entry['shortcut']))
+            return self.show_desktop()
         if action == 'keyboard-prepare':
             if self.env.get('XDG_SESSION_TYPE') == 'wayland':
                 from .keyboard_focus import ensure
@@ -129,6 +143,26 @@ class DesktopTools:
         if action == "position":
             return self.position(*value)
         raise ValueError("atalho desconhecido")
+
+    def show_desktop(self):
+        binary = shutil.which('qdbus6')
+        if not binary:
+            raise RuntimeError('Mostrar área de trabalho requer KDE/KWin nesta integração')
+        query = [binary, 'org.kde.KWin', '/KWin', 'org.kde.KWin.showingDesktop']
+        before = self._call(query)
+        if before == 'true': return 'A área de trabalho já está visível'
+        if before != 'false': raise RuntimeError('Estado da área de trabalho não confirmado; solicitação não enviada')
+        if self.desktop_show is None:
+            raise RuntimeError('Conexão persistente com o desktop indisponível; solicitação não enviada')
+        # KWin cancels showDesktop when the requesting D-Bus client exits.
+        # The GUI supplies its persistent connection; a short-lived qdbus
+        # process would immediately undo the effect.
+        self.desktop_show()
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            if self._call(query) == 'true': return 'Área de trabalho exibida'
+            time.sleep(.05)
+        raise RuntimeError('Pedido enviado; área de trabalho não confirmada. Não houve repetição')
 
     def position(self, caption, geometry, service=None, confirmation=None):
         """KWin can move only this process's uniquely titled keyboard window."""

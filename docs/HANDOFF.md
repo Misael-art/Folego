@@ -1,5 +1,51 @@
 # Passagem para o próximo agente — atualizada em 01/11/2026
 
+## Custom: textos e macros pessoais — 01/11/2026
+
+Incremento sobre `eeba357f287da7a4f18c879d6a8665e810d02954`, na mesma raiz,
+branch e PR #1. Pedido atual implementado: último item **Custom** em Prompts,
+submenu de textos/macros e editor na aba **prompts** da janela principal, com
+**+ Texto**, **+ Macro**, Salvar, Remover e Atualizar. O exemplo inicial é
+literalmente **123**, sem espaços, tanto no título quanto no clipboard.
+Macro inicial **Mostrar área de trabalho**; outras macros aceitam um atalho
+de teclado. A pergunta opcional sobre comandos de terminal não foi respondida;
+adotado o modelo de atalho, conforme o exemplo do usuário. Não há shell.
+
+Configuração própria privada e limitada, defaults só quando ausente, vazio
+persistido respeitado, revisão contra gravação concorrente/menu antigo e
+arquivo desconhecido preservado. Leitura/gravação/desktop fora do loop Qt.
+No ensaio nativo, qdbus transitório desfazia Mostrar área de trabalho ao sair;
+corrigido com QtDBus persistente fornecido pela GUI, mantendo core/CLI sem Qt.
+Já visível não alterna, efeito enviado uma vez e estado confirmado.
+
+Gates finais: headless **1133 passed, 2 skipped**, 39,93 s; Qt **1402 passed,
+2 skipped**, 52,08 s. Python 3.14.7 gerenciado, sequencial, HOME/XDG/TMP privados.
+Tentativas anteriores preservadas: deadline variável no teste Hypothesis de
+backup (repetição focada passou sem mudar limite) e expectativa antiga das abas,
+atualizada para incluir prompts. Workspaces completos revisados/preservados
+em `.scratch/dev-tests-reviewed/20261101-custom`, sem excluir fixtures.
+
+KDE/Wayland real: nove casos aprovados, widget 280×275, edição/salvamento em
+HOME próprio, contas e teclado com cliques/AT-SPI em campos descartáveis.
+Clipboard Xvfb confirmou cópia/colagem exata de 123. Macro desktop e Ctrl+A
+acionadas pelo submenu no KWin/Xvfb/D-Bus em namespaces privados, runtime
+físico oculto: desktop confirmado, repetição não alterna, seleção do alvo
+próprio confirmada. Não minimizou janelas físicas nem reiniciou serviços.
+[Provas, screenshots e limites](handoff/validation/custom-prompts-2026-11-01/README.md).
+
+A instância anterior 710222 já estava ausente, sem lock GUI, antes da tentativa
+de substituição; nenhum efeito de encerramento foi enviado. `./dev gui` lançado
+uma vez, instância **935427** com starttime **1403407**, lock e bandeja confirmados.
+Compacto aberto e central oculta; posição atual do compositor apenas limitada à
+área útil (604;318,185; 280×274,815), sem alterar regra do KWin. AT-SPI confirmou
+o botão Prompts e a nova aba na instância real. Metadados locais e log em
+`.scratch/custom-prompts`. Não encerrar PID só por este registro histórico.
+
+Este incremento ainda não integra a tag imutável v0.2.0b2 publicada abaixo;
+versão não avançada e sem novo release/merge. Próximo passo: validar Custom
+nas aplicações usuais do usuário; publicar outro marco somente com versão,
+artefatos e gates de distribuição correspondentes. Demais limites continuam.
+
 ## Release 0.2.0b2 publicada e instância substituída — 01/11/2026
 
 [Release v0.2.0b2](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b2),

@@ -185,6 +185,7 @@ class CompactWindow(QWidget):
         inner.addWidget(self.ai_strip)
         inner.addLayout(footer)
         self.shortcut_tabs = ShortcutTabs(self)
+        self.shortcut_tabs.customize_requested.connect(self._customize_prompts)
         self.shortcut_tabs.controller.feedback.connect(self._shortcut_result)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -202,6 +203,11 @@ class CompactWindow(QWidget):
         self.feedback_label.show()
         self.feedback_timer.start(7000)
         self.adjustSize()
+
+    def _customize_prompts(self):
+        open_editor = getattr(self._window, 'open_custom_prompts', self._window.raise_to_user)
+        open_editor()
+        self.hide()
 
     def _clear_feedback(self):
         self.feedback_label.hide()
