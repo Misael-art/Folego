@@ -1,5 +1,58 @@
 # Passagem para o próximo agente — atualizada em 01/11/2026
 
+## Hover das IAs, edição de campo e saída real — 01/11/2026
+
+Código: `079d39e08a2b8261649a36152cf3a50959ffc33b`, sobre
+`cb7857479c71c89dc4aa70ebdfce2d26a93708cd`, na branch/PR #1 existentes.
+Pedido do usuário: corrigir dados do hover, manter contadores/abertura das IAs,
+acrescentar Selecionar tudo/Apagar tudo e reabrir para validação. O trecho final
+da transcrição foi considerado conversa incidental.
+
+Widget sem foco habilita agora dicas em janela inativa. Codex consulta GETs
+de uso/tickets do próprio provedor, com credencial existente válida, sem refresh
+ou resgate; fallback local continua limitado. Descobre/deduplica diretórios
+nativos ativos no HOME selecionado. Hover separa uso e reposição com contagem
+regressiva, tickets/validade, créditos extras e referência mensal. Botão direito:
+atualizar, detalhes com rolagem, referência mensal pessoal persistente e site.
+Dias 29–31 respeitam meses curtos; referência não confirma cobrança.
+
+Claude inclui uso extra/perfil quando disponíveis. Mensalidade pelo início da
+assinatura ativa é estimativa identificada. Cache em memória com chave de
+credencial/diretório, uso por 5 min e perfil por 6 h; HTTP 429 respeita
+Retry-After, sem encurtar espera superior a uma hora. Revalida conta, validade
+e reset inclusive na CLI. Nenhum token/conversa é persistido nesse cache.
+**Limite remanescente:** Web/Grok continuam sem percentual/reposição/tickets
+verificáveis nas fontes desta integração; campo desconhecido e link para
+consultar o provedor. Não declarar completas todas as funções dos quatro serviços.
+No host, Codex retornou janelas/tickets em três raízes; Claude respondeu HTTP 429
+na consulta de uso posterior à leitura do perfil. Sem contornar ou ignorar o limite.
+
+Dois botões finos, largura preservada em 280 px. AT-SPI de produção altera
+somente o campo editável em foco, com proprietário/identidade/estado/tamanho
+revalidados. Não lê conteúdo, toca clipboard ou substitui a edição por atalhos
+globais de terminal. Aplicação sem interface editável informa indisponibilidade.
+Também corrigida a saída: central oculta + widget Tool não encerravam o loop Qt;
+o shutdown normal agora solicita `QGuiApplication.quit()` explicitamente.
+
+`./dev check` final: **1095 passed, 2 skipped** sem Qt (20,83 s),
+**1356 passed, 2 skipped** Qt (39,30 s), Python 3.14.7 gerenciado, sequencial,
+HOME/XDG/TMP privados. Skips seguem exigindo Edge real. KDE/Wayland próprio:
+evento de ajuda Qt mostra os campos, teclado embaixo/topo/embaixo e edição de
+texto em campo próprio sem perder foco. Teste de saída reproduziu a falha antes
+e saiu sem watchdog após a correção. Wrapper de QA remove agora as três
+variáveis de caminho nativas dos provedores; HOME privado não adota HOME físico.
+Falhas intermediárias e workspaces revisados preservados integralmente, sem
+remover regressões ou afrouxar limites. [Evidências](handoff/validation/ai-details-editing-2026-11-01/README.md).
+
+A instância antiga fechou o widget, mas manteve o processo/lock pelo defeito
+reproduzido. SIGTERM único por pidfd após conferir argv/starttime; flock liberado.
+Nova GUI oficial aberta, modo widget acionado por AT-SPI, botões e novos campos
+confirmados visíveis, posição ajustada à área disponível sem mudar regras KWin.
+Fôlego deixado aberto para validação. Nenhum agente/terminal encerrado, grant ou
+opção de início alterado. Sem novo release/merge; v0.2.0b1 permanece anterior.
+Próximo passo: validação física do usuário no hover e nos campos das aplicações
+que usa; não presumir cobertura de todos os clientes nem do compositor X11.
+
 ## Avisos de entregas e Fôlego reaberto — 01/11/2026
 
 Implementação: `91125ecb4417293f8fdf4f9773b9ea0c7009f3c5`, sobre
