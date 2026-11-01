@@ -3,7 +3,8 @@
 ## Custom: textos e macros pessoais — 01/11/2026
 
 Incremento sobre `eeba357f287da7a4f18c879d6a8665e810d02954`, na mesma raiz,
-branch e PR #1. Pedido atual implementado: último item **Custom** em Prompts,
+branch e PR #1. Código/QA em `2f80a594f27b6d93725c152f0c2e6e12fea02d39`.
+Pedido atual implementado: último item **Custom** em Prompts,
 submenu de textos/macros e editor na aba **prompts** da janela principal, com
 **+ Texto**, **+ Macro**, Salvar, Remover e Atualizar. O exemplo inicial é
 literalmente **123**, sem espaços, tanto no título quanto no clipboard.
