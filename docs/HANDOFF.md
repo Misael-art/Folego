@@ -4,6 +4,7 @@
 
 Sobre `cc2f3bf993d0e49726da399ae16bc6c24c2f39d5`, mesma raiz/branch/PR #1.
 Edição corrigida em `6396a527c03e1ed7e44a74a7ce5e8f2e942241ee`.
+Captura, sons e gates finais em `c59670d8fcaa9ea65784a1a4cccb89ca1d10a018`.
 Chrome próprio reproduziu a falta de EditableText apesar de Text/entry editável.
 Agora seleciona o campo exato por AT-SPI, aguarda a seleção inteira, revalida
 foco/identidade/tamanho e envia um Backspace. Sem Ctrl+A global, clipboard ou
@@ -26,7 +27,7 @@ Volume temporário de pelo menos 85%, desmute e restauração por canal/mudo,
 preservando ajuste concorrente do usuário. Usa saída já padrão, sem mudar perfil,
 serviço ou grants. Intenção privada antes do efeito, servidor/saída/boot revalidados,
 registro pendente reconciliado na abertura; desconhecido bloqueia restauração
-cega. Registo em `~/.local/state/folego/audio-volume.json`. Código Qt só na UI;
+cega. Registro em `~/.local/state/folego/audio-volume.json`. Código Qt só na UI;
 núcleo/CLI continuam independentes. O wrapper de testes agora isola também Pulse.
 
 `./dev check` final: **1148 passed, 2 skipped** headless (29,23 s), **1422 passed,
