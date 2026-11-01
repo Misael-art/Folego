@@ -10,7 +10,7 @@ class Bridge:
         self.closed = False
     def focused(self, pid): return 'object', 'text', 'editable'
     def states(self, obj): return True
-    def call(self, name, *args):
+    def call(self, name, *args, **kwargs):
         self.calls.append((name, args))
         if name == 'text_get_character_count': return self.count
         if name == 'text_get_n_selections': return self.selections
@@ -52,3 +52,24 @@ def test_missing_editable_surface_never_deletes_or_sends_terminal_shortcuts():
     with pytest.raises(RuntimeError):
         edit_focused('delete_all', bridge=lambda: api, focus=lambda env: ('window', (123, 1, 10)))
     assert api.closed and not api.calls
+
+
+@pytest.mark.parametrize('selected', [0, 1])
+def test_chromium_without_editabletext_selects_exact_field_then_sends_one_backspace(selected):
+    api = Bridge(selections=selected)
+    api.focused = lambda pid: ('object', 'text', None)
+    selected_ranges = iter([None, (0, 42)])
+    api.selection = lambda text: next(selected_ranges)
+    sent = []
+    def key(codes): sent.append(codes); api.count = 0
+    result = edit_focused('delete_all', bridge=lambda: api, focus=lambda env: ('window', (123, 1, 10)), send_key=key)
+    assert sent == [[14]] and 'apagado' in result
+    assert not any('get_text' in name for name, _ in api.calls)
+
+
+def test_chromium_focus_change_after_selection_does_not_send_backspace():
+    api = Bridge(); api.focused = lambda pid: ('object', 'text', None)
+    api.selection = lambda text: (0, 42)
+    positions = iter([('window', (123, 1, 10)), ('window', (123, 1, 10)), ('other', (124, 1, 12))])
+    with pytest.raises(RuntimeError, match='foco mudou'):
+        edit_focused('delete_all', bridge=lambda: api, focus=lambda env: next(positions), send_key=lambda _: pytest.fail('wrong focus'))

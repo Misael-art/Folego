@@ -57,7 +57,9 @@ class DesktopController(QObject):
 
     def request(self, action, value=None):
         if self.closed or self.future is not None:
-            self.result.emit("Aguarde a solicitação atual; nenhuma tecla ficou na fila")
+            message = 'Aguarde a solicitação atual; nenhuma tecla ficou na fila'
+            self.feedback.emit(message)
+            self.result.emit(message)
             return False
         self.future = self.pool.submit(self.backend.perform, action, value)
         self.action = action

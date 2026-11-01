@@ -1,8 +1,8 @@
-"""Explicit whole-field editing via native AT-SPI, without text or clipboard reads.
+"""Explicit whole-field editing via AT-SPI, without copying or logging contents.
 
 Only the focused editable object of the compositor's current local application
-can be changed. No Ctrl+A/Backspace fallback can accidentally affect files,
-terminal jobs, or another application after a focus change.
+can be changed. Chromium exposes Text without EditableText: select the exact
+accessible field, verify its range and focus, then send one Backspace.
 """
 import ctypes as C
 from ctypes.util import find_library
@@ -39,12 +39,16 @@ class Atspi:
             'text_get_n_selections': (I, [P, E]),
             'text_add_selection': (I, [P, I, I, E]),
             'text_set_selection': (I, [P, I, I, I, E]),
+            'text_get_selection': (P, [P, I, E]),
+            'text_get_character_at_offset': (C.c_uint, [P, I, E]),
+            'range_get_type': (C.c_size_t, []),
             'editable_text_delete_text': (I, [P, I, I, E]),
         }
         for name, (result, args) in signatures.items():
             fn = getattr(self.lib, 'atspi_' + name)
             fn.restype, fn.argtypes = result, args
         self.objects.g_object_unref.argtypes = [P]
+        self.objects.g_boxed_free.argtypes = [C.c_size_t, P]
         self.glib.g_error_free.argtypes = [P]
         self.glib.g_free.argtypes = [P]
         if self.lib.atspi_init() not in (0, 1):
@@ -95,11 +99,22 @@ class Atspi:
                 if role == 'terminal': raise RuntimeError('O terminal não expõe um campo de texto editável')
                 text = self.call('accessible_get_text_iface', obj, error=False, own=True)
                 editable = self.call('accessible_get_editable_text_iface', obj, error=False, own=True)
-                if text and editable: return obj, text, editable
+                if text: return obj, text, editable
             count = self.call('accessible_get_child_count', obj)
             if count < 0 or len(queue) + count > 1024: break
             queue.extend(self.call('accessible_get_child_at_index', obj, i, own=True) for i in range(count))
         raise RuntimeError('Clique no campo de texto editável e tente novamente; nada foi apagado')
+
+    def selection(self, text):
+        class Range(C.Structure):
+            _fields_ = [('start', C.c_int), ('end', C.c_int)]
+        pointer = self.call('text_get_selection', text, 0)
+        if not pointer: return None
+        try:
+            value = C.cast(pointer, C.POINTER(Range)).contents
+            return value.start, value.end
+        finally:
+            self.objects.g_boxed_free(self.call('range_get_type', error=False), pointer)
 
     def close(self):
         for obj in reversed(self.owned): self.objects.g_object_unref(obj)
@@ -120,7 +135,7 @@ def foreground(env):
     return window, owner
 
 
-def edit_focused(action, *, env=None, bridge=Atspi, focus=foreground):
+def edit_focused(action, *, env=None, bridge=Atspi, focus=foreground, send_key=None, prepare_input=None):
     if action not in ('select_all', 'delete_all'): raise ValueError('edição desconhecida')
     env = dict(os.environ if env is None else env)
     before = focus(env)
@@ -129,19 +144,45 @@ def edit_focused(action, *, env=None, bridge=Atspi, focus=foreground):
         obj, text, editable = api.focused(before[1][0])
         count = api.call('text_get_character_count', text)
         if not 0 <= count <= 1_000_000: raise RuntimeError('Tamanho do campo não verificado; texto preservado')
-        selections = api.call('text_get_n_selections', text) if action == 'select_all' else 0
+        selections = api.call('text_get_n_selections', text) if action == 'select_all' or not editable else 0
         if focus(env) != before or not api.states(obj):
             raise RuntimeError('O foco mudou; nenhuma edição enviada')
         if count == 0: return 'O campo de texto já está vazio'
         if api.call('text_get_character_count', text) != count:
             raise RuntimeError('O campo mudou; nenhuma edição enviada')
-        if action == 'select_all':
+        if action == 'delete_all' and not editable and prepare_input is not None:
+            prepare_input()
+            if focus(env) != before or not api.states(obj):
+                raise RuntimeError('O foco mudou; nenhuma edição enviada')
+        if action == 'select_all' or not editable:
+            if action == 'delete_all' and send_key is None:
+                raise RuntimeError('Entrada verificada indisponível para este editor; texto preservado')
             ok = api.call('text_set_selection', text, 0, 0, count) if selections else api.call('text_add_selection', text, 0, count)
+            if not ok: raise RuntimeError('O campo não confirmou a seleção; nada foi apagado')
+            if action == 'delete_all':
+                end = time.monotonic() + .4
+                while time.monotonic() < end:
+                    if api.selection(text) == (0, count): break
+                    time.sleep(.025)
+                else: raise RuntimeError('O campo não confirmou a seleção inteira; nada foi apagado')
+                if (not api.states(obj) or focus(env) != before
+                        or api.call('text_get_character_count', text) != count):
+                    raise RuntimeError('Seleção ou foco mudou; nada foi apagado')
+                send_key([14])  # never Ctrl+A, Enter, clipboard or a terminal shortcut
         else:
             ok = api.call('editable_text_delete_text', editable, 0, count)
         if not ok: raise RuntimeError('O campo não confirmou a edição; não houve repetição')
-        if action == 'delete_all' and api.call('text_get_character_count', text) != 0:
-            return 'Edição enviada; o campo mudou novamente. Confira o texto, sem repetição automática'
+        if action == 'delete_all':
+            end = time.monotonic() + .7
+            while time.monotonic() < end:
+                api.call('accessible_clear_cache', obj, error=False)
+                remaining = api.call('text_get_character_count', text)
+                if remaining == 0: break
+                # Chromium's empty contenteditable can expose only its line
+                # terminator. Inspect that single codepoint, never field text.
+                if remaining == 1 and api.call('text_get_character_at_offset', text, 0) == 10: break
+                time.sleep(.04)
+            else: raise RuntimeError('O aplicativo não confirmou o campo vazio; não houve repetição')
         return 'Todo o texto do campo selecionado' if action == 'select_all' else 'Todo o texto do campo apagado'
     finally:
         api.close()

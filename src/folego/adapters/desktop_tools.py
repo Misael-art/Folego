@@ -119,7 +119,7 @@ class DesktopTools:
             return 'Teclado preparado'
         if action in ('select_all', 'delete_all'):
             from .editable_text import edit_focused
-            return edit_focused(action, env=self.env)
+            return edit_focused(action, env=self.env, send_key=self.keys, prepare_input=self._input)
         if action == "copy":
             # Standard alternate editing keys: Ctrl+C in a terminal can signal
             # its foreground job. Copy must never turn into an interrupt.
