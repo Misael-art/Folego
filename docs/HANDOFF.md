@@ -1,5 +1,48 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Medidores circulares animados de IA — 02/11/2026
+
+Sobre `0239f4921e144ac839c5a4ead86c5d315bbf921d`, mesma raiz/branch/PR #1.
+Código, testes e provas em `604f1f515cfcc929133d4393177addc0fd9baa47`.
+Codex, Codex Web, Claude e Grok seguem o medidor circular do PhaseZero:
+disco de identificação, percentual disponível no centro e arco de cota.
+Nome completo Codex Web, entregas/presentes abaixo e largura de 280 px.
+Dados vêm do monitor existente, sem importar/iniciar PhaseZero. Fontes sem
+percentual, antigas ou incompletas mostram **?** com anel cinza; zero mostra
+**0** com arco vazio. Padrão de cores da referência preservado entre temas
+e transparência. Contas, hover, cliques e presentes mantêm seus contratos.
+
+Transição de 450 ms entre valores conhecidos; número/descrição atuais desde
+o início. Expiração/falha cancelam imediatamente. Entregas confirmadas fazem
+a borda interna pulsar em 1,8 s, separada de cota/tickets. Sem contagem
+confirmada ou widget visível, não pulsa; ocultação para todas as animações.
+O monitor de consultas continua independente da visibilidade.
+
+Focados **16 passed**, 1,48 s. `./dev check`: **1168 passed, 2 skipped**
+headless, 25,31 s; **1484 passed, 2 skipped** Qt, 97,45 s. Python 3.14.7,
+sequencial, HOME/XDG/TMP/Pulse privados. Oito cenários KDE/Wayland aprovados:
+três combinações de tema/transparência, animações, expiração, clique/hover
+nativos, presente por Qt, ocultação, Central/Voltar e saída. Inspeção visual
+das capturas próprias em 135%, nomes inteiros e contadores sem sobreposição.
+Abertura do cliente interceptada em memória; métricas/contas sintéticas.
+[Provas, comandos e limites](handoff/validation/ai-quota-rings-2026-11-02/README.md).
+
+Primeiro QA nativo não aprovado: hover abriu o painel durante calibração e
+interceptou o clique. Corrigida a sequência do harness, mantendo 45 s e a
+tentativa anterior. Baseline remoto já tinha Qt vermelho em duas variantes
+de transparência de texto com fonte Ubuntu (alpha 250/244, linha 31).
+Asserção preservada e nenhuma alegação de CI inteiramente verde.
+
+GUI real atualizada pela saída da bandeja e uma chamada `./dev gui`, com
+lock liberado e posição/preferências preservadas. Novo PID **1827618**,
+starttime **10085542**, widget (2902,197;33,954), 280×217, central oculta.
+Recibo privado `.scratch/dev-tests/run-ta5pjkkq/host-replacement/replacement-primary.json`,
+com boot/identidade observados após a saída do launcher. Revalidar antes de
+agir. QA/auxiliares encerrados, nenhum trabalho alheio sinalizado e nenhum
+diretório anterior apagado. Sem release/merge/grant; b2 imutável.
+Próximo passo: usuário conferir os sinais nas suas contas; Web/Grok continuam
+sem fonte percentual confirmada. Matriz geral de desktop permanece parcial.
+
 ## Transparência dos fundos e painel contínuo — 02/11/2026
 
 Sobre `fdceab8095c62a68e3efdc32f942b959a91608ce`, mesma raiz/branch/PR #1.
