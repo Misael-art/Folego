@@ -56,6 +56,9 @@ A faixa de IAs acompanha Codex, Codex Web, Claude e Grok
 no próprio Fôlego; passe o mouse para abrir o painel na conta padrão e escolha
 outras na lista lateral. Consumo, resets, tickets e referência da assinatura
 ficam separados. Cinza significa que o dado não foi confirmado.
+Ao lado das entregas, um **presente verde piscando** mostra as redefinições
+disponíveis confirmadas das contas do provedor. Clique para consultar a conta;
+o resgate continua no cliente de IA.
 
 As abas coloridas **Copiar, Colar, Print e Teclado** atuam por clique. A aba do
 teclado abre sempre na parte inferior; somente sua seta abre no topo. A altura

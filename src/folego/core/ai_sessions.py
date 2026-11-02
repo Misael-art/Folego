@@ -83,6 +83,27 @@ def band(remaining):
     return "unknown" if remaining is None else "green" if remaining > 60 else "yellow" if remaining > 20 else "red"
 
 
+def available_resets(item, now=None):
+    """Confirmed redeemable tickets, independent of the quota window's reset.
+
+    None means unknown or outdated, including after the first known expiry.
+    Do not decrement a provider's count locally or assume a new allowance.
+    """
+    now = time.time() if now is None else now
+    credits = item.get('reset_credits')
+    if not isinstance(credits, dict): return None
+    count = credits.get('available')
+    seen = timestamp(credits.get('observed_at'))
+    expiry = credits.get('expires_at')
+    if (type(count) is not int or count < 0 or seen is None
+            or not 0 <= now - seen <= MAX_AGE):
+        return None
+    if expiry is not None:
+        expiry = timestamp(expiry)
+        if expiry is None or expiry <= now: return None
+    return count
+
+
 def _rollouts(home):
     """Bound both directory enumeration and bytes read, not just result count."""
     import itertools
@@ -156,7 +177,9 @@ def reset_credits(payload, now):
         if not isinstance(credit, dict): raise ValueError('ticket inválido')
         if credit.get('status') != 'available': continue
         at = timestamp(credit.get('expires_at', credit.get('expiresAt')))
-        if at and at > now: expiry.append(at)
+        # Keep an expired available entry as a freshness boundary too. A stale
+        # server count must not look redeemable merely because we filtered it.
+        if at: expiry.append(at)
     return dict(available=count, expires_at=min(expiry) if expiry else None, observed_at=now)
 
 
@@ -516,12 +539,11 @@ def describe(item, now=None):
     if not windows:
         lines.extend(['Uso da sessão: não informado nesta fonte', 'Reposição da sessão: não informada nesta fonte'])
     reset = item.get('reset_credits') or {}
-    seen = reset.get('observed_at', 0)
     expiry = reset.get('expires_at')
-    fresh = 0 <= now - seen <= MAX_AGE and (not expiry or expiry > now)
-    if reset and fresh:
-        text = str(reset['available']) + ' disponíveis'
-        if reset['available']: text += ' · validade: ' + (date(expiry) if expiry else 'não informada')
+    available = available_resets(item, now)
+    if available is not None:
+        text = str(available) + ' disponíveis'
+        if available: text += ' · validade: ' + (date(expiry) if expiry else 'não informada')
         lines.append('Tickets de reposição: ' + text + ' · resgate na aplicação')
     else:
         lines.append('Tickets de reposição: ' + ('consulta vencida; aguardando atualização' if reset else 'não informados nesta fonte'))

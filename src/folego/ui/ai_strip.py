@@ -1,8 +1,8 @@
 """Quota indicators, new completed sessions and verified application opening."""
-from PySide6.QtCore import Qt, QTimer, QUrl, QEvent, QPoint
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap, QDesktopServices
+from PySide6.QtCore import Qt, QTimer, QUrl, QEvent, QPoint, QSize, QRectF
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap, QDesktopServices, QPen
 from PySide6.QtWidgets import (QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QWidget,
-                              QMenu, QInputDialog, QWidgetAction)
+                              QMenu, QInputDialog, QWidgetAction, QGraphicsOpacityEffect)
 
 from ..core import ai_sessions
 from .theme import TOKENS
@@ -10,6 +10,22 @@ from .desktop_shortcuts import DesktopController
 from .ai_monitor import AIMonitor
 from ..adapters.agent_apps import AgentApps
 from .ai_account_panel import AccountPanel
+
+
+def gift_icon():
+    """Code-native gift; no platform emoji/font or icon-theme dependency."""
+    pixmap = QPixmap(24, 24)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(QPen(QColor(TOKENS.accent_text), 1.8))
+    painter.drawRoundedRect(QRectF(4, 12, 16, 9), 1, 1)
+    painter.drawRoundedRect(QRectF(2, 8, 20, 5), 1, 1)
+    painter.drawLine(12, 8, 12, 21)
+    painter.drawEllipse(QRectF(5, 2, 7, 6))
+    painter.drawEllipse(QRectF(12, 2, 7, 6))
+    painter.end()
+    return QIcon(pixmap)
 
 
 class AIStrip(QWidget):
@@ -22,6 +38,11 @@ class AIStrip(QWidget):
         self.account_panel = None
         self.buttons = {}
         self.badges = {}
+        self.reset_badges = {}
+        self._reset_bright = True
+        self.reset_blink = QTimer(self)
+        self.reset_blink.setInterval(800)
+        self.reset_blink.timeout.connect(self._blink_resets)
         self.deliveries = self.monitor.deliveries
         self.delivery_items = self.monitor.delivery_items
         self.opener = opener or DesktopController(self, backend=AgentApps(self.deliveries))
@@ -48,13 +69,28 @@ class AIStrip(QWidget):
             badge_row.setStyleSheet('background:transparent;')
             badge_layout = QHBoxLayout(badge_row)
             badge_layout.setContentsMargins(0, 0, 0, 0)
+            badge_layout.setSpacing(2)
             badge = QLabel()
-            badge.setFixedSize(32, 14)
+            badge.setFixedSize(30, 14)
             badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
             badge.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             badge_layout.addWidget(badge)
+            reset_badge = QPushButton()
+            reset_badge.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            reset_badge.setCursor(Qt.CursorShape.PointingHandCursor)
+            reset_badge.setFixedSize(30, 14)
+            reset_badge.setIcon(gift_icon())
+            reset_badge.setIconSize(QSize(11, 11))
+            reset_badge.setStyleSheet(f'background:{TOKENS.ok};color:{TOKENS.accent_text};'
+                                      'padding:0;border:none;min-height:0;max-height:14px;'
+                                      'border-radius:6px;font-size:8pt;font-weight:600;')
+            reset_badge.setGraphicsEffect(QGraphicsOpacityEffect(reset_badge))
+            reset_badge.clicked.connect(lambda checked=False, p=provider: self.reset_details(p))
+            reset_badge.hide()
+            badge_layout.addWidget(reset_badge)
             badge_layout.addStretch(1)
             self.badges[provider] = badge
+            self.reset_badges[provider] = reset_badge
             column.addWidget(badge_row)
             column.addWidget(button)
             layout.addLayout(column, 1)
@@ -92,6 +128,24 @@ class AIStrip(QWidget):
     def default_item(self, provider):
         items = [i for i in self.items if i['provider'] == provider]
         return next((i for i in items if i.get('default')), items[0] if items else {})
+
+    def reset_details(self, provider):
+        # Prefer the default account, but let a gift from another account lead
+        # to that account. Ordinary provider hover still starts at the default.
+        items = [i for i in self.items if i.get('provider') == provider
+                 and (ai_sessions.available_resets(i) or 0) > 0]
+        if not items: return
+        item = next((i for i in items if i.get('default')), items[0])
+        self.details(provider)
+        self.account_panel.select(item.get('account_id', ''))
+
+    def _blink_resets(self):
+        self._reset_bright = not self._reset_bright
+        self._paint_reset_phase()
+
+    def _paint_reset_phase(self):
+        for badge in self.reset_badges.values():
+            badge.graphicsEffect().setOpacity(1.0 if self._reset_bright else .5)
 
     def open_agent(self, provider, account=None):
         account = account or self.default_item(provider).get('account_id')
@@ -169,6 +223,7 @@ class AIStrip(QWidget):
 
     def render(self):
         colors = dict(green=TOKENS.ok, yellow=TOKENS.warning, red=TOKENS.danger, unknown=TOKENS.muted)
+        has_resets = False
         for provider, button in self.buttons.items():
             items = [item for item in self.items if item.get("provider") == provider]
             left = ai_sessions.effective(self.default_item(provider))
@@ -192,8 +247,31 @@ class AIStrip(QWidget):
                                f"color:{TOKENS.accent_text};font-size:8pt;font-weight:600;border-radius:6px;")
             completed = 'conclusões não verificadas' if count is None else f'{count} novas entregas para revisitar'
             if count and partial: completed = 'Pelo menos ' + completed + '; outras sessões não verificadas'
-            button.setAccessibleName(ai_sessions.NAMES[provider] + ": " + summary + ' · ' + completed)
+            confirmed = [(i, ai_sessions.available_resets(i)) for i in items]
+            offers = [(i, n) for i, n in confirmed if n is not None and n > 0]
+            total = sum(n for _, n in offers)
+            reset_badge = self.reset_badges[provider]
+            reset_badge.setVisible(total > 0)
+            reset_badge.setText(str(total) if total <= 9 else '9+')
+            resets = f'{total} redefinições disponíveis confirmadas'
+            reset_badge.setAccessibleName(ai_sessions.NAMES[provider] + ': ' + resets)
+            detail = [resets] + [f"{i['label']}: {n}" for i, n in offers]
+            if any(n is None for _, n in confirmed): detail.append('Outras contas sem confirmação atual')
+            detail.append('Clique para ver a conta · resgate no cliente')
+            reset_badge.setToolTip('\n'.join(detail))
+            has_resets |= total > 0
+            button.setAccessibleName(ai_sessions.NAMES[provider] + ": " + summary + ' · ' + completed
+                                     + (' · ' + resets if total else ''))
             button.setToolTip('Uso e renovação por conta · clique para abrir o cliente da conta padrão')
+        if has_resets and self.isVisible():
+            if not self.reset_blink.isActive():
+                self._reset_bright = True
+                self._paint_reset_phase()
+                self.reset_blink.start()
+        else:
+            self.reset_blink.stop()
+            self._reset_bright = True
+            self._paint_reset_phase()
         if self.account_panel is not None:
             panel = self.account_panel
             items = [i for i in self.items if i['provider'] == panel.provider]
@@ -206,6 +284,7 @@ class AIStrip(QWidget):
         super().showEvent(event)
         if self._owns_monitor: self.monitor.start()
         self.freshness.start()
+        self.render()
         self.refresh()
         self.delivery_poller.request()
 
@@ -213,10 +292,12 @@ class AIStrip(QWidget):
         if self.account_menu is not None: self.account_menu.close()
         if self._owns_monitor: self.monitor.pause()
         self.freshness.stop()
+        self.reset_blink.stop()
         super().hideEvent(event)
 
     def shutdown(self):
         if self.account_menu is not None: self.account_menu.close()
         self.freshness.stop()
+        self.reset_blink.stop()
         if self._owns_monitor: self.monitor.shutdown()
         self.opener.close()

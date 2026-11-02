@@ -1,4 +1,36 @@
-# Passagem para o próximo agente — atualizada em 01/11/2026
+# Passagem para o próximo agente — atualizada em 02/11/2026
+
+## Presente verde para tickets de redefinição — 02/11/2026
+
+Incremento sobre `0c1ca41f9c2eb9f75d146b8e0e9cadec8ea510fe`, mesma raiz/branch/PR #1.
+Pedido atual: pequeno presente verde piscando com quantidade ao lado das entregas.
+Implementado na linha existente de 14 px, mantendo largura de 280 px. Soma
+somente tickets confirmados das contas daquele provedor; 9+ no badge e número
+exato/contas no tooltip. O clique escolhe uma conta com tickets, preferindo a
+padrão. Hover comum continua na padrão; sem resgate ou alteração de cota.
+
+Um timer de 800 ms alterna intensidade sem sumir com o número e para ao ocultar
+ou encerrar. Validação única Qt-free, usada por badge/painel/CLI: desconhecido,
+futuro, malformado, mais de 15 minutos ou validade conhecida passada não exibem
+presente. Corrigido parser que descartava expiração passada de ticket disponível,
+perdendo o limite de validade. Suporte visual comum aos quatro indicadores;
+atualmente a fonte confirmada de tickets é Codex. Não criar ofertas por inferência.
+
+Focados **43 passed** (2,02 s). `./dev check`: **1151 passed, 2 skipped** headless
+(28,95 s), **1429 passed, 2 skipped** Qt (49,21 s). Python 3.14.7, sequencial,
+HOME/XDG/TMP/Pulse privados. KDE/Wayland: cinco cenários com dados próprios,
+timer real, clique nativo em presente, conta secundária e invalidação, sem
+credenciais/resgate ou efeitos em outros clientes. Prova inicial detectou o
+min-height do tema cortando o botão; corrigido e coberto. Evidência final aguarda
+escala/DeferredDelete antes de fotografar o painel. [Provas e limites](handoff/validation/reset-gifts-2026-11-02/README.md).
+
+GUI real substituída pela bandeja e `./dev gui`, sem sinais manuais: PID **3445610**,
+starttime **5247515**, compacto (2804,553;185,362), 280×275, central oculta e
+posição do usuário preservada. Recibo `.scratch/reset-gifts/replacement.json`;
+revalidar identidade/boot antes de ações futuras. QA e seu auxiliar encerrados.
+Sem merge/release; b2 publicado continua imutável. Próximo passo: usuário conferir
+o presente nas contas cujas fontes confirmem tickets; demais fontes permanecem
+sem aviso em vez de receber contagem inventada.
 
 ## Voltar e cabeçalhos sem controles de janela — 01/11/2026
 

@@ -26,6 +26,20 @@ A bolinha representa a conta padrão: verde significa mais de 60% disponível;
 amarelo, de 21% a 60%; vermelho, até 20%. Cinza é desconhecido, vencido ou parcial.
 Uma outra conta não altera a cor da padrão; seu estado aparece ao selecioná-la.
 
+Ao lado da contagem azul de entregas aparece um **presente verde piscando**
+quando há tickets de redefinição disponíveis. A quantidade soma somente os
+tickets confirmados das contas daquele provedor, sem alterar a bolinha da conta
+padrão ou a contagem de entregas. Acima de nove mostra **9+**; o mouse revela o
+número exato e a divisão por conta. Clique no presente para abrir o painel numa
+conta com tickets, preferindo a padrão quando ela tem ofertas. Não resgata.
+
+O presente pulsa a cada 800 ms entre duas intensidades e mantém o número
+legível. Zero, ausência de confirmação, consulta com mais de 15 minutos ou a
+primeira validade conhecida vencida retiram o aviso até nova observação válida.
+Uma reposição automática da janela de uso não é um ticket. A animação para com
+o widget oculto. O suporte visual é comum aos quatro indicadores; só aparece
+quando a fonte daquele provedor informa tickets (atualmente confirmado no Codex).
+
 - Codex: consulta somente leitura aos endpoints de uso e tickets do próprio
   provedor, com a credencial local já existente e ainda válida. Exibe consumo,
   reposição com data/hora e contagem regressiva, tickets disponíveis com validade

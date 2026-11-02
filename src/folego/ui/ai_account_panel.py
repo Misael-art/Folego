@@ -108,9 +108,7 @@ class AccountPanel(QWidget):
     def update_items(self, items):
         # Keep the reading/scroll position stable between actual changes.
         now = time.time()
-        validity = tuple((ai.effective(i, now),
-                          0 <= now - (i.get('reset_credits') or {}).get('observed_at', 0) <= ai.MAX_AGE,
-                          ((i.get('reset_credits') or {}).get('expires_at') or now + 1) > now)
+        validity = tuple((ai.effective(i, now), ai.available_resets(i, now))
                          for i in items)
         signature = (repr(items), validity, int(now // 60))
         if signature == self._signature: return
@@ -139,10 +137,10 @@ class AccountPanel(QWidget):
             self.line(f'{remaining}% restante · janela mais restrita', color=T.muted)
         tickets = item.get('reset_credits') or {}
         expiry = tickets.get('expires_at')
-        fresh = 0 <= now - tickets.get('observed_at', 0) <= ai.MAX_AGE and (not expiry or expiry > now)
-        if tickets and fresh:
-            self.line(f"Tickets de reset · {tickets['available']} disponíveis", color=T.accent if tickets['available'] else T.muted)
-            if tickets['available']:
+        available = ai.available_resets(item, now)
+        if available is not None:
+            self.line(f"Tickets de reset · {available} disponíveis", color=T.ok if available else T.muted)
+            if available:
                 self.line(('Valem até ' + date(expiry) if expiry else 'Validade não informada') + ' · resgate no cliente', color=T.muted)
         else:
             self.line('Tickets de reset · ' + ('consulta vencida' if tickets else 'não informados'), color=T.muted)

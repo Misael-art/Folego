@@ -20,8 +20,10 @@ def main():
     parser.add_argument("--offscreen", action="store_true")
     parser.add_argument("--input", action="store_true")
     parser.add_argument('--capture', action='store_true', help='Owned Spectacle lifecycle, cancel without saving')
+    parser.add_argument('--reset-badges-only', action='store_true',
+                        help='Synthetic tickets and blink lifecycle; no native input or capture tool')
     args = parser.parse_args()
-    if args.input and not args.offscreen and os.environ.get('XDG_SESSION_TYPE') == 'wayland':
+    if args.input and not args.reset_badges_only and not args.offscreen and os.environ.get('XDG_SESSION_TYPE') == 'wayland':
         # Explicit native QA prepares only the product-owned keyboard rule in
         # the physical session, before isolating every account/data directory.
         from folego.adapters.keyboard_focus import ensure
@@ -97,6 +99,13 @@ def main():
     items[0].update(reset_credits=dict(available=2, observed_at=now, expires_at=now + 86400),
                     extra_credits='9.99', billing_day=15, billing_source='referência de demonstração')
     view.ai_strip.poller._collect = lambda: items
+    if args.reset_badges_only:
+        delivery_rows = [dict(provider=p, count=n, pending=[], complete=True)
+                         for p, n in zip(ai.NAMES, (3, 1, 5, 2))]
+        view.ai_strip.delivery_poller._collect = lambda: delivery_rows
+        view.ai_strip.set_deliveries(delivery_rows)
+        for item, count in zip(items, (2, 1, 3, 1, 1)):
+            item['reset_credits'] = dict(available=count, observed_at=now, expires_at=now + 3600)
     sample = Snapshot(ts=now, mono=time.monotonic(), mem=MemInfo(16 * 1024**2, 6 * 1024**2),
                       swap_used_kb=1024, swap_total_kb=8192, pressure_memory=None, pressure_io=None,
                       pressure_cpu=None, load=None, apps=(), self_rss_kb=0, cpu_busy_frac=.24,
@@ -125,6 +134,18 @@ def main():
         app.processEvents()
         point = button.mapToGlobal(button.rect().center())
         desired = (point.x(), point.y())
+        if args.reset_badges_only:
+            # Wayland QWidget globals may differ from compositor coordinates.
+            own = subprocess.check_output(['kdotool', 'search', '--all', '--pid', str(os.getpid()),
+                                          '--name', '^Fôlego — widget$'], text=True).strip().splitlines()
+            assert len(own) == 1
+            native = subprocess.check_output(['kdotool', 'getwindowgeometry', own[0]], text=True)
+            position = re.search(r'Position:\s*([-0-9.]+),([-0-9.]+)', native)
+            assert position
+            origin = view.mapToGlobal(view.rect().topLeft())
+            desired = (float(position[1]) + point.x() - origin.x(),
+                       float(position[2]) + point.y() - origin.y())
+            subprocess.run(['kdotool', 'windowraise', own[0]], check=True, capture_output=True)
         if not click:
             # A pointer already at the new surface's centre still needs a real
             # motion event to start Qt's hover timer after mapping/raising it.
@@ -162,6 +183,81 @@ def main():
             subprocess.run([binary, 'click', '0xC0'], env=backend.env, check=True, capture_output=True)
     try:
         wait(lambda: view.isVisible())
+        if args.reset_badges_only:
+            strip = view.ai_strip
+            wait(lambda: view.windowHandle().isExposed())
+            if app.platformName() == 'wayland':
+                native = []
+                def own_widget():
+                    result = subprocess.run(['kdotool', 'search', '--all', '--pid', str(os.getpid()),
+                                             '--name', '^Fôlego — widget$'], capture_output=True, text=True, timeout=3)
+                    native[:] = result.stdout.strip().splitlines()
+                    return len(native) == 1
+                wait(own_widget)
+                geometry = subprocess.check_output(['kdotool', 'getwindowgeometry', native[0]], text=True)
+            else:
+                geometry = 'offscreen; no compositor proof'
+            assert view.width() == 280 and strip.reset_blink.isActive()
+            view.adjustSize()
+            wait(lambda: all(b.parentWidget().rect().contains(b.geometry())
+                             for b in strip.reset_badges.values()))
+            for provider, total in zip(ai.NAMES, (3, 1, 3, 1)):
+                gift, delivery = strip.reset_badges[provider], strip.badges[provider]
+                assert gift.isVisible() and gift.text() == str(total)
+                assert gift.geometry().left() > delivery.geometry().right()
+                assert gift.parentWidget().rect().contains(gift.geometry())
+                assert strip.rect().contains(gift.mapTo(strip, gift.rect().bottomRight()))
+            records.append(dict(gifts='four providers, confirmed multi-account counts, beside deliveries',
+                                logical_width=view.width(), native_geometry=geometry))
+            wait(lambda: strip._reset_bright)
+            view.grab().save(str(root / 'compact-gifts-bright.png'))
+            wait(lambda: not strip._reset_bright)
+            assert strip.reset_badges['codex'].graphicsEffect().opacity() == .5
+            view.grab().save(str(root / 'compact-gifts-dim.png'))
+            wait(lambda: strip._reset_bright)
+            assert strip.reset_badges['codex'].graphicsEffect().opacity() == 1
+            records.append(dict(blink='real QTimer bright/dim/bright; count never disappears', interval_ms=800))
+            view.hide(); app.processEvents()
+            assert not strip.reset_blink.isActive()
+            view.show_compact(); app.processEvents()
+            wait(lambda: view.windowHandle().isExposed() and strip.reset_blink.isActive())
+            records.append(dict(lifecycle='hidden stops timer; return resumes'))
+            # Only the secondary account contributes now; gift must lead there.
+            items[0]['reset_credits']['available'] = 0
+            strip.set_items(items)
+            assert strip.reset_badges['codex'].text() == '1'
+            if args.input:
+                pointer_click(strip.reset_badges['codex'])
+            else:
+                strip.reset_badges['codex'].click()
+            wait(lambda: strip.account_panel is not None and strip.account_menu.isVisible())
+            assert strip.account_panel.selected == 'codex-work'
+            settled = time.monotonic() + .35
+            wait(lambda: time.monotonic() >= settled)
+            # This harness pumps processEvents instead of app.exec; flush Qt's
+            # deferred disposal of the previous account before inspecting pixels.
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            app.processEvents()
+            labels = [label.text() for label in strip.account_panel.findChildren(QLabel) if label.isVisible()]
+            assert 'Tickets de reset · 1 disponíveis' in labels and '92% usado' in labels
+            assert 'Tickets de reset · 0 disponíveis' not in labels and '72% usado' not in labels
+            strip.account_panel.grab().save(str(root / 'reset-account.png'))
+            strip.account_menu.close(); app.processEvents()
+            records.append(dict(account='gift selects secondary account with ticket; no redemption'))
+            for item in items:
+                item['reset_credits']['expires_at'] = now - 1
+            strip.render()
+            assert all(b.isHidden() for b in strip.reset_badges.values()) and not strip.reset_blink.isActive()
+            assert strip.badges['codex'].text() == '3'
+            for item in items:
+                item['reset_credits'].update(expires_at=now + 3600, available=0)
+            strip.render()
+            assert all(b.isHidden() for b in strip.reset_badges.values()) and not strip.reset_blink.isActive()
+            records.append(dict(invalidation='expiry and zero hide gifts, stop timer, preserve deliveries'))
+            (root / 'result.json').write_text(json.dumps(dict(platform=app.platformName(),
+                size=[view.width(), view.height()], cases=records, passed=True), indent=2) + '\n')
+            print(json.dumps(dict(passed=True, state=str(root), cases=len(records))))
+            return
         if args.input and os.environ.get('XDG_SESSION_TYPE') == 'wayland':
             native_windows = []
             def mapped_widget():
@@ -430,11 +526,14 @@ def main():
               "size": [view.width(), view.height()], "cases": records, "passed": True}, indent=2) + "\n")
         print(json.dumps({"passed": True, "state": str(root), "cases": len(records)}))
     except Exception:
+        view.grab().save(str(root / 'failure.png'))
         keyboard = view.shortcut_tabs.keyboard
         (root / "failure.json").write_text(json.dumps({"status": keyboard.status.text() if keyboard else None,
             "observed": keyboard.observed_geometry if keyboard else None,
             "requested": keyboard._geometry if keyboard else None,
-            "feedback": view.feedback_label.text()}, indent=2))
+            "feedback": view.feedback_label.text(),
+            "badges": {p: dict(row=b.parentWidget().rect().getRect(), gift=b.geometry().getRect())
+                       for p, b in view.ai_strip.reset_badges.items()}}, indent=2))
         raise
     finally:
         capture = view.shortcut_tabs.controller.backend.capture

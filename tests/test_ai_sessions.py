@@ -185,6 +185,38 @@ def test_failed_ticket_details_preserve_summary_without_inventing_validity(tmp_p
     assert 'validade: não informada' in ai.describe(item, NOW)
 
 
+def test_available_resets_are_independent_of_quota_and_expire_without_collection():
+    item = ai.unknown('codex')
+    item['reset_credits'] = ai.reset_credits(dict(available_count=2, credits=[
+        dict(status='available', expires_at=NOW + 10),
+        dict(status='available', expires_at=NOW + 100)]), NOW)
+    assert ai.effective(item, NOW) is None
+    assert ai.available_resets(item, NOW) == 2
+    assert ai.available_resets(item, NOW + 10) is None  # no guessed decrement
+    assert 'consulta vencida' in ai.describe(item, NOW + 10)
+    item['reset_credits'] = ai.reset_credits(dict(available_count=2), NOW)
+    assert ai.available_resets(item, NOW) == 2  # provider confirms count, not expiry
+    assert ai.available_resets(item, NOW + ai.MAX_AGE + 1) is None
+    assert ai.available_resets(item, NOW - 1) is None
+
+
+def test_already_expired_reset_details_never_lose_their_validity_boundary():
+    item = dict(reset_credits=ai.reset_credits(dict(available_count=1,
+        credits=[dict(status='available', expires_at=NOW - 1)]), NOW))
+    assert ai.available_resets(item, NOW) is None
+
+
+def test_unknown_or_malformed_ticket_counts_never_become_available():
+    assert ai.available_resets({}, NOW) is None
+    for count in (None, True, -1, '2', 2.5):
+        assert ai.available_resets(dict(reset_credits=dict(available=count, observed_at=NOW)), NOW) is None
+    for observed in (None, True, 'invalid', float('nan'), NOW + 1):
+        assert ai.available_resets(dict(reset_credits=dict(available=2, observed_at=observed)), NOW) is None
+    for expiry in (True, 0, 'invalid', float('inf'), NOW):
+        assert ai.available_resets(dict(reset_credits=dict(available=2, observed_at=NOW, expires_at=expiry)), NOW) is None
+    assert ai.available_resets(dict(reset_credits=dict(available=0, observed_at=NOW)), NOW) == 0
+
+
 def test_claude_profile_and_extra_usage_have_separate_monthly_meaning(tmp_path):
     root, _ = credentials(tmp_path)
     def fetch(url, headers):
