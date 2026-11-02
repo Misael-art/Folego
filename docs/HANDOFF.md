@@ -3,6 +3,7 @@
 ## Seletor com faixas laterais aprovado — 02/11/2026
 
 Sobre `1512658a885c6574b1525bd69401c893a3c3be77`, mesma raiz/branch/PR #1.
+Código, testes e provas em `0c592a162f0ed2c97ef0d769bc83861bea05b86b`.
 Opção aprovada implementada no próprio Qt: 12 títulos em seis categorias com
 faixas coloridas, cabeçalhos horizontais e copiar por linha. Painel até 480×540,
 rolagem e rodapé fixo com Janelas/Edição/Terminal/Custom. Setas/Tab/Enter/Escape;
@@ -25,10 +26,13 @@ inicial. Último título pode exigir rolagem na fonte nativa, com rodapé preser
 de todas as fontes/assets verificados, sem dados privados no pacote. Sem release,
 merge, regra persistente ou ampliação de grants. [Provas e limites](handoff/validation/prompt-groups-2026-11-02/README.md).
 
-Próximo passo deste lote: após o commit, substituir a instância real pela bandeja
-e launcher oficial, preservar posição e registrar a identidade nova antes do
-push/atualização do PR. Revalidar lock/PID/starttime/boot; não usar PID histórico
-sem confirmação. Publicação de b2 continua imutável.
+Após o commit, GUI real substituída por Sair na bandeja e `./dev gui`, com lock
+liberado, sem sinais manuais ou encerramento de outros clientes. Nova GUI
+**126200**, starttime **6331748**, widget (439,695;97,407), 280×274,815, central
+oculta; posição atual do usuário preservada. Recibo privado
+`.scratch/prompt-groups/replacement.json`. Revalidar lock/PID/starttime/boot antes
+de agir novamente. Próximo passo: usuário validar o seletor em Prompts. Publicação
+de b2 continua imutável.
 
 ## Prompt de Product Design para seleção — 02/11/2026
 

@@ -53,3 +53,13 @@ O guard de ponteiro bloqueou cliques quando a posição não foi confirmada. O
 harness passou a entrar na altura comum das saídas, cruzar horizontalmente e
 revalidar Y após a mudança de escala entre monitores. Mantidos guardas de
 coordenadas e PID; não foram alteradas configurações ou dispositivos do host.
+
+## Atualização do host
+
+Depois do commit `0c592a162f0ed2c97ef0d769bc83861bea05b86b`, a GUI real foi
+encerrada pela ação Sair da sua própria bandeja. Lock liberado, launcher oficial
+`./dev gui` solicitado uma vez e posição atual do usuário preservada.
+PID novo **126200**, starttime **6331748**, compacto (439,695;97,407),
+280×274,815, central oculta. Recibo privado `.scratch/prompt-groups/replacement.json`;
+revalidar identidade/boot antes de agir novamente. Sem sinais manuais ou
+encerramento de outros clientes/agentes. O host usa o checkout canônico atualizado.
