@@ -3,6 +3,7 @@
 ## Voltar e cabeçalhos sem controles de janela — 01/11/2026
 
 Sobre `c2b67d5c013ecd712fc06f54b67fc6cb54b36399`, mesma raiz/branch/PR #1.
+Código, testes e provas em `8494fd57945401dcbbbc8aeeb26e123d9dac3795`.
 Pedido implementado nas duas interfaces, conforme hipótese comunicada durante
 o lote (pergunta opcional de escopo não recebeu resposta). Central sem barra
 nativa de minimizar/maximizar/fechar, com **Voltar** no cabeçalho. Mostra o widget
