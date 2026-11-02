@@ -132,6 +132,7 @@ class MetricsCollector:
         else:
             add("self_rss", OK)
 
+        temperature, sensor = sysfs.read_temperature(self._sys())
         finished = self.clock()
         elapsed = (None if self._prev_mono is None
                    else max(0.0, finished - self._prev_mono))
@@ -156,6 +157,8 @@ class MetricsCollector:
         except OSError:
             boot_id = ""
         return Snapshot(
+            temperature_c=temperature,
+            temperature_sensor=sensor,
             boot_id=boot_id,
             ts=self.wall_clock(),
             mem=mem,

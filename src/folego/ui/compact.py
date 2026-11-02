@@ -6,10 +6,10 @@ Wayland placement is compositor-owned; X11 positions are clamped to live screens
 """
 import os
 
-from PySide6.QtCore import QPoint, Qt, QTimer
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtCore import QPoint, Qt, QTimer, QPropertyAnimation, QEasingCurve, QEvent
+from PySide6.QtGui import QGuiApplication, QWindow
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
-                               QWidget)
+                               QWidget, QSizePolicy, QApplication)
 
 from . import title_signal
 from .desktop_caps import detect
@@ -190,6 +190,8 @@ class CompactWindow(QWidget):
         self.capture_timer.setInterval(350)
         self.capture_timer.timeout.connect(self._capture_status)
         self.shortcut_tabs = ShortcutTabs(self, capture_handler=self._print)
+        header.insertWidget(1, self.shortcut_tabs.buttons['keyboard'])
+        header.insertWidget(2, self.shortcut_tabs.top_button)
         self.shortcut_tabs.customize_requested.connect(self._customize_prompts)
         self.shortcut_tabs.controller.feedback.connect(self._shortcut_result)
         self.shortcut_tabs.controller.payload.connect(self._capture_result)
@@ -198,12 +200,63 @@ class CompactWindow(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(card)
-        layout.addWidget(self.shortcut_tabs)
+        self.action_drawer = QWidget(self)
+        self.action_drawer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        drawer = QVBoxLayout(self.action_drawer)
+        drawer.setContentsMargins(0, 0, 0, 0)
+        drawer.addWidget(self.shortcut_tabs)
+        self.action_drawer.setMaximumHeight(0)
+        layout.addWidget(self.action_drawer)
+        self.drawer_animation = QPropertyAnimation(self.action_drawer, b'maximumHeight', self)
+        self.drawer_animation.setDuration(140)
+        self.drawer_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.drawer_animation.valueChanged.connect(self._drawer_frame)
+        self.drawer_animation.finished.connect(self._screen_changed)
+        self.drawer_delay = QTimer(self)
+        self.drawer_delay.setSingleShot(True)
+        self.drawer_delay.setInterval(200)
+        self.drawer_delay.timeout.connect(self._collapse_actions)
         app = QGuiApplication.instance()
+        app.installEventFilter(self)
         app.screenRemoved.connect(self._screen_changed)
         app.screenAdded.connect(self._watch_screen)
         for screen in app.screens():
             self._watch_screen(screen)
+
+    def _animate_actions(self, expanded):
+        self.drawer_animation.stop()
+        self.drawer_animation.setStartValue(self.action_drawer.maximumHeight())
+        self.drawer_animation.setEndValue(self.shortcut_tabs.sizeHint().height() if expanded else 0)
+        self.drawer_animation.start()
+
+    def _drawer_frame(self, value):
+        self.layout().invalidate()
+        self.adjustSize()
+
+    def enterEvent(self, event):
+        self.drawer_delay.stop()
+        self._animate_actions(True)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.drawer_delay.start()
+        super().leaveEvent(event)
+
+    def eventFilter(self, watched, event):
+        # Qt/Wayland can synthesize an Enter on popup dismissal without pairing
+        # its Leave when another surface of the same application is entered.
+        if (event.type() == QEvent.Type.Enter and isinstance(watched, QWindow)
+                and self.isVisible() and watched is not self.windowHandle()):
+            self.drawer_delay.start()
+        return super().eventFilter(watched, event)
+
+    def _collapse_actions(self):
+        popup = QApplication.activePopupWidget()
+        if popup is not None and popup.isVisible():
+            self.drawer_delay.start()
+        else:
+            # A new Enter cancels this timer; paired events own the hover state.
+            self._animate_actions(False)
 
     def _shortcut_result(self, message):
         self.feedback_label.setText(message)
@@ -307,8 +360,13 @@ class CompactWindow(QWidget):
         if snapshot.swap_total_kb and (not snapshot.sources or snapshot.source("swaps").status == "ok"):
             swap = f"Swap {snapshot.swap_used_kb * 100 // snapshot.swap_total_kb}%"
         measured = [v for v in snapshot.tmpfs if v.quality == "ok" and v.total_bytes]
-        temp = f"Temp {max(v.used_frac for v in measured) * 100:.0f}%" if measured else "Temp —"
-        self.detail_label.setText(f"{memory}   {cpu}\n{swap}   {temp}")
+        temp = f"Tmp {max(v.used_frac for v in measured) * 100:.0f}%" if measured else "Tmp —"
+        thermal = '— °C' if snapshot.temperature_c is None else f'{snapshot.temperature_c:.0f} °C'
+        self.detail_label.setText('<table width="100%" cellspacing="0"><tr>'
+            f'<td>{memory}</td><td align="right">{cpu}</td><td align="right">{thermal}</td></tr>'
+            f'<tr><td>{swap}</td><td align="right">{temp}</td><td></td></tr></table>')
+        self.detail_label.setToolTip('Temperatura do host · ' + (snapshot.temperature_sensor or 'sensor não disponível')
+                                     + '\nTmp = ocupação dos temporários em memória')
         alerts = []
         for volume in snapshot.tmpfs:
             if volume.quality != "ok":
@@ -485,6 +543,9 @@ class CompactWindow(QWidget):
         event.accept()
 
     def hideEvent(self, event):
+        self.drawer_delay.stop()
+        self.drawer_animation.stop()
+        self.action_drawer.setMaximumHeight(0)
         self._save_position()
         super().hideEvent(event)
 

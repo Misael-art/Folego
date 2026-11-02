@@ -286,42 +286,39 @@ class ShortcutTabs(QWidget):
             self.buttons[action] = button
             editing.addWidget(button, 1)
         layout.addLayout(editing)
-        tabs = QHBoxLayout()
-        tabs.setSpacing(3)
-        layout.addLayout(tabs)
-        for key, text, color, icon in (("copy", "Copiar", "#2e78a7", "edit-copy"),
-                                        ("paste", "Colar", "#287963", "edit-paste"),
-                                        ("print", "Print", "#8f651f", "camera-photo"),
-                                        ("keyboard", "Teclado", "#7255ab", "input-keyboard")):
-            tab = QFrame()
-            tab.setStyleSheet(f"QFrame {{background:{color};border-bottom-left-radius:9px;"
-                             "border-bottom-right-radius:9px;} QPushButton {background:transparent;"
-                             "color:white;border:none;padding:3px 1px;min-height:26px;}"
-                             "QPushButton:hover {background:rgba(255,255,255,35);}")
-            row = QHBoxLayout(tab)
-            row.setContentsMargins(1, 0, 1, 0)
-            row.setSpacing(0)
-            button = QPushButton(text)
+        row = QHBoxLayout()
+        row.setSpacing(3)
+        layout.addLayout(row)
+        for key, title, color in (('copy', 'Copiar', '#2e78a7'), ('paste', 'Colar', '#287963'),
+                                  ('print', 'Print', '#8f651f')):
+            button = QPushButton(title)
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            button.setAccessibleName(text)
-            button.setToolTip({"copy": "Copiar a seleção do aplicativo em foco",
-                               "paste": "Colar no aplicativo em foco",
-                               "print": "Selecionar uma região para captura de tela",
-                               "keyboard": "Abrir sempre na parte inferior da tela"}[key])
+            button.setAccessibleName(title)
+            button.setToolTip({'copy': 'Copiar a seleção do aplicativo em foco',
+                               'paste': 'Colar no aplicativo em foco',
+                               'print': 'Selecionar uma região para captura de tela'}[key])
+            button.setStyleSheet(f'background:{color};color:white;border:none;border-radius:5px;'
+                                 'font-size:8pt;padding:2px;min-height:18px;')
             button.clicked.connect(lambda checked=False, action=key: self.activate(action))
             self.buttons[key] = button
             row.addWidget(button, 1)
-            if key == "keyboard":
-                self.top_button = QPushButton()
-                self.top_button.setIcon(control_icon(self.style(), "go-up", QStyle.StandardPixmap.SP_ArrowUp))
-                self.top_button.setFixedWidth(22)
-                self.top_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-                self.top_button.setAccessibleName("Abrir teclado no topo da tela")
-                self.top_button.setToolTip("Somente esta seta abre o teclado no topo da tela")
-                self.top_button.setStyleSheet("border-left:1px solid #b99ce1;border-radius:4px;")
-                self.top_button.clicked.connect(lambda: self.open_keyboard("top"))
-                row.addWidget(self.top_button)
-            tabs.addWidget(tab, 3 if key == "keyboard" else 2)
+        keyboard = QPushButton(self)
+        keyboard.setIcon(control_icon(self.style(), 'input-keyboard', QStyle.StandardPixmap.SP_ComputerIcon))
+        keyboard.setFixedSize(24, 24)
+        keyboard.setStyleSheet('min-height:0;max-height:24px;padding:0;')
+        keyboard.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        keyboard.setAccessibleName('Abrir teclado na parte inferior da tela')
+        keyboard.setToolTip('Teclado · abrir embaixo')
+        keyboard.clicked.connect(lambda: self.open_keyboard('bottom'))
+        self.buttons['keyboard'] = keyboard
+        self.top_button = QPushButton(self)
+        self.top_button.setIcon(control_icon(self.style(), 'go-up', QStyle.StandardPixmap.SP_ArrowUp))
+        self.top_button.setFixedSize(18, 24)
+        self.top_button.setStyleSheet('min-height:0;max-height:24px;padding:0;')
+        self.top_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.top_button.setAccessibleName('Abrir teclado no topo da tela')
+        self.top_button.setToolTip('Abrir teclado no topo da tela')
+        self.top_button.clicked.connect(lambda: self.open_keyboard('top'))
 
     def activate(self, action):
         if action == "keyboard":

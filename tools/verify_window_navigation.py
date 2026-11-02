@@ -37,6 +37,14 @@ def main():
     window._poller=Poller(lambda:None,offload=True,parent=window)
     window._poller.start()
     errors=[];records=[];menu_events=[];target=None
+    hover_events=[]
+    class HoverProbe(QObject):
+        def eventFilter(self,obj,event):
+            if event.type() in (QEvent.Type.Enter,QEvent.Type.Leave):
+                hover_events.append([type(obj).__name__,obj.objectName(),str(event.type()),
+                                     obj.windowTitle() if hasattr(obj,'windowTitle') else ''])
+            return False
+    hover_probe=HoverProbe();app.installEventFilter(hover_probe)
     measured={}
     @ClassInfo(**{'D-Bus Interface':'org.folego.QANavigation'})
     class Geometry(QObject):
@@ -59,7 +67,10 @@ def main():
         return result.stdout.strip().splitlines()
     def pointer_click(point,backend,widget,click=True):
         binary,wayland=backend._input();assert wayland
-        windows=native('^Fôlego — widget$');assert len(windows)==1
+        if not click:
+            subprocess.run([binary,'mousemove','--','4','0'],env=backend.env,check=True,capture_output=True)
+            app.processEvents()
+        windows=native('^'+re.escape(widget.windowTitle())+'$');assert len(windows)==1
         raw=call('qdbus6','org.kde.KWin','/KWin','org.kde.KWin.getWindowInfo',windows[0])
         x=float(re.search(r'(?m)^x:\s*([-0-9.]+)',raw)[1]);y=float(re.search(r'(?m)^y:\s*([-0-9.]+)',raw)[1])
         origin=widget.mapToGlobal(QPoint(0,0))
@@ -85,8 +96,14 @@ def main():
                 if abs(moved)>1 and amounts[axis]:factors[axis]=max(.2,min(4,abs(amounts[axis]/moved)))
         assert max(abs(cursor()[i]-desired[i]) for i in range(2))<=1,(desired,cursor(),raw,origin,point)
         surface=re.search(r'window[:=]\s*(\{[0-9a-fA-F-]+\})',call('kdotool','getmouselocation'))
-        assert surface and call('kdotool','getwindowpid',surface[1])==str(os.getpid()),'pointer outside owned QA window'
+        assert surface and call('kdotool','getwindowpid',surface[1])==str(os.getpid()),('pointer outside owned QA window',raw,origin,point,desired,call('kdotool','getmouselocation'))
+        if widget.windowTitle()!='Fôlego — widget':
+            assert call('kdotool','getwindowname',surface[1])==widget.windowTitle(),'pointer outside intended owned target'
         if click:subprocess.run([binary,'click','0xC0'],env=backend.env,check=True,capture_output=True)
+    def reveal(compact,backend):
+        pointer_click(compact.mapToGlobal(QPoint(45,80)),backend,compact,click=False)
+        wait(lambda:compact.action_drawer.maximumHeight()>0 and
+             compact.drawer_animation.state()==compact.drawer_animation.State.Stopped)
     def scenario():
         nonlocal target
         try:
@@ -123,6 +140,12 @@ def main():
             QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)
             wait(lambda:compact.isVisible() and compact.windowHandle().isExposed() and not window.isVisible())
             backend=compact.shortcut_tabs.controller.backend
+            from folego.core.snapshot import Snapshot,MemInfo
+            from folego.core.tmpfs import TmpfsVolume
+            compact.show_snapshot(Snapshot(ts=time.time(),mono=time.monotonic(),mem=MemInfo(16*1024**2,6*1024**2),
+                swap_used_kb=1024,swap_total_kb=8192,pressure_memory=None,pressure_io=None,pressure_cpu=None,
+                load=None,apps=(),self_rss_kb=0,cpu_busy_frac=.52,temperature_c=61,temperature_sensor='demonstração',
+                tmpfs=(TmpfsVolume('/qa/runtime','tmpfs',100,81,19,is_runtime=True),)))
             if args.prompt_key or args.standard_shortcuts:
                 script=root/'place-owned-widget.js'
                 script.write_text('const w=workspace.windowList().find(w=>w.pid==='+str(os.getpid())+
@@ -137,6 +160,7 @@ def main():
                 selected=next(p for p in PROMPTS if p.key==args.prompt_key)
                 tabs=compact.shortcut_tabs;copied=[]
                 tabs._copy_text=copied.append  # no physical clipboard fixture
+                reveal(compact,backend)
                 pointer_click(tabs.buttons['prompts'].mapToGlobal(tabs.buttons['prompts'].rect().center()),backend,compact)
                 wait(lambda:tabs.prompt_menu is not None and tabs.prompt_menu.isVisible())
                 settle=time.monotonic()+.35;wait(lambda:time.monotonic()>=settle)
@@ -163,17 +187,26 @@ def main():
                 def focus_target():
                     script=root/'focus-owned-text.js'
                     script.write_text('const w=workspace.windowList().find(w=>w.pid==='+str(os.getpid())+
-                        ' && w.caption==="Fôlego QA — atalhos padrão");if(w)workspace.activeWindow=w;')
+                        ' && w.caption==="Fôlego QA — atalhos padrão");if(w){w.frameGeometry={x:420,y:30,width:450,height:100};workspace.activeWindow=w;}')
                     name='folego-qa-shortcuts-'+str(os.getpid())
                     sid=call('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.loadScript',str(script),name)
                     try:call('qdbus6','org.kde.KWin','/Scripting/Script'+sid,'org.kde.kwin.Script.run')
                     finally:call('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript',name)
                     target.setFocus();wait(lambda:target.isActiveWindow() and target.hasFocus())
+                    settle=time.monotonic()+.35;wait(lambda:time.monotonic()>=settle)
                 focus_target();target.insert('abc');assert target.text()=='123abc'
+                pointer_click(target.mapToGlobal(target.rect().center()),backend,target,click=False)
+                wait(lambda:compact.action_drawer.maximumHeight()==0)
+                compact.grab().save(str(root/'compact-collapsed.png'))
+                reveal(compact,backend)
+                compact.grab().save(str(root/'compact-expanded.png'))
+                records.append(dict(case='hover actions',collapsed=True,expanded=True,temperature='61 °C demo',
+                                    focus_preserved=target.hasFocus()))
                 for group,key in (('Edição','undo'),('Edição','redo'),('Edição','save'),('Edição','find'),
                                   ('Terminal','terminal-copy'),('Terminal','terminal-paste')):
                     focus_target()
                     tabs=compact.shortcut_tabs
+                    reveal(compact,backend)
                     pointer_click(tabs.buttons['prompts'].mapToGlobal(tabs.buttons['prompts'].rect().center()),backend,compact)
                     wait(lambda:tabs.prompt_menu is not None and tabs.prompt_menu.isVisible() and tabs.controller.future is None)
                     menu=tabs.prompt_menu;panel=tabs.prompt_panel
@@ -209,6 +242,16 @@ def main():
         except Exception as exc:
             import traceback
             (root/'failure.txt').write_text(traceback.format_exc())
+            (root/'hover-events.json').write_text(json.dumps(hover_events,indent=2))
+            if window._compact is not None:
+                c=window._compact;popup=QApplication.activePopupWidget()
+                (root/'hover-failure.json').write_text(json.dumps(dict(height=c.action_drawer.maximumHeight(),
+                    delay=c.drawer_delay.isActive(),under_mouse=c.underMouse(),
+                    geometry=[c.x(),c.y(),c.width(),c.height()],
+                    native=call('qdbus6','org.kde.KWin','/KWin','org.kde.KWin.getWindowInfo',native('^Fôlego — widget$')[0]),
+                    popup=popup.windowTitle() if popup else None,
+                    popup_visible=popup.isVisible() if popup else None,
+                    pointer=call('kdotool','getmouselocation')),indent=2))
             if args.prompt_key and 'copied' in locals():
                 import hashlib
                 (root/'prompt-failure.json').write_text(json.dumps(dict(

@@ -60,13 +60,16 @@ Ao lado das entregas, um **presente verde piscando** mostra as redefinições
 disponíveis confirmadas das contas do provedor. Clique para consultar a conta;
 o resgate continua no cliente de IA.
 
-As abas coloridas **Copiar, Colar, Print e Teclado** atuam por clique. A aba do
-teclado abre sempre na parte inferior; somente sua seta abre no topo. A altura
+Os atalhos coloridos aparecem em duas linhas iguais ao passar o mouse pelo
+widget e se recolhem ao sair. **Copiar, Colar e Print** ficam abaixo de
+**Selecionar tudo, Apagar tudo e Prompts**. O ícone de teclado no cabeçalho abre
+na parte inferior; somente sua seta abre no topo. CPU e Tmp ficam alinhados,
+com a temperatura do host em °C à direita da CPU (sensor indisponível: **— °C**).
+**Tmp** indica a ocupação dos temporários em memória. A altura
 pode crescer para preservar alertas e mensagens. [Uso, configuração de contas,
 dependências e limites](docs/COMPACTO.md).
 
-**Selecionar tudo, Apagar tudo e Prompts** ficam logo acima das abas. A biblioteca
-oferece 12 prompts de desenvolvimento: escolha um título para copiar e cole no
+A biblioteca oferece 12 prompts de desenvolvimento: escolha um título para copiar e cole no
 agente desejado. O teclado virtual preserva o foco do campo de destino no KWin.
 O seletor organiza os títulos em seis blocos com faixas laterais coloridas,
 cabeçalhos horizontais e ícones de copiar. O painel tem até 480 × 540 px,

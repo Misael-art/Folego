@@ -221,6 +221,19 @@ do campo vazio. Uma falha informa resultado não confirmado, sem repetição aut
 Dependências opcionais: `libatspi`/AT-SPI 2 e `kdotool` no KDE/Wayland ou
 `xdotool` em X11 com gerenciador de janelas. Não há instalação automática.
 
+Os seis atalhos têm o mesmo tamanho, em duas linhas: **Selecionar tudo / Apagar
+tudo / Prompts**, depois **Copiar / Colar / Print**. Passar o mouse revela a área
+de cima para baixo em 140 ms; ao sair, aguarda 200 ms antes de recolher. Menus
+abertos preservam a área durante a escolha. O teclado fica sempre no cabeçalho:
+ícone para abrir embaixo e seta para abrir no topo.
+
+As métricas mostram RAM e Swap à esquerda, CPU e Tmp alinhados à direita e a
+temperatura em °C à direita da CPU. **Tmp** é a ocupação dos temporários em
+memória, não a temperatura. A coleta lê sensores CPU/SoC em sysfs; se ausentes,
+aceita o sensor de sistema ACPI, identificado no tooltip. Não usa temperatura
+de GPU/disco como temperatura do host. Ausente/ilegível resulta em **— °C**.
+A leitura acontece no coletor, fora do loop gráfico, sem alterar ventoinhas.
+
 **Copiar** solicita a cópia da seleção do aplicativo em foco. **Colar** solicita
 a colagem nele. Usam os atalhos alternativos de edição Ctrl+Insert e Shift+Insert;
 assim, copiar nunca envia Ctrl+C para interromper um trabalho no terminal. O

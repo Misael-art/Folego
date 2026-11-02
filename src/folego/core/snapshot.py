@@ -165,6 +165,8 @@ class Snapshot:
     cpu_busy_frac: float | None = None
     cpu_count: int = 0
     boot_id: str = ""
+    temperature_c: float | None = None
+    temperature_sensor: str = ""
 
     @property
     def ts_iso(self) -> str:

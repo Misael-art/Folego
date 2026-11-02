@@ -1,5 +1,28 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Atalhos recolhíveis e temperatura — 02/11/2026
+
+Sobre `b2969ac5280cc2ed477b258ddbe13701264c3332`, mesma raiz/branch/PR #1.
+Seis atalhos pareados em duas linhas iguais, ocultos em repouso, animação
+descendente de 140 ms e espera de 200 ms ao sair; menus preservam a escolha.
+Teclado no cabeçalho, padrão embaixo e seta separada para cima. CPU/Tmp
+alinhados e temperatura em °C à direita da CPU. O antigo Temp era ocupação
+de tmpfs: agora Tmp, sem inventar relógio. CPU/SoC preferenciais, ACPI de
+sistema como fallback identificado; ausente/ilegível permanece — °C. Leitura
+no coletor, somente sysfs, sem Qt no núcleo ou ajuste de ventoinhas.
+
+`./dev check`: **1168 passed, 2 skipped** headless (21,64 s) e **1453 passed,
+2 skipped** Qt (45,89 s), Python 3.14.7 gerenciado, HOME/XDG/TMP/Pulse privados,
+sequencial. Doze cenários finais KDE/Wayland: recolher/revelar, prompt e seis
+macros com foco preservado, navegação e saída. Corrigida reconciliação de Enter
+sintético do Qt ao fechar popup e entrar em outra superfície. Guardas de PID
+e posição mantidos; tentativas anteriores preservadas e não somadas como
+aprovação. Inspeção visual das capturas próprias: botões iguais, teclado
+disponível, métricas legíveis e alinhadas. Temperatura da captura é demonstração.
+[Provas e limites](handoff/validation/hover-actions-2026-11-02/README.md).
+Sem release/merge ou ampliação de grants. Substituição da GUI real será
+registrada após o commit; próximo passo é a validação do usuário.
+
 ## Seletor com faixas laterais aprovado — 02/11/2026
 
 Sobre `1512658a885c6574b1525bd69401c893a3c3be77`, mesma raiz/branch/PR #1.
