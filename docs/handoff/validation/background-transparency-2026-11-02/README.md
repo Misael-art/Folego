@@ -32,7 +32,7 @@ a autoridade de tema. Marcação desmarcada mantém contorno visível.
   rótulos sem camada extra, teclado, diálogos, persistência, chave inválida,
   prévia sem gravação, salvamento por gesto e rollback, checkbox distinto e
   ações primárias a 0/100%. Os últimos dois casos validam a aplicação do mesmo
-  alpha também no preenchimento primário/hover, após a suíte Qt final. [Focados](focused.txt).
+  alpha também no preenchimento primário, após a suíte Qt final. [Focados](focused.txt).
 - `tools/verify_window_navigation.py --background-transparency --transparency-theme
   snes-us` e `... --transparency-theme ps2`: duas execuções **aprovadas, sete
   cenários cada**, dentro do orçamento original de 45 s. Três valores por tema,
@@ -75,9 +75,10 @@ compositores, todos os aplicativos, leitores de tela ou soak de duas horas.
 
 ## Host atualizado
 
-Código em `c28b8d4eedd763fb72b82922f87c1e6f6d4aa87e`. GUI anterior encerrada
+Código base em `c28b8d4eedd763fb72b82922f87c1e6f6d4aa87e`; complemento do
+preenchimento primário em `6c653cd20d6c984cc6717631444f660ae746fb89`. GUI anterior encerrada
 normalmente pela própria bandeja, lock liberado e `./dev gui` solicitado uma vez.
-Nova GUI **566678**, starttime **7014963**, compacto (2702;32,885), 280×219,
+Nova GUI **586685**, starttime **7047120**, compacto (2702;32,885), 280×219,
 central oculta. Posição e tema atuais preservados, sem sinais manuais ou outros
-clientes encerrados. Recibo privado `.scratch/background-transparency/replacement.json`;
+clientes encerrados. Recibo privado `.scratch/background-transparency/replacement-primary.json`;
 revalidar identidade/boot. Próximo passo: usuário ajustar a barra nas opções.

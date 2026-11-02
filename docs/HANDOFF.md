@@ -4,6 +4,7 @@
 
 Sobre `fdceab8095c62a68e3efdc32f942b959a91608ce`, mesma raiz/branch/PR #1.
 Código, testes e provas em `c28b8d4eedd763fb72b82922f87c1e6f6d4aa87e`.
+Complemento do preenchimento primário e focados em `6c653cd20d6c984cc6717631444f660ae746fb89`.
 Corrigidos estilos genéricos que pintavam rótulos/contêineres como caixas no
 painel de contas. Popup sem moldura preta, superfície única arredondada,
 filhos transparentes e cartão de janela de uso com seletor próprio.
@@ -21,7 +22,7 @@ recurso. Fontes e dados das contas permanecem nos seus owners existentes.
 
 `./dev check`: **1168 passed, 2 skipped** headless (50,68 s) e **1473 passed,
 2 skipped** Qt (142,25 s). Após a regressão de checkbox, Qt final `./dev test`:
-**1478 passed, 2 skipped**, 126,64 s. Focados finais **15 passed**, 3,84 s, incluindo preenchimento primário/hover
+**1478 passed, 2 skipped**, 126,64 s. Focados finais **15 passed**, 3,84 s, incluindo preenchimento primário
 e estados de checkbox.
 Python 3.14.7, sequencial, HOME/XDG/TMP/Pulse privados. Host com carga 18–20,
 sem encerrar trabalhos alheios. Duas execuções KDE/Wayland de sete cenários,
@@ -36,9 +37,9 @@ em vez de QWidget filho com preenchimento sintético de raiz. Perfis finais
 separados para respeitar os 45 s existentes, sem somar tentativas como aprovação
 ou ampliar watchdog. QA/auxiliares encerrados. Sem release/merge; b2 imutável.
 GUI real substituída por Sair na bandeja e `./dev gui`, lock liberado e sem
-sinais manuais/outros clientes encerrados. PID **566678**, starttime **7014963**,
+sinais manuais/outros clientes encerrados. PID **586685**, starttime **7047120**,
 widget (2702;32,885), 280×219, central oculta; posição e tema atuais preservados.
-Recibo privado `.scratch/background-transparency/replacement.json`.
+Recibo final privado `.scratch/background-transparency/replacement-primary.json`.
 Revalidar identidade/boot antes de agir. Próximo passo: usuário regular a barra
 em Central → opções → Aparência · consoles clássicos.
 
