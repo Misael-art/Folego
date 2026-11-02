@@ -237,6 +237,15 @@ def test_the_widget_button_returns_to_the_central_window_and_folds_itself(qapp):
     assert host.raised == 1 and not view.isVisible()
 
 
+def test_widget_header_uses_navigation_and_control_menu_instead_of_window_buttons(qapp):
+    view,host=make(qapp)
+    assert view.open_button.text()=='Central'
+    assert not hasattr(view,'hide_button') and not hasattr(view,'quit_button')
+    assert [a.text() for a in view.control_menu.actions()]==['Ocultar widget','Sair do Fôlego']
+    view.quit_action.trigger()
+    assert host.quits==1
+
+
 def test_the_widget_shows_the_basic_numbers_and_a_mini_gauge(qapp):
     from folego.core.snapshot import MemInfo, Snapshot
     view, _ = make(qapp)

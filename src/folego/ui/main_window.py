@@ -14,8 +14,10 @@ import sys
 from concurrent.futures import Future
 
 from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
-from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QMainWindow, QStyle, QStyleOptionTab, QStylePainter, QTabBar, QTabWidget
+from PySide6.QtCore import QTimer, Qt
+from PySide6.QtWidgets import (QMainWindow, QStyle, QStyleOptionTab, QStylePainter, QTabBar,
+                              QTabWidget, QFrame, QHBoxLayout, QLabel, QPushButton,
+                              QToolButton, QMenu)
 
 from . import desktop_caps, title_signal
 from .compact import CompactWindow
@@ -30,6 +32,7 @@ from .accessibility_tab import AccessibilityTab
 from .options_tab import OptionsTab
 from .custom_prompts_tab import CustomPromptsTab
 from .ai_monitor import AIMonitor
+from .theme import control_icon
 from ..core import health
 from ..core.exclusions import ExclusionError, ExclusionList
 from ..core.orphans import OrphanTracker, active_investigation, group_targets
@@ -72,6 +75,17 @@ class SidebarTabBar(QTabBar):
             painter.drawControl(QStyle.ControlElement.CE_TabBarTabLabel, option)
 
 
+class NavigationHeader(QFrame):
+    """Native window dragging on the empty header, separate from its controls."""
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            handle = self.window().windowHandle()
+            if handle is not None and handle.startSystemMove():
+                event.accept()
+                return
+        super().mousePressEvent(event)
+
+
 class MainWindow(QMainWindow):
     def __init__(self, collector_factory=None,
                  thresholds: title_signal.Thresholds | None = None,
@@ -82,6 +96,7 @@ class MainWindow(QMainWindow):
                  config_store=None, grant_store=None, compact_factory=None, process_jobs=None,
                  accessibility_factory=None, startup_defaults=False):
         super().__init__()
+        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         self._thresholds = thresholds or title_signal.Thresholds()
         self._journal = journal or Journal()
         self._history_reader = HistoryReader(self._journal)
@@ -161,6 +176,29 @@ class MainWindow(QMainWindow):
         for title, attribute in TABS:
             self.tabs.addTab(getattr(self, attribute), title)
         self.setCentralWidget(self.tabs)
+        self.navigation_header = NavigationHeader()
+        header = QHBoxLayout(self.navigation_header)
+        header.setContentsMargins(12, 8, 12, 8)
+        self.back_button = QPushButton('Voltar')
+        self.back_button.setIcon(control_icon(self.style(), 'go-previous', QStyle.StandardPixmap.SP_ArrowBack))
+        self.back_button.setAccessibleName('Voltar ao controle flutuante do Fôlego')
+        self.back_button.setToolTip('Voltar ao widget sem encerrar o monitoramento')
+        self.back_button.clicked.connect(self.return_to_compact)
+        header.addWidget(self.back_button)
+        brand = QLabel('Fôlego')
+        brand.setObjectName('section')
+        header.addWidget(brand)
+        header.addStretch(1)
+        self.control_button = QToolButton()
+        self.control_button.setIcon(control_icon(self.style(), 'application-menu', QStyle.StandardPixmap.SP_TitleBarMenuButton))
+        self.control_button.setAccessibleName('Controles do Fôlego')
+        self.control_button.setToolTip('Controles do Fôlego')
+        self.control_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.control_menu = QMenu(self.control_button)
+        self.control_menu.addAction('Sair do Fôlego', self.quit)
+        self.control_button.setMenu(self.control_menu)
+        header.addWidget(self.control_button)
+        self.setMenuWidget(self.navigation_header)
         self.accessibility.options_requested.connect(self._open_options)
 
         self.tray = Tray(self, thresholds=self._thresholds)
@@ -436,6 +474,10 @@ class MainWindow(QMainWindow):
         self.show_compact()
         self._offer_kwin_rule()
         return self.hide_window()
+
+    def return_to_compact(self):
+        self.show_compact()
+        self.hide_window()
 
     def _offer_kwin_rule(self) -> None:
         """No Wayland do Plasma, só uma regra do KWin mantém o widget por cima; pergunta uma vez."""

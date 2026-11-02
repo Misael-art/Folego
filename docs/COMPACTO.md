@@ -1,9 +1,14 @@
 # Widget, sessões de IA e atalhos
 
 O widget tem 280 px de largura em pixels lógicos do desktop. Recursos ficam em
-duas linhas; alertas completos e mensagens podem aumentar a altura. Minimizar
-oculta o widget com um caminho de retorno; ampliar abre a central; fechar sai
-do Fôlego. Pausar controla a telemetria de recursos. A consulta de IAs é separada
+duas linhas; alertas completos e mensagens podem aumentar a altura. **Central**
+abre a janela principal e recolhe o widget. **Voltar**, no topo da central,
+retorna ao controle flutuante sem perder a aba, os campos em edição ou parar o
+monitoramento. As duas interfaces dispensam minimizar, maximizar e fechar.
+Para encerrar, use **Controles → Sair do Fôlego** ou a bandeja. **Ocultar widget**,
+no menu Controles, mantém um caminho de retorno: sem bandeja e com a central
+oculta, ela é reaberta antes de ocultar o widget. O cabeçalho da central permite
+arrastar a janela. Pausar controla a telemetria de recursos. A consulta de IAs é separada
 e continua enquanto o Fôlego está aberto, inclusive com o widget oculto ou a
 central em primeiro plano. Fechar o aplicativo encerra seus workers e seu próprio
 auxiliar de entrada; um som em andamento conclui a restauração do volume.

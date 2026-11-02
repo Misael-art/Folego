@@ -18,7 +18,7 @@ def test_quit_from_widget_exits_even_when_the_central_is_hidden():
         def start():
             win.show_compact()
             win.hide()
-            QTimer.singleShot(20, win._compact.quit_button.click)
+            QTimer.singleShot(20, win._compact.quit_action.trigger)
         def watchdog():
             state['watchdog'] = True
             app.exit(10)

@@ -48,8 +48,11 @@ estão descritos abaixo.
 | **Entrada e acessibilidade** | Observar teclado, ponteiro, trackpads, toque, controles e áudio; solicitar reparo de entrada ou manter um monitor residente opcional, sem depender do PhaseZero. |
 | **Opções e continuidade** | Iniciar com a sessão por padrão, desativar quando quiser, consultar operações pelo código e acompanhar temporários próprios preservados. |
 
-O **modo compacto** tem 280 px de largura, recursos em duas linhas e controles
-de janela no cabeçalho. A faixa de IAs acompanha Codex, Codex Web, Claude e Grok
+O **modo compacto** tem 280 px de largura e recursos em duas linhas. **Central**
+abre a interface principal; **Voltar** retorna ao widget mantendo a aba e o
+monitoramento. A saída fica em **Controles → Sair do Fôlego** ou na bandeja,
+sem botões de minimizar, maximizar e fechar nas duas interfaces.
+A faixa de IAs acompanha Codex, Codex Web, Claude e Grok
 no próprio Fôlego; passe o mouse para abrir o painel na conta padrão e escolha
 outras na lista lateral. Consumo, resets, tickets e referência da assinatura
 ficam separados. Cinza significa que o dado não foi confirmado.
@@ -69,7 +72,7 @@ Na aba **opções**, escolha se o widget deve aparecer no print e teste os sons
 de conclusão por agente, de 20% restantes, esgotamento e reposição confirmada.
 O volume pode subir temporariamente a 85% e retornar aos valores anteriores.
 
-![Widget compacto do Fôlego, com dados de demonstração](docs/handoff/validation/ai-accounts-keyboard-prompts-2026-11-01/compact.png)
+![Widget compacto do Fôlego com navegação Central e Controles](docs/handoff/validation/navigation-2026-11-01/compact.png)
 
 ## Começar
 

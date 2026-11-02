@@ -1,5 +1,40 @@
 # Passagem para o próximo agente — atualizada em 01/11/2026
 
+## Voltar e cabeçalhos sem controles de janela — 01/11/2026
+
+Sobre `c2b67d5c013ecd712fc06f54b67fc6cb54b36399`, mesma raiz/branch/PR #1.
+Pedido implementado nas duas interfaces, conforme hipótese comunicada durante
+o lote (pergunta opcional de escopo não recebeu resposta). Central sem barra
+nativa de minimizar/maximizar/fechar, com **Voltar** no cabeçalho. Mostra o widget
+e oculta a central sem perder a aba/draft nem parar monitoramento. O widget usa
+**Central** e **Controles**, com Ocultar widget e Sair do Fôlego. Encerramento
+explícito pelo menu ou bandeja; fallback sem bandeja preserva rota de retorno.
+Nenhum grant, operação de recursos ou regra persistente do KWin novo.
+
+Verificação: `./dev check` com **1148 passed, 2 skipped** headless (22,62 s).
+Qt final `./dev test`: **1424 passed, 2 skipped** (40,24 s); ajuste só visual
+do ícone Central seguido de **51 passed** focados (4,50 s). Python 3.14.7,
+sequencial, HOME/XDG/TMP/Pulse privados. Guarda de 20 workspaces respeitada;
+sessões concluídas revisadas e preservadas em
+`.scratch/dev-tests-reviewed/20261101-navigation`, sem remoção ou ampliação.
+
+KDE/Wayland real: quatro casos aprovados, central sem moldura (frame=client no
+compositor), Voltar sem bandeja, retorno à mesma aba com worker ativo e saída
+por clique nativo em Controles. Menu sem foco usa popup após soltar o botão;
+InstantPopup não manteve o menu aberto neste compositor. O primeiro oráculo
+`noBorder` era inadequado ao KWin 6.7.4: representa política, não moldura
+efetivamente desenhada. Ensaios incompletos preservados, sem virarem aprovação.
+[Provas e screenshots](handoff/validation/navigation-2026-11-01/README.md).
+
+Instância real substituída por Sair na bandeja e launcher oficial, sem sinais
+manuais ou encerramento de clientes de IA. Nova GUI **1543441**, starttime
+**2203999**, compacto (2946,635;121,240), 280×275; posição do usuário preservada,
+central oculta. Acessibilidade nativa confirmou Voltar, Central e Controles na
+instância nova. Recibo `.scratch/navigation-host/replacement.json`; identidade e
+boot precisam ser revalidados antes de qualquer ação futura. Auxiliares de QA
+encerrados. Versão não avançada, sem novo release/merge. Próximo passo: validação
+do usuário; arraste físico e outro compositor não foram certificados neste lote.
+
 ## Apagar em Chromium, opção de captura e sons — 01/11/2026
 
 Sobre `cc2f3bf993d0e49726da399ae16bc6c24c2f39d5`, mesma raiz/branch/PR #1.

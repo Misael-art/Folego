@@ -315,11 +315,30 @@ def test_no_tray_close_keeps_visible_compact_and_workers_alive(window, qapp):
     window.close()
     assert not window.isVisible() and window._compact.isVisible()
     assert not poller.stopped and window._jobs.calls == []
-    window._compact.hide_button.click()
+    window._compact.hide_action.trigger()
     assert window.isVisible() and not window._compact.isVisible()
     assert not poller.stopped
     assert not window.hide_window(), "hidden compact is not a route back"
     window.quit()
+    assert poller.stopped
+
+
+def test_back_returns_to_widget_without_tray_or_losing_current_tab(window,qapp):
+    from PySide6.QtCore import Qt
+    poller=FakePoller();window._poller=poller
+    window.tabs.setCurrentWidget(window.options)
+    window.show();qapp.processEvents()
+    assert window.windowFlags() & Qt.WindowType.FramelessWindowHint
+    assert window.back_button.text()=='Voltar'
+    window.back_button.click();qapp.processEvents()
+    assert not window.isVisible() and window._compact.isVisible() and not poller.stopped
+    window._compact.open_button.click();qapp.processEvents()
+    assert window.isVisible() and not window._compact.isVisible()
+    assert window.tabs.currentWidget() is window.options
+    window.back_button.click();qapp.processEvents()
+    assert window._compact.isVisible() and not window.isVisible() and not poller.stopped
+    assert [a.text() for a in window.control_menu.actions()]==['Sair do Fôlego']
+    window.control_menu.actions()[0].trigger()
     assert poller.stopped
 
 

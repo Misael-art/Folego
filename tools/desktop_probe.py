@@ -99,7 +99,7 @@ def main():
                         elif action == "hide-central":
                             win.hide_window()
                         elif action == "hide-compact" and win._compact is not None:
-                            win._compact.hide_button.click()
+                            win._compact.hide_action.trigger()
                         elif action == "fullscreen":
                             win.showFullScreen()
                         elif action == "normal":
