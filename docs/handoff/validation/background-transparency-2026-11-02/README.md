@@ -71,3 +71,12 @@ tema escolhido; contraste das paletas é medido sobre suas superfícies opacas.
 
 Sem novo release, merge, grant ou executor automático. Não certifica outros
 compositores, todos os aplicativos, leitores de tela ou soak de duas horas.
+
+## Host atualizado
+
+Código em `c28b8d4eedd763fb72b82922f87c1e6f6d4aa87e`. GUI anterior encerrada
+normalmente pela própria bandeja, lock liberado e `./dev gui` solicitado uma vez.
+Nova GUI **566678**, starttime **7014963**, compacto (2702;32,885), 280×219,
+central oculta. Posição e tema atuais preservados, sem sinais manuais ou outros
+clientes encerrados. Recibo privado `.scratch/background-transparency/replacement.json`;
+revalidar identidade/boot. Próximo passo: usuário ajustar a barra nas opções.

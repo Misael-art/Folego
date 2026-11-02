@@ -3,6 +3,7 @@
 ## Transparência dos fundos e painel contínuo — 02/11/2026
 
 Sobre `fdceab8095c62a68e3efdc32f942b959a91608ce`, mesma raiz/branch/PR #1.
+Código, testes e provas em `c28b8d4eedd763fb72b82922f87c1e6f6d4aa87e`.
 Corrigidos estilos genéricos que pintavam rótulos/contêineres como caixas no
 painel de contas. Popup sem moldura preta, superfície única arredondada,
 filhos transparentes e cartão de janela de uso com seletor próprio.
@@ -33,8 +34,12 @@ Tentativas interrompidas preservadas. Oráculo corrigido para medir popup nativo
 em vez de QWidget filho com preenchimento sintético de raiz. Perfis finais
 separados para respeitar os 45 s existentes, sem somar tentativas como aprovação
 ou ampliar watchdog. QA/auxiliares encerrados. Sem release/merge; b2 imutável.
-Substituição da GUI real será registrada após o commit. Próximo passo: usuário
-regular a barra em Central → opções → Aparência · consoles clássicos.
+GUI real substituída por Sair na bandeja e `./dev gui`, lock liberado e sem
+sinais manuais/outros clientes encerrados. PID **566678**, starttime **7014963**,
+widget (2702;32,885), 280×219, central oculta; posição e tema atuais preservados.
+Recibo privado `.scratch/background-transparency/replacement.json`.
+Revalidar identidade/boot antes de agir. Próximo passo: usuário regular a barra
+em Central → opções → Aparência · consoles clássicos.
 
 ## Temas de consoles em toda a interface — 02/11/2026
 
