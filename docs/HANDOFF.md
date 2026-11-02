@@ -3,6 +3,7 @@
 ## Atalhos padrão em Janelas, Edição e Terminal — 02/11/2026
 
 Sobre `dca7f88b5608f83a4eebbe8ac0e55692dee84e26`, mesma raiz/branch/PR #1.
+Código, testes e provas em `dc5ba8a6116bb2e988c780c6a20075207af4fad6`.
 Pedido atual implementado: dez atalhos sugeridos, em três submenus de Prompts,
 antes de Custom (continua o último). Janelas: Alt+Tab, Meta+W, Meta+Left/Right.
 Edição: Ctrl+Z, Ctrl+Shift+Z, Ctrl+S, Ctrl+F. Terminal: Ctrl+Shift+C/V.
