@@ -68,6 +68,9 @@ dependências e limites](docs/COMPACTO.md).
 **Selecionar tudo, Apagar tudo e Prompts** ficam logo acima das abas. A biblioteca
 oferece 12 prompts de desenvolvimento: escolha um título para copiar e cole no
 agente desejado. O teclado virtual preserva o foco do campo de destino no KWin.
+O seletor organiza os títulos em seis blocos com faixas laterais coloridas,
+cabeçalhos horizontais e ícones de copiar. O painel tem até 480 × 540 px,
+com rolagem e rodapé fixo para **Janelas, Edição, Terminal e Custom**.
 **Design e mockups para aprovação** copia o prompt integral de Product Design
 fornecido pelo usuário, para propor e revisar visuais antes da implementação.
 O mesmo menu inclui dez atalhos padrão em **Janelas**, **Edição** e **Terminal**:

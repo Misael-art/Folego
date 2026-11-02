@@ -1,6 +1,6 @@
 import hashlib
 
-from folego.core.development_prompts import CONTEXT, PROMPTS, text
+from folego.core.development_prompts import CONTEXT, PROMPTS, PROMPT_CATEGORIES, text
 
 
 def test_design_mockups_prompt_preserves_the_complete_user_text():
@@ -16,3 +16,11 @@ def test_existing_prompts_keep_their_context_and_catalog_ids_are_unique():
     for prompt in PROMPTS:
         if prompt.key != 'design-mockups':
             assert text(prompt.key) == CONTEXT + '\n\n' + prompt.body
+
+
+def test_categories_cover_each_prompt_once_in_the_approved_order():
+    assert [key for key, _, _ in PROMPT_CATEGORIES] == [
+        'context', 'development', 'quality', 'performance', 'design', 'delivery']
+    keys = [key for _, _, items in PROMPT_CATEGORIES for key in items]
+    assert len(keys) == len(set(keys)) == len(PROMPTS)
+    assert set(keys) == {p.key for p in PROMPTS}

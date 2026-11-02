@@ -234,6 +234,18 @@ copia seu texto para a área de transferência; depois cole no agente desejado.
 Não cola, executa ou envia pedidos automaticamente. Os textos são genéricos,
 respeitam as instruções e autorizações do projeto e pedem evidências verificáveis.
 
+O seletor usa seis blocos: **Diagnóstico e continuidade**, **Desenvolvimento e
+correção**, **Qualidade e segurança**, **Desempenho**, **Design e experiência**
+e **Documentação e entrega**. Cada bloco tem faixa lateral colorida, título
+horizontal e linhas clicáveis com ícone de copiar; clicar em qualquer ponto da
+linha copia o texto integral e fecha o painel. A cor complementa o nome da
+categoria. O painel tem até 480 × 540 px e se limita à área disponível da tela;
+nomes longos quebram linha e a lista tem rolagem. O rodapé permanece visível.
+Setas para cima/baixo ou Tab percorrem as escolhas, Enter copia ou abre o grupo
+de atalhos e Escape fecha. Janelas, Edição, Terminal e Custom ficam no rodapé.
+Os atalhos mantêm o comportamento do aplicativo de destino e a biblioteca
+personalizada não é migrada nem regravada pela organização visual.
+
 **Design e mockups para aprovação** copia integralmente o prompt fornecido pelo
 usuário, incluindo as oito etapas, referências, restrições e passagem ao agente
 implementador. Esse item preserva o texto original, sem adicionar o preâmbulo

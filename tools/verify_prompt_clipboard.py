@@ -56,9 +56,10 @@ def main():
             raise AssertionError('Private clipboard QA deadline')
         tabs.show_prompts()
         wait(lambda: any(m.isVisible() for m in tabs.findChildren(QMenu)))
-        menu = next(m for m in tabs.findChildren(QMenu) if m.isVisible())
-        next(a for a in menu.actions() if a.text() == selected.title).trigger()
-        menu.close()
+        panel = tabs.prompt_panel
+        panel.scroll.ensureWidgetVisible(panel.buttons[selected.key])
+        app.processEvents()
+        panel.buttons[selected.key].click()
         wait(lambda: app.clipboard().text() == text(selected.key))
         subprocess.run(['xdotool', 'windowfocus', str(int(field.winId()))], check=True)
         field.setFocus()
@@ -70,7 +71,7 @@ def main():
         tabs.show_prompts()
         wait(lambda: tabs.custom_menu is not None and any(a.text() == '123' for a in tabs.custom_menu.actions()))
         next(a for a in tabs.custom_menu.actions() if a.text() == '123').trigger()
-        tabs.prompt_menu.close()
+        assert tabs.prompt_menu is None
         wait(lambda: app.clipboard().text() == '123' and tabs.controller.future is None)
         field.clear()
         subprocess.run(['xdotool', 'windowfocus', str(int(field.winId()))], check=True)

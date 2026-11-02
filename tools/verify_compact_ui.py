@@ -315,17 +315,17 @@ def main():
         view.shortcut_tabs.buttons['prompts'].click()
         wait(lambda: any(m.isVisible() for m in view.findChildren(QMenu)))
         menus = [m for m in view.findChildren(QMenu) if m.isVisible()]
-        assert len(menus[-1].actions()) >= 10
+        assert len(view.shortcut_tabs.prompt_panel.buttons) == 12
         menus[-1].grab().save(str(root / 'prompts.png'))
         tabs = view.shortcut_tabs
         wait(lambda: tabs.custom_menu is not None and any(a.text() == '123' for a in tabs.custom_menu.actions()))
-        assert tabs.prompt_menu.actions()[-1].text() == 'Custom'
+        assert list(tabs.prompt_panel.footer_buttons)[-1] == 'Custom'
         custom = tabs.custom_menu
-        custom.popup(tabs.prompt_menu.mapToGlobal(tabs.prompt_menu.rect().topRight()))
+        tabs.prompt_panel.footer_buttons['Custom'].click()
         app.processEvents()
         custom.grab().save(str(root / 'custom-menu.png'))
         next(a for a in custom.actions() if a.text() == 'Editar textos e macros…').trigger()
-        menus[-1].close()
+        assert tabs.prompt_menu is None
         wait(lambda: editor.isVisible() and editor.readable and not editor.busy)
         assert editor.text.toPlainText() == '123'
         editor.grab().save(str(root / 'custom-editor.png'))

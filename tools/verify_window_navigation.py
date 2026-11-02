@@ -57,7 +57,7 @@ def main():
     def native(caption):
         result=subprocess.run(['kdotool','search','--all','--pid',str(os.getpid()),'--name',caption],capture_output=True,text=True,timeout=3)
         return result.stdout.strip().splitlines()
-    def pointer_click(point,backend,widget):
+    def pointer_click(point,backend,widget,click=True):
         binary,wayland=backend._input();assert wayland
         windows=native('^Fôlego — widget$');assert len(windows)==1
         raw=call('qdbus6','org.kde.KWin','/KWin','org.kde.KWin.getWindowInfo',windows[0])
@@ -70,19 +70,23 @@ def main():
             raw=call('kdotool','getmouselocation')
             found=re.search(r'x[:=]\s*([-0-9.]+).*y[:=]\s*([-0-9.]+)',raw);assert found,raw
             return float(found[1]),float(found[2])
-        for _ in range(12):
-            before=cursor();delta=[desired[i]-before[i] for i in range(2)]
-            if max(map(abs,delta))<=1:break
-            amounts=[round(delta[i]*factors[i]) for i in range(2)]
-            subprocess.run([binary,'mousemove','--',*map(str,amounts)],env=backend.env,check=True,capture_output=True)
-            time.sleep(.06);app.processEvents();after=cursor()
-            for i in range(2):
-                moved=after[i]-before[i]
-                if abs(moved)>1 and amounts[i]:factors[i]=max(.2,min(4,abs(amounts[i]/moved)))
+        # First enter the outputs' common vertical span, then cross horizontally.
+        # A diagonal through the void below a short output is constrained by KWin
+        # and is not a usable sample for calibrating relative input.
+        # Recheck Y after crossing outputs: KWin can remap it at a scale boundary.
+        for axis in (1,0,1):
+            for _ in range(20):
+                before=cursor();delta=desired[axis]-before[axis]
+                if abs(delta)<=1:break
+                amounts=[0,0];amounts[axis]=max(-200,min(200,round(delta*factors[axis])))
+                subprocess.run([binary,'mousemove','--',*map(str,amounts)],env=backend.env,check=True,capture_output=True)
+                time.sleep(.06);app.processEvents();after=cursor()
+                moved=after[axis]-before[axis]
+                if abs(moved)>1 and amounts[axis]:factors[axis]=max(.2,min(4,abs(amounts[axis]/moved)))
         assert max(abs(cursor()[i]-desired[i]) for i in range(2))<=1,(desired,cursor(),raw,origin,point)
         surface=re.search(r'window[:=]\s*(\{[0-9a-fA-F-]+\})',call('kdotool','getmouselocation'))
         assert surface and call('kdotool','getwindowpid',surface[1])==str(os.getpid()),'pointer outside owned QA window'
-        subprocess.run([binary,'click','0xC0'],env=backend.env,check=True,capture_output=True)
+        if click:subprocess.run([binary,'click','0xC0'],env=backend.env,check=True,capture_output=True)
     def scenario():
         nonlocal target
         try:
@@ -136,10 +140,15 @@ def main():
                 pointer_click(tabs.buttons['prompts'].mapToGlobal(tabs.buttons['prompts'].rect().center()),backend,compact)
                 wait(lambda:tabs.prompt_menu is not None and tabs.prompt_menu.isVisible())
                 settle=time.monotonic()+.35;wait(lambda:time.monotonic()>=settle)
-                menu=tabs.prompt_menu
-                action=next(a for a in menu.actions() if a.text()==selected.title)
+                menu=tabs.prompt_menu;panel=tabs.prompt_panel
+                menu.grab().save(str(root/'prompts-top.png'))
+                button=panel.buttons[selected.key]
+                panel.scroll.ensureWidgetVisible(button,0,8)
+                settle=time.monotonic()+.35;wait(lambda:time.monotonic()>=settle)
+                pointer_click(button.mapToGlobal(button.rect().center()),backend,compact,click=False)
+                settle=time.monotonic()+.15;wait(lambda:time.monotonic()>=settle)
                 menu.grab().save(str(root/'prompts.png'))
-                pointer_click(menu.mapToGlobal(menu.actionGeometry(action).center()),backend,compact)
+                pointer_click(button.mapToGlobal(button.rect().center()),backend,compact)
                 wait(lambda:copied==[text(selected.key)] and tabs.prompt_menu is None)
                 records.append(dict(case='native prompt selection',key=selected.key,clipboard='intercepted in memory'))
             if args.standard_shortcuts:
@@ -167,11 +176,11 @@ def main():
                     tabs=compact.shortcut_tabs
                     pointer_click(tabs.buttons['prompts'].mapToGlobal(tabs.buttons['prompts'].rect().center()),backend,compact)
                     wait(lambda:tabs.prompt_menu is not None and tabs.prompt_menu.isVisible() and tabs.controller.future is None)
-                    menu=tabs.prompt_menu
-                    assert [a.text() for a in menu.actions() if a.menu()]==['Janelas','Edição','Terminal','Custom']
-                    submenu=next(a.menu() for a in menu.actions() if a.text()==group)
-                    menu.setActiveAction(submenu.menuAction())
-                    submenu.popup(menu.mapToGlobal(menu.actionGeometry(submenu.menuAction()).topRight()))
+                    menu=tabs.prompt_menu;panel=tabs.prompt_panel
+                    assert list(panel.footer_menus)==['Janelas','Edição','Terminal','Custom']
+                    submenu=panel.footer_menus[group]
+                    footer=panel.footer_buttons[group]
+                    pointer_click(footer.mapToGlobal(footer.rect().center()),backend,compact)
                     wait(lambda:submenu.isVisible() and submenu.windowHandle().isExposed())
                     if key in ('undo','terminal-copy'):
                         settle=time.monotonic()+.35;wait(lambda:time.monotonic()>=settle)

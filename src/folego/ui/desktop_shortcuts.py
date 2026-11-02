@@ -5,9 +5,10 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot, ClassInfo
+from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot, ClassInfo, QPoint
 from PySide6.QtGui import QGuiApplication, QIcon
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QStyle, QVBoxLayout, QWidget, QMenu
+from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QStyle,
+                              QVBoxLayout, QWidget, QMenu, QWidgetAction)
 
 from ..adapters.desktop_tools import DesktopTools
 from .theme import TOKENS, control_icon
@@ -263,6 +264,7 @@ class ShortcutTabs(QWidget):
         self.keyboard = None
         self.buttons = {}
         self.prompt_menu = None
+        self.prompt_panel = None
         self.custom_menu = None
         self.controller.payload.connect(self._custom_result)
         self.controller.failed.connect(self._custom_failed)
@@ -332,33 +334,70 @@ class ShortcutTabs(QWidget):
             self.controller.request(action)
 
     def show_prompts(self):
-        from ..core.development_prompts import PROMPTS
         from ..core.custom_prompts import STANDARD_SHORTCUTS
+        from .prompt_panel import PromptPanel
+        if self.prompt_menu is not None: self.prompt_menu.close()
         menu = QMenu(self.buttons['prompts'])
-        for prompt in PROMPTS:
-            menu.addAction(prompt.title, lambda checked=False, key=prompt.key: self.copy_prompt(key))
-        menu.addSeparator()
+        menu.setObjectName('promptPopup')
+        menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        menu.setStyleSheet(f'QWidget{{background:{TOKENS.surface};color:{TOKENS.text};padding:0;min-height:0;'
+                           'border:none;border-radius:0;}'
+                           f'QMenu#promptPopup{{background:{TOKENS.surface};color:{TOKENS.text};'
+                           f'border:1px solid {TOKENS.border};border-radius:8px;padding:0;}}')
+        panel = PromptPanel(menu)
+        area = self.buttons['prompts'].screen().availableGeometry()
+        panel.setFixedSize(min(480, area.width() - 20) - 2, min(540, area.height() - 20) - 2)
+        action = QWidgetAction(menu)
+        action.setDefaultWidget(panel)
+        menu.addAction(action)
+        panel.prompt_selected.connect(lambda key: (menu.close(), self.copy_prompt(key)))
         for group, items in STANDARD_SHORTCUTS:
-            submenu = menu.addMenu(group)
+            submenu = QMenu(group, panel.footer_buttons[group])
+            panel.footer_menus[group] = submenu
+            self._style_prompt_submenu(submenu)
             for identity, title, shortcut in items:
                 # Display the chord without registering a keyboard shortcut on
                 # Fôlego itself; these actions run only when explicitly chosen.
                 action = submenu.addAction(title + '\t' + shortcut)
                 action.setData(identity)
                 action.setToolTip(title + ' · ' + shortcut + '\nEnviado ao aplicativo em foco')
-                action.triggered.connect(lambda checked=False, key=identity: self.controller.request('standard-macro', key))
-        menu.addSeparator()
-        self.custom_menu = menu.addMenu('Custom')
+                action.triggered.connect(lambda checked=False, key=identity: self._prompt_request(menu, 'standard-macro', key))
+        self.custom_menu = QMenu('Custom', panel.footer_buttons['Custom'])
+        self._style_prompt_submenu(self.custom_menu)
+        panel.footer_menus['Custom'] = self.custom_menu
         self.custom_menu.addAction('Carregando…').setEnabled(False)
         self.prompt_menu = menu
+        self.prompt_panel = panel
+        panel.footer_requested.connect(lambda key: self._prompt_footer(panel, key))
         menu.aboutToHide.connect(lambda: self._prompts_closed(menu))
         menu.popup(self.buttons['prompts'].mapToGlobal(self.buttons['prompts'].rect().bottomLeft()))
         if not self.controller.request('custom-load'):
             self._custom_failed('Aguarde e reabra o menu Custom')
 
+    @staticmethod
+    def _style_prompt_submenu(menu):
+        menu.setStyleSheet(f'QMenu{{background:{TOKENS.surface};color:{TOKENS.text};'
+            f'border:1px solid {TOKENS.border};padding:4px;}}'
+            'QMenu::item{padding:6px 12px;}'
+            f'QMenu::item:selected{{background:{TOKENS.border};}}')
+
+    @staticmethod
+    def _prompt_footer(panel, key):
+        button = panel.footer_buttons[key]
+        panel.footer_menus[key].popup(button.mapToGlobal(QPoint(0, button.height())))
+
+    def _prompt_request(self, menu, action, value):
+        menu.close()
+        self.controller.request(action, value)
+
+    def _edit_custom(self):
+        if self.prompt_menu is not None: self.prompt_menu.close()
+        self.customize_requested.emit()
+
     def _prompts_closed(self, menu):
         if self.prompt_menu is menu:
             self.prompt_menu = None
+            self.prompt_panel = None
             self.custom_menu = None
         menu.deleteLater()
 
@@ -366,7 +405,7 @@ class ShortcutTabs(QWidget):
         if self.custom_menu is not None and self.controller.action == 'custom-load':
             self.custom_menu.clear()
             self.custom_menu.addAction('Biblioteca indisponível').setEnabled(False)
-            self.custom_menu.addAction('Editar textos e macros…', lambda: self.customize_requested.emit())
+            self.custom_menu.addAction('Editar textos e macros…', self._edit_custom)
 
     def _custom_result(self, payload):
         if payload.get('operation') == 'custom-copy':
@@ -383,10 +422,11 @@ class ShortcutTabs(QWidget):
                 action = menu.addAction(shown)
                 action.setToolTip(title)
                 value = dict(id=item['id'], revision=payload['revision'])
-                action.triggered.connect(lambda checked=False, selected=value: self.controller.request('custom-use', selected))
+                root = self.prompt_menu
+                action.triggered.connect(lambda checked=False, selected=value, root=root: self._prompt_request(root, 'custom-use', selected))
             if not rows: menu.addAction('Nenhum item cadastrado').setEnabled(False)
         menu.addSeparator()
-        menu.addAction('Editar textos e macros…', lambda: self.customize_requested.emit())
+        menu.addAction('Editar textos e macros…', self._edit_custom)
 
     def copy_prompt(self, key):
         from ..core.development_prompts import text
@@ -406,6 +446,7 @@ class ShortcutTabs(QWidget):
         self.keyboard.show_at(position, self.screen())
 
     def shutdown(self):
+        if self.prompt_menu is not None: self.prompt_menu.close()
         if self.keyboard is not None:
             self.keyboard.hide()
             if self.keyboard.registered:

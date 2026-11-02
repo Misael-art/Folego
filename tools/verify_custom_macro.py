@@ -96,8 +96,7 @@ def main():
         wait(lambda: tabs.custom_menu is not None and any(a.text() == 'Mostrar área de trabalho' for a in tabs.custom_menu.actions()))
         assert call(['qdbus6', 'org.kde.KWin', '/KWin', 'org.kde.KWin.showingDesktop']) == 'false'
         custom = tabs.custom_menu
-        tabs.prompt_menu.setActiveAction(custom.menuAction())
-        custom.popup(tabs.prompt_menu.mapToGlobal(tabs.prompt_menu.rect().topRight()))
+        tabs.prompt_panel.footer_buttons['Custom'].click()
         wait(custom.isVisible)
         app.processEvents()
         action = next(a for a in custom.actions() if a.text() == 'Mostrar área de trabalho')
@@ -121,8 +120,7 @@ def main():
         tabs.show_prompts()
         wait(lambda: tabs.custom_menu is not None and any(a.text() == 'Selecionar campo' for a in tabs.custom_menu.actions()))
         custom = tabs.custom_menu
-        tabs.prompt_menu.setActiveAction(custom.menuAction())
-        custom.popup(tabs.prompt_menu.mapToGlobal(tabs.prompt_menu.rect().topRight()))
+        tabs.prompt_panel.footer_buttons['Custom'].click()
         wait(custom.isVisible)
         action = next(a for a in custom.actions() if a.text() == 'Selecionar campo')
         point = custom.mapToGlobal(custom.actionGeometry(action).center())

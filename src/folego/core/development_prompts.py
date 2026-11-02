@@ -12,6 +12,17 @@ class Prompt:
 
 CONTEXT = """Trabalhe no projeto atual. Leia as instruções aplicáveis (AGENTS.md ou equivalente), README e a passagem de contexto existente antes de agir. Preserve alterações de outras pessoas, dados, credenciais e trabalhos em execução. Reutilize o ambiente e as ferramentas do projeto. Não amplie permissões nem publique, faça merge ou execute efeitos destrutivos sem autorização vigente. Diferencie fatos verificados, hipóteses e limitações. Não exponha segredos na resposta ou nos registros."""
 
+# Category IDs are presentation-independent; prompt bodies and copy semantics
+# remain in the same catalog used by every selection surface.
+PROMPT_CATEGORIES = (
+    ('context', 'Diagnóstico e continuidade', ('diagnose', 'continue')),
+    ('development', 'Desenvolvimento e correção', ('implement', 'debug')),
+    ('quality', 'Qualidade e segurança', ('review', 'tests', 'security')),
+    ('performance', 'Desempenho', ('performance',)),
+    ('design', 'Design e experiência', ('ux', 'design-mockups')),
+    ('delivery', 'Documentação e entrega', ('handoff', 'delivery')),
+)
+
 PROMPTS = (
     Prompt('diagnose', 'Diagnosticar o estado real do projeto', """Faça uma análise profunda e baseada em evidências do projeto, sem alterar seu comportamento. Verifique a raiz canônica no host, branch, estado do Git e alterações locais; leia a documentação atual e confira o código que realmente está conectado à produção. Mapeie arquitetura, owners, dependências, entradas CLI/GUI, configuração e armazenamento. Separe o que está implementado, integrado, testado e ainda planejado. Identifique lacunas, falhas reproduzíveis, riscos, dívida técnica e boas práticas com benefício concreto. Execute apenas verificações pertinentes e de baixo impacto; antes de operações pesadas, confira recursos e orçamento. Entregue um diagnóstico com evidências e um roteiro priorizado, com aceite e dependências de cada próximo passo. Não declare prontidão com base somente na documentação ou em testes simulados."""),
     Prompt('continue', 'Continuar de onde o agente anterior parou', """Retome o desenvolvimento a partir da passagem mais recente, sem reiniciar o trabalho. Confira Git, diffs, commits, testes e pendências para reconciliar o relato com o estado real. Preserve decisões válidas e alterações existentes. Identifique o próximo incremento já autorizado, seu owner, dependências e critérios de aceite; se não houver autorização de implementação, apresente a proposta antes de alterar comportamento. Prossiga autonomamente nas decisões reversíveis dentro do escopo. Implemente, execute testes focados e os gates aplicáveis, revise o diff e atualize a passagem existente com o que mudou, evidências, limitações e próximo passo. Não confunda tentativa interrompida com verificação aprovada."""),

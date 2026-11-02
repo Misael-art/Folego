@@ -33,9 +33,9 @@ class Tokens:
 TOKENS = Tokens()
 
 
-def control_icon(style, name, fallback):
+def control_icon(style, name, fallback, *, fallback_icon=None):
     """Native theme/Qt icons with a readable monochrome mask on dark surfaces."""
-    icon = QIcon.fromTheme(name, style.standardIcon(fallback))
+    icon = QIcon.fromTheme(name, fallback_icon if fallback_icon is not None else style.standardIcon(fallback))
     pixmap = icon.pixmap(16, 16)
     painter = QPainter(pixmap)
     painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)

@@ -1,5 +1,35 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Seletor com faixas laterais aprovado — 02/11/2026
+
+Sobre `1512658a885c6574b1525bd69401c893a3c3be77`, mesma raiz/branch/PR #1.
+Opção aprovada implementada no próprio Qt: 12 títulos em seis categorias com
+faixas coloridas, cabeçalhos horizontais e copiar por linha. Painel até 480×540,
+rolagem e rodapé fixo com Janelas/Edição/Terminal/Custom. Setas/Tab/Enter/Escape;
+nomes longos quebram linha. Categorias no catálogo Qt-free, sem mudar os corpos
+dos prompts. Custom preservado, carregado no worker e sem migração/regravação.
+Menus fecham antes de copiar/solicitar macros para retornar o foco ao destino.
+
+Focados finais **20 passed**, 5,61 s. `./dev check`: **1165 passed, 2 skipped**
+headless (21,16 s), **1448 passed, 2 skipped** Qt (44,62 s). Python 3.14.7,
+sequencial, HOME/XDG/TMP/Pulse privados. Onze cenários finais KDE/Wayland com
+cliques em prompt e seis macros, foco e navegação. Clipboard/colagem integral
+em Xvfb próprio; Custom/Mostrar área de trabalho em KWin/Xvfb/D-Bus isolados.
+Guardas de ponteiro mantidos; rota entre saídas com escalas distintas corrigida
+no harness após bloqueios. Auxiliares de QA encerrados.
+
+Comparação visual conjunta e detalhe em [design-qa.md](../design-qa.md), resultado
+passed. Corrigidos separadores/ícones afetados pelo estilo herdado e densidade
+inicial. Último título pode exigir rolagem na fonte nativa, com rodapé preservado.
+Ícones de tema com fallback Tabler/MIT incluídos no wheel; offline build e bytes
+de todas as fontes/assets verificados, sem dados privados no pacote. Sem release,
+merge, regra persistente ou ampliação de grants. [Provas e limites](handoff/validation/prompt-groups-2026-11-02/README.md).
+
+Próximo passo deste lote: após o commit, substituir a instância real pela bandeja
+e launcher oficial, preservar posição e registrar a identidade nova antes do
+push/atualização do PR. Revalidar lock/PID/starttime/boot; não usar PID histórico
+sem confirmação. Publicação de b2 continua imutável.
+
 ## Prompt de Product Design para seleção — 02/11/2026
 
 Sobre `f82e9974937de69ce312ff5149551f13c12b33d6`, mesma raiz/branch/PR #1.
