@@ -3,6 +3,7 @@
 ## Prompt de Product Design para seleção — 02/11/2026
 
 Sobre `f82e9974937de69ce312ff5149551f13c12b33d6`, mesma raiz/branch/PR #1.
+Código, testes e provas em `9b138147918266e3f725fb87d79c1dd5d530c72a`.
 Incluído **Design e mockups para aprovação**, ID `design-mockups`, logo após
 usabilidade. Texto integral do anexo do usuário, 9866 bytes UTF-8, SHA-256
 `679b411c224337653971fe662e62a854f704a703203310f393c59bed06b0e8a9`.
