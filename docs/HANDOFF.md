@@ -1,5 +1,31 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Prompt de Product Design para seleção — 02/11/2026
+
+Sobre `f82e9974937de69ce312ff5149551f13c12b33d6`, mesma raiz/branch/PR #1.
+Incluído **Design e mockups para aprovação**, ID `design-mockups`, logo após
+usabilidade. Texto integral do anexo do usuário, 9866 bytes UTF-8, SHA-256
+`679b411c224337653971fe662e62a854f704a703203310f393c59bed06b0e8a9`.
+Sem adicionar o preâmbulo genérico neste item; contexto dos demais preservado.
+Biblioteca com 12 títulos, corpo embutido no Python, sem depender do caminho
+do anexo. O conteúdo é um prompt para copiar, não uma instrução executada neste
+lote. Não foram produzidos mockups nem alterado o design por causa do texto.
+
+Focados: **11 passed** Qt (1,54 s) e **2 passed** headless (0,27 s), Python
+3.14.7, sequenciais, HOME/XDG/TMP/Pulse privados. Cópia real do menu e colagem
+Shift+Insert em Xvfb próprio preservaram texto/hash e Custom `123`. KDE/Wayland:
+cinco cenários incluindo clique nativo no novo título; clipboard interceptado
+somente no QA para não usar o físico como fixture. Aguardar escala do popup e
+posicionar seu próprio widget corrigiu o oráculo sem afrouxar guardas. Não
+repetidas suítes integrais neste incremento de conteúdo. [Provas e limites](handoff/validation/design-prompt-2026-11-02/README.md).
+
+Fôlego substituído pela bandeja e launcher oficial, lock liberado e sem sinais
+manuais. GUI **4108311**, starttime **5992098**, compacto (2958,549;116,584),
+280×275, central oculta; posição do usuário preservada. Recibo privado
+`.scratch/design-prompt/replacement.json`; revalidar identidade/boot. QA e
+auxiliar encerrados. Sem release/merge; próximo passo: usuário selecionar o
+novo título e colar o prompt no agente desejado.
+
 ## Atalhos padrão em Janelas, Edição e Terminal — 02/11/2026
 
 Sobre `dca7f88b5608f83a4eebbe8ac0e55692dee84e26`, mesma raiz/branch/PR #1.

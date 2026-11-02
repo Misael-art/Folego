@@ -66,8 +66,10 @@ pode crescer para preservar alertas e mensagens. [Uso, configuração de contas,
 dependências e limites](docs/COMPACTO.md).
 
 **Selecionar tudo, Apagar tudo e Prompts** ficam logo acima das abas. A biblioteca
-oferece 11 prompts de desenvolvimento: escolha um título para copiar e cole no
+oferece 12 prompts de desenvolvimento: escolha um título para copiar e cole no
 agente desejado. O teclado virtual preserva o foco do campo de destino no KWin.
+**Design e mockups para aprovação** copia o prompt integral de Product Design
+fornecido pelo usuário, para propor e revisar visuais antes da implementação.
 O mesmo menu inclui dez atalhos padrão em **Janelas**, **Edição** e **Terminal**:
 alternar aplicativo, visão geral, posicionar à esquerda/direita, desfazer/refazer,
 salvar, buscar e copiar/colar no terminal. Escolher um item envia seu atalho ao

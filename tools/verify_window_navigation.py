@@ -13,6 +13,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--state',type=Path,required=True)
     parser.add_argument('--standard-shortcuts',action='store_true',help='Native menu clicks into an owned text field')
+    parser.add_argument('--prompt-key',help='Verify native prompt selection with clipboard intercepted in memory')
     args=parser.parse_args()
     root=args.state.resolve();root.mkdir(mode=0o700,parents=True,exist_ok=False)
     for key,folder in (('HOME','home'),('XDG_CONFIG_HOME','config'),('XDG_DATA_HOME','data'),
@@ -118,7 +119,7 @@ def main():
             QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)
             wait(lambda:compact.isVisible() and compact.windowHandle().isExposed() and not window.isVisible())
             backend=compact.shortcut_tabs.controller.backend
-            if args.standard_shortcuts:
+            if args.prompt_key or args.standard_shortcuts:
                 script=root/'place-owned-widget.js'
                 script.write_text('const w=workspace.windowList().find(w=>w.pid==='+str(os.getpid())+
                     ' && w.caption==="Fôlego — widget");if(w){const g=w.frameGeometry;w.frameGeometry={x:20,y:120,width:g.width,height:g.height};}')
@@ -127,6 +128,21 @@ def main():
                 try:call('qdbus6','org.kde.KWin','/Scripting/Script'+sid,'org.kde.kwin.Script.run')
                 finally:call('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript',name)
                 settle=time.monotonic()+.35;wait(lambda:time.monotonic()>=settle)
+            if args.prompt_key:
+                from folego.core.development_prompts import PROMPTS,text
+                selected=next(p for p in PROMPTS if p.key==args.prompt_key)
+                tabs=compact.shortcut_tabs;copied=[]
+                tabs._copy_text=copied.append  # no physical clipboard fixture
+                pointer_click(tabs.buttons['prompts'].mapToGlobal(tabs.buttons['prompts'].rect().center()),backend,compact)
+                wait(lambda:tabs.prompt_menu is not None and tabs.prompt_menu.isVisible())
+                settle=time.monotonic()+.35;wait(lambda:time.monotonic()>=settle)
+                menu=tabs.prompt_menu
+                action=next(a for a in menu.actions() if a.text()==selected.title)
+                menu.grab().save(str(root/'prompts.png'))
+                pointer_click(menu.mapToGlobal(menu.actionGeometry(action).center()),backend,compact)
+                wait(lambda:copied==[text(selected.key)] and tabs.prompt_menu is None)
+                records.append(dict(case='native prompt selection',key=selected.key,clipboard='intercepted in memory'))
+            if args.standard_shortcuts:
                 target=QLineEdit('123');target.setWindowTitle('Fôlego QA — atalhos padrão')
                 target.resize(450,80);target.show()
                 observed=[];bindings=[]
@@ -184,6 +200,12 @@ def main():
         except Exception as exc:
             import traceback
             (root/'failure.txt').write_text(traceback.format_exc())
+            if args.prompt_key and 'copied' in locals():
+                import hashlib
+                (root/'prompt-failure.json').write_text(json.dumps(dict(
+                    received=[hashlib.sha256(value.encode()).hexdigest() for value in copied],
+                    expected=hashlib.sha256(text(args.prompt_key).encode()).hexdigest(),
+                    menu_open=compact.shortcut_tabs.prompt_menu is not None),indent=2))
             errors.append(repr(exc)+' menu events: '+repr(menu_events));window.quit();app.exit(1)
     QTimer.singleShot(0,scenario)
     QTimer.singleShot(45000,lambda:(errors.append('watchdog'),window.quit(),app.exit(2)))

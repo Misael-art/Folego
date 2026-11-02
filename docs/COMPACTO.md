@@ -227,12 +227,17 @@ assim, copiar nunca envia Ctrl+C para interromper um trabalho no terminal. O
 aplicativo de destino precisa aceitar esses atalhos. O Fôlego não lê nem grava
 o conteúdo da área de transferência ou as teclas em logs.
 
-**Prompts** abre uma lista de 11 títulos: diagnóstico real, continuidade,
+**Prompts** abre uma lista de 12 títulos: diagnóstico real, continuidade,
 implementação, investigação de erro, revisão, testes, desempenho, segurança,
-usabilidade, passagem de contexto e prontidão para PR/distribuição. Escolher um
+usabilidade, design com mockups, passagem de contexto e prontidão para PR/distribuição. Escolher um
 copia seu texto para a área de transferência; depois cole no agente desejado.
 Não cola, executa ou envia pedidos automaticamente. Os textos são genéricos,
 respeitam as instruções e autorizações do projeto e pedem evidências verificáveis.
+
+**Design e mockups para aprovação** copia integralmente o prompt fornecido pelo
+usuário, incluindo as oito etapas, referências, restrições e passagem ao agente
+implementador. Esse item preserva o texto original, sem adicionar o preâmbulo
+dos demais prompts: propõe visuais para aprovação antes de implementar.
 
 Antes de Custom, o menu **Prompts** oferece três grupos de atalhos padrão:
 

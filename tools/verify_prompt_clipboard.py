@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise prompt selection and paste only in an owned disposable X server."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -12,7 +13,9 @@ import time
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--state', type=Path, required=True)
-    root = parser.parse_args().state.resolve()
+    parser.add_argument('--prompt-key', help='Catalog prompt to select and paste; defaults to the first')
+    args = parser.parse_args()
+    root = args.state.resolve()
     root.mkdir(parents=True, mode=0o700, exist_ok=False)
     for key, folder in (('HOME', 'home'), ('XDG_CONFIG_HOME', 'config'), ('XDG_DATA_HOME', 'data'),
                         ('XDG_STATE_HOME', 'state'), ('XDG_CACHE_HOME', 'cache'), ('TMPDIR', 'tmp')):
@@ -39,6 +42,7 @@ def main():
         from folego.core.development_prompts import PROMPTS, text
         from folego.ui.desktop_shortcuts import ShortcutTabs
         app = QApplication([])
+        selected = next(p for p in PROMPTS if p.key == (args.prompt_key or PROMPTS[0].key))
         field = QTextEdit()
         field.resize(640, 400)
         field.show()
@@ -53,16 +57,16 @@ def main():
         tabs.show_prompts()
         wait(lambda: any(m.isVisible() for m in tabs.findChildren(QMenu)))
         menu = next(m for m in tabs.findChildren(QMenu) if m.isVisible())
-        menu.actions()[0].trigger()
+        next(a for a in menu.actions() if a.text() == selected.title).trigger()
         menu.close()
-        wait(lambda: app.clipboard().text() == text(PROMPTS[0].key))
+        wait(lambda: app.clipboard().text() == text(selected.key))
         subprocess.run(['xdotool', 'windowfocus', str(int(field.winId()))], check=True)
         field.setFocus()
         wait(field.hasFocus)
         wait(lambda: tabs.controller.future is None)
         assert tabs.controller.request('paste')
         wait(lambda: tabs.controller.future is None)
-        wait(lambda: field.toPlainText() == text(PROMPTS[0].key))
+        wait(lambda: field.toPlainText() == text(selected.key))
         tabs.show_prompts()
         wait(lambda: tabs.custom_menu is not None and any(a.text() == '123' for a in tabs.custom_menu.actions()))
         next(a for a in tabs.custom_menu.actions() if a.text() == '123').trigger()
@@ -76,7 +80,10 @@ def main():
         wait(lambda: field.toPlainText() == '123' and tabs.controller.future is None)
         (root / 'result.json').write_text(json.dumps(dict(passed=True,
             case='production menu selection, native clipboard and Shift+Insert into owned editor',
-            scope='owned Xvfb only; physical clipboard untouched', prompts=len(PROMPTS), custom_literal='123'), indent=2) + '\n')
+            scope='owned Xvfb only; physical clipboard untouched', prompts=len(PROMPTS),
+            selected=selected.key, selected_bytes=len(text(selected.key).encode('utf-8')),
+            selected_sha256=hashlib.sha256(text(selected.key).encode('utf-8')).hexdigest(),
+            custom_literal='123'), indent=2) + '\n')
         print(json.dumps(dict(passed=True, prompts=len(PROMPTS), scope='private Xvfb')))
         tabs.shutdown()
         for widget in list(app.topLevelWidgets()): widget.deleteLater()
