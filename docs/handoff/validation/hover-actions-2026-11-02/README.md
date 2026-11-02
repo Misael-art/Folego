@@ -39,3 +39,14 @@ nativo. Nenhum serviço ou configuração física de entrada foi alterado.
 A coleta de temperatura é somente leitura no worker. Sem novos grants, ações
 de recursos ou dependências. Não certifica outros compositores, aplicações,
 leitores de tela ou soak de duas horas. Release b2 permanece imutável.
+
+## Host atualizado
+
+Código em `ee4a756203d7e1708e0ecda0d31d5383a88195ee`. Instância anterior
+encerrada pela própria bandeja, lock liberado e `./dev gui` solicitado uma vez.
+Nova GUI **234379**, starttime **6504957**, widget (3108,315;187,814), 280×219,
+central oculta. Posição atual do usuário preservada, sem sinais manuais ou
+encerramento de outros clientes. Recibo privado
+`.scratch/hover-actions/replacement.json`; revalidar identidade/boot antes de
+agir. Leitura real confirmou sensor ACPI `acpitz` disponível no host; a captura
+acima usa somente dados demonstrativos. Próximo passo: validação do usuário.

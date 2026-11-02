@@ -3,6 +3,7 @@
 ## Atalhos recolhíveis e temperatura — 02/11/2026
 
 Sobre `b2969ac5280cc2ed477b258ddbe13701264c3332`, mesma raiz/branch/PR #1.
+Código, testes e provas em `ee4a756203d7e1708e0ecda0d31d5383a88195ee`.
 Seis atalhos pareados em duas linhas iguais, ocultos em repouso, animação
 descendente de 140 ms e espera de 200 ms ao sair; menus preservam a escolha.
 Teclado no cabeçalho, padrão embaixo e seta separada para cima. CPU/Tmp
@@ -20,8 +21,14 @@ e posição mantidos; tentativas anteriores preservadas e não somadas como
 aprovação. Inspeção visual das capturas próprias: botões iguais, teclado
 disponível, métricas legíveis e alinhadas. Temperatura da captura é demonstração.
 [Provas e limites](handoff/validation/hover-actions-2026-11-02/README.md).
-Sem release/merge ou ampliação de grants. Substituição da GUI real será
-registrada após o commit; próximo passo é a validação do usuário.
+Sem release/merge ou ampliação de grants. GUI real substituída por Sair na
+bandeja e `./dev gui`, com lock liberado, sem sinais manuais/outros clientes.
+PID **234379**, starttime **6504957**, widget (3108,315;187,814), 280×219,
+central oculta. Preservada a posição atual do usuário; revalidar identidade/boot
+antes de agir. Recibo privado `.scratch/hover-actions/replacement.json`.
+Sensor de sistema `acpitz` disponível no host, leitura real somente leitura;
+não tratado como prova de temperatura de CPU. Próximo passo: usuário validar
+o hover e a disposição dos controles na instância atual.
 
 ## Seletor com faixas laterais aprovado — 02/11/2026
 
