@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--console-themes',action='store_true',help='Select all console themes in owned mapped Qt windows')
     parser.add_argument('--background-transparency',action='store_true',help='Verify alpha at 0/50/100 percent in light/dark themes')
     parser.add_argument('--transparency-theme',choices=('snes-us','ps2'),help='Run one transparency palette within the existing QA time budget')
+    parser.add_argument('--ai-quota-rings',action='store_true',help='Verify quota rings, animations and account gestures with synthetic observations')
     args=parser.parse_args()
     root=args.state.resolve();root.mkdir(mode=0o700,parents=True,exist_ok=False)
     for key,folder in (('HOME','home'),('XDG_CONFIG_HOME','config'),('XDG_DATA_HOME','data'),
@@ -149,7 +150,7 @@ def main():
                 swap_used_kb=1024,swap_total_kb=8192,pressure_memory=None,pressure_io=None,pressure_cpu=None,
                 load=None,apps=(),self_rss_kb=0,cpu_busy_frac=.52,temperature_c=61,temperature_sensor='demonstração',
                 tmpfs=(TmpfsVolume('/qa/runtime','tmpfs',100,81,19,is_runtime=True),)))
-            if args.prompt_key or args.standard_shortcuts or args.console_themes or args.background_transparency:
+            if args.prompt_key or args.standard_shortcuts or args.console_themes or args.background_transparency or args.ai_quota_rings:
                 script=root/'place-owned-widget.js'
                 script.write_text('const w=workspace.windowList().find(w=>w.pid==='+str(os.getpid())+
                     ' && w.caption==="Fôlego — widget");if(w){const g=w.frameGeometry;w.frameGeometry={x:20,y:120,width:g.width,height:g.height};}')
@@ -158,6 +159,75 @@ def main():
                 try:call('qdbus6','org.kde.KWin','/Scripting/Script'+sid,'org.kde.kwin.Script.run')
                 finally:call('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript',name)
                 settle=time.monotonic()+.35;wait(lambda:time.monotonic()>=settle)
+            if args.ai_quota_rings:
+                from folego.core import ai_sessions as ai
+                from folego.ui.theme import TOKENS
+                monitor=window.ai_monitor;monitor.pause()
+                def drained():
+                    monitor.poller.drain();monitor.delivery_poller.drain()
+                    return not monitor.poller._inflight and not monitor.delivery_poller._inflight
+                wait(drained)
+                strip=compact.ai_strip;now=time.time();items=[]
+                for provider,remaining in (('codex',31),('web',None),('claude',8),('grok',None)):
+                    item=ai.unknown(provider,label='Conta QA')
+                    item.update(account_id=provider+'-qa',default=True)
+                    if remaining is not None:
+                        item.update(observed_at=now,windows=[ai.quota_window('Sessão QA',100-remaining,now+3600,now)])
+                    if provider=='codex':item['reset_credits']=dict(available=2,observed_at=now)
+                    items.append(item)
+                strip.set_items(items)
+                strip.set_deliveries([dict(provider=p,count=2 if p=='codex' else 0,pending=[]) for p in ai.NAMES])
+                requests=[];original_request=strip.opener.request
+                strip.opener.request=lambda *values:requests.append(values)
+                for key,transparency in (('snes-us',0),('ps2',0),('ps2',100)):
+                    apply_theme(app,key,transparency=transparency)
+                    settle=time.monotonic()+.2;wait(lambda:time.monotonic()>=settle)
+                    prefix=key+'-'+str(transparency)
+                    compact.grab().save(str(root/(prefix+'-rings-compact.png')))
+                    strip.grab().save(str(root/(prefix+'-rings.png')))
+                    assert [b.remaining for b in strip.buttons.values()]==[31,None,8,None]
+                    assert all(b.width()>=b.sizeHint().width() for b in strip.buttons.values())
+                    records.append(dict(case='quota rings',theme=key,transparency=transparency,
+                                        remaining=[31,None,8,None],width=compact.width()))
+                apply_theme(app,'ps2',transparency=0)
+                button=strip.buttons['codex']
+                wait(lambda:button.halo>.9)
+                strip.grab().save(str(root/'pulse-bright.png'))
+                wait(lambda:button.halo<.1)
+                strip.grab().save(str(root/'pulse-dim.png'))
+                items[0]['windows'][0]['remaining']=68;strip.render()
+                wait(lambda:31<button.displayed<68)
+                strip.grab().save(str(root/'transition.png'))
+                wait(lambda:button.displayed==68)
+                items[0]['windows'][0]['resets_at']=now-1;strip.render()
+                assert button.remaining is None and button.transition.state()==button.transition.State.Stopped
+                strip.grab().save(str(root/'expired.png'))
+                # Wait for the same hover event used in production to open accounts.
+                pointer_click(button.mapToGlobal(button.rect().center()),backend,compact,click=False)
+                wait(lambda:strip.account_menu is not None and strip.account_menu.isVisible())
+                assert strip.account_panel.selected=='codex-qa'
+                strip.account_menu.grab().save(str(root/'rings-accounts.png'))
+                strip.account_menu.close();app.processEvents()
+                # Calibration may outlast the tooltip delay. Close that owned
+                # popup before sending a direct native click at the same point.
+                binary,wayland=backend._input();assert wayland
+                subprocess.run([binary,'click','0xC0'],env=backend.env,check=True,capture_output=True)
+                wait(lambda:bool(requests))
+                assert requests==[('agent-open',('codex',[],'codex-qa'))],requests
+                QTest.mouseClick(strip.reset_badges['codex'],Qt.MouseButton.LeftButton)
+                wait(lambda:strip.account_menu is not None and strip.account_menu.isVisible())
+                assert strip.account_panel.selected=='codex-qa'
+                strip.account_menu.close();app.processEvents()
+                compact.hide();app.processEvents()
+                assert strip.delivery_pulse.state()==strip.delivery_pulse.State.Stopped
+                compact.show();wait(lambda:compact.windowHandle().isExposed())
+                wait(lambda:strip.delivery_pulse.state()==strip.delivery_pulse.State.Running)
+                strip._delivery_failed('QA incomplete')
+                assert strip.delivery_pulse.state()==strip.delivery_pulse.State.Stopped
+                strip.opener.request=original_request
+                records.append(dict(case='quota animation and account gestures',transition=True,expiry_cancels=True,
+                                    completion_pulse=True,hidden_stops=True,unknown_stops=True,
+                                    input='native provider click and hover; Qt gift click',client_open='intercepted in memory'))
             if args.console_themes or args.background_transparency:
                 from folego.ui.theme import THEMES,TOKENS,THEME_KEY
                 from folego.ui.desktop_shortcuts import VirtualKeyboard

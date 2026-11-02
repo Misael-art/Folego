@@ -55,7 +55,10 @@ sem botões de minimizar, maximizar e fechar nas duas interfaces.
 A faixa de IAs acompanha Codex, Codex Web, Claude e Grok
 no próprio Fôlego; passe o mouse para abrir o painel na conta padrão e escolha
 outras na lista lateral. Consumo, resets, tickets e referência da assinatura
-ficam separados. Cinza significa que o dado não foi confirmado.
+ficam separados. Os quatro medidores seguem o padrão circular do PhaseZero:
+disco do provedor, percentual disponível no centro e anel verde/amarelo/vermelho.
+**?** com anel cinza indica cota sem confirmação. O anel faz uma transição suave
+ao receber um novo percentual; entregas para revisitar fazem a borda interna pulsar.
 Ao lado das entregas, um **presente verde piscando** mostra as redefinições
 disponíveis confirmadas das contas do provedor. Clique para consultar a conta;
 o resgate continua no cliente de IA.

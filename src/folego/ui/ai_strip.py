@@ -1,5 +1,5 @@
 """Quota indicators, new completed sessions and verified application opening."""
-from PySide6.QtCore import Qt, QTimer, QUrl, QEvent, QPoint, QSize, QRectF
+from PySide6.QtCore import Qt, QTimer, QUrl, QEvent, QPoint, QSize, QRectF, QVariantAnimation, QEasingCurve
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap, QDesktopServices, QPen
 from PySide6.QtWidgets import (QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QWidget,
                               QMenu, QInputDialog, QWidgetAction, QGraphicsOpacityEffect)
@@ -11,6 +11,7 @@ from .desktop_shortcuts import DesktopController
 from .ai_monitor import AIMonitor
 from ..adapters.agent_apps import AgentApps
 from .ai_account_panel import AccountPanel
+from .ai_quota_button import QuotaButton
 
 
 def gift_icon():
@@ -44,6 +45,14 @@ class AIStrip(QWidget):
         self.reset_blink = QTimer(self)
         self.reset_blink.setInterval(800)
         self.reset_blink.timeout.connect(self._blink_resets)
+        self.delivery_pulse = QVariantAnimation(self)
+        self.delivery_pulse.setDuration(1800)
+        self.delivery_pulse.setStartValue(0.0)
+        self.delivery_pulse.setKeyValueAt(.5, 1.0)
+        self.delivery_pulse.setEndValue(0.0)
+        self.delivery_pulse.setEasingCurve(QEasingCurve.Type.InOutSine)
+        self.delivery_pulse.setLoopCount(-1)
+        self.delivery_pulse.valueChanged.connect(self._pulse_deliveries)
         self.deliveries = self.monitor.deliveries
         self.delivery_items = self.monitor.delivery_items
         self.opener = opener or DesktopController(self, backend=AgentApps(self.deliveries))
@@ -52,12 +61,11 @@ class AIStrip(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
-        for provider, label in (("codex", "Codex"), ("web", "Web"), ("claude", "Claude"), ("grok", "Grok")):
-            button = QPushButton(label)
+        for provider, label in ai_sessions.NAMES.items():
+            button = QuotaButton(provider, label)
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.setAccessibleName(ai_sessions.NAMES[provider] + ": cota desconhecida")
-            button.setStyleSheet("padding:3px 0;border:none;background:transparent;")
             button.installEventFilter(self)
             button.clicked.connect(lambda checked=False, p=provider: self.open_agent(p))
             button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -89,11 +97,10 @@ class AIStrip(QWidget):
             reset_badge.clicked.connect(lambda checked=False, p=provider: self.reset_details(p))
             reset_badge.hide()
             badge_layout.addWidget(reset_badge)
-            badge_layout.addStretch(1)
             self.badges[provider] = badge
             self.reset_badges[provider] = reset_badge
-            column.addWidget(badge_row)
             column.addWidget(button)
+            column.addWidget(badge_row, 0, Qt.AlignmentFlag.AlignHCenter)
             layout.addLayout(column, 1)
         self.monitor.deliveries_ready.connect(self.set_deliveries)
         self.monitor.quotas_ready.connect(self.set_items)
@@ -148,6 +155,11 @@ class AIStrip(QWidget):
     def _paint_reset_phase(self):
         for badge in self.reset_badges.values():
             badge.graphicsEffect().setOpacity(1.0 if self._reset_bright else .5)
+
+    def _pulse_deliveries(self, value):
+        for provider, button in self.buttons.items():
+            count = next((r.get('count') for r in self.delivery_items if r['provider'] == provider), None)
+            button.set_halo(value if count else 0.0)
 
     def open_agent(self, provider, account=None):
         account = account or self.default_item(provider).get('account_id')
@@ -227,23 +239,17 @@ class AIStrip(QWidget):
         if show: show(message)
 
     def render(self):
-        colors = dict(green=TOKENS.ok, yellow=TOKENS.warning, red=TOKENS.danger, unknown=TOKENS.muted)
         has_resets = False
+        has_deliveries = False
         for provider, button in self.buttons.items():
             items = [item for item in self.items if item.get("provider") == provider]
             left = ai_sessions.effective(self.default_item(provider))
-            pixmap = QPixmap(10, 10)
-            pixmap.fill(Qt.GlobalColor.transparent)
-            painter = QPainter(pixmap)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(colors[ai_sessions.band(left)]))
-            painter.drawEllipse(1, 1, 8, 8)
-            painter.end()
-            button.setIcon(QIcon(pixmap))
+            button.set_remaining(left)
             summary = "cota desconhecida" if left is None else f"{left}% disponível"
             delivery = next((r for r in self.delivery_items if r['provider'] == provider), {})
             count = delivery.get('count')
+            has_deliveries |= bool(count)
+            if not count: button.set_halo(0.0)
             badge = self.badges[provider]
             partial = not delivery.get('complete', True)
             number = str(count) + ('+' if partial else '')
@@ -270,6 +276,12 @@ class AIStrip(QWidget):
             button.setAccessibleName(ai_sessions.NAMES[provider] + ": " + summary + ' · ' + completed
                                      + (' · ' + resets if total else ''))
             button.setToolTip('Uso e renovação por conta · clique para abrir o cliente da conta padrão')
+        if has_deliveries and self.isVisible():
+            if self.delivery_pulse.state() != QVariantAnimation.State.Running:
+                self.delivery_pulse.start()
+        else:
+            self.delivery_pulse.stop()
+            self._pulse_deliveries(0.0)
         if has_resets and self.isVisible():
             if not self.reset_blink.isActive():
                 self._reset_bright = True
@@ -300,11 +312,14 @@ class AIStrip(QWidget):
         if self._owns_monitor: self.monitor.pause()
         self.freshness.stop()
         self.reset_blink.stop()
+        self.delivery_pulse.stop()
         super().hideEvent(event)
 
     def shutdown(self):
         if self.account_menu is not None: self.account_menu.close()
         self.freshness.stop()
         self.reset_blink.stop()
+        self.delivery_pulse.stop()
+        for button in self.buttons.values(): button.transition.stop()
         if self._owns_monitor: self.monitor.shutdown()
         self.opener.close()

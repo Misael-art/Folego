@@ -15,20 +15,32 @@ auxiliar de entrada; um som em andamento conclui a restauração do volume.
 
 ## Sessões de IA
 
-Passe o mouse sobre Codex, Web, Claude ou Grok para abrir o painel de contas.
+Passe o mouse sobre Codex, Codex Web, Claude ou Grok para abrir o painel de contas.
 A conta padrão aparece primeiro; escolha outra na lista à esquerda. O percentual
 gasto, tickets e referência da assinatura ficam em destaque; cada janela mostra
 seu próprio reset e tempo restante. Detalhes adicionais têm rolagem. Clique fora
 ou use Escape para fechar. O clique direto no indicador abre o cliente da conta
 padrão; **Abrir cliente** no painel usa a conta selecionada.
 
-A bolinha representa a conta padrão: verde significa mais de 60% disponível;
-amarelo, de 21% a 60%; vermelho, até 20%. Cinza é desconhecido, vencido ou parcial.
-Uma outra conta não altera a cor da padrão; seu estado aparece ao selecioná-la.
+Os quatro indicadores usam o mesmo desenho circular do medidor do PhaseZero:
+disco colorido de identificação, percentual **disponível** no centro e anel
+externo proporcional à cota da conta padrão. O anel é verde acima de 60%, amarelo
+de 21% a 60% e vermelho até 20%; zero mostra **0** com o anel vazio.
+**?** com anel cinza significa dado desconhecido, vencido ou parcial.
+Uma outra conta não altera o percentual da padrão; seu estado aparece ao selecioná-la.
+
+Uma atualização entre percentuais conhecidos move o anel suavemente em 450 ms;
+o número e a descrição acessível mostram o valor atual desde o início.
+Expiração ou falha retiram o percentual imediatamente e cancelam a transição.
+Entregas confirmadas para revisitar fazem a borda interna pulsar em ciclos de
+1,8 s, mantendo a contagem separada abaixo. Isso não representa cota ou tickets.
+Sem entregas confirmadas, o pulso para. Todas as animações param com o widget
+oculto; a consulta continua sob o monitor existente. Cores de identificação e
+do anel seguem a referência nos oito temas e não perdem opacidade com o fundo.
 
 Ao lado da contagem azul de entregas aparece um **presente verde piscando**
 quando há tickets de redefinição disponíveis. A quantidade soma somente os
-tickets confirmados das contas daquele provedor, sem alterar a bolinha da conta
+tickets confirmados das contas daquele provedor, sem alterar o medidor da conta
 padrão ou a contagem de entregas. Acima de nove mostra **9+**; o mouse revela o
 número exato e a divisão por conta. Clique no presente para abrir o painel numa
 conta com tickets, preferindo a padrão quando ela tem ofertas. Não resgata.
@@ -60,7 +72,7 @@ quando a fonte daquele provedor informa tickets (atualmente confirmado no Codex)
   A espera por HTTP 429 continua valendo para a mesma credencial durante essa troca.
   Não há rede no loop gráfico.
 - Codex Web e Grok: esta fonte não oferece uma franquia percentual confirmada.
-  Permanecem cinza. Metadados de assinatura, quando disponíveis, aparecem como
+  Permanecem com **?** e anel cinza. Metadados de assinatura, quando disponíveis, aparecem como
   tal, separados da reposição de cota. A data de Grok pode ser informada pelo
   usuário; isso não confirma pagamento ou cota. Esses campos continuam
   indisponíveis nas fontes consultadas; não se usam tokens gastos na conversa
