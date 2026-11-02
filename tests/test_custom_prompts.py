@@ -5,7 +5,7 @@ import subprocess
 
 import pytest
 
-from folego.core.custom_prompts import CustomPrompts, DEFAULTS, shortcut_codes
+from folego.core.custom_prompts import CustomPrompts, DEFAULTS, shortcut_codes, STANDARD_SHORTCUTS
 from folego.adapters.desktop_tools import DesktopTools
 
 
@@ -76,6 +76,34 @@ def test_copy_resolution_never_sends_input_or_desktop_effect(tmp_path, monkeypat
     loaded = backend.perform('custom-load')
     result = backend.perform('custom-use', dict(id='example-text', revision=loaded['revision']))
     assert result == dict(operation='custom-copy', text='123')
+
+
+@pytest.mark.parametrize('identity,expected', [
+    ('switch-window', [56, 15]), ('overview', [125, 17]),
+    ('tile-left', [125, 105]), ('tile-right', [125, 106]),
+    ('undo', [29, 44]), ('redo', [29, 42, 44]),
+    ('save', [29, 31]), ('find', [29, 33]),
+    ('terminal-copy', [29, 42, 46]), ('terminal-paste', [29, 42, 47]),
+])
+def test_standard_macro_sends_one_chord_and_preserves_existing_custom_library(tmp_path, monkeypatch, identity, expected):
+    store = CustomPrompts(env=dict(HOME=str(tmp_path)))
+    store.path.parent.mkdir(parents=True)
+    original = b'{unknown personal configuration}'
+    store.path.write_bytes(original)
+    backend = DesktopTools(env=dict(HOME=str(tmp_path)))
+    calls = []
+    monkeypatch.setattr(backend, 'keys', lambda codes: calls.append(codes) or 'sent')
+    assert backend.perform('standard-macro', identity) == 'sent'
+    assert calls == [expected] and store.path.read_bytes() == original
+
+
+def test_standard_catalog_is_unique_and_unknown_action_sends_no_keys(tmp_path, monkeypatch):
+    ids = [key for _, items in STANDARD_SHORTCUTS for key, _, _ in items]
+    assert len(ids) == len(set(ids)) == 10
+    backend = DesktopTools(env=dict(HOME=str(tmp_path)))
+    monkeypatch.setattr(backend, 'keys', lambda *_: pytest.fail('unknown macro sent keys'))
+    with pytest.raises(ValueError, match='desconhecido'): backend.perform('standard-macro', 'shell command')
+    assert not CustomPrompts(env=dict(HOME=str(tmp_path))).path.exists()
 
 
 def test_desktop_macro_requests_show_once_and_verifies_state(monkeypatch):

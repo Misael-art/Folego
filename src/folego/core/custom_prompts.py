@@ -25,6 +25,34 @@ KEYS.update({f'f{i}': code for i, code in enumerate([*range(59, 69), 87, 88], 1)
 DEFAULTS = [dict(id='example-text', kind='text', title='123', text='123'),
             dict(id='example-desktop', kind='macro', title='Mostrar área de trabalho', action='desktop')]
 
+# Shipped actions are independent of the private, user-edited library. Updating
+# the application must neither append to that file nor resurrect deleted items.
+STANDARD_SHORTCUTS = (
+    ('Janelas', (
+        ('switch-window', 'Alternar aplicativo', 'Alt+Tab'),
+        ('overview', 'Visão geral das janelas', 'Meta+W'),
+        ('tile-left', 'Janela à esquerda', 'Meta+Left'),
+        ('tile-right', 'Janela à direita', 'Meta+Right'),
+    )),
+    ('Edição', (
+        ('undo', 'Desfazer', 'Ctrl+Z'),
+        ('redo', 'Refazer', 'Ctrl+Shift+Z'),
+        ('save', 'Salvar', 'Ctrl+S'),
+        ('find', 'Buscar no aplicativo', 'Ctrl+F'),
+    )),
+    ('Terminal', (
+        ('terminal-copy', 'Copiar no terminal', 'Ctrl+Shift+C'),
+        ('terminal-paste', 'Colar no terminal', 'Ctrl+Shift+V'),
+    )),
+)
+
+
+def standard_shortcut(key):
+    for _, items in STANDARD_SHORTCUTS:
+        for identity, _, shortcut in items:
+            if key == identity: return shortcut
+    raise ValueError('Atalho padrão desconhecido; nenhuma tecla enviada')
+
 
 def shortcut_codes(value):
     if not isinstance(value, str) or len(value) > 80:

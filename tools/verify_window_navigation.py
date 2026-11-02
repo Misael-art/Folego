@@ -12,7 +12,9 @@ import time
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--state',type=Path,required=True)
-    root=parser.parse_args().state.resolve();root.mkdir(mode=0o700,parents=True,exist_ok=False)
+    parser.add_argument('--standard-shortcuts',action='store_true',help='Native menu clicks into an owned text field')
+    args=parser.parse_args()
+    root=args.state.resolve();root.mkdir(mode=0o700,parents=True,exist_ok=False)
     for key,folder in (('HOME','home'),('XDG_CONFIG_HOME','config'),('XDG_DATA_HOME','data'),
                        ('XDG_STATE_HOME','state'),('XDG_CACHE_HOME','cache'),('TMPDIR','tmp')):
         p=root/folder;p.mkdir(mode=0o700);os.environ[key]=str(p)
@@ -20,7 +22,8 @@ def main():
     os.environ['PULSE_SERVER']='unix:'+str(root/'no-audio')
     from PySide6.QtCore import QTimer,Qt,QCoreApplication,QEvent,QObject,Slot,ClassInfo,QPoint
     from PySide6.QtDBus import QDBusConnection
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication,QLineEdit
+    from PySide6.QtGui import QShortcut,QKeySequence
     from PySide6.QtTest import QTest
     from folego.ui.main_window import MainWindow
     from folego.ui.workers import Poller
@@ -32,7 +35,7 @@ def main():
     window.ai_monitor.delivery_poller._collect=lambda:[]
     window._poller=Poller(lambda:None,offload=True,parent=window)
     window._poller.start()
-    errors=[];records=[];menu_events=[]
+    errors=[];records=[];menu_events=[];target=None
     measured={}
     @ClassInfo(**{'D-Bus Interface':'org.folego.QANavigation'})
     class Geometry(QObject):
@@ -75,11 +78,12 @@ def main():
             for i in range(2):
                 moved=after[i]-before[i]
                 if abs(moved)>1 and amounts[i]:factors[i]=max(.2,min(4,abs(amounts[i]/moved)))
-        assert max(abs(cursor()[i]-desired[i]) for i in range(2))<=1
+        assert max(abs(cursor()[i]-desired[i]) for i in range(2))<=1,(desired,cursor(),raw,origin,point)
         surface=re.search(r'window[:=]\s*(\{[0-9a-fA-F-]+\})',call('kdotool','getmouselocation'))
         assert surface and call('kdotool','getwindowpid',surface[1])==str(os.getpid()),'pointer outside owned QA window'
         subprocess.run([binary,'click','0xC0'],env=backend.env,check=True,capture_output=True)
     def scenario():
+        nonlocal target
         try:
             window.show()
             wait(lambda:window.windowHandle().isExposed() and len(native('^Fôlego ·'))==1)
@@ -114,6 +118,58 @@ def main():
             QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)
             wait(lambda:compact.isVisible() and compact.windowHandle().isExposed() and not window.isVisible())
             backend=compact.shortcut_tabs.controller.backend
+            if args.standard_shortcuts:
+                script=root/'place-owned-widget.js'
+                script.write_text('const w=workspace.windowList().find(w=>w.pid==='+str(os.getpid())+
+                    ' && w.caption==="Fôlego — widget");if(w){const g=w.frameGeometry;w.frameGeometry={x:20,y:120,width:g.width,height:g.height};}')
+                name='folego-qa-shortcuts-place-'+str(os.getpid())
+                sid=call('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.loadScript',str(script),name)
+                try:call('qdbus6','org.kde.KWin','/Scripting/Script'+sid,'org.kde.kwin.Script.run')
+                finally:call('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript',name)
+                settle=time.monotonic()+.35;wait(lambda:time.monotonic()>=settle)
+                target=QLineEdit('123');target.setWindowTitle('Fôlego QA — atalhos padrão')
+                target.resize(450,80);target.show()
+                observed=[];bindings=[]
+                for key,chord in (('save','Ctrl+S'),('find','Ctrl+F'),
+                                  ('terminal-copy','Ctrl+Shift+C'),('terminal-paste','Ctrl+Shift+V')):
+                    binding=QShortcut(QKeySequence(chord),target)
+                    binding.activated.connect(lambda identity=key:observed.append(identity));bindings.append(binding)
+                wait(lambda:target.windowHandle().isExposed() and len(native('^Fôlego QA — atalhos padrão$'))==1)
+                def focus_target():
+                    script=root/'focus-owned-text.js'
+                    script.write_text('const w=workspace.windowList().find(w=>w.pid==='+str(os.getpid())+
+                        ' && w.caption==="Fôlego QA — atalhos padrão");if(w)workspace.activeWindow=w;')
+                    name='folego-qa-shortcuts-'+str(os.getpid())
+                    sid=call('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.loadScript',str(script),name)
+                    try:call('qdbus6','org.kde.KWin','/Scripting/Script'+sid,'org.kde.kwin.Script.run')
+                    finally:call('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript',name)
+                    target.setFocus();wait(lambda:target.isActiveWindow() and target.hasFocus())
+                focus_target();target.insert('abc');assert target.text()=='123abc'
+                for group,key in (('Edição','undo'),('Edição','redo'),('Edição','save'),('Edição','find'),
+                                  ('Terminal','terminal-copy'),('Terminal','terminal-paste')):
+                    focus_target()
+                    tabs=compact.shortcut_tabs
+                    pointer_click(tabs.buttons['prompts'].mapToGlobal(tabs.buttons['prompts'].rect().center()),backend,compact)
+                    wait(lambda:tabs.prompt_menu is not None and tabs.prompt_menu.isVisible() and tabs.controller.future is None)
+                    menu=tabs.prompt_menu
+                    assert [a.text() for a in menu.actions() if a.menu()]==['Janelas','Edição','Terminal','Custom']
+                    submenu=next(a.menu() for a in menu.actions() if a.text()==group)
+                    menu.setActiveAction(submenu.menuAction())
+                    submenu.popup(menu.mapToGlobal(menu.actionGeometry(submenu.menuAction()).topRight()))
+                    wait(lambda:submenu.isVisible() and submenu.windowHandle().isExposed())
+                    if key in ('undo','terminal-copy'):
+                        settle=time.monotonic()+.35;wait(lambda:time.monotonic()>=settle)
+                        submenu.grab().save(str(root/(group+'.png')))
+                    action=next(a for a in submenu.actions() if a.data()==key)
+                    pointer_click(submenu.mapToGlobal(submenu.actionGeometry(action).center()),backend,compact)
+                    wait(lambda:tabs.controller.future is None and tabs.prompt_menu is None)
+                    if key=='undo':wait(lambda:target.text()=='123')
+                    elif key=='redo':wait(lambda:target.text()=='123abc')
+                    else:wait(lambda:key in observed)
+                    assert target.hasFocus() and target.isActiveWindow()
+                    records.append(dict(case='native standard macro',macro=key,owned_target=True,
+                                        result='text edit' if key in ('undo','redo') else 'native key delivery; no file or clipboard effect'))
+                target.close()
             compact.control_button.pressed.connect(lambda:menu_events.append('pressed'))
             compact.control_menu.aboutToShow.connect(lambda:menu_events.append('show'))
             compact.control_menu.aboutToHide.connect(lambda:menu_events.append('hide'))
@@ -126,6 +182,8 @@ def main():
             assert window._poller._stop.is_set() and window.ai_monitor.poller._stop.is_set()
             records.append(dict(case='explicit exit in controls',workers_stopped=True))
         except Exception as exc:
+            import traceback
+            (root/'failure.txt').write_text(traceback.format_exc())
             errors.append(repr(exc)+' menu events: '+repr(menu_events));window.quit();app.exit(1)
     QTimer.singleShot(0,scenario)
     QTimer.singleShot(45000,lambda:(errors.append('watchdog'),window.quit(),app.exit(2)))
@@ -138,6 +196,7 @@ def main():
     if window._compact is not None:
         backend=window._compact.shortcut_tabs.controller.backend
         wait(lambda:backend.daemon is None)
+    if target is not None:target.close()
     for widget in list(app.topLevelWidgets()):widget.deleteLater()
     QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
     assert result['passed']

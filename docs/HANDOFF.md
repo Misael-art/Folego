@@ -1,5 +1,32 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Atalhos padrão em Janelas, Edição e Terminal — 02/11/2026
+
+Sobre `dca7f88b5608f83a4eebbe8ac0e55692dee84e26`, mesma raiz/branch/PR #1.
+Pedido atual implementado: dez atalhos sugeridos, em três submenus de Prompts,
+antes de Custom (continua o último). Janelas: Alt+Tab, Meta+W, Meta+Left/Right.
+Edição: Ctrl+Z, Ctrl+Shift+Z, Ctrl+S, Ctrl+F. Terminal: Ctrl+Shift+C/V.
+Catálogo Qt-free com IDs estáveis, exibe combinações sem registrar atalhos
+globais; escolha solicita uma combinação pelo worker/backend existente.
+Custom não é migrado nem regravado: padrões disponíveis também em instalação
+existente, sem recriar exemplos removidos ou bloquear por arquivo inválido.
+Editor da central informa onde encontrar os novos grupos.
+
+Focados **44 passed**, 2,87 s. `./dev check`: **1162 passed, 2 skipped** headless
+(28,75 s), **1441 passed, 2 skipped** Qt (57,80 s). Python 3.14.7, sequencial,
+HOME/XDG/TMP/Pulse privados, limites do wrapper mantidos. KDE/Wayland: quatro
+cenários de navegação mais seis macros por clique nativo. Desfazer/refazer
+alteraram campo próprio; demais combinações chegaram a bindings Qt próprios,
+com retorno do foco, sem arquivo/clipboard físico. As quatro associações globais
+de Janelas foram conferidas somente por leitura. [Provas e limites](handoff/validation/default-shortcuts-2026-11-02/README.md).
+
+Fôlego substituído pela bandeja e launcher oficial, sem sinais manuais. GUI
+**4071137**, starttime **5940425**, widget (2958,549;116,584), 280×275, central
+oculta; posição do usuário preservada. Recibo `.scratch/default-shortcuts/replacement.json`.
+Revalidar identidade/boot antes de qualquer ação. QA e auxiliar encerrados.
+Sem release/merge neste lote; próximo passo é o usuário validar os atalhos nos
+aplicativos usados. Outros aplicativos podem remapear combinações.
+
 ## Presente verde para tickets de redefinição — 02/11/2026
 
 Incremento sobre `0c1ca41f9c2eb9f75d146b8e0e9cadec8ea510fe`, mesma raiz/branch/PR #1.

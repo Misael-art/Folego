@@ -41,7 +41,8 @@ class CustomPromptsTab(QWidget):
         heading.setObjectName('section')
         layout.addWidget(heading)
         intro = QLabel('Os itens aparecem em Prompts → Custom no modo compacto. '
-                       'Textos são copiados; macros executam somente o atalho escolhido.')
+                       'Textos são copiados; macros executam somente o atalho escolhido. '
+                       'Os atalhos padrão ficam em Prompts → Janelas, Edição e Terminal.')
         intro.setWordWrap(True)
         layout.addWidget(intro)
         body = QHBoxLayout()

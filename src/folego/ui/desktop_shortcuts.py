@@ -277,7 +277,7 @@ class ShortcutTabs(QWidget):
             button = QPushButton(text)
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             button.setAccessibleName(text if action == 'prompts' else text + " no campo de texto em foco")
-            button.setToolTip('Escolher um prompt para copiar' if action == 'prompts' else text + " no campo de texto editável em foco; preserva a área de transferência")
+            button.setToolTip('Prompts para copiar, atalhos padrão e personalizações' if action == 'prompts' else text + " no campo de texto editável em foco; preserva a área de transferência")
             button.setStyleSheet(f"background:{color};color:white;border:none;border-radius:5px;"
                                  "font-size:8pt;padding:2px;min-height:18px;")
             button.clicked.connect(lambda checked=False, key=action: self.activate(key))
@@ -333,9 +333,20 @@ class ShortcutTabs(QWidget):
 
     def show_prompts(self):
         from ..core.development_prompts import PROMPTS
+        from ..core.custom_prompts import STANDARD_SHORTCUTS
         menu = QMenu(self.buttons['prompts'])
         for prompt in PROMPTS:
             menu.addAction(prompt.title, lambda checked=False, key=prompt.key: self.copy_prompt(key))
+        menu.addSeparator()
+        for group, items in STANDARD_SHORTCUTS:
+            submenu = menu.addMenu(group)
+            for identity, title, shortcut in items:
+                # Display the chord without registering a keyboard shortcut on
+                # Fôlego itself; these actions run only when explicitly chosen.
+                action = submenu.addAction(title + '\t' + shortcut)
+                action.setData(identity)
+                action.setToolTip(title + ' · ' + shortcut + '\nEnviado ao aplicativo em foco')
+                action.triggered.connect(lambda checked=False, key=identity: self.controller.request('standard-macro', key))
         menu.addSeparator()
         self.custom_menu = menu.addMenu('Custom')
         self.custom_menu.addAction('Carregando…').setEnabled(False)

@@ -68,6 +68,10 @@ dependências e limites](docs/COMPACTO.md).
 **Selecionar tudo, Apagar tudo e Prompts** ficam logo acima das abas. A biblioteca
 oferece 11 prompts de desenvolvimento: escolha um título para copiar e cole no
 agente desejado. O teclado virtual preserva o foco do campo de destino no KWin.
+O mesmo menu inclui dez atalhos padrão em **Janelas**, **Edição** e **Terminal**:
+alternar aplicativo, visão geral, posicionar à esquerda/direita, desfazer/refazer,
+salvar, buscar e copiar/colar no terminal. Escolher um item envia seu atalho ao
+aplicativo em foco; abrir o menu não executa as ações.
 O último item, **Custom**, reúne textos e macros pessoais. Na janela principal,
 aba **prompts**, use **+ Texto** ou **+ Macro** para cadastrar. Os exemplos são
 o texto exato `123` (sem espaços) e **Mostrar área de trabalho**.

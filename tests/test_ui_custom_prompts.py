@@ -67,6 +67,35 @@ def test_bad_library_disables_editor_instead_of_overwriting(qapp, tmp_path):
     editor.shutdown(); editor.close()
 
 
+def test_standard_groups_are_always_available_and_click_dispatches_one_macro(qapp, tmp_path, monkeypatch):
+    store = CustomPrompts(env=dict(HOME=str(tmp_path)))
+    store.path.parent.mkdir(parents=True)
+    store.path.write_text('{unknown}')
+    backend = DesktopTools(env=dict(HOME=str(tmp_path)))
+    calls = []
+    monkeypatch.setattr(backend, 'keys', lambda codes: calls.append(codes) or 'sent')
+    controller = DesktopController(backend=backend)
+    tabs = ShortcutTabs(controller=controller)
+    tabs.show_prompts()
+    wait(qapp, lambda: controller.future is None)
+    groups = {action.text(): action.menu() for action in tabs.prompt_menu.actions() if action.menu()}
+    assert list(groups) == ['Janelas', 'Edição', 'Terminal', 'Custom']
+    assert [len(groups[name].actions()) for name in ('Janelas', 'Edição', 'Terminal')] == [4, 4, 2]
+    assert calls == []  # opening menus never invokes a macro
+    assert groups['Custom'].actions()[0].text() == 'Biblioteca indisponível'
+    for name in ('Janelas', 'Edição', 'Terminal'):
+        for action in groups[name].actions():
+            assert action.shortcut().isEmpty() and '\t' in action.text()
+            before = len(calls)
+            action.trigger()
+            wait(qapp, lambda: controller.future is None)
+            assert len(calls) == before + 1
+    assert calls == [[56, 15], [125, 17], [125, 105], [125, 106],
+                     [29, 44], [29, 42, 44], [29, 31], [29, 33], [29, 42, 46], [29, 42, 47]]
+    assert store.path.read_text() == '{unknown}'
+    tabs.prompt_menu.close(); tabs.shutdown()
+
+
 def test_compact_custom_editor_opens_the_standard_window_tab(qapp):
     from folego.ui.main_window import MainWindow
     window = MainWindow()

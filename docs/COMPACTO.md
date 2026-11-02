@@ -234,6 +234,27 @@ copia seu texto para a área de transferência; depois cole no agente desejado.
 Não cola, executa ou envia pedidos automaticamente. Os textos são genéricos,
 respeitam as instruções e autorizações do projeto e pedem evidências verificáveis.
 
+Antes de Custom, o menu **Prompts** oferece três grupos de atalhos padrão:
+
+| Grupo | Ação | Combinação enviada |
+|---|---|---|
+| Janelas | Alternar aplicativo | `Alt+Tab` |
+| Janelas | Visão geral das janelas | `Meta+W` |
+| Janelas | Janela à esquerda / à direita | `Meta+Left` / `Meta+Right` |
+| Edição | Desfazer / Refazer | `Ctrl+Z` / `Ctrl+Shift+Z` |
+| Edição | Salvar / Buscar no aplicativo | `Ctrl+S` / `Ctrl+F` |
+| Terminal | Copiar / Colar no terminal | `Ctrl+Shift+C` / `Ctrl+Shift+V` |
+
+São dez ações disponíveis também em instalações existentes, sem alterar a
+biblioteca pessoal. O menu mostra as combinações, mas não registra atalhos
+globais: somente escolher um item envia a combinação uma vez pelo worker de
+entrada existente. Edição atua no aplicativo em foco; Terminal usa as combinações
+do Konsole. Janelas depende das associações do KDE (conferidas no host deste
+incremento); atalhos remapeados e outros aplicativos podem responder de outra
+forma. Meta corresponde à tecla Windows/Super. Não há shell nem envio de Enter
+após colar. Nenhum arquivo personalizado é migrado ou recriado para incluir os
+atalhos padrão, que continuam disponíveis se a biblioteca estiver vazia/ilegível.
+
 O último item, **Custom**, abre um submenu de textos e macros pessoais.
 **123** copia exatamente `123`, sem espaços. **Mostrar área de trabalho**
 mostra o desktop do KDE/KWin sem fechar aplicações; se ele já estiver visível,
