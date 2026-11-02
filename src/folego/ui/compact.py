@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLa
 
 from . import title_signal
 from .desktop_caps import detect
-from .theme import TOKENS, control_icon
+from .theme import themed_style, TOKENS, set_control_icon
 
 POSITION_KEY = "compact/position"
 WIDGET_TITLE = "Fôlego — widget"
@@ -82,8 +82,7 @@ class CompactWindow(QWidget):
         self.setWindowTitle(WIDGET_TITLE)
         self.setAccessibleName("Widget do Fôlego")
         self.setFixedWidth(280)
-        self.setStyleSheet(
-            "QWidget {font-size:9pt;}"
+        themed_style(self, lambda: "QWidget {font-size:9pt;}"
             f"QFrame#widgetCard {{background:{TOKENS.surface};border:1px solid {TOKENS.border};border-radius:12px;}}"
             f"QLabel {{background:transparent;color:{TOKENS.text};}}"
             f"QLabel#quality {{color:{TOKENS.muted};}}"
@@ -100,7 +99,7 @@ class CompactWindow(QWidget):
         self.detail_label = QLabel("sem amostra ainda")
         self.detail_label.setWordWrap(True)
         self.detail_label.setObjectName("quality")
-        self.detail_label.setStyleSheet(f"color:{TOKENS.text};font-weight:500;")
+        themed_style(self.detail_label, lambda: f"color:{TOKENS.text};font-weight:500;")
         self._automation_text = "automação manual · preset equilibrado · nenhum grant ativo"
         self.mode_label = QLabel()
         self.operation_label = QLabel("operação: nenhuma nesta sessão")
@@ -123,7 +122,7 @@ class CompactWindow(QWidget):
         self.open_button.clicked.connect(self._open_central)
         from PySide6.QtWidgets import QMenu
         self.control_button = QPushButton()
-        self.control_button.setIcon(control_icon(self.style(), 'application-menu', QStyle.StandardPixmap.SP_TitleBarMenuButton))
+        set_control_icon(self.control_button, 'application-menu', QStyle.StandardPixmap.SP_TitleBarMenuButton)
         self.control_button.setAccessibleName('Controles do widget do Fôlego')
         self.control_button.setToolTip('Controles do Fôlego')
         self.control_menu = QMenu(self.control_button)
@@ -132,7 +131,7 @@ class CompactWindow(QWidget):
         self.control_button.clicked.connect(lambda: self.control_menu.popup(
             self.control_button.mapToGlobal(self.control_button.rect().bottomLeft())))
         self.pause_button = QPushButton("Pausar")
-        self.pause_button.setIcon(control_icon(self.style(), "media-playback-pause", QStyle.StandardPixmap.SP_MediaPause))
+        set_control_icon(self.pause_button, "media-playback-pause", QStyle.StandardPixmap.SP_MediaPause)
         self.pause_button.setAccessibleName("Pausar ou retomar a coleta de telemetria")
         self.pause_button.setToolTip("Pausar monitoramento")
         self.pause_button.clicked.connect(self._toggle_pause)
@@ -345,9 +344,9 @@ class CompactWindow(QWidget):
         from .dashboard_tab import headroom_pct
         self.gauge.set_state(headroom_pct(snapshot), signal.level)
         from .dashboard_tab import VERDICT
-        verdict, color = VERDICT.get(signal.level, VERDICT["unknown"])
+        verdict, role = VERDICT.get(signal.level, VERDICT["unknown"])
         self.status_label.setText(verdict)
-        self.status_label.setStyleSheet(f"color:{color};font-weight:600;")
+        themed_style(self.status_label, lambda: f"color:{getattr(TOKENS, role)};font-weight:600;")
         memory = "RAM —"
         self.free_label.setText("RAM sem leitura")
         if snapshot.mem is not None and snapshot.mem.mem_total_kb > 0:

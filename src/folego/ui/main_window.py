@@ -32,7 +32,7 @@ from .accessibility_tab import AccessibilityTab
 from .options_tab import OptionsTab
 from .custom_prompts_tab import CustomPromptsTab
 from .ai_monitor import AIMonitor
-from .theme import control_icon
+from .theme import set_control_icon
 from ..core import health
 from ..core.exclusions import ExclusionError, ExclusionList
 from ..core.orphans import OrphanTracker, active_investigation, group_targets
@@ -180,7 +180,7 @@ class MainWindow(QMainWindow):
         header = QHBoxLayout(self.navigation_header)
         header.setContentsMargins(12, 8, 12, 8)
         self.back_button = QPushButton('Voltar')
-        self.back_button.setIcon(control_icon(self.style(), 'go-previous', QStyle.StandardPixmap.SP_ArrowBack))
+        set_control_icon(self.back_button, 'go-previous', QStyle.StandardPixmap.SP_ArrowBack)
         self.back_button.setAccessibleName('Voltar ao controle flutuante do Fôlego')
         self.back_button.setToolTip('Voltar ao widget sem encerrar o monitoramento')
         self.back_button.clicked.connect(self.return_to_compact)
@@ -190,7 +190,7 @@ class MainWindow(QMainWindow):
         header.addWidget(brand)
         header.addStretch(1)
         self.control_button = QToolButton()
-        self.control_button.setIcon(control_icon(self.style(), 'application-menu', QStyle.StandardPixmap.SP_TitleBarMenuButton))
+        set_control_icon(self.control_button, 'application-menu', QStyle.StandardPixmap.SP_TitleBarMenuButton)
         self.control_button.setAccessibleName('Controles do Fôlego')
         self.control_button.setToolTip('Controles do Fôlego')
         self.control_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)

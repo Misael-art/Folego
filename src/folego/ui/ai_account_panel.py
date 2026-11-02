@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QWidget, QLabel, QPushButton, QHBoxLayout, QVBoxL
                               QScrollArea, QProgressBar, QFrame)
 
 from ..core import ai_sessions as ai
-from .theme import TOKENS as T
+from .theme import themed_style, TOKENS as T
 
 
 def date(at):
@@ -32,7 +32,7 @@ class AccountPanel(QWidget):
         self.items = items or [ai.unknown(provider)]
         self._signature = None
         self.selected = next((i.get('account_id', '') for i in self.items if i.get('default')), self.items[0].get('account_id', ''))
-        self.setStyleSheet(f'QWidget{{background:{T.surface};color:{T.text};}}'
+        themed_style(self, lambda: f'QWidget{{background:{T.surface};color:{T.text};}}'
                           f'QPushButton{{padding:5px;border:1px solid {T.border};border-radius:5px;}}'
                           f'QPushButton:checked{{background:{T.surface_alt};border-color:{T.accent};}}'
                           f'QProgressBar{{border:none;background:{T.border};height:5px;max-height:5px;}}')
@@ -100,7 +100,7 @@ class AccountPanel(QWidget):
         label = QLabel(text)
         label.setWordWrap(True)
         label.setTextFormat(Qt.TextFormat.PlainText)
-        label.setStyleSheet(f'color:{color or T.text};font-size:{18 if big else 9}pt;'
+        themed_style(label, lambda: f'color:{getattr(T, color or "text")};font-size:{18 if big else 9}pt;'
                            + ('font-weight:600;' if big else ''))
         (layout or self.content).addWidget(label)
         return label
@@ -128,22 +128,22 @@ class AccountPanel(QWidget):
             if child: child.deleteLater()
         now = time.time()
         remaining = ai.effective(item, now)
-        color = dict(green=T.ok, yellow=T.warning, red=T.danger, unknown=T.muted)[ai.band(remaining)]
+        color = dict(green='ok', yellow='warning', red='danger', unknown='muted')[ai.band(remaining)]
         status = ('Cota não confirmada' if remaining is None else
                   'Cota quase no fim' if remaining <= 20 else 'Atenção ao consumo' if remaining <= 60 else 'Cota disponível')
         self.line(status, color=color)
         if remaining is not None:
             self.line(f'{100 - remaining}% usado', big=True, color=color)
-            self.line(f'{remaining}% restante · janela mais restrita', color=T.muted)
+            self.line(f'{remaining}% restante · janela mais restrita', color='muted')
         tickets = item.get('reset_credits') or {}
         expiry = tickets.get('expires_at')
         available = ai.available_resets(item, now)
         if available is not None:
-            self.line(f"Tickets de reset · {available} disponíveis", color=T.ok if available else T.muted)
+            self.line(f"Tickets de reset · {available} disponíveis", color='ok' if available else 'muted')
             if available:
-                self.line(('Valem até ' + date(expiry) if expiry else 'Validade não informada') + ' · resgate no cliente', color=T.muted)
+                self.line(('Valem até ' + date(expiry) if expiry else 'Validade não informada') + ' · resgate no cliente', color='muted')
         else:
-            self.line('Tickets de reset · ' + ('consulta vencida' if tickets else 'não informados'), color=T.muted)
+            self.line('Tickets de reset · ' + ('consulta vencida' if tickets else 'não informados'), color='muted')
         day = item.get('billing_day')
         if day:
             next_date = ai.next_monthly(day, now)
@@ -151,15 +151,15 @@ class AccountPanel(QWidget):
             days = (due - dt.datetime.fromtimestamp(now).date()).days
             today = dt.datetime.fromtimestamp(now).day == min(day, calendar.monthrange(
                 dt.datetime.fromtimestamp(now).year, dt.datetime.fromtimestamp(now).month)[1])
-            self.line(f'Assinatura · dia {day}' + (' · hoje' if today else f' · em {days} dias' if days <= 7 else ''), color=T.warning if today or days <= 7 else T.text)
-            self.line(('Estimativa' if 'estimativa' in item.get('billing_source', '') else 'Referência pessoal') + ' · ' + next_date + ' · confirme no provedor', color=T.muted)
+            self.line(f'Assinatura · dia {day}' + (' · hoje' if today else f' · em {days} dias' if days <= 7 else ''), color='warning' if today or days <= 7 else 'text')
+            self.line(('Estimativa' if 'estimativa' in item.get('billing_source', '') else 'Referência pessoal') + ' · ' + next_date + ' · confirme no provedor', color='muted')
         else:
-            self.line('Assinatura · dia não informado', color=T.muted)
+            self.line('Assinatura · dia não informado', color='muted')
         if item.get('paid_until'):
-            self.line('Assinatura até ' + date(item['paid_until']) + ' · metadado local', color=T.muted)
+            self.line('Assinatura até ' + date(item['paid_until']) + ' · metadado local', color='muted')
         for window in item.get('windows', []):
             card = QFrame()
-            card.setStyleSheet(f'QFrame{{background:{T.surface_alt};border-radius:5px;}}')
+            themed_style(card, lambda: f'QFrame{{background:{T.surface_alt};border-radius:5px;}}')
             block = QVBoxLayout(card)
             block.setContentsMargins(8, 6, 8, 6)
             block.setSpacing(3)
@@ -168,26 +168,26 @@ class AccountPanel(QWidget):
             progress.setRange(0, 100)
             progress.setValue(window['used'])
             progress.setTextVisible(False)
-            progress.setStyleSheet(f'QProgressBar::chunk{{background:{color};}}')
+            themed_style(progress, lambda: f'QProgressBar::chunk{{background:{getattr(T, color)};}}')
             block.addWidget(progress)
             reset = window.get('resets_at')
             text = ('Repõe em ' + until(reset, now) + ' · ' + date(reset) if reset and reset > now
                     else 'Reset passou · atualizando' if reset else 'Reset não informado')
-            self.line(text, color=T.muted, layout=block)
+            self.line(text, color='muted', layout=block)
             self.content.addWidget(card)
         if not item.get('windows'):
-            self.line('Sessão e semana: indisponíveis nesta fonte.', color=T.muted)
+            self.line('Sessão e semana: indisponíveis nesta fonte.', color='muted')
         if item.get('extra_credits') is not None:
             self.line('Saldo extra · ' + str(item['extra_credits']))
         extra = item.get('extra_usage')
         if extra:
             text = 'Uso extra · ' + ('habilitado' if extra['enabled'] else 'desabilitado')
             if 'utilization' in extra: text += f" · {extra['utilization']:g}% do limite mensal"
-            self.line(text, color=T.muted)
+            self.line(text, color='muted')
             if 'used_credits' in extra and 'monthly_limit' in extra:
-                self.line(f"Consumo {extra['used_credits']:g} / {extra['monthly_limit']:g} · unidades do provedor", color=T.muted)
-        if item.get('plan'): self.line('Plano · ' + str(item['plan']), color=T.muted)
-        if item.get('reason'): self.line(item['reason'], color=T.muted)
-        if item.get('observed_at'): self.line('Consulta · ' + date(item['observed_at']), color=T.muted)
-        if item.get('source'): self.line(item['source'], color=T.muted)
+                self.line(f"Consumo {extra['used_credits']:g} / {extra['monthly_limit']:g} · unidades do provedor", color='muted')
+        if item.get('plan'): self.line('Plano · ' + str(item['plan']), color='muted')
+        if item.get('reason'): self.line(item['reason'], color='muted')
+        if item.get('observed_at'): self.line('Consulta · ' + date(item['observed_at']), color='muted')
+        if item.get('source'): self.line(item['source'], color='muted')
         self.content.addStretch()

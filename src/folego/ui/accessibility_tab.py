@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QLab
 
 from .tune_jobs import TuneJobs
 from .workers import Poller
-from .theme import TOKENS
+from .theme import themed_style, TOKENS
 from ..core.accessibility import LABELS, STALE_SECONDS, ACTION, sample_age
 from ..orchestration.models import ActionPlan
 
@@ -35,7 +35,7 @@ class CapabilityButton(QPushButton):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.setAccessibleName(NAMES[key] + ": habilitar e verificar")
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setStyleSheet(f'''
+        themed_style(self, lambda: f'''
             QPushButton#capabilityButton {{ background: {TOKENS.surface}; border: 2px solid {TOKENS.border}; border-radius: 12px; }}
             QPushButton#capabilityButton:hover {{ background: {TOKENS.surface_alt}; }}
             QPushButton#capabilityButton[recovery="ready"] {{ border-color: {TOKENS.ok}; }}

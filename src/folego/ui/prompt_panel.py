@@ -7,11 +7,7 @@ from PySide6.QtWidgets import (QWidget, QFrame, QLabel, QPushButton, QVBoxLayout
                               QApplication)
 
 from ..core.development_prompts import PROMPTS, PROMPT_CATEGORIES
-from .theme import TOKENS as T, control_icon
-
-
-COLORS = dict(context=T.accent, development=T.ok, quality=T.warning,
-              performance='#ff9f8b', design='#b99ce1', delivery='#77c8de')
+from .theme import themed_style, TOKENS as T, control_icon, tint_icon, on_theme_change
 
 
 class PickerButton(QPushButton):
@@ -25,9 +21,9 @@ class PickerButton(QPushButton):
         policy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         policy.setHeightForWidth(True)
         self.setSizePolicy(policy)
-        self.setStyleSheet(f'QPushButton#promptChoice{{background:transparent;color:{T.text};'
+        themed_style(self, lambda: f'QPushButton#promptChoice{{background:transparent;color:{T.text};'
                            'min-height:0;padding:0;border:1px solid transparent;border-radius:5px;}'
-                           f'QPushButton#promptChoice:hover{{background:{T.border};}}'
+                           f'QPushButton#promptChoice:hover{{background:{T.surface_alt};border-color:{T.accent};}}'
                            f'QPushButton#promptChoice:focus{{background:{T.surface_alt};border-color:{T.focus};}}')
         row = QHBoxLayout(self)
         row.setContentsMargins(6, 3, 6, 3)
@@ -41,6 +37,7 @@ class PickerButton(QPushButton):
         image = QLabel()
         image.setStyleSheet('background:transparent;border:none;')
         image.setPixmap(icon.pixmap(14, 14))
+        on_theme_change(image, lambda: image.setPixmap(tint_icon(icon).pixmap(14, 14)))
         image.setFixedSize(14, 14)
         image.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         row.addWidget(image)
@@ -66,7 +63,7 @@ class PromptPanel(QWidget):
         super().__init__(parent)
         self.setObjectName('promptPanel')
         self.setAccessibleName('Prompts por categoria')
-        self.setStyleSheet(f'QWidget{{background:{T.surface};color:{T.text};}}'
+        themed_style(self, lambda: f'QWidget{{background:{T.surface};color:{T.text};}}'
                           'QWidget#promptPanel{border-radius:7px;}')
         self.buttons = {}
         self.headings = {}
@@ -84,12 +81,12 @@ class PromptPanel(QWidget):
         title = QLabel('Prompts')
         title.setStyleSheet('font-size:15pt;font-weight:700;')
         self.count = QLabel(f'{len(PROMPTS)} modelos')
-        self.count.setStyleSheet(f'font-size:10pt;color:{T.muted};')
+        themed_style(self.count, lambda: f'font-size:10pt;color:{T.muted};')
         line.addWidget(title, 1)
         line.addWidget(self.count)
         top.addLayout(line)
         hint = QLabel('Clique em um título para copiar')
-        hint.setStyleSheet(f'font-size:10pt;color:{T.muted};')
+        themed_style(hint, lambda: f'font-size:10pt;color:{T.muted};')
         top.addWidget(hint)
         outer.addWidget(header)
         outer.addWidget(self.separator())
@@ -97,7 +94,7 @@ class PromptPanel(QWidget):
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.scroll.setWidgetResizable(True)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.scroll.setStyleSheet(f'QScrollArea,QScrollArea>QWidget>QWidget{{background:{T.surface};}}'
+        themed_style(self.scroll, lambda: f'QScrollArea,QScrollArea>QWidget>QWidget{{background:{T.surface};}}'
             f'QScrollBar:vertical{{background:{T.surface_alt};width:6px;margin:2px 0;}}'
             f'QScrollBar::handle:vertical{{background:{T.border};min-height:24px;border-radius:3px;}}'
             'QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}'
@@ -118,8 +115,9 @@ class PromptPanel(QWidget):
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(8)
             stripe = QFrame()
+            stripe.setObjectName('promptStripe_' + key)
             stripe.setFixedWidth(3)
-            stripe.setStyleSheet(f'background:{COLORS[key]};border-radius:1px;min-width:3px;max-width:3px;')
+            themed_style(stripe, lambda slot=index: f'background:{T.categories[slot]};border-radius:1px;min-width:3px;max-width:3px;')
             row.addWidget(stripe)
             column = QVBoxLayout()
             column.setContentsMargins(0, 0, 0, 0)
@@ -166,7 +164,7 @@ class PromptPanel(QWidget):
     def separator():
         line = QFrame()
         line.setFixedHeight(1)
-        line.setStyleSheet(f'background:{T.border};border:none;min-height:1px;max-height:1px;')
+        themed_style(line, lambda: f'background:{T.border};border:none;min-height:1px;max-height:1px;')
         return line
 
     def sizeHint(self):

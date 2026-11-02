@@ -221,6 +221,28 @@ do campo vazio. Uma falha informa resultado não confirmado, sem repetição aut
 Dependências opcionais: `libatspi`/AT-SPI 2 e `kdotool` no KDE/Wayland ou
 `xdotool` em X11 com gerenciador de janelas. Não há instalação automática.
 
+### Temas em toda a interface
+
+Na central, **opções → Aparência · consoles clássicos** oferece oito paletas:
+SNES americano (cinza/lavanda), Super Famicom (quatro cores), Mega Drive / Genesis
+(preto/vermelho/azul), Master System III (preto/vermelho), PC Engine
+(branco/laranja), NES (cinza/preto/vermelho), TurboGrafx-16 (grafite/laranja) e
+PlayStation 2 (preto/azul). São inspirações aproximadas nas cores fornecidas
+pelo usuário; os tons de texto são ajustados para contraste nas superfícies.
+
+A seleção aplica imediatamente em todas as superfícies Qt, abertas ou ocultas:
+central, widget, prompts/submenus/Custom, contas, avisos, controles e teclado.
+Novas janelas usam a mesma paleta. A preferência `appearance/theme` usa a
+autoridade QSettings existente `folego/folego`; o próximo início restaura a
+escolha. O padrão sem preferência é SNES americano. Tema salvo desconhecido
+é informado nas opções, usando o padrão visual sem sobrescrever a preferência.
+Falha ao salvar mantém o tema em uso e mostra a falha; não anuncia sucesso.
+
+Verde/âmbar/vermelho mantêm o significado de saúde e franquia, sempre com texto.
+Texto normal e semântico tem contraste mínimo 4,5:1 nas três superfícies;
+botões usam tinta clara ou escura conforme seu fundo, com foco visível.
+A escolha não muda cotas, automação, sons, atalhos ou grants.
+
 Os seis atalhos têm o mesmo tamanho, em duas linhas: **Selecionar tudo / Apagar
 tudo / Prompts**, depois **Copiar / Colar / Print**. Passar o mouse revela a área
 de cima para baixo em 140 ms; ao sair, aguarda 200 ms antes de recolher. Menus

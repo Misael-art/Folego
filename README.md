@@ -86,6 +86,13 @@ o texto exato `123` (sem espaços) e **Mostrar área de trabalho**.
 Na aba **opções**, escolha se o widget deve aparecer no print e teste os sons
 de conclusão por agente, de 20% restantes, esgotamento e reposição confirmada.
 O volume pode subir temporariamente a 85% e retornar aos valores anteriores.
+Em **opções → Aparência · consoles clássicos**, escolha **SNES americano,
+Super Famicom, Mega Drive / Genesis, Master System III, PC Engine, NES,
+TurboGrafx-16 ou PlayStation 2**. A troca é imediata na central, no widget,
+nos menus, nos painéis de contas e no teclado, inclusive os já abertos, e fica
+salva para a próxima abertura. Sem preferência anterior, o padrão é SNES americano.
+As paletas usam os tons de referência com ajustes de contraste para leitura;
+os alertas preservam verde/âmbar/vermelho e seus textos.
 
 ![Widget compacto do Fôlego com navegação Central e Controles](docs/handoff/validation/navigation-2026-11-01/compact.png)
 

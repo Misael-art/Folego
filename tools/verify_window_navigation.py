@@ -14,6 +14,7 @@ def main():
     parser.add_argument('--state',type=Path,required=True)
     parser.add_argument('--standard-shortcuts',action='store_true',help='Native menu clicks into an owned text field')
     parser.add_argument('--prompt-key',help='Verify native prompt selection with clipboard intercepted in memory')
+    parser.add_argument('--console-themes',action='store_true',help='Select all console themes in owned mapped Qt windows')
     args=parser.parse_args()
     root=args.state.resolve();root.mkdir(mode=0o700,parents=True,exist_ok=False)
     for key,folder in (('HOME','home'),('XDG_CONFIG_HOME','config'),('XDG_DATA_HOME','data'),
@@ -146,7 +147,7 @@ def main():
                 swap_used_kb=1024,swap_total_kb=8192,pressure_memory=None,pressure_io=None,pressure_cpu=None,
                 load=None,apps=(),self_rss_kb=0,cpu_busy_frac=.52,temperature_c=61,temperature_sensor='demonstração',
                 tmpfs=(TmpfsVolume('/qa/runtime','tmpfs',100,81,19,is_runtime=True),)))
-            if args.prompt_key or args.standard_shortcuts:
+            if args.prompt_key or args.standard_shortcuts or args.console_themes:
                 script=root/'place-owned-widget.js'
                 script.write_text('const w=workspace.windowList().find(w=>w.pid==='+str(os.getpid())+
                     ' && w.caption==="Fôlego — widget");if(w){const g=w.frameGeometry;w.frameGeometry={x:20,y:120,width:g.width,height:g.height};}')
@@ -155,6 +156,49 @@ def main():
                 try:call('qdbus6','org.kde.KWin','/Scripting/Script'+sid,'org.kde.kwin.Script.run')
                 finally:call('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript',name)
                 settle=time.monotonic()+.35;wait(lambda:time.monotonic()>=settle)
+            if args.console_themes:
+                from folego.ui.theme import THEMES,TOKENS,THEME_KEY
+                from folego.ui.desktop_shortcuts import VirtualKeyboard
+                from PySide6.QtCore import QSettings
+                keyboard=VirtualKeyboard(compact.shortcut_tabs.controller)
+                keyboard.resize(min(900,compact.screen().availableGeometry().width()),260)
+                compact.shortcut_tabs.keyboard=keyboard
+                QTest.mouseClick(compact.open_button,Qt.MouseButton.LeftButton)
+                wait(lambda:window.isVisible() and window.windowHandle().isExposed())
+                # Start from a different choice: selecting an already-current
+                # default legitimately emits no currentIndexChanged signal.
+                window.options.theme_choice.setCurrentIndex(window.options.theme_choice.findData('ps2'))
+                for index,(key,selected) in enumerate(THEMES.items()):
+                    combo=window.options.theme_choice
+                    pointer_click(combo.mapToGlobal(combo.rect().center()),backend,window)
+                    wait(lambda:combo.view().isVisible())
+                    QTest.keyClick(combo.view(),Qt.Key.Key_Home)
+                    for _ in range(index):QTest.keyClick(combo.view(),Qt.Key.Key_Down)
+                    QTest.keyClick(combo.view(),Qt.Key.Key_Enter)
+                    wait(lambda:TOKENS.key==key and not combo.view().isVisible())
+                    assert QSettings('folego','folego').value(THEME_KEY)==key
+                    settle=time.monotonic()+.15;wait(lambda:time.monotonic()>=settle)
+                    window.grab().save(str(root/(key+'-central.png')))
+                    QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)
+                    wait(lambda:compact.isVisible() and compact.windowHandle().isExposed())
+                    compact._animate_actions(True)
+                    wait(lambda:compact.drawer_animation.state()==compact.drawer_animation.State.Stopped)
+                    compact.grab().save(str(root/(key+'-compact.png')))
+                    tabs=compact.shortcut_tabs;tabs.show_prompts()
+                    wait(lambda:tabs.prompt_menu is not None and tabs.prompt_menu.isVisible() and tabs.controller.future is None)
+                    settle=time.monotonic()+.15;wait(lambda:time.monotonic()>=settle)
+                    tabs.prompt_menu.grab().save(str(root/(key+'-prompts.png')))
+                    tabs.prompt_menu.close()
+                    keyboard.show();wait(lambda:keyboard.windowHandle().isExposed())
+                    keyboard.grab().save(str(root/(key+'-keyboard.png')))
+                    assert selected.tokens.surface in keyboard.styleSheet()
+                    keyboard.hide()
+                    records.append(dict(case='console theme selection',theme=key,saved=True,
+                                        surfaces=['central','compact','prompts','keyboard'],input='native dropdown click, Qt navigation on owned popup'))
+                    QTest.mouseClick(compact.open_button,Qt.MouseButton.LeftButton)
+                    wait(lambda:window.isVisible() and window.windowHandle().isExposed())
+                QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)
+                wait(lambda:compact.isVisible() and compact.windowHandle().isExposed())
             if args.prompt_key:
                 from folego.core.development_prompts import PROMPTS,text
                 selected=next(p for p in PROMPTS if p.key==args.prompt_key)
@@ -244,11 +288,11 @@ def main():
             (root/'failure.txt').write_text(traceback.format_exc())
             (root/'hover-events.json').write_text(json.dumps(hover_events,indent=2))
             if window._compact is not None:
-                c=window._compact;popup=QApplication.activePopupWidget()
+                c=window._compact;popup=QApplication.activePopupWidget();surface=native('^Fôlego — widget$')
                 (root/'hover-failure.json').write_text(json.dumps(dict(height=c.action_drawer.maximumHeight(),
                     delay=c.drawer_delay.isActive(),under_mouse=c.underMouse(),
                     geometry=[c.x(),c.y(),c.width(),c.height()],
-                    native=call('qdbus6','org.kde.KWin','/KWin','org.kde.KWin.getWindowInfo',native('^Fôlego — widget$')[0]),
+                    native=call('qdbus6','org.kde.KWin','/KWin','org.kde.KWin.getWindowInfo',surface[0]) if surface else None,
                     popup=popup.windowTitle() if popup else None,
                     popup_visible=popup.isVisible() if popup else None,
                     pointer=call('kdotool','getmouselocation')),indent=2))

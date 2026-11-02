@@ -8,10 +8,10 @@ from concurrent.futures import ThreadPoolExecutor
 from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot, ClassInfo, QPoint
 from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QStyle,
-                              QVBoxLayout, QWidget, QMenu, QWidgetAction)
+                              QVBoxLayout, QWidget, QMenu, QWidgetAction, QSizePolicy)
 
 from ..adapters.desktop_tools import DesktopTools
-from .theme import TOKENS, control_icon
+from .theme import themed_style, TOKENS, set_control_icon, shortcut_style
 
 
 def _show_desktop_request():
@@ -117,7 +117,7 @@ class VirtualKeyboard(QWidget):
         self._ready = os.environ.get('XDG_SESSION_TYPE') != 'wayland'
         self._requested_screen = None
         self._opening = False
-        self.setStyleSheet(f"QWidget {{ background:{TOKENS.surface};color:{TOKENS.text};font-size:11pt; }}"
+        themed_style(self, lambda: f"QWidget {{ background:{TOKENS.surface};color:{TOKENS.text};font-size:11pt; }}"
                            f"QPushButton {{ background:{TOKENS.surface_alt};border:1px solid {TOKENS.border};"
                            "border-radius:5px; padding:5px; min-height:26px; }"
                            f"QPushButton:hover {{border-color:{TOKENS.accent};}}")
@@ -127,7 +127,7 @@ class VirtualKeyboard(QWidget):
         self.status.setWordWrap(True)
         header.addWidget(self.status, 1)
         hide = self._button("Fechar", self.hide)
-        hide.setIcon(QIcon.fromTheme("window-close"))
+        set_control_icon(hide, 'window-close', QStyle.StandardPixmap.SP_DialogCloseButton)
         header.addWidget(hide)
         layout.addLayout(header)
         self.letters = []
@@ -273,15 +273,14 @@ class ShortcutTabs(QWidget):
         layout.setSpacing(2)
         editing = QHBoxLayout()
         editing.setSpacing(3)
-        for action, text, color in (("select_all", "Selecionar tudo", "#28596b"),
-                                    ("delete_all", "Apagar tudo", "#8a4554"),
-                                    ("prompts", "Prompts", "#51477d")):
+        for index, (action, text) in enumerate((("select_all", "Selecionar tudo"),
+                                    ("delete_all", "Apagar tudo"), ("prompts", "Prompts"))):
             button = QPushButton(text)
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             button.setAccessibleName(text if action == 'prompts' else text + " no campo de texto em foco")
             button.setToolTip('Prompts para copiar, atalhos padrão e personalizações' if action == 'prompts' else text + " no campo de texto editável em foco; preserva a área de transferência")
-            button.setStyleSheet(f"background:{color};color:white;border:none;border-radius:5px;"
-                                 "font-size:8pt;padding:2px;min-height:18px;")
+            themed_style(button, lambda slot=index: shortcut_style(slot))
             button.clicked.connect(lambda checked=False, key=action: self.activate(key))
             self.buttons[action] = button
             editing.addWidget(button, 1)
@@ -289,21 +288,20 @@ class ShortcutTabs(QWidget):
         row = QHBoxLayout()
         row.setSpacing(3)
         layout.addLayout(row)
-        for key, title, color in (('copy', 'Copiar', '#2e78a7'), ('paste', 'Colar', '#287963'),
-                                  ('print', 'Print', '#8f651f')):
+        for index, (key, title) in enumerate((('copy', 'Copiar'), ('paste', 'Colar'), ('print', 'Print')), 3):
             button = QPushButton(title)
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             button.setAccessibleName(title)
             button.setToolTip({'copy': 'Copiar a seleção do aplicativo em foco',
                                'paste': 'Colar no aplicativo em foco',
                                'print': 'Selecionar uma região para captura de tela'}[key])
-            button.setStyleSheet(f'background:{color};color:white;border:none;border-radius:5px;'
-                                 'font-size:8pt;padding:2px;min-height:18px;')
+            themed_style(button, lambda slot=index: shortcut_style(slot))
             button.clicked.connect(lambda checked=False, action=key: self.activate(action))
             self.buttons[key] = button
             row.addWidget(button, 1)
         keyboard = QPushButton(self)
-        keyboard.setIcon(control_icon(self.style(), 'input-keyboard', QStyle.StandardPixmap.SP_ComputerIcon))
+        set_control_icon(keyboard, 'input-keyboard', QStyle.StandardPixmap.SP_ComputerIcon)
         keyboard.setFixedSize(24, 24)
         keyboard.setStyleSheet('min-height:0;max-height:24px;padding:0;')
         keyboard.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -312,7 +310,7 @@ class ShortcutTabs(QWidget):
         keyboard.clicked.connect(lambda: self.open_keyboard('bottom'))
         self.buttons['keyboard'] = keyboard
         self.top_button = QPushButton(self)
-        self.top_button.setIcon(control_icon(self.style(), 'go-up', QStyle.StandardPixmap.SP_ArrowUp))
+        set_control_icon(self.top_button, 'go-up', QStyle.StandardPixmap.SP_ArrowUp)
         self.top_button.setFixedSize(18, 24)
         self.top_button.setStyleSheet('min-height:0;max-height:24px;padding:0;')
         self.top_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -337,7 +335,7 @@ class ShortcutTabs(QWidget):
         menu = QMenu(self.buttons['prompts'])
         menu.setObjectName('promptPopup')
         menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        menu.setStyleSheet(f'QWidget{{background:{TOKENS.surface};color:{TOKENS.text};padding:0;min-height:0;'
+        themed_style(menu, lambda: f'QWidget{{background:{TOKENS.surface};color:{TOKENS.text};padding:0;min-height:0;'
                            'border:none;border-radius:0;}'
                            f'QMenu#promptPopup{{background:{TOKENS.surface};color:{TOKENS.text};'
                            f'border:1px solid {TOKENS.border};border-radius:8px;padding:0;}}')
@@ -373,10 +371,10 @@ class ShortcutTabs(QWidget):
 
     @staticmethod
     def _style_prompt_submenu(menu):
-        menu.setStyleSheet(f'QMenu{{background:{TOKENS.surface};color:{TOKENS.text};'
+        themed_style(menu, lambda: f'QMenu{{background:{TOKENS.surface};color:{TOKENS.text};'
             f'border:1px solid {TOKENS.border};padding:4px;}}'
             'QMenu::item{padding:6px 12px;}'
-            f'QMenu::item:selected{{background:{TOKENS.border};}}')
+            f'QMenu::item:selected{{background:{TOKENS.accent};color:{TOKENS.accent_text};}}')
 
     @staticmethod
     def _prompt_footer(panel, key):

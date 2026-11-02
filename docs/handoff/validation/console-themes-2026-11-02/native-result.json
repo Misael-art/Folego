@@ -1,0 +1,143 @@
+{
+  "passed": true,
+  "platform": "wayland",
+  "cases": [
+    {
+      "case": "frameless central",
+      "native_frame_equals_client": true,
+      "compositor_geometry": {
+        "frame": [
+          1779,
+          230,
+          900,
+          620
+        ],
+        "client": [
+          1779,
+          230,
+          900,
+          620
+        ]
+      },
+      "client_size": [
+        900,
+        620
+      ],
+      "available": [
+        2560,
+        1080
+      ]
+    },
+    {
+      "case": "back to widget without tray",
+      "workers_active": true
+    },
+    {
+      "case": "return to previous central tab",
+      "tab": "op\u00e7\u00f5es",
+      "workers_active": true
+    },
+    {
+      "case": "console theme selection",
+      "theme": "snes-us",
+      "saved": true,
+      "surfaces": [
+        "central",
+        "compact",
+        "prompts",
+        "keyboard"
+      ],
+      "input": "native dropdown click, Qt navigation on owned popup"
+    },
+    {
+      "case": "console theme selection",
+      "theme": "super-famicom",
+      "saved": true,
+      "surfaces": [
+        "central",
+        "compact",
+        "prompts",
+        "keyboard"
+      ],
+      "input": "native dropdown click, Qt navigation on owned popup"
+    },
+    {
+      "case": "console theme selection",
+      "theme": "mega-drive",
+      "saved": true,
+      "surfaces": [
+        "central",
+        "compact",
+        "prompts",
+        "keyboard"
+      ],
+      "input": "native dropdown click, Qt navigation on owned popup"
+    },
+    {
+      "case": "console theme selection",
+      "theme": "master-system",
+      "saved": true,
+      "surfaces": [
+        "central",
+        "compact",
+        "prompts",
+        "keyboard"
+      ],
+      "input": "native dropdown click, Qt navigation on owned popup"
+    },
+    {
+      "case": "console theme selection",
+      "theme": "pc-engine",
+      "saved": true,
+      "surfaces": [
+        "central",
+        "compact",
+        "prompts",
+        "keyboard"
+      ],
+      "input": "native dropdown click, Qt navigation on owned popup"
+    },
+    {
+      "case": "console theme selection",
+      "theme": "nes",
+      "saved": true,
+      "surfaces": [
+        "central",
+        "compact",
+        "prompts",
+        "keyboard"
+      ],
+      "input": "native dropdown click, Qt navigation on owned popup"
+    },
+    {
+      "case": "console theme selection",
+      "theme": "turbografx",
+      "saved": true,
+      "surfaces": [
+        "central",
+        "compact",
+        "prompts",
+        "keyboard"
+      ],
+      "input": "native dropdown click, Qt navigation on owned popup"
+    },
+    {
+      "case": "console theme selection",
+      "theme": "ps2",
+      "saved": true,
+      "surfaces": [
+        "central",
+        "compact",
+        "prompts",
+        "keyboard"
+      ],
+      "input": "native dropdown click, Qt navigation on owned popup"
+    },
+    {
+      "case": "explicit exit in controls",
+      "workers_stopped": true
+    }
+  ],
+  "errors": [],
+  "scope": "owned Qt windows and compositor metadata; private HOME/XDG/Pulse; no user text or resource effects"
+}

@@ -27,8 +27,8 @@ TARGET_LABEL = {"memoria": "memória", "ajustes": "ajustes",
                 "orfaos": "órfãos", "disco": "disco", "tmpfs": "temporários"}
 
 
-VERDICT = {health.GREEN: ("Saudável", TOKENS.ok), health.YELLOW: ("Atenção", TOKENS.warning),
-           health.RED: ("Crítico", TOKENS.danger), health.UNKNOWN: ("Desconhecido", TOKENS.muted)}
+VERDICT = {health.GREEN: ("Saudável", 'ok'), health.YELLOW: ("Atenção", 'warning'),
+           health.RED: ("Crítico", 'danger'), health.UNKNOWN: ("Desconhecido", 'muted')}
 
 
 def headroom_pct(snapshot) -> int | None:
@@ -56,15 +56,19 @@ class HealthGauge(QWidget):
         self._compact = compact
         self.setMinimumSize(*((72, 72) if compact else (176, 176)))
         self.value: int | None = None
-        self.verdict, self.color = VERDICT[health.UNKNOWN]
+        self.verdict, self._color_role = VERDICT[health.UNKNOWN]
         self.setAccessibleName("Saúde geral")
         self._sync_accessible()
 
     def set_state(self, value: int | None, level: str) -> None:
         self.value = value
-        self.verdict, self.color = VERDICT.get(level, VERDICT[health.UNKNOWN])
+        self.verdict, self._color_role = VERDICT.get(level, VERDICT[health.UNKNOWN])
         self._sync_accessible()
         self.update()
+
+    @property
+    def color(self):
+        return getattr(TOKENS, self._color_role)
 
     def _sync_accessible(self):
         amount = "sem dados" if self.value is None else f"{self.value}% de folga"

@@ -5,7 +5,8 @@ from PySide6.QtWidgets import (QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QW
                               QMenu, QInputDialog, QWidgetAction, QGraphicsOpacityEffect)
 
 from ..core import ai_sessions
-from .theme import TOKENS
+from .theme import themed_style, TOKENS, on_theme_change
+from .palettes import on_color
 from .desktop_shortcuts import DesktopController
 from .ai_monitor import AIMonitor
 from ..adapters.agent_apps import AgentApps
@@ -18,7 +19,7 @@ def gift_icon():
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    painter.setPen(QPen(QColor(TOKENS.accent_text), 1.8))
+    painter.setPen(QPen(QColor(on_color(TOKENS.ok)), 1.8))
     painter.drawRoundedRect(QRectF(4, 12, 16, 9), 1, 1)
     painter.drawRoundedRect(QRectF(2, 8, 20, 5), 1, 1)
     painter.drawLine(12, 8, 12, 21)
@@ -81,7 +82,7 @@ class AIStrip(QWidget):
             reset_badge.setFixedSize(30, 14)
             reset_badge.setIcon(gift_icon())
             reset_badge.setIconSize(QSize(11, 11))
-            reset_badge.setStyleSheet(f'background:{TOKENS.ok};color:{TOKENS.accent_text};'
+            themed_style(reset_badge, lambda: f'background:{TOKENS.ok};color:{on_color(TOKENS.ok)};'
                                       'padding:0;border:none;min-height:0;max-height:14px;'
                                       'border-radius:6px;font-size:8pt;font-weight:600;')
             reset_badge.setGraphicsEffect(QGraphicsOpacityEffect(reset_badge))
@@ -99,6 +100,7 @@ class AIStrip(QWidget):
         self.freshness = QTimer(self)
         self.freshness.setInterval(1000)
         self.freshness.timeout.connect(self.render)
+        on_theme_change(self, self.render)
         self.render()
 
     @property
@@ -243,14 +245,16 @@ class AIStrip(QWidget):
             partial = not delivery.get('complete', True)
             number = str(count) + ('+' if partial else '')
             badge.setText('?' if count is None else number if count else '')
+            background = TOKENS.accent if count else TOKENS.muted if count is None else TOKENS.surface
             badge.setStyleSheet(f"background:{TOKENS.accent if count else TOKENS.muted if count is None else 'transparent'};"
-                               f"color:{TOKENS.accent_text};font-size:8pt;font-weight:600;border-radius:6px;")
+                               f"color:{on_color(background)};font-size:8pt;font-weight:600;border-radius:6px;")
             completed = 'conclusões não verificadas' if count is None else f'{count} novas entregas para revisitar'
             if count and partial: completed = 'Pelo menos ' + completed + '; outras sessões não verificadas'
             confirmed = [(i, ai_sessions.available_resets(i)) for i in items]
             offers = [(i, n) for i, n in confirmed if n is not None and n > 0]
             total = sum(n for _, n in offers)
             reset_badge = self.reset_badges[provider]
+            reset_badge.setIcon(gift_icon())
             reset_badge.setVisible(total > 0)
             reset_badge.setText(str(total) if total <= 9 else '9+')
             resets = f'{total} redefinições disponíveis confirmadas'

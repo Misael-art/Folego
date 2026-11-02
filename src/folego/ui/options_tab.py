@@ -1,9 +1,11 @@
 """Session startup preference; all system/file operations run in a worker."""
 import sys
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QSignalBlocker
+from PySide6.QtGui import QPixmap, QPainter, QColor, QIcon
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QLineEdit, QLabel, QPushButton,
                               QVBoxLayout, QHBoxLayout, QScrollArea, QGroupBox, QLayout, QWidget)
 from .tune_jobs import TuneJobs
+from .theme import TOKENS, THEMES, choose_theme, on_theme_change
 
 
 def options_argv(action, target, confirm):
@@ -64,11 +66,55 @@ class OptionsTab(QWidget):
         box = QVBoxLayout(content)
         box.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         self.settings_box = box
+        self.build_theme_options()
         for widget in (self.choice, text, self.status, self.verify, self.pending, self.operation_id, self.reconcile, self.cancel, self.operation_status, self.retention, self.retain):
             box.addWidget(widget)
         box.addStretch(1)
         area.setWidget(content)
         outer.addWidget(area)
+
+    def build_theme_options(self):
+        group = QGroupBox('Aparência · consoles clássicos')
+        layout = QVBoxLayout(group)
+        self.theme_choice = QComboBox()
+        self.theme_choice.setAccessibleName('Tema de cores de todo o Fôlego')
+        self.theme_choice.setToolTip('Aplica agora na central, widget, menus, painéis e teclado; mantém a escolha ao reabrir')
+        for key, theme in THEMES.items():
+            pixmap = QPixmap(60, 14)
+            painter = QPainter(pixmap)
+            for i, color in enumerate(theme.tokens.actions):
+                painter.fillRect(i * 10, 0, 10, 14, QColor(color))
+            painter.end()
+            self.theme_choice.addItem(QIcon(pixmap), theme.name, key)
+        self.theme_description = QLabel()
+        self.theme_description.setWordWrap(True)
+        self.theme_status = QLabel()
+        self.theme_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.theme_status.setWordWrap(True)
+        hint = QLabel('Uma escolha para todas as telas. As cores de alerta mantêm o significado: '
+                      'verde disponível, âmbar atenção e vermelho crítico, acompanhadas de texto.')
+        hint.setWordWrap(True)
+        for widget in (self.theme_choice, self.theme_description, hint, self.theme_status): layout.addWidget(widget)
+        self.settings_box.addWidget(group)
+        self.sync_theme()
+        on_theme_change(self, self.sync_theme)
+        self.theme_choice.currentIndexChanged.connect(self.change_theme)
+
+    def sync_theme(self):
+        with QSignalBlocker(self.theme_choice):
+            self.theme_choice.setCurrentIndex(self.theme_choice.findData(TOKENS.key))
+        self.theme_description.setText(THEMES[TOKENS.key].description)
+        from PySide6.QtWidgets import QApplication
+        self.theme_status.setText(QApplication.instance().property('folego_theme_error') or
+                                 'Aplicado em todas as telas · escolha salva ao selecionar.')
+
+    def change_theme(self, index):
+        if self._stopped: return
+        try:
+            choose_theme(self.theme_choice.itemData(index))
+        except (ValueError, RuntimeError) as exc:
+            self.sync_theme()
+            self.theme_status.setText(str(exc))
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -111,7 +157,7 @@ class OptionsTab(QWidget):
         self.test_sound.clicked.connect(lambda: self.sound_preview.emit(self.sound_kind.currentData()))
         preview.addWidget(self.sound_kind, 1); preview.addWidget(self.test_sound)
         layout.addLayout(preview); layout.addWidget(self.sound_status)
-        self.settings_box.insertWidget(0, group)
+        self.settings_box.insertWidget(1, group)
 
     def sound_feedback(self, message):
         if self._stopped: return

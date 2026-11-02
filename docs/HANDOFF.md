@@ -1,5 +1,36 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Temas de consoles em toda a interface — 02/11/2026
+
+Sobre `1cf92789aa10eaad608956cab6d5c9eb4799d82c`, mesma raiz/branch/PR #1.
+Seletor no topo de opções: oito temas do anexo (SNES americano, SFC, Mega Drive,
+Master System III, PC Engine, NES, TurboGrafx-16 e PS2). Padrão SNES americano.
+Tokens compartilhados, receitas nos próprios widgets e atualização em uso de
+central, compacto, prompts/submenus/Custom, contas e teclado, mesmo ocultos.
+Ícones de controles e sinais redesenhados com a paleta; alertas preservam
+semântica/texto. Sem recriar monitores, alterar grants ou fontes de conta.
+Preferência `appearance/theme` na autoridade QSettings existente; restauração,
+chave desconhecida informada sem sobrescrever e falha de gravação explícita.
+
+Focados finais **46 passed**, 16,09 s. `./dev check`: **1168 passed, 2 skipped**
+headless (48,15 s), **1465 passed, 2 skipped** Qt (120,81 s), Python 3.14.7,
+sequencial, HOME/XDG/TMP/Pulse privados. Contraste texto/semântico/categorias
+4,5:1 nas três superfícies, tinta dos botões, foco, persistência e views abertas,
+ocultas e futuras. Doze cenários KDE/Wayland, oito temas selecionados e salvos
+com clique nativo e navegação Qt no popup; capturas de quatro superfícies por
+paleta. Inspeção visual das matrizes de widget/prompts/teclado e central.
+Dados de demonstração, sem clipboard/processos/textos do usuário como fixtures;
+teclado validado na apresentação, sem repetir efeitos de digitação/volume.
+[Provas e limites](handoff/validation/console-themes-2026-11-02/README.md).
+
+CI anterior do SHA base tinha Qt vermelho por larguras 91/88 na fonte Ubuntu;
+política horizontal dos seis botões corrigida para preservar colunas iguais,
+sem afrouxar a asserção. Núcleo/CLI anteriores verdes. Tentativas de QA
+interrompidas preservadas; harness ajustado para clique nativo no seletor e
+navegação no popup próprio. Sem novo release/merge; b2 continua imutável.
+Atualização da GUI real será registrada após o commit. Próximo passo: usuário
+escolher sua paleta em Central → opções → Aparência · consoles clássicos.
+
 ## Atalhos recolhíveis e temperatura — 02/11/2026
 
 Sobre `b2969ac5280cc2ed477b258ddbe13701264c3332`, mesma raiz/branch/PR #1.
