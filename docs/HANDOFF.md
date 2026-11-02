@@ -21,7 +21,8 @@ recurso. Fontes e dados das contas permanecem nos seus owners existentes.
 
 `./dev check`: **1168 passed, 2 skipped** headless (50,68 s) e **1473 passed,
 2 skipped** Qt (142,25 s). Após a regressão de checkbox, Qt final `./dev test`:
-**1478 passed, 2 skipped**, 126,64 s. Focados de popup **11 passed**, 3,36 s.
+**1478 passed, 2 skipped**, 126,64 s. Focados finais **15 passed**, 3,84 s, incluindo preenchimento primário/hover
+e estados de checkbox.
 Python 3.14.7, sequencial, HOME/XDG/TMP/Pulse privados. Host com carga 18–20,
 sem encerrar trabalhos alheios. Duas execuções KDE/Wayland de sete cenários,
 SNES/PS2 com 0/50/100%, cinco superfícies, salvamento, navegação e saída.

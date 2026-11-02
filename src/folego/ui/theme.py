@@ -195,11 +195,11 @@ QPushButton#pill {{
     font-weight: 600;
 }}
 QPushButton#pill:hover {{
-    background: {TOKENS.accent};
+    background: {background(TOKENS.accent)};
     color: {TOKENS.accent_text};
 }}
 QPushButton#primary {{
-    background: {TOKENS.accent};
+    background: {background(TOKENS.accent)};
     color: {TOKENS.accent_text};
     border: 1px solid {TOKENS.accent};
     font-weight: 600;

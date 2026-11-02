@@ -1,7 +1,7 @@
 """Surface alpha must never fade foreground content or fragment label rows."""
 import pytest
 from PySide6.QtCore import QSettings, Qt
-from PySide6.QtWidgets import QLabel, QDialog, QCheckBox, QStyle, QStyleOptionButton
+from PySide6.QtWidgets import QLabel, QDialog, QCheckBox, QStyle, QStyleOptionButton, QPushButton
 
 from folego.ui import theme, options_tab
 from folego.ui.ai_account_panel import AccountPanel
@@ -144,3 +144,13 @@ def test_checkbox_states_stay_visible_and_distinct(qapp,restore_appearance,value
         assert max(image.pixelColor(x,y).alpha() for x in range(image.width()) for y in range(image.height()))==255
         images.append(bytes(image.constBits()))
     assert images[0]!=images[1]
+
+
+@pytest.mark.parametrize('value,alpha', [(0,255),(100,0)])
+def test_primary_action_fill_follows_background_control(qapp,restore_appearance,value,alpha):
+    theme.apply_theme(qapp,'ps2',transparency=value)
+    control=QPushButton('Continuar');control.setObjectName('primary')
+    control.resize(160,48);control.show();qapp.processEvents()
+    image=control.grab().toImage()
+    assert image.pixelColor(6,24).alpha()==alpha
+    assert control.windowOpacity()==1

@@ -28,10 +28,11 @@ a autoridade de tema. Marcação desmarcada mantém contorno visível.
   Python 3.14.7 gerenciado, sequencial, HOME/XDG/TMP/Pulse privados. Host com
   outros trabalhos ativos, carga observada 18–20; nenhuma carga alheia encerrada.
   [Headless](headless.txt) · [Qt final](qt.txt).
-- Focados do popup: **11 passed**, 3,36 s; cobrem alpha 0/128/255, texto opaco,
+- Focados finais: **15 passed**, 3,84 s; cobrem alpha 0/128/255, texto opaco,
   rótulos sem camada extra, teclado, diálogos, persistência, chave inválida,
-  prévia sem gravação, salvamento por gesto e rollback. Mais dois cenários de
-  checkbox visível/distinto a 0/100% estão na suíte Qt final. [Focados](focused.txt).
+  prévia sem gravação, salvamento por gesto e rollback, checkbox distinto e
+  ações primárias a 0/100%. Os últimos dois casos validam a aplicação do mesmo
+  alpha também no preenchimento primário/hover, após a suíte Qt final. [Focados](focused.txt).
 - `tools/verify_window_navigation.py --background-transparency --transparency-theme
   snes-us` e `... --transparency-theme ps2`: duas execuções **aprovadas, sete
   cenários cada**, dentro do orçamento original de 45 s. Três valores por tema,
