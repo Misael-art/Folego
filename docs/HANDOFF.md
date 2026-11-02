@@ -3,6 +3,7 @@
 ## Presente verde para tickets de redefinição — 02/11/2026
 
 Incremento sobre `0c1ca41f9c2eb9f75d146b8e0e9cadec8ea510fe`, mesma raiz/branch/PR #1.
+Código, testes e provas em `a475b005fb7e0aff1795b4351d99a2eefc773a73`.
 Pedido atual: pequeno presente verde piscando com quantidade ao lado das entregas.
 Implementado na linha existente de 14 px, mantendo largura de 280 px. Soma
 somente tickets confirmados das contas daquele provedor; 9+ no badge e número
