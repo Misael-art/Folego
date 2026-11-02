@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QWidget, QFrame, QLabel, QPushButton, QVBoxLayout
                               QApplication)
 
 from ..core.development_prompts import PROMPTS, PROMPT_CATEGORIES
-from .theme import themed_style, TOKENS as T, control_icon, tint_icon, on_theme_change
+from .theme import background, themed_style, TOKENS as T, control_icon, tint_icon, on_theme_change, paint_surface
 
 
 class PickerButton(QPushButton):
@@ -23,8 +23,8 @@ class PickerButton(QPushButton):
         self.setSizePolicy(policy)
         themed_style(self, lambda: f'QPushButton#promptChoice{{background:transparent;color:{T.text};'
                            'min-height:0;padding:0;border:1px solid transparent;border-radius:5px;}'
-                           f'QPushButton#promptChoice:hover{{background:{T.surface_alt};border-color:{T.accent};}}'
-                           f'QPushButton#promptChoice:focus{{background:{T.surface_alt};border-color:{T.focus};}}')
+                           f'QPushButton#promptChoice:hover{{background:{background(T.surface_alt)};border-color:{T.accent};}}'
+                           f'QPushButton#promptChoice:focus{{background:{background(T.surface_alt)};border-color:{T.focus};}}')
         row = QHBoxLayout(self)
         row.setContentsMargins(6, 3, 6, 3)
         row.setSpacing(8)
@@ -62,9 +62,10 @@ class PromptPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName('promptPanel')
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         self.setAccessibleName('Prompts por categoria')
-        themed_style(self, lambda: f'QWidget{{background:{T.surface};color:{T.text};}}'
-                          'QWidget#promptPanel{border-radius:7px;}')
+        themed_style(self, lambda: f'QWidget{{background:transparent;color:{T.text};}}'
+                          f'QWidget#promptPanel{{background:{background(T.surface)};border-radius:7px;}}')
         self.buttons = {}
         self.headings = {}
         self.footer_buttons = {}
@@ -94,8 +95,8 @@ class PromptPanel(QWidget):
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.scroll.setWidgetResizable(True)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        themed_style(self.scroll, lambda: f'QScrollArea,QScrollArea>QWidget>QWidget{{background:{T.surface};}}'
-            f'QScrollBar:vertical{{background:{T.surface_alt};width:6px;margin:2px 0;}}'
+        themed_style(self.scroll, lambda: 'QScrollArea,QScrollArea>QWidget>QWidget{background:transparent;}'
+            f'QScrollBar:vertical{{background:{background(T.surface_alt)};width:6px;margin:2px 0;}}'
             f'QScrollBar::handle:vertical{{background:{T.border};min-height:24px;border-radius:3px;}}'
             'QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}'
             'QScrollBar::add-page:vertical,QScrollBar::sub-page:vertical{background:transparent;}')
@@ -159,6 +160,10 @@ class PromptPanel(QWidget):
             self.footer_buttons[name] = button
         outer.addWidget(footer)
         if parent: parent.installEventFilter(self)
+
+    def paintEvent(self, event):
+        paint_surface(self)
+        super().paintEvent(event)
 
     @staticmethod
     def separator():

@@ -93,6 +93,10 @@ nos menus, nos painéis de contas e no teclado, inclusive os já abertos, e fica
 salva para a próxima abertura. Sem preferência anterior, o padrão é SNES americano.
 As paletas usam os tons de referência com ajustes de contraste para leitura;
 os alertas preservam verde/âmbar/vermelho e seus textos.
+No mesmo grupo, **Transparência do fundo** vai de **0% (opaco)** a **100% (sem
+fundo)**. A prévia acompanha a barra e a escolha é salva ao soltá-la. Textos,
+ícones, contornos de teclas e indicadores mantêm a opacidade; os painéis de
+contas usam um fundo contínuo, com os elementos internos transparentes.
 
 ![Widget compacto do Fôlego com navegação Central e Controles](docs/handoff/validation/navigation-2026-11-01/compact.png)
 

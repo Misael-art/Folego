@@ -180,6 +180,9 @@ class AIStrip(QWidget):
         button = self.buttons[provider]
         menu = QMenu(button)
         panel = AccountPanel(provider, [i for i in self.items if i['provider'] == provider])
+        menu.setObjectName('accountPopup')
+        menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        menu.setStyleSheet('QMenu#accountPopup{background:transparent;border:none;padding:0;}')
         area = button.screen().availableGeometry()
         panel.setFixedSize(min(560, area.width() - 20), min(470, area.height() - 24))
         panel.open_requested.connect(lambda p, a: (menu.close(), self.open_agent(p, a)))

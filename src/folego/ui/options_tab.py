@@ -3,9 +3,9 @@ import sys
 from PySide6.QtCore import Qt, Signal, QSignalBlocker
 from PySide6.QtGui import QPixmap, QPainter, QColor, QIcon
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QLineEdit, QLabel, QPushButton,
-                              QVBoxLayout, QHBoxLayout, QScrollArea, QGroupBox, QLayout, QWidget)
+                              QVBoxLayout, QHBoxLayout, QScrollArea, QGroupBox, QLayout, QWidget, QSlider)
 from .tune_jobs import TuneJobs
-from .theme import TOKENS, THEMES, choose_theme, on_theme_change
+from .theme import TOKENS, THEMES, choose_theme, on_theme_change, choose_transparency, apply_theme
 
 
 def options_argv(action, target, confirm):
@@ -91,10 +91,24 @@ class OptionsTab(QWidget):
         self.theme_status = QLabel()
         self.theme_status.setTextFormat(Qt.TextFormat.PlainText)
         self.theme_status.setWordWrap(True)
+        self.background_label = QLabel()
+        self.background_slider = QSlider(Qt.Orientation.Horizontal)
+        self.background_slider.setRange(0, 100)
+        self.background_slider.setSingleStep(1)
+        self.background_slider.setPageStep(10)
+        self.background_slider.setAccessibleName('Transparência do fundo de todo o Fôlego')
+        self.background_slider.setToolTip('0%: fundo opaco · 100%: sem fundo. Textos, ícones e contornos continuam visíveis.')
+        self._transparency_origin = TOKENS.transparency
+        self.background_slider.sliderPressed.connect(self._transparency_pressed)
+        self.background_slider.sliderReleased.connect(self._transparency_released)
+        self.background_slider.valueChanged.connect(self._transparency_changed)
         hint = QLabel('Uma escolha para todas as telas. As cores de alerta mantêm o significado: '
                       'verde disponível, âmbar atenção e vermelho crítico, acompanhadas de texto.')
         hint.setWordWrap(True)
-        for widget in (self.theme_choice, self.theme_description, hint, self.theme_status): layout.addWidget(widget)
+        opacity_hint = QLabel('0% opaco · 100% sem fundo. Mantém textos, ícones, teclas e indicadores; ajuste ao fundo da sua tela.')
+        opacity_hint.setWordWrap(True)
+        for widget in (self.theme_choice, self.theme_description, self.background_label,
+                       self.background_slider, opacity_hint, hint, self.theme_status): layout.addWidget(widget)
         self.settings_box.addWidget(group)
         self.sync_theme()
         on_theme_change(self, self.sync_theme)
@@ -103,6 +117,9 @@ class OptionsTab(QWidget):
     def sync_theme(self):
         with QSignalBlocker(self.theme_choice):
             self.theme_choice.setCurrentIndex(self.theme_choice.findData(TOKENS.key))
+        with QSignalBlocker(self.background_slider):
+            self.background_slider.setValue(TOKENS.transparency)
+        self.background_label.setText(f'Transparência do fundo · {TOKENS.transparency}%')
         self.theme_description.setText(THEMES[TOKENS.key].description)
         from PySide6.QtWidgets import QApplication
         self.theme_status.setText(QApplication.instance().property('folego_theme_error') or
@@ -113,6 +130,27 @@ class OptionsTab(QWidget):
         try:
             choose_theme(self.theme_choice.itemData(index))
         except (ValueError, RuntimeError) as exc:
+            self.sync_theme()
+            self.theme_status.setText(str(exc))
+
+    def _transparency_pressed(self):
+        self._transparency_origin = TOKENS.transparency
+
+    def _transparency_changed(self, value):
+        if self._stopped: return
+        if self.background_slider.isSliderDown():
+            # Drag previews contain no configuration I/O. Save once on release.
+            apply_theme(theme_id=TOKENS.key, transparency=value)
+        else:
+            self._transparency_origin = TOKENS.transparency
+            self._transparency_released()
+
+    def _transparency_released(self):
+        if self._stopped: return
+        try:
+            choose_transparency(self.background_slider.value())
+        except (ValueError, RuntimeError) as exc:
+            apply_theme(theme_id=TOKENS.key, transparency=self._transparency_origin)
             self.sync_theme()
             self.theme_status.setText(str(exc))
 

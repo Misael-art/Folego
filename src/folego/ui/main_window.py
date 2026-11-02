@@ -32,7 +32,7 @@ from .accessibility_tab import AccessibilityTab
 from .options_tab import OptionsTab
 from .custom_prompts_tab import CustomPromptsTab
 from .ai_monitor import AIMonitor
-from .theme import set_control_icon
+from .theme import set_control_icon, prepare_surface, paint_surface
 from ..core import health
 from ..core.exclusions import ExclusionError, ExclusionList
 from ..core.orphans import OrphanTracker, active_investigation, group_targets
@@ -87,6 +87,10 @@ class NavigationHeader(QFrame):
 
 
 class MainWindow(QMainWindow):
+    def paintEvent(self, event):
+        paint_surface(self)
+        super().paintEvent(event)
+
     def __init__(self, collector_factory=None,
                  thresholds: title_signal.Thresholds | None = None,
                  *, tracker: OrphanTracker | None = None, reaper_factory=None,
@@ -97,6 +101,7 @@ class MainWindow(QMainWindow):
                  accessibility_factory=None, startup_defaults=False):
         super().__init__()
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
+        prepare_surface(self)
         self._thresholds = thresholds or title_signal.Thresholds()
         self._journal = journal or Journal()
         self._history_reader = HistoryReader(self._journal)

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QWidget, QLabel, QPushButton, QHBoxLayout, QVBoxL
                               QScrollArea, QProgressBar, QFrame)
 
 from ..core import ai_sessions as ai
-from .theme import themed_style, TOKENS as T
+from .theme import background, themed_style, TOKENS as T, paint_surface
 
 
 def date(at):
@@ -29,12 +29,15 @@ class AccountPanel(QWidget):
     def __init__(self, provider, items, parent=None):
         super().__init__(parent)
         self.provider = provider
+        self.setObjectName('accountPanel')
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         self.items = items or [ai.unknown(provider)]
         self._signature = None
         self.selected = next((i.get('account_id', '') for i in self.items if i.get('default')), self.items[0].get('account_id', ''))
-        themed_style(self, lambda: f'QWidget{{background:{T.surface};color:{T.text};}}'
-                          f'QPushButton{{padding:5px;border:1px solid {T.border};border-radius:5px;}}'
-                          f'QPushButton:checked{{background:{T.surface_alt};border-color:{T.accent};}}'
+        themed_style(self, lambda: f'QWidget{{background:transparent;color:{T.text};}}'
+                          f'QWidget#accountPanel{{background:{background(T.surface)};border:1px solid {T.border};border-radius:10px;}}'
+                          f'QPushButton{{background:{background(T.surface_alt)};padding:5px;border:1px solid {T.border};border-radius:5px;}}'
+                          f'QPushButton:checked{{background:{background(T.surface_alt)};border-color:{T.accent};}}'
                           f'QProgressBar{{border:none;background:{T.border};height:5px;max-height:5px;}}')
         outer = QVBoxLayout(self)
         outer.setContentsMargins(10, 8, 10, 8)
@@ -95,6 +98,10 @@ class AccountPanel(QWidget):
         actions.addWidget(billing)
         outer.addLayout(actions)
         self.select(self.selected)
+
+    def paintEvent(self, event):
+        paint_surface(self)
+        super().paintEvent(event)
 
     def line(self, text, *, big=False, color=None, layout=None):
         label = QLabel(text)
@@ -159,7 +166,8 @@ class AccountPanel(QWidget):
             self.line('Assinatura até ' + date(item['paid_until']) + ' · metadado local', color='muted')
         for window in item.get('windows', []):
             card = QFrame()
-            themed_style(card, lambda: f'QFrame{{background:{T.surface_alt};border-radius:5px;}}')
+            card.setObjectName('quotaWindow')
+            themed_style(card, lambda: f'QFrame#quotaWindow{{background:{background(T.surface_alt)};border-radius:5px;}}')
             block = QVBoxLayout(card)
             block.setContentsMargins(8, 6, 8, 6)
             block.setSpacing(3)

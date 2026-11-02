@@ -1,0 +1,89 @@
+{
+  "passed": true,
+  "platform": "wayland",
+  "cases": [
+    {
+      "case": "frameless central",
+      "native_frame_equals_client": true,
+      "compositor_geometry": {
+        "frame": [
+          24,
+          0,
+          900,
+          593.3333333333333
+        ],
+        "client": [
+          24,
+          0,
+          900,
+          593.3333333333333
+        ]
+      },
+      "client_size": [
+        900,
+        593
+      ],
+      "available": [
+        948,
+        593
+      ]
+    },
+    {
+      "case": "back to widget without tray",
+      "workers_active": true
+    },
+    {
+      "case": "return to previous central tab",
+      "tab": "op\u00e7\u00f5es",
+      "workers_active": true
+    },
+    {
+      "case": "background transparency",
+      "theme": "snes-us",
+      "transparency": 0,
+      "saved": true,
+      "surfaces": [
+        "central",
+        "compact",
+        "prompts",
+        "keyboard",
+        "accounts"
+      ],
+      "input": "native dropdown click, Qt popup navigation and slider keys"
+    },
+    {
+      "case": "background transparency",
+      "theme": "snes-us",
+      "transparency": 50,
+      "saved": true,
+      "surfaces": [
+        "central",
+        "compact",
+        "prompts",
+        "keyboard",
+        "accounts"
+      ],
+      "input": "native dropdown click, Qt popup navigation and slider keys"
+    },
+    {
+      "case": "background transparency",
+      "theme": "snes-us",
+      "transparency": 100,
+      "saved": true,
+      "surfaces": [
+        "central",
+        "compact",
+        "prompts",
+        "keyboard",
+        "accounts"
+      ],
+      "input": "native dropdown click, Qt popup navigation and slider keys"
+    },
+    {
+      "case": "explicit exit in controls",
+      "workers_stopped": true
+    }
+  ],
+  "errors": [],
+  "scope": "owned Qt windows and compositor metadata; private HOME/XDG/Pulse; no user text or resource effects"
+}

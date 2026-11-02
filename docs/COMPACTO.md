@@ -239,9 +239,25 @@ escolha. O padrão sem preferência é SNES americano. Tema salvo desconhecido
 Falha ao salvar mantém o tema em uso e mostra a falha; não anuncia sucesso.
 
 Verde/âmbar/vermelho mantêm o significado de saúde e franquia, sempre com texto.
-Texto normal e semântico tem contraste mínimo 4,5:1 nas três superfícies;
+Texto normal e semântico tem contraste mínimo 4,5:1 nas três superfícies opacas;
 botões usam tinta clara ou escura conforme seu fundo, com foco visível.
 A escolha não muda cotas, automação, sons, atalhos ou grants.
+
+**Transparência do fundo**, no mesmo grupo, ajusta todas as superfícies de
+**0% opaco** a **100% sem fundo**. O padrão sem preferência é 0%. Arrastar
+mostra uma prévia sem gravar a configuração a cada movimento; soltar salva uma
+vez. Teclas/setas e acessibilidade também salvam a escolha. Trocar de tema
+preserva a transparência. A autoridade QSettings existente guarda
+`appearance/background_transparency`; o próximo início restaura a escolha.
+Valor desconhecido é informado, usando 0% sem sobrescrever o dado. Falha de
+gravação retorna à aparência anterior e informa o problema.
+
+O ajuste muda somente as pinturas de fundo. Textos, ícones, contornos de teclas,
+faixas, medidores e sinalizadores continuam opacos; a opacidade da janela inteira
+permanece 1. Rótulos e espaços de layout são transparentes para evitar caixas
+fragmentadas. O painel de contas tem uma superfície contínua, sem a moldura
+preta do popup. Na composição transparente, a leitura também depende do fundo
+da tela; escolha o nível que combina com o seu tema e conteúdo.
 
 Os seis atalhos têm o mesmo tamanho, em duas linhas: **Selecionar tudo / Apagar
 tudo / Prompts**, depois **Copiar / Colar / Print**. Passar o mouse revela a área

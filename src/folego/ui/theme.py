@@ -1,22 +1,61 @@
 """One live theme authority for every Qt surface, with persistent selection."""
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QSettings, QObject, QEvent, Qt
 from PySide6.QtGui import QColor, QPalette, QIcon, QPainter
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QWidget, QStyle, QStyleOption, QDialog
 from .palettes import THEMES, DEFAULT_THEME, Tokens, on_color
 
 THEME_KEY = 'appearance/theme'
+TRANSPARENCY_KEY = 'appearance/background_transparency'
 
 
 class _ActiveTokens:
     # Imports keep this identity. Replacing a palette never strands old imports.
     current = THEMES[DEFAULT_THEME].tokens
     key = DEFAULT_THEME
+    transparency = 0
 
     def __getattr__(self, name):
         return getattr(self.current, name)
 
 
 TOKENS = _ActiveTokens()
+
+
+def background(color):
+    """Alpha belongs to surface paint, never to a whole window or its content."""
+    if TOKENS.transparency == 0: return color
+    value = QColor(color)
+    return f'rgba({value.red()},{value.green()},{value.blue()},{round(255 * (100 - TOKENS.transparency) / 100)})'
+
+
+def _background_color(color):
+    value = QColor(color)
+    value.setAlpha(round(255 * (100 - TOKENS.transparency) / 100))
+    return value
+
+
+def prepare_surface(widget):
+    # Must precede native surface creation; toggling after mapping is unreliable.
+    widget.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
+
+def paint_surface(widget):
+    """Translucent roots skip Qt's automatic background; paint their QSS once."""
+    if widget.testAttribute(Qt.WidgetAttribute.WA_NoSystemBackground):
+        option = QStyleOption()
+        option.initFrom(widget)
+        painter = QPainter(widget)
+        widget.style().drawPrimitive(QStyle.PrimitiveElement.PE_Widget, option, painter, widget)
+        painter.end()
+
+
+class _SurfacePreparation(QObject):
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Type.Polish and isinstance(watched, QWidget) and watched.isWindow():
+            prepare_surface(watched)
+        elif event.type() == QEvent.Type.Paint and isinstance(watched, QDialog):
+            paint_surface(watched)
+        return False
 
 
 def themed_style(widget, factory):
@@ -33,11 +72,11 @@ def on_theme_change(widget, callback):
 def shortcut_style(index):
     color = TOKENS.actions[index]
     ink = on_color(color)
-    return (f'QPushButton{{background:{color};color:{ink};border:1px solid {color};border-radius:5px;'
+    return (f'QPushButton{{background:{background(color)};color:{ink};border:1px solid {color};border-radius:5px;'
             'font-size:8pt;padding:1px;min-height:18px;}'
             f'QPushButton:hover{{border-color:{TOKENS.text};}}'
             f'QPushButton:focus{{border:2px solid {TOKENS.focus};padding:0;}}'
-            f'QPushButton:disabled{{background:{TOKENS.surface_alt};color:{TOKENS.muted};border-color:{TOKENS.border};}}')
+            f'QPushButton:disabled{{background:{background(TOKENS.surface_alt)};color:{TOKENS.muted};border-color:{TOKENS.border};}}')
 
 
 def tint_icon(icon):
@@ -64,13 +103,16 @@ def control_icon(style, name, fallback, *, fallback_icon=None):
 def stylesheet():
     return f"""
 QWidget {{
-    background-color: {TOKENS.background};
+    background-color: transparent;
     color: {TOKENS.text};
     selection-background-color: {TOKENS.accent};
     selection-color: {TOKENS.accent_text};
 }}
-QMainWindow, QTabWidget::pane, QScrollArea {{
-    background-color: {TOKENS.background};
+QMainWindow, QDialog {{
+    background-color: {background(TOKENS.background)};
+}}
+QTabWidget::pane, QScrollArea {{
+    background: transparent;
 }}
 QTabWidget::pane {{
     border: 1px solid {TOKENS.border};
@@ -78,7 +120,7 @@ QTabWidget::pane {{
     top: -1px;
 }}
 QTabBar::tab {{
-    background: {TOKENS.surface};
+    background: {background(TOKENS.surface)};
     color: {TOKENS.muted};
     padding: 7px 14px;
     margin-right: 2px;
@@ -88,7 +130,7 @@ QTabBar::tab {{
     border-top-right-radius: {TOKENS.radius}px;
 }}
 QTabBar::tab:selected {{
-    background: {TOKENS.surface_alt};
+    background: {background(TOKENS.surface_alt)};
     color: {TOKENS.text};
     border-bottom: 2px solid {TOKENS.accent};
 }}
@@ -110,7 +152,7 @@ QTabWidget#sidebar QTabBar::tab {{
     text-align: left;
 }}
 QTabWidget#sidebar QTabBar::tab:selected {{
-    background: {TOKENS.surface_alt};
+    background: {background(TOKENS.surface_alt)};
     color: {TOKENS.text};
     border-left: 3px solid {TOKENS.accent};
 }}
@@ -118,7 +160,7 @@ QTabWidget#sidebar QTabBar::tab:focus {{
     border: 2px solid {TOKENS.focus};
 }}
 QFrame#hero, QFrame#card {{
-    background: {TOKENS.surface};
+    background: {background(TOKENS.surface)};
     border: 1px solid {TOKENS.border};
     border-radius: {TOKENS.radius * 2}px;
 }}
@@ -145,7 +187,7 @@ QLabel#section {{
     font-size: 11pt;
 }}
 QPushButton#pill {{
-    background: {TOKENS.surface_alt};
+    background: {background(TOKENS.surface_alt)};
     color: {TOKENS.text};
     border: 1px solid {TOKENS.accent};
     border-radius: 16px;
@@ -164,7 +206,7 @@ QPushButton#primary {{
     padding: 9px 18px;
 }}
 QPushButton#primary:disabled {{
-    background: {TOKENS.surface_alt};
+    background: {background(TOKENS.surface_alt)};
     color: {TOKENS.muted};
     border-color: {TOKENS.border};
 }}
@@ -195,7 +237,7 @@ QLabel#warning {{
     color: {TOKENS.warning};
 }}
 QPushButton {{
-    background: {TOKENS.surface_alt};
+    background: {background(TOKENS.surface_alt)};
     color: {TOKENS.text};
     border: 1px solid {TOKENS.border};
     border-radius: {TOKENS.radius}px;
@@ -211,20 +253,20 @@ QPushButton:focus {{
 QPushButton:disabled {{
     color: {TOKENS.muted};
     border-color: {TOKENS.border};
-    background: {TOKENS.surface};
+    background: {background(TOKENS.surface)};
 }}
 QPushButton:default {{
     border-color: {TOKENS.accent};
 }}
 QTableWidget, QTreeWidget, QListView {{
-    background: {TOKENS.surface};
-    alternate-background-color: {TOKENS.surface_alt};
+    background: {background(TOKENS.surface)};
+    alternate-background-color: {background(TOKENS.surface_alt)};
     gridline-color: {TOKENS.border};
     border: 1px solid {TOKENS.border};
     border-radius: {TOKENS.radius}px;
 }}
 QHeaderView::section {{
-    background: {TOKENS.surface_alt};
+    background: {background(TOKENS.surface_alt)};
     color: {TOKENS.muted};
     border: none;
     border-bottom: 1px solid {TOKENS.border};
@@ -234,7 +276,7 @@ QTableWidget:focus, QTreeWidget:focus {{
     border: 2px solid {TOKENS.focus};
 }}
 QProgressBar {{
-    background: {TOKENS.surface_alt};
+    background: {background(TOKENS.surface_alt)};
     border: 1px solid {TOKENS.border};
     border-radius: {TOKENS.radius}px;
     text-align: center;
@@ -243,18 +285,21 @@ QProgressBar::chunk {{
     background-color: {TOKENS.accent};
     border-radius: {TOKENS.radius - 1}px;
 }}
-QMenu {{background:{TOKENS.surface};color:{TOKENS.text};border:1px solid {TOKENS.border};}}
+QMenu {{background:{background(TOKENS.surface)};color:{TOKENS.text};border:1px solid {TOKENS.border};}}
 QMenu::item:selected {{background:{TOKENS.accent};color:{TOKENS.accent_text};}}
 QMenu::item:disabled {{color:{TOKENS.muted};}}
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox {{
-    background:{TOKENS.surface};color:{TOKENS.text};border:1px solid {TOKENS.border};
+    background:{background(TOKENS.surface)};color:{TOKENS.text};border:1px solid {TOKENS.border};
     border-radius:4px;padding:4px;
 }}
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus {{border:2px solid {TOKENS.focus};}}
 QGroupBox {{border:1px solid {TOKENS.border};border-radius:6px;margin-top:12px;padding-top:12px;}}
 QGroupBox::title {{subcontrol-origin:margin;left:8px;padding:0 4px;}}
+QCheckBox::indicator:unchecked {{width:14px;height:14px;border:1px solid {TOKENS.border};border-radius:3px;background:{background(TOKENS.surface_alt)};}}
+QSlider::groove:horizontal {{height:4px;background:{TOKENS.border};border-radius:2px;}}
+QSlider::handle:horizontal {{width:14px;margin:-5px 0;background:{TOKENS.accent};border:1px solid {TOKENS.text};border-radius:7px;}}
 QToolTip {{
-    background: {TOKENS.surface_alt};
+    background: {background(TOKENS.surface_alt)};
     color: {TOKENS.text};
     border: 1px solid {TOKENS.focus};
     padding: 4px;
@@ -265,7 +310,15 @@ QToolTip {{
 STYLESHEET = stylesheet()
 
 
-def apply_theme(app: QApplication | None = None, theme_id: str | None = None, *, store=None) -> None:
+def _transparency(value):
+    if isinstance(value, str) and value.isascii() and value.isdigit(): value = int(value)
+    if type(value) is not int or not 0 <= value <= 100:
+        raise ValueError('Transparência salva desconhecida; escolha um valor entre 0 e 100%.')
+    return value
+
+
+def apply_theme(app: QApplication | None = None, theme_id: str | None = None, *, store=None,
+                transparency: int | None = None) -> None:
     app = app or QApplication.instance()
     if app is None:
         return
@@ -273,22 +326,33 @@ def apply_theme(app: QApplication | None = None, theme_id: str | None = None, *,
         store = store if store is not None else QSettings('folego', 'folego')
         saved = store.value(THEME_KEY, DEFAULT_THEME)
         theme_id = saved if isinstance(saved, str) and saved in THEMES else DEFAULT_THEME
-        app.setProperty('folego_theme_error', '' if theme_id == saved else 'Tema salvo desconhecido; escolha um tema para salvar a preferência.')
+        errors = [] if theme_id == saved else ['Tema salvo desconhecido; escolha um tema para salvar a preferência.']
+        try: transparency = _transparency(store.value(TRANSPARENCY_KEY, 0))
+        except ValueError as exc:
+            transparency = 0; errors.append(str(exc))
+        if store.status() != QSettings.Status.NoError:
+            errors.append('Preferências não puderam ser lidas completamente; confira a configuração.')
+        app.setProperty('folego_theme_error', ' '.join(errors))
     if theme_id not in THEMES:
         raise ValueError('Tema desconhecido')
+    transparency = TOKENS.transparency if transparency is None else _transparency(transparency)
     TOKENS.current = THEMES[theme_id].tokens
     TOKENS.key = theme_id
+    TOKENS.transparency = transparency
+    if not hasattr(app, '_folego_surface_preparation'):
+        app._folego_surface_preparation = _SurfacePreparation(app)
+        app.installEventFilter(app._folego_surface_preparation)
     palette = app.palette()
-    palette.setColor(QPalette.ColorRole.Window, QColor(TOKENS.background))
-    palette.setColor(QPalette.ColorRole.Base, QColor(TOKENS.surface))
-    palette.setColor(QPalette.ColorRole.AlternateBase, QColor(TOKENS.surface_alt))
+    palette.setColor(QPalette.ColorRole.Window, _background_color(TOKENS.background))
+    palette.setColor(QPalette.ColorRole.Base, _background_color(TOKENS.surface))
+    palette.setColor(QPalette.ColorRole.AlternateBase, _background_color(TOKENS.surface_alt))
     palette.setColor(QPalette.ColorRole.Text, QColor(TOKENS.text))
     palette.setColor(QPalette.ColorRole.WindowText, QColor(TOKENS.text))
-    palette.setColor(QPalette.ColorRole.Button, QColor(TOKENS.surface_alt))
+    palette.setColor(QPalette.ColorRole.Button, _background_color(TOKENS.surface_alt))
     palette.setColor(QPalette.ColorRole.ButtonText, QColor(TOKENS.text))
     palette.setColor(QPalette.ColorRole.Highlight, QColor(TOKENS.accent))
     palette.setColor(QPalette.ColorRole.HighlightedText, QColor(TOKENS.accent_text))
-    palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(TOKENS.surface_alt))
+    palette.setColor(QPalette.ColorRole.ToolTipBase, _background_color(TOKENS.surface_alt))
     palette.setColor(QPalette.ColorRole.ToolTipText, QColor(TOKENS.text))
     palette.setColor(QPalette.ColorRole.PlaceholderText, QColor(TOKENS.muted))
     palette.setColor(QPalette.ColorRole.Link, QColor(TOKENS.accent))
@@ -299,7 +363,9 @@ def apply_theme(app: QApplication | None = None, theme_id: str | None = None, *,
     app.setStyleSheet(stylesheet())
     for widget in app.allWidgets():
         factory = getattr(widget, '_folego_theme_style', None)
-        if factory is not None: widget.setStyleSheet(factory())
+        if factory is not None:
+            style = factory()
+            if style != widget.styleSheet(): widget.setStyleSheet(style)
         for callback in getattr(widget, '_folego_theme_callbacks', ()):
             callback()
         widget.update()
@@ -315,3 +381,16 @@ def choose_theme(theme_id, *, store=None):
     app = QApplication.instance()
     if app is not None: app.setProperty('folego_theme_error', '')
     apply_theme(app, theme_id)
+
+
+def choose_transparency(value, *, store=None):
+    if type(value) is not int: raise ValueError('Transparência deve ser um inteiro de 0 a 100%.')
+    value = _transparency(value)
+    store = store if store is not None else QSettings('folego', 'folego')
+    store.setValue(TRANSPARENCY_KEY, value)
+    store.sync()
+    if store.status() != QSettings.Status.NoError:
+        raise RuntimeError('Transparência não foi salva; confira as permissões da configuração')
+    app = QApplication.instance()
+    if app is not None: app.setProperty('folego_theme_error', '')
+    apply_theme(app, TOKENS.key, transparency=value)

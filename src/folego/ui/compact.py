@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLa
 
 from . import title_signal
 from .desktop_caps import detect
-from .theme import themed_style, TOKENS, set_control_icon
+from .theme import background, themed_style, TOKENS, set_control_icon
 
 POSITION_KEY = "compact/position"
 WIDGET_TITLE = "Fôlego — widget"
@@ -83,10 +83,10 @@ class CompactWindow(QWidget):
         self.setAccessibleName("Widget do Fôlego")
         self.setFixedWidth(280)
         themed_style(self, lambda: "QWidget {font-size:9pt;}"
-            f"QFrame#widgetCard {{background:{TOKENS.surface};border:1px solid {TOKENS.border};border-radius:12px;}}"
+            f"QFrame#widgetCard {{background:{background(TOKENS.surface)};border:1px solid {TOKENS.border};border-radius:12px;}}"
             f"QLabel {{background:transparent;color:{TOKENS.text};}}"
             f"QLabel#quality {{color:{TOKENS.muted};}}"
-            f"QPushButton {{background:{TOKENS.surface_alt};color:{TOKENS.text};border:1px solid {TOKENS.border};"
+            f"QPushButton {{background:{background(TOKENS.surface_alt)};color:{TOKENS.text};border:1px solid {TOKENS.border};"
             "border-radius:7px;padding:2px 4px;}"
             f"QPushButton:hover {{border-color:{TOKENS.accent};}}")
         from PySide6.QtGui import QIcon

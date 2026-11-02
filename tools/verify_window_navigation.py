@@ -15,6 +15,8 @@ def main():
     parser.add_argument('--standard-shortcuts',action='store_true',help='Native menu clicks into an owned text field')
     parser.add_argument('--prompt-key',help='Verify native prompt selection with clipboard intercepted in memory')
     parser.add_argument('--console-themes',action='store_true',help='Select all console themes in owned mapped Qt windows')
+    parser.add_argument('--background-transparency',action='store_true',help='Verify alpha at 0/50/100 percent in light/dark themes')
+    parser.add_argument('--transparency-theme',choices=('snes-us','ps2'),help='Run one transparency palette within the existing QA time budget')
     args=parser.parse_args()
     root=args.state.resolve();root.mkdir(mode=0o700,parents=True,exist_ok=False)
     for key,folder in (('HOME','home'),('XDG_CONFIG_HOME','config'),('XDG_DATA_HOME','data'),
@@ -147,7 +149,7 @@ def main():
                 swap_used_kb=1024,swap_total_kb=8192,pressure_memory=None,pressure_io=None,pressure_cpu=None,
                 load=None,apps=(),self_rss_kb=0,cpu_busy_frac=.52,temperature_c=61,temperature_sensor='demonstração',
                 tmpfs=(TmpfsVolume('/qa/runtime','tmpfs',100,81,19,is_runtime=True),)))
-            if args.prompt_key or args.standard_shortcuts or args.console_themes:
+            if args.prompt_key or args.standard_shortcuts or args.console_themes or args.background_transparency:
                 script=root/'place-owned-widget.js'
                 script.write_text('const w=workspace.windowList().find(w=>w.pid==='+str(os.getpid())+
                     ' && w.caption==="Fôlego — widget");if(w){const g=w.frameGeometry;w.frameGeometry={x:20,y:120,width:g.width,height:g.height};}')
@@ -156,7 +158,7 @@ def main():
                 try:call('qdbus6','org.kde.KWin','/Scripting/Script'+sid,'org.kde.kwin.Script.run')
                 finally:call('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript',name)
                 settle=time.monotonic()+.35;wait(lambda:time.monotonic()>=settle)
-            if args.console_themes:
+            if args.console_themes or args.background_transparency:
                 from folego.ui.theme import THEMES,TOKENS,THEME_KEY
                 from folego.ui.desktop_shortcuts import VirtualKeyboard
                 from PySide6.QtCore import QSettings
@@ -168,33 +170,68 @@ def main():
                 # Start from a different choice: selecting an already-current
                 # default legitimately emits no currentIndexChanged signal.
                 window.options.theme_choice.setCurrentIndex(window.options.theme_choice.findData('ps2'))
-                for index,(key,selected) in enumerate(THEMES.items()):
+                profiles = ([(key,value) for key in ((args.transparency_theme,) if args.transparency_theme else ('snes-us','ps2')) for value in (0,50,100)]
+                            if args.background_transparency else [(key,0) for key in THEMES])
+                for key,transparency in profiles:
+                    selected=THEMES[key]
                     combo=window.options.theme_choice
                     pointer_click(combo.mapToGlobal(combo.rect().center()),backend,window)
                     wait(lambda:combo.view().isVisible())
                     QTest.keyClick(combo.view(),Qt.Key.Key_Home)
-                    for _ in range(index):QTest.keyClick(combo.view(),Qt.Key.Key_Down)
+                    for _ in range(combo.findData(key)):QTest.keyClick(combo.view(),Qt.Key.Key_Down)
                     QTest.keyClick(combo.view(),Qt.Key.Key_Enter)
                     wait(lambda:TOKENS.key==key and not combo.view().isVisible())
                     assert QSettings('folego','folego').value(THEME_KEY)==key
+                    slider=window.options.background_slider
+                    QTest.keyClick(slider,Qt.Key.Key_Home)
+                    if transparency==100:QTest.keyClick(slider,Qt.Key.Key_End)
+                    else:
+                        for _ in range(transparency//10):QTest.keyClick(slider,Qt.Key.Key_PageUp)
+                    wait(lambda:TOKENS.transparency==transparency)
+                    prefix=key+('-'+str(transparency) if args.background_transparency else '')
                     settle=time.monotonic()+.15;wait(lambda:time.monotonic()>=settle)
-                    window.grab().save(str(root/(key+'-central.png')))
+                    window.grab().save(str(root/(prefix+'-central.png')))
                     QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)
                     wait(lambda:compact.isVisible() and compact.windowHandle().isExposed())
                     compact._animate_actions(True)
                     wait(lambda:compact.drawer_animation.state()==compact.drawer_animation.State.Stopped)
-                    compact.grab().save(str(root/(key+'-compact.png')))
+                    compact.grab().save(str(root/(prefix+'-compact.png')))
                     tabs=compact.shortcut_tabs;tabs.show_prompts()
                     wait(lambda:tabs.prompt_menu is not None and tabs.prompt_menu.isVisible() and tabs.controller.future is None)
                     settle=time.monotonic()+.15;wait(lambda:time.monotonic()>=settle)
-                    tabs.prompt_menu.grab().save(str(root/(key+'-prompts.png')))
+                    tabs.prompt_menu.grab().save(str(root/(prefix+'-prompts.png')))
                     tabs.prompt_menu.close()
+                    if args.background_transparency:
+                        from folego.core import ai_sessions as ai
+                        now=time.time();items=[]
+                        for identity,used in (('Principal',63),('Pesquisa',95),('Pessoal',15)):
+                            item=ai.unknown('codex',label=identity)
+                            item.update(account_id=identity,default=identity=='Principal',observed_at=now,
+                                        windows=[ai.quota_window('Sessão (5 h)',used,now+3600,now),
+                                                 ai.quota_window('Semana',used,now+86400,now)])
+                            items.append(item)
+                        compact.ai_strip.set_items(items);compact.ai_strip.details('codex')
+                        wait(lambda:compact.ai_strip.account_menu is not None and compact.ai_strip.account_menu.isVisible())
+                        panel=compact.ai_strip.account_panel
+                        settle=time.monotonic()+.15;wait(lambda:time.monotonic()>=settle)
+                        # Grab the actual native popup. QWidget.grab on an
+                        # embedded panel adds a synthetic root palette fill.
+                        image=compact.ai_strip.account_menu.grab().toImage();ratio=image.devicePixelRatio()
+                        point=panel.mapTo(compact.ai_strip.account_menu,QPoint(4,100))
+                        alpha=image.pixelColor(round(point.x()*ratio),round(point.y()*ratio)).alpha()
+                        assert abs(alpha-round(255*(100-transparency)/100))<=1,(key,transparency,alpha)
+                        compact.ai_strip.account_menu.grab().save(str(root/(prefix+'-accounts.png')))
+                        compact.ai_strip.account_menu.close()
                     keyboard.show();wait(lambda:keyboard.windowHandle().isExposed())
-                    keyboard.grab().save(str(root/(key+'-keyboard.png')))
-                    assert selected.tokens.surface in keyboard.styleSheet()
+                    keyboard.grab().save(str(root/(prefix+'-keyboard.png')))
+                    from folego.ui.theme import background
+                    assert background(selected.tokens.surface) in keyboard.styleSheet()
+                    assert keyboard.windowOpacity()==window.windowOpacity()==1
                     keyboard.hide()
-                    records.append(dict(case='console theme selection',theme=key,saved=True,
-                                        surfaces=['central','compact','prompts','keyboard'],input='native dropdown click, Qt navigation on owned popup'))
+                    records.append(dict(case='background transparency' if args.background_transparency else 'console theme selection',
+                                        theme=key,transparency=transparency,saved=True,
+                                        surfaces=['central','compact','prompts','keyboard']+(['accounts'] if args.background_transparency else []),
+                                        input='native dropdown click, Qt popup navigation and slider keys'))
                     QTest.mouseClick(compact.open_button,Qt.MouseButton.LeftButton)
                     wait(lambda:window.isVisible() and window.windowHandle().isExposed())
                 QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)

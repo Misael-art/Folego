@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QStyle,
                               QVBoxLayout, QWidget, QMenu, QWidgetAction, QSizePolicy)
 
 from ..adapters.desktop_tools import DesktopTools
-from .theme import themed_style, TOKENS, set_control_icon, shortcut_style
+from .theme import background, themed_style, TOKENS, set_control_icon, shortcut_style, prepare_surface, paint_surface
 
 
 def _show_desktop_request():
@@ -104,6 +104,9 @@ class VirtualKeyboard(QWidget):
         super().__init__(parent, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
                          Qt.WindowType.WindowDoesNotAcceptFocus | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        prepare_surface(self)
+        self.setObjectName('virtualKeyboard')
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips)
         self.setWindowTitle("Fôlego — teclado " + uuid.uuid4().hex)
         self.setAccessibleName("Teclado virtual do Fôlego")
@@ -117,8 +120,9 @@ class VirtualKeyboard(QWidget):
         self._ready = os.environ.get('XDG_SESSION_TYPE') != 'wayland'
         self._requested_screen = None
         self._opening = False
-        themed_style(self, lambda: f"QWidget {{ background:{TOKENS.surface};color:{TOKENS.text};font-size:11pt; }}"
-                           f"QPushButton {{ background:{TOKENS.surface_alt};border:1px solid {TOKENS.border};"
+        themed_style(self, lambda: f"QWidget {{ background:transparent;color:{TOKENS.text};font-size:11pt; }}"
+                           f'QWidget#virtualKeyboard{{background:{background(TOKENS.surface)};}}'
+                           f"QPushButton {{ background:{background(TOKENS.surface_alt)};border:1px solid {TOKENS.border};"
                            "border-radius:5px; padding:5px; min-height:26px; }"
                            f"QPushButton:hover {{border-color:{TOKENS.accent};}}")
         layout = QVBoxLayout(self)
@@ -159,6 +163,10 @@ class VirtualKeyboard(QWidget):
         self.registered = self.bus.registerService(self.service)
         if self.registered:
             self.bus.registerObject("/keyboard", self, QDBusConnection.RegisterOption.ExportAllSlots)
+
+    def paintEvent(self, event):
+        paint_surface(self)
+        super().paintEvent(event)
 
     def _button(self, text, callback):
         button = QPushButton(text)
@@ -335,9 +343,9 @@ class ShortcutTabs(QWidget):
         menu = QMenu(self.buttons['prompts'])
         menu.setObjectName('promptPopup')
         menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        themed_style(menu, lambda: f'QWidget{{background:{TOKENS.surface};color:{TOKENS.text};padding:0;min-height:0;'
+        themed_style(menu, lambda: f'QWidget{{background:transparent;color:{TOKENS.text};padding:0;min-height:0;'
                            'border:none;border-radius:0;}'
-                           f'QMenu#promptPopup{{background:{TOKENS.surface};color:{TOKENS.text};'
+                           f'QMenu#promptPopup{{background:transparent;color:{TOKENS.text};'
                            f'border:1px solid {TOKENS.border};border-radius:8px;padding:0;}}')
         panel = PromptPanel(menu)
         area = self.buttons['prompts'].screen().availableGeometry()
@@ -371,7 +379,7 @@ class ShortcutTabs(QWidget):
 
     @staticmethod
     def _style_prompt_submenu(menu):
-        themed_style(menu, lambda: f'QMenu{{background:{TOKENS.surface};color:{TOKENS.text};'
+        themed_style(menu, lambda: f'QMenu{{background:{background(TOKENS.surface)};color:{TOKENS.text};'
             f'border:1px solid {TOKENS.border};padding:4px;}}'
             'QMenu::item{padding:6px 12px;}'
             f'QMenu::item:selected{{background:{TOKENS.accent};color:{TOKENS.accent_text};}}')

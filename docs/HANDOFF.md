@@ -1,5 +1,41 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Transparência dos fundos e painel contínuo — 02/11/2026
+
+Sobre `fdceab8095c62a68e3efdc32f942b959a91608ce`, mesma raiz/branch/PR #1.
+Corrigidos estilos genéricos que pintavam rótulos/contêineres como caixas no
+painel de contas. Popup sem moldura preta, superfície única arredondada,
+filhos transparentes e cartão de janela de uso com seletor próprio.
+Barra em opções/Aparência, 0% opaco a 100% sem fundo, padrão 0%. Muda pinturas
+de fundo de todas as superfícies; conteúdo/contornos/indicadores continuam
+opacos e windowOpacity fica 1. Prévia durante arraste sem I/O de configuração,
+salvamento ao soltar e por teclado/acessibilidade, preservação entre temas e
+restauração ao abrir. QSettings existente, `appearance/background_transparency`.
+Inválido é informado sem sobrescrever; falha de gravação restaura o estado.
+
+ARGB preparado antes de mapear. Raízes com WA_NoSystemBackground pintam QSS
+explicitamente; diálogos e superfícies novas seguem o tema. Checkbox desmarcado
+mantém contorno e estado distinto. Nenhum novo serviço, grant ou operação de
+recurso. Fontes e dados das contas permanecem nos seus owners existentes.
+
+`./dev check`: **1168 passed, 2 skipped** headless (50,68 s) e **1473 passed,
+2 skipped** Qt (142,25 s). Após a regressão de checkbox, Qt final `./dev test`:
+**1478 passed, 2 skipped**, 126,64 s. Focados de popup **11 passed**, 3,36 s.
+Python 3.14.7, sequencial, HOME/XDG/TMP/Pulse privados. Host com carga 18–20,
+sem encerrar trabalhos alheios. Duas execuções KDE/Wayland de sete cenários,
+SNES/PS2 com 0/50/100%, cinco superfícies, salvamento, navegação e saída.
+Composição real por portal sobre fundo próprio: alpha 8 bits, mistura de 50%
+coincidiu exatamente nos dois pixels medidos; textos e indicadores opacos.
+Captura pública retém somente recorte interno do fundo próprio na escala 135%.
+[Provas e limites](handoff/validation/background-transparency-2026-11-02/README.md).
+
+Tentativas interrompidas preservadas. Oráculo corrigido para medir popup nativo,
+em vez de QWidget filho com preenchimento sintético de raiz. Perfis finais
+separados para respeitar os 45 s existentes, sem somar tentativas como aprovação
+ou ampliar watchdog. QA/auxiliares encerrados. Sem release/merge; b2 imutável.
+Substituição da GUI real será registrada após o commit. Próximo passo: usuário
+regular a barra em Central → opções → Aparência · consoles clássicos.
+
 ## Temas de consoles em toda a interface — 02/11/2026
 
 Sobre `1cf92789aa10eaad608956cab6d5c9eb4799d82c`, mesma raiz/branch/PR #1.
