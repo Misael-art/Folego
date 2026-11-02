@@ -60,3 +60,14 @@ de prompts pode exigir rolagem, como antes. Menus mantêm rodapé e ícones leg�
 
 Não certifica todos os aplicativos, leitores de tela, outros compositores ou
 soak de duas horas. Sem novo release, merge, grant ou automação de recursos.
+
+## Host atualizado
+
+Código em `4f64b091e04b62303f5b3848c14b2dee2ce681eb`. GUI anterior encerrada
+normalmente por Sair na bandeja, lock liberado e `./dev gui` solicitado uma vez.
+Nova GUI **389475**, starttime **6736851**, widget (3108,315;187,814), 280×219,
+central oculta. Posição atual preservada, sem sinais manuais/outros clientes
+encerrados. Recibo privado `.scratch/console-themes/replacement.json`;
+revalidar identidade/boot antes de agir. Consulta ampla de locks interrompida
+antes da intenção, sem efeito; verificação restringida ao flock/fdinfo do inode
+exato. Próximo passo: usuário selecionar o tema na central.

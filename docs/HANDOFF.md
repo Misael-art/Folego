@@ -3,6 +3,7 @@
 ## Temas de consoles em toda a interface — 02/11/2026
 
 Sobre `1cf92789aa10eaad608956cab6d5c9eb4799d82c`, mesma raiz/branch/PR #1.
+Código, testes e provas em `4f64b091e04b62303f5b3848c14b2dee2ce681eb`.
 Seletor no topo de opções: oito temas do anexo (SNES americano, SFC, Mega Drive,
 Master System III, PC Engine, NES, TurboGrafx-16 e PS2). Padrão SNES americano.
 Tokens compartilhados, receitas nos próprios widgets e atualização em uso de
@@ -28,8 +29,15 @@ política horizontal dos seis botões corrigida para preservar colunas iguais,
 sem afrouxar a asserção. Núcleo/CLI anteriores verdes. Tentativas de QA
 interrompidas preservadas; harness ajustado para clique nativo no seletor e
 navegação no popup próprio. Sem novo release/merge; b2 continua imutável.
-Atualização da GUI real será registrada após o commit. Próximo passo: usuário
-escolher sua paleta em Central → opções → Aparência · consoles clássicos.
+GUI real substituída pela ação Sair na bandeja e `./dev gui`, com lock
+liberado, sem sinais manuais ou outros clientes encerrados. PID **389475**,
+starttime **6736851**, widget (3108,315;187,814), 280×219, central oculta.
+Posição atual do usuário preservada. Recibo privado
+`.scratch/console-themes/replacement.json`; revalidar identidade/boot.
+Consulta ampla lslocks excedeu o prazo antes da intenção, sem efeito; autoridade
+confirmada por flock não bloqueante e fdinfo do inode exato, evitando varrer
+outros processos. Próximo passo: usuário escolher a paleta em
+Central → opções → Aparência · consoles clássicos.
 
 ## Atalhos recolhíveis e temperatura — 02/11/2026
 
