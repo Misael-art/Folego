@@ -1,5 +1,25 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Oráculo de texto Qt no runner Ubuntu — 03/11/2026
+
+No SHA `98bd49c` o CI repetiu as duas falhas anteriores do Qt offscreen;
+`tests/test_ui_transparency.py` exigia que algum pixel do glifo chegasse a
+alpha 255. O código aplica cor de texto opaca (`theme.apply_theme`,
+`AccountPanel.line`) e mantém `windowOpacity() == 1`. O Qt desenha texto com
+antialiasing por padrão e a cobertura depende da fonte/renderizador
+([QPainter](https://doc.qt.io/qt-6/qpainter.html)); alpha máximo 250/244 na
+fonte do Ubuntu não prova uma camada de texto translúcida. Captura offscreen
+local inspecionada: texto presente sobre fundo transparente, alpha máximo 255
+no painel e na renderização isolada do mesmo label, cor do palette alpha 255.
+
+O teste agora compara a composição do painel com o mesmo glifo renderizado
+isoladamente, usando a cobertura da própria fonte, e verifica separadamente
+cor de texto e opacidade da janela. Mantém a prova de ausência de caixa de
+fundo na linha. Host: `./dev test tests/test_ui_transparency.py` **15 passed**;
+`./dev test` **1544 passed, 2 skipped**, Qt offscreen, HOME/XDG privados,
+Python 3.14.7. CI do novo SHA ainda requer confirmação. Offscreen não prova
+compositor, leitor de tela ou entrada física. Próximo: swap parcial.
+
 ## Diário: cauda JSON sem terminador — 03/11/2026
 
 Em `395cfd6`, `Journal.load()` usava `splitlines()` e aceitava uma última linha

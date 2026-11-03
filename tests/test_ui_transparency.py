@@ -1,6 +1,7 @@
 """Surface alpha must never fade foreground content or fragment label rows."""
 import pytest
 from PySide6.QtCore import QSettings, Qt
+from PySide6.QtGui import QImage, QColor
 from PySide6.QtWidgets import QLabel, QDialog, QCheckBox, QStyle, QStyleOptionButton, QPushButton
 
 from folego.ui import theme, options_tab
@@ -28,7 +29,20 @@ def test_account_surface_alpha_and_opaque_text_without_label_boxes(qapp, restore
     label = panel.details.findChildren(QLabel)[0]
     origin = label.mapTo(panel, label.rect().topLeft())
     region = image.copy(origin.x(),origin.y(),label.width(),label.height())
-    assert max(region.pixelColor(x,y).alpha() for x in range(region.width()) for y in range(region.height())) == 255
+    # Font coverage varies by platform: even an opaque antialiased glyph may
+    # have no pixel with alpha 255. Compare the painted glyph to the same label
+    # rendered over transparent pixels, then check source color separately.
+    reference = QImage(label.size(), QImage.Format.Format_ARGB32_Premultiplied)
+    reference.fill(Qt.GlobalColor.transparent)
+    label.render(reference)
+    coverage = max(reference.pixelColor(x,y).alpha()
+                   for x in range(reference.width()) for y in range(reference.height()))
+    painted = max(region.pixelColor(x,y).alpha()
+                  for x in range(region.width()) for y in range(region.height()))
+    assert coverage > 0
+    assert label.palette().color(label.foregroundRole()).alpha() == 255
+    assert QColor(theme.TOKENS.text).alpha() == 255
+    assert abs(painted - (alpha + (255-alpha)*coverage/255)) <= 2
     # The empty end of a text row paints no extra layer on the shared backdrop.
     assert abs(region.pixelColor(region.width()-2,2).alpha()-alpha) <= 1
 
