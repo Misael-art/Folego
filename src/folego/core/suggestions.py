@@ -65,8 +65,8 @@ def suggest(snapshot: Snapshot, *, orphan_count: int = 0,
             "pressao", CRITICO,
             f"Pressão de memória {psi10:.1f} — o kernel está esperando páginas",
             "psi/memory some avg10 acima de "
-            f"{thresholds.psi_memory_some_avg10:g}: fechando o Edge em background e "
-            "limpando /tmp sobra respiração imediata.",
+            f"{thresholds.psi_memory_some_avg10:g}: inspecione os consumidores no "
+            "Modo Desempenho e revise um alvo específico antes de fechar.",
             "memoria"))
 
     if snapshot.mem and snapshot.mem.mem_total_kb:
@@ -77,8 +77,8 @@ def suggest(snapshot: Snapshot, *, orphan_count: int = 0,
                 f"Sobrou {fmt_gb(avail)} GB livre de "
                 f"{fmt_gb(snapshot.mem.mem_total_kb)} GB",
                 "Menos de "
-                f"{thresholds.available_frac * 100:g}% disponível: a troca para zram "
-                "começa a custar frames.",
+                f"{thresholds.available_frac * 100:g}% disponível: confira quem usa "
+                "a memória e a pressão antes de escolher uma ação.",
                 "memoria"))
 
     if (snapshot.swap_known and snapshot.swap_total_kb and
@@ -87,16 +87,16 @@ def suggest(snapshot: Snapshot, *, orphan_count: int = 0,
         out.append(Suggestion(
             "zram", ALTO,
             f"zram/swap em {pct}% dos {fmt_gb(snapshot.swap_total_kb)} GB",
-            "zram cheio comprime no lugar da CPU e aumenta o PSI; aliviar RAM "
-            "estrutura o resto.",
+            "Uso de swap/zram exige correlação com PSI e consumidores antes de "
+            "atribuir lentidão ou prometer alívio.",
             "memoria"))
 
     if snapshot.self_rss_kb > thresholds.self_rss_kb:
         out.append(Suggestion(
             "app", MEDIO,
             f"O próprio Fôlego está em {fmt_gb(snapshot.self_rss_kb)} GB",
-            "Acima do orçamento medido no M1: fechar a janela libera a UI e a "
-            "bandeja continua monitorando.",
+            "Acima do orçamento medido no M1: acompanhe a tendência e compare "
+            "com outros consumidores antes de agir.",
             "memoria"))
 
     edge = next((a for a in snapshot.apps if a.group == "edge"), None)

@@ -139,6 +139,27 @@ def test_the_window_offers_resource_tabs_and_accessibility_in_order(window):
     assert window.tabs.widget(5) is window.tmpfs
 
 
+def test_memory_primary_action_opens_a_real_investigation_tab(window):
+    window.apply_snapshot(snap(pressure_memory=Pressure(14, 14, 14, 0), apps=()))
+    assert window.dashboard.primary_button.isEnabled()
+    assert "Dar fôlego" in window.dashboard.primary_button.text()
+    window.dashboard.primary_button.click()
+    assert window.tabs.currentWidget() is window.performance
+
+
+def test_dragging_the_memory_action_does_not_start_a_flow(window, qapp):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    window.apply_snapshot(snap(pressure_memory=Pressure(14, 14, 14, 0), apps=()))
+    window.show()
+    qapp.processEvents()
+    button = window.dashboard.primary_button
+    QTest.mousePress(button, Qt.MouseButton.LeftButton, pos=button.rect().center())
+    QTest.mouseMove(button, pos=QPoint(-20, -20))
+    QTest.mouseRelease(button, Qt.MouseButton.LeftButton, pos=QPoint(-20, -20))
+    assert window.tabs.currentWidget() is window.dashboard
+
+
 def test_the_window_reads_automation_state_but_offers_no_grant_control(qapp):
     config = StaticConfig(mode="assistido", preset="foco", paused=True)
     grants = StaticGrants([SimpleNamespace(action="tmpfs.release")])

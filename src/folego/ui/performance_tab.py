@@ -438,10 +438,14 @@ class PerformanceTab(QWidget):
         if self._jobs is None or self.closing:
             return
         text = (f"{item.action}.\n\n{item.label} · {fmt_bytes(item.rss_kb * 1024)} · {item.reason}.\n"
-                "O Fôlego revalida agentes, exclusões e a condição antes de pedir, e confere a saída.")
-        if not self._confirm("Fechar " + item.label + "?", text):
-            return
-        self._run("performance-close", item.rule + "\t" + item.unit, item.label, confirm=True)
+                "O Fôlego revalida agentes, exclusões e a condição antes do efeito, e confere a saída.")
+        self.closing = item.label
+        self.notice.setText("Revisando " + item.label + "…")
+        self.show_suggestions(self.suggestions)
+        self._jobs.review_and_run("performance-close", item.rule + "\t" + item.unit,
+                                  title="Fechar " + item.label + "?", text=text,
+                                  confirm_fn=self._confirm, done=self._closed,
+                                  expected_scope=[{"key": item.unit}])
 
     def _closed(self, payload):
         label, self.closing = self.closing, ""

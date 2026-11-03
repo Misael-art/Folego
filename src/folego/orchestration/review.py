@@ -15,7 +15,8 @@ from .models import ActionPlan, ActionResult, Outcome
 
 ACTIVE = ContextVar("folego_manual_review", default=None)
 ALLOWED = {("tune", "apply"), ("tune", "revert"), ("disk", "restore"), ("disk", "purge"),
-           ("tmpfs", "release"), ("tmpfs", "restore"), ("tmpfs", "expire"), ("tmpfs", "recover")}
+           ("tmpfs", "release"), ("tmpfs", "restore"), ("tmpfs", "expire"), ("tmpfs", "recover"),
+           ("performance", "close")}
 
 
 def root():
@@ -124,6 +125,12 @@ def evidence(command, plan):
             manifest = engine.backup.read_manifest(backup)
             data.update(backup=backup, manifest=manifest)
             proof = {"file": str(tuning.target()), "sha": manifest["entries"][0]["sha_before"]}
+    elif group == "performance":
+        if plan.action != "performance.close" or plan.target.kind != "group":
+            raise ValueError("plano de desempenho inesperado")
+        data = {"target": plan.target.to_dict(), "params": dict(plan.params)}
+        summary = [{"key": plan.target.key, "source": plan.target.key}]
+        proof = {"performance_unit": plan.target.key}
     elif group == "disk":
         book = cli._quarantine()
         entry = book.entries().get(command[2])
@@ -363,6 +370,9 @@ def reconcile(key):
             group, verb = bundle["command"][:2]
             if "file" in proof:
                 ok = _hash(proof["file"]).get("sha256") == proof["sha"]
+            elif group == "performance":
+                return ActionResult(plan.action, Outcome.UNKNOWN, key, target_key=plan.target.key,
+                    reason="fechamento sem resultado no diário; não atribuir saída nem repetir")
             elif group == "disk":
                 entries = cli._quarantine().entries()
                 ok = all(key in entries and entries[key].state == proof["state"] for key in proof["entries"])

@@ -23,7 +23,7 @@ from ..core.snapshot import ERROR, MISSING, PARTIAL
 from ..core.suggestions import suggest
 
 LEVEL_EMOJI = {"critico": "🔴", "alto": "🟠", "medio": "🟡"}
-TARGET_LABEL = {"memoria": "memória", "ajustes": "ajustes",
+TARGET_LABEL = {"memoria": "desempenho", "ajustes": "ajustes",
                 "orfaos": "órfãos", "disco": "disco", "tmpfs": "temporários"}
 
 
@@ -574,7 +574,8 @@ class DashboardTab(QWidget):
         self.no_recommendations.setVisible(not rows)
         if rows:
             top = rows[0].suggestion
-            self.primary_button.setText(f"Resolver agora: {TARGET_LABEL.get(top.target, 'aba')}")
+            self.primary_button.setText("Dar fôlego: investigar memória" if top.target == "memoria" else
+                                        f"Resolver agora: {TARGET_LABEL.get(top.target, 'aba')}")
             self.primary_button.setEnabled(True)
         else:
             self.primary_button.setText("Tudo dentro do orçamento")

@@ -47,7 +47,7 @@ from ..orchestration.history import HistoryReader
 TABS = (("central", "dashboard"), ("ajustes", "tunings"),
         ("desempenho", "performance"), ("órfãos", "orphans"), ("disco", "disk"), ("temporários", "tmpfs"), ("acessibilidade", "accessibility"),
         ("prompts", "custom_prompts"), ("opções", "options"))
-JUMPS = {"memoria": "dashboard", "ajustes": "tunings", "orfaos": "orphans",
+JUMPS = {"memoria": "performance", "ajustes": "tunings", "orfaos": "orphans",
          "disco": "disk", "tmpfs": "tmpfs", "accessibility": "accessibility"}
 DISK_TIMEOUT_MS = 120_000  # the real cache walk took 54,7 s on this Deck (M3 log)
 RUNTIME_SIZE_TIMEOUT_MS = 180_000  # inclui a digitação da senha no diálogo do polkit

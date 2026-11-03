@@ -7,6 +7,7 @@ from folego.actions.performance import closers, executor
 from folego.core import agents, perf_model, perf_rules, procfs
 from folego.orchestration import Coordinator, Outcome
 from folego.orchestration.journal import Journal
+from folego.orchestration import review
 
 UNIT = "app-steam.service"
 
@@ -132,3 +133,42 @@ def test_automatic_trigger_requires_automatic_mode(tmp_path):
         assert verdict.outcome is Outcome.REFUSED and "automático" in verdict.reason
     finally:
         proc.kill()
+
+
+def test_manual_close_reviews_exact_plan_and_cli_recovers_same_id(fake_home, monkeypatch, capsys):
+    from folego import cli
+    from folego.core.snapshot import Snapshot
+    from folego.actions.performance import closers as closer_registry
+    proc = child()
+    try:
+        observed = procfs.read_proc(Path("/proc"), proc.pid)
+        group = perf_model.AppGroup(UNIT, "steam", (proc.pid,), observed.rss_kb, 0.0,
+                                    perf_model.OBSERVED, "fixture")
+        activity = agents.AgentActivity(frozenset(), frozenset(), frozenset(), agents.IDLE, 0.0)
+        view = perf_model.PerfView((group,), activity, None, None, None)
+        snapshot = Snapshot(0, None, 0, 0, None, None, None, None, (), 0, procs=(observed,))
+        class Collector:
+            def collect(self): return snapshot
+        monkeypatch.setattr(cli.scan, "collector_for", lambda: Collector())
+        monkeypatch.setattr(perf_model, "observe", lambda *a, **kw: view)
+        monkeypatch.setattr(perf_rules, "load_modes", lambda *a: {
+            **{r.id: r.default for r in perf_rules.RULES}, "steam-idle": perf_rules.ASSISTED})
+        monkeypatch.setattr(perf_rules, "condition", lambda *a: (True, "fixture"))
+        calls = []
+        def closer(pids):
+            calls.append(bool(Journal().records(bundle["plan"]["operation_id"])))
+            proc.terminate(); proc.wait(timeout=3)
+            return closers.Request(True, "bandeja", "pedido fixture")
+        monkeypatch.setattr(closer_registry, "CLOSERS", {"tray": closer})
+        bundle = review.prepare(["performance", "close", "steam-idle", "--unit", UNIT, "--json"])
+        key = bundle["plan"]["operation_id"]
+        assert proc.poll() is None and calls == []
+        result = review.execute(bundle, confirmed=True)
+        assert result.outcome is Outcome.OK and result.operation_id == key and calls == [True]
+        assert review.execute(bundle, confirmed=True) == result and calls == [True]
+        assert cli.main(["review", "reconcile", key, "--json"]) == 0
+        assert json.loads(capsys.readouterr().out)["operation_id"] == key
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=3)

@@ -1,5 +1,36 @@
 # Passagem para o próximo agente — atualizada em 03/11/2026
 
+## Dar fôlego: análise, revisão e resultado pelo mesmo ID — 03/11/2026
+
+Reprodução do caminho anterior: a recomendação prioritária de memória voltava
+à própria central; o fechamento Assistido no Desempenho confirmava texto antes
+de criar o `ActionPlan`, então o usuário não revisava o ID que seria executado.
+A ação principal agora abre a aba Desempenho para investigar consumidores, e
+as mensagens de PSI/swap não prometem alívio de Edge ou `/tmp` sem medição.
+No fechamento manual, o worker usa `review.plan` para registrar plano, alvo e
+ID duráveis; só então apresenta esses bytes para confirmação e chama
+`review.execute` com o mesmo bundle. O `Coordinator` grava a intenção antes do
+closer, revalida o alvo no ato e acompanha a saída. `review.reconcile <ID>` na
+CLI e a consulta em Opções retornam o mesmo resultado. Resultado desconhecido
+mantém a revisão pendente e bloqueia nova revisão do mesmo alvo; não atribui
+saída do processo ao Fôlego sem resultado no diário. Clique repetido durante a
+revisão fica bloqueado; arrastar o botão não navega nem pede operação.
+
+Teste integrado com **filho descartável próprio** percorreu CLI real do plano
+ao fechamento: nenhum closer na revisão, intenção presente antes do pedido,
+saída acompanhada, repetição pelo mesmo ID sem segundo efeito e consulta CLI.
+Regressões adicionais cobrem resultado desconhecido sem retry, GUI antes/depois
+da confirmação, CTA de memória e arraste. Focados: `test_performance_close.py`
+**7 passed**, `test_session_resilience.py` **25 passed**, UI Desempenho **6
+passed**, UI janela **34 passed**. Host `./dev test-headless` **1241 passed,
+2 skipped**; `./dev test` **1569 passed, 2 skipped**. QA na sessão KDE/Wayland real com HOME/XDG
+privados: captura da central com “Dar fôlego: investigar memória”, clique
+levando à aba Desempenho, ambos inspecionados. Nenhum app/unit real foi fechado;
+entrada física e efeito real pelo compositor não foram ensaiados.
+
+Próximo: matriz física e continuidade do item 8; retenção real permanece
+bloqueada por `/proc/environ` inacessível em cinco processos do UID.
+
 ## Temporários próprios: inventário e localização de recuperação — 03/11/2026
 
 Reprodução descartável: após arquivar uma execução concluída, `jobs status`
@@ -27,6 +58,7 @@ passed, 2 skipped**. Aba Opções aberta em janela própria no KDE/Wayland real:
 seletor, contagem, estado desconhecido e botão de localização visíveis; captura
 inspecionada com HOME/XDG privados, sem entrada física ou retenção real.
 Python 3.14.7 gerenciado, HOME/XDG privados, sem fixtures pytest adotadas.
+CI de `9fcbbd2` passou nos dois jobs Qt, dois headless e dois contratos CLI.
 Próximo: integrar a revisão do mesmo plano/ID no caminho Dar fôlego e encerrar
 aceites físicos disponíveis. Retenção real segue bloqueada pela leitura dos
 cinco processos; não há autorização para mudar permissões ou ignorá-los.

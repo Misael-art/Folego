@@ -54,9 +54,15 @@ def test_cards_and_modes_persist_and_bad_file_disables(qapp, tmp_path):
 class Jobs:
     def __init__(self):
         self.calls = []
+        self.review_calls = []
 
     def run(self, acao, target, *, confirm, done):
         self.calls.append((acao, target, confirm))
+        self.done = done
+
+    def review_and_run(self, action, target, *, title, text, confirm_fn, done, expected_scope):
+        self.review_calls.append((action, target, expected_scope))
+        self.review_confirm = confirm_fn
         self.done = done
 
 
@@ -72,11 +78,20 @@ def test_assisted_ready_card_closes_only_after_confirmation(qapp, tmp_path):
     tab.show_suggestions((item, suggestion(True)))
     card = tab.cards.itemAt(0).widget()
     assert card.close_button is not None and tab.cards.itemAt(1).widget().close_button is None
-    answers.append(False); card.close_button.click()
-    assert jobs.calls == []
-    answers.append(True); card.close_button.click()
-    assert jobs.calls == [("performance-close", "steam-idle\tapp-steam.service", True)]
+    card.close_button.click()
+    assert jobs.review_calls == [("performance-close", "steam-idle\tapp-steam.service",
+                                  [{"key": "app-steam.service"}])]
+    assert jobs.calls == [] and answers == []  # no dialog before the same plan/ID exists
     assert tab.closing == "steam" and tab.cards.itemAt(0).widget().close_button is None
+    tab.request_close(item)
+    assert len(jobs.review_calls) == 1  # repeated click cannot create a second review
+    answers.append(False)
+    assert not jobs.review_confirm("Fechar?", "Operação fixture")
+    jobs.done({"outcome": "cancelamento", "reason": "nenhum efeito"})
+    assert tab.closing == ""
+    tab.request_close(item)
+    answers.append(True)
+    assert jobs.review_confirm("Fechar?", "Operação fixture")
     jobs.done({"outcome": "sucesso", "reason": "todos saíram"})
     assert tab.closing == "" and "sucesso" in tab.notice.text()
 

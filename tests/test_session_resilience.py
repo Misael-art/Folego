@@ -201,6 +201,38 @@ def test_tuning_review_binds_content_and_stable_id_and_replays_without_effect(fa
     assert json.loads(path.read_text())["startup_boost"]["enabled"] is False
 
 
+@pytest.mark.parametrize("outcome", [Outcome.OK, Outcome.UNKNOWN])
+def test_performance_review_uses_one_id_and_reconciles_without_retry(fake_home, monkeypatch, capsys, outcome):
+    from folego import cli
+    from folego.orchestration.bridge import perform
+    effects = []
+    target = ResourceIdentity("group", "app-fixture.service", {
+        "boot_id": "fixture", "rule": "steam-idle", "members": [{"pid": 123, "start_ticks": 5}]})
+    params = {"rule": "steam-idle", "channel": "tray", "trigger": "manual"}
+    def invoke(command):
+        assert command[:2] == ["performance", "close"]
+        return perform(coordinator=Coordinator(), action="performance.close", target=target,
+                       params=params, act=lambda: effects.append(1) or True,
+                       verdict=lambda _result, key: ActionResult("performance.close", outcome, "",
+                                                                  target_key=key, reason="fixture"))
+    monkeypatch.setattr(review, "_invoke", invoke)
+    bundle = review.prepare(["performance", "close", "steam-idle", "--unit", target.key, "--json"])
+    key = bundle["plan"]["operation_id"]
+    assert effects == [] and bundle["evidence"]["summary"] == [{"key": target.key, "source": target.key}]
+    first = review.execute(bundle, confirmed=True)
+    assert first.operation_id == key and first.outcome is outcome and effects == [1]
+    second = review.execute(bundle, confirmed=True)
+    assert second.operation_id == key and effects == [1]
+    consulted = review.reconcile(key)
+    assert consulted.operation_id == key and consulted.outcome is outcome and effects == [1]
+    if outcome is Outcome.UNKNOWN:
+        with pytest.raises(ValueError, match="pendente"):
+            review.prepare(["performance", "close", "steam-idle", "--unit", target.key, "--json"])
+        assert effects == [1]
+    assert cli.main(["review", "reconcile", key, "--json"]) == (0 if outcome is Outcome.OK else cli.EXIT_UNKNOWN)
+    assert json.loads(capsys.readouterr().out)["operation_id"] == key
+
+
 def test_tuning_changed_after_review_refuses_before_effect(fake_home):
     path = fake_home / ".config/microsoft-edge/Local State"
     path.parent.mkdir(parents=True)
