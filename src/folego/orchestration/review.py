@@ -45,15 +45,34 @@ def _read(key):
 
 
 def _close(bundle, result):
-    from ..actions.accessibility import private_path
-    bundle.update(state="closed", result=result.to_dict())
-    _save(bundle)
+    from ..actions.accessibility import private_path, read_object
+    plan = ActionPlan.from_dict(bundle["plan"])
+    if (result.operation_id != plan.operation_id or result.action != plan.action
+            or result.target_key != plan.target.key):
+        raise ValueError("resultado não corresponde ao plano da revisão")
+    if bundle.get("result") and bundle["result"] != result.to_dict():
+        raise ValueError("recibo encerrado diverge do resultado; preservar conflito")
+    closed = {**bundle, "state": "closed", "result": result.to_dict()}
     source = _path(result.operation_id)
     target = paths.state_dir() / "reviews-closed" / source.name
     private_path(target, create=True)
-    if target.exists(): raise ValueError("recibo encerrado já existe; preservar ambos")
-    os.rename(source, target)
-    for folder in (source.parent, target.parent):
+    if target.exists() or target.is_symlink():
+        if read_object(target) != closed:
+            raise ValueError("recibo encerrado já existe e diverge; preservar ambos")
+    if source.exists():
+        _save(closed)
+        try:
+            os.link(source, target, follow_symlinks=False)
+        except FileExistsError:
+            if read_object(target) != closed:
+                raise ValueError("recibo encerrado já existe e diverge; preservar ambos")
+        fd = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try: os.fsync(fd)
+        finally: os.close(fd)
+        source.unlink()
+    elif not target.exists():
+        raise ValueError("recibo da revisão ausente; fechamento não comprovado")
+    for folder in (source.parent,):
         fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
         try: os.fsync(fd)
         finally: os.close(fd)
@@ -218,10 +237,12 @@ def execute(bundle, *, confirmed=False, irreversible=False):
         raise ValueError("operação irreversível exige confirmação separada")
     state = Coordinator().journal.state_of(plan.operation_id)
     if stored.get("result"):
-        return ActionResult.from_dict(stored["result"])
+        return reconcile(plan.operation_id)
     if state is not None:
         if state.intent != plan:
             raise ValueError("ID registrado com outro plano")
+        if state.result is not None and state.result.outcome != Outcome.UNKNOWN:
+            return reconcile(plan.operation_id)
         return state.result or ActionResult(plan.action, Outcome.UNKNOWN, plan.operation_id,
                 target_key=plan.target.key, reason="intenção sem resultado; não repetir")
     with Coordinator().lock(wait=.2):
@@ -242,10 +263,14 @@ def execute(bundle, *, confirmed=False, irreversible=False):
     state = Coordinator().journal.state_of(plan.operation_id)
     if state and state.result:
         if state.result.outcome != Outcome.UNKNOWN:
-            _close(stored, state.result)
+            with Coordinator().lock():
+                current = _read(plan.operation_id)
+                _close(current, state.result)
         return state.result
     if getattr(review, "result", None) is not None and review.result.outcome == Outcome.REFUSED:
-        _close(stored, review.result)
+        with Coordinator().lock():
+            current = _read(plan.operation_id)
+            _close(current, review.result)
         return review.result
     return ActionResult(plan.action, Outcome.UNKNOWN, plan.operation_id, target_key=plan.target.key,
                         reason="resultado não registrado; consultar o mesmo ID")
@@ -315,12 +340,22 @@ def reconcile(key):
         if not bundle: raise ValueError("revisão não encontrada")
         plan = ActionPlan.from_dict(bundle["plan"])
         state = c.journal.state_of(key)
+        if bundle.get("state") == "closed":
+            result = ActionResult.from_dict(bundle["result"])
+            if state and state.result and state.result != result:
+                raise ValueError("recibo encerrado diverge do diário; preservar conflito")
+            if _path(key).exists():
+                _close(bundle, result)
+            return result
         if state is None and bundle.get("state") == "started" and _alive(bundle.get("owner")) is False:
             result = ActionResult(plan.action, Outcome.REFUSED, key, target_key=plan.target.key,
                                   reason="executor encerrado sem intenção no diário; nenhum efeito autorizado; criar nova revisão")
             _close(bundle, result)
             return result
         if state and state.result and state.result.outcome != Outcome.UNKNOWN:
+            if state.intent != plan:
+                raise ValueError("diário e revisão têm planos diferentes; preservar conflito")
+            _close(bundle, state.result)
             return state.result
         proof = bundle["evidence"]["proof"]
         ok = False

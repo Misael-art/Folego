@@ -196,6 +196,52 @@ def test_review_survives_restart_and_cancelled_review_never_executes(fake_home):
     assert json.loads(path.read_text())["startup_boost"]["enabled"] is True
 
 
+def test_reconcile_known_journal_result_closes_started_review_once(fake_home):
+    plan = ActionPlan("tune.apply", ResourceIdentity.entry("fixture"))
+    bundle = {"schema": 1, "plan": plan.to_dict(),
+              "command": ["tune", "apply", "fixture"],
+              "evidence": {"proof": {}}, "state": "started"}
+    review._save(bundle)
+    journal = Journal()
+    result = ActionResult(plan.action, Outcome.OK, plan.operation_id,
+                          target_key=plan.target.key, reason="efeito já verificado")
+    journal.append_intent(plan)
+    journal.append_result(result)
+    active = review._path(plan.operation_id)
+    closed = active.parent.parent / "reviews-closed" / active.name
+    assert review.reconcile(plan.operation_id) == result
+    assert not active.exists() and closed.exists()
+    before = closed.read_bytes()
+    assert review.reconcile(plan.operation_id) == result
+    assert review.execute(bundle, confirmed=True) == result
+    # Crash between linking the closed receipt and removing its active copy.
+    active.write_bytes(before)
+    assert review.reconcile(plan.operation_id) == result
+    assert closed.read_bytes() == before and not active.exists()
+    assert review.pending() == []
+
+
+def test_reconcile_preserves_conflicting_closed_receipt(fake_home):
+    from folego.actions.accessibility import save_object
+    plan = ActionPlan("tune.apply", ResourceIdentity.entry("fixture"))
+    bundle = {"schema": 1, "plan": plan.to_dict(),
+              "command": ["tune", "apply", "fixture"],
+              "evidence": {"proof": {}}, "state": "started"}
+    review._save(bundle)
+    result = ActionResult(plan.action, Outcome.OK, plan.operation_id, target_key=plan.target.key)
+    journal = Journal()
+    journal.append_intent(plan)
+    journal.append_result(result)
+    active = review._path(plan.operation_id)
+    closed = active.parent.parent / "reviews-closed" / active.name
+    save_object(closed, {**bundle, "state": "closed", "result": {**result.to_dict(), "reason": "conflito"}})
+    before_active, before_closed = active.read_bytes(), closed.read_bytes()
+    with pytest.raises(ValueError, match="recibo encerrado"):
+        review.reconcile(plan.operation_id)
+    assert active.read_bytes() == before_active
+    assert closed.read_bytes() == before_closed
+
+
 @pytest.mark.parametrize("verb", ["restore", "purge"])
 def test_disk_review_replays_same_operation_and_requires_irreversible_confirmation(fake_home, verb):
     from folego.actions.disk.quarantine import Quarantine

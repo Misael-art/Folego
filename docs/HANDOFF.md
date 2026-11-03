@@ -1,5 +1,24 @@
 # Passagem para o próximo agente — atualizada em 03/11/2026
 
+## Revisões: recibo reconciliado libera slot ativo — 03/11/2026
+
+Reprodução em HOME descartável antes da correção: `review.reconcile(id)`
+retornava o resultado já conhecido no diário, mas mantinha o bundle `started`
+em `reviews/`; uma segunda chamada repetia a resposta e o arquivo ainda
+ocupava um dos 256 slots. Agora a reconciliação compara plano/ID/resultado,
+fecha o recibo e só então devolve o resultado. O fechamento grava a cópia
+`closed`, cria o destino sem sobrescrever (`link` exclusivo), sincroniza o
+diretório e remove a cópia ativa; se uma queda deixou ambas, confere conteúdo
+antes de terminar. Recibo conflitante preserva os dois lados e gera erro.
+Clique repetido com resultado conhecido passa pela mesma reconciliação; o
+efeito não é reaplicado. Cancelamento com recibo fechado continua consultável.
+
+Testes focados `test_session_resilience.py`: **22 passed**, incluindo resultado
+conhecido, repetição, queda entre link/unlink e conflito. Host:
+`./dev test-headless` **1236 passed, 2 skipped**; `./dev test` **1561 passed,
+2 skipped**. HOME/XDG privados, efeito somente em fixtures. Próximo: Modo
+Desempenho no host e aceites físicos seguros.
+
 ## Início com a sessão: escolha e unit em ordem única — 03/11/2026
 
 Reprodução descartável antes da correção: habilitação A pausada em `install`,
@@ -16,7 +35,8 @@ motivo na CLI/GUI. Unit pessoal e destino inesperado continuam protegidos.
 Teste concorrente e teste de timeout usam apenas mocks e HOME privado. Host:
 focados `test_session_resilience.py` + `test_cli_operations.py` **24 passed**;
 `./dev test-headless` **1234 passed, 2 skipped** e `./dev test` **1559 passed,
-2 skipped**. Nenhuma unit real foi alterada; confirmar o comportamento na
+2 skipped**. CI de `c363363` passou nos dois jobs Qt, nos dois headless e nos
+contratos CLI. Nenhuma unit real foi alterada; confirmar o comportamento na
 sessão KDE apenas por escolha normal do usuário, sem reinício de sessão como
 QA. Próximo: recibo de revisão reconciliada.
 
