@@ -1,7 +1,8 @@
 """Read-only AI quota observations. No Qt, account manager or token renewal.
 
-Provider data is deliberately asymmetric: Codex reports rate limits, Claude
-has a first-party usage endpoint, Web/Grok do not supply a quota here. A reset
+Provider data is deliberately asymmetric: Codex (also the account of a Web
+root) reports rate limits, Claude has a first-party usage endpoint and Grok's
+own CLI answers its billing extension. ChatGPT Web turns carry no limit. A reset
 in the past invalidates an observation; it never creates a full allowance.
 """
 from __future__ import annotations
@@ -15,6 +16,10 @@ import datetime as dt
 import json
 import math
 import os
+import selectors
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 import time
 import urllib.request
@@ -25,6 +30,8 @@ MAX_FILE = 512 * 1024
 MAX_TAIL = 64 * 1024
 NAMES = {"codex": "Codex", "web": "Codex Web", "claude": "Claude", "grok": "Grok"}
 _CLAUDE_CACHE = {}  # sanitized observations only; no tokens, no disk writes
+_GROK_CACHE = {}
+WEB_SOURCE = "cota Codex da conta desta raiz; mensagens do ChatGPT Web não informam limite"
 
 
 def read_json(path):
@@ -250,12 +257,10 @@ def codex(home, now, *, provider="codex", label=None, fetch=None):
         auth_changed = (home / "auth.json").stat().st_mtime
     except FileNotFoundError:
         auth_changed = 0
-    if provider == "web":
-        result["reason"] = "Codex Web não fornece percentual de cota nesta fonte"
-        return result
     if fetch is not None and auth is not None:
         try:
             remote = codex_remote(home, dict(result), now, fetch)
+            if provider == "web" and remote.get('observed_at'): remote['source'] = WEB_SOURCE
             if remote.get('observed_at') or remote.get('reason', '').startswith('Conta '): return remote
         except (OSError, ValueError, TypeError, AttributeError):
             result['source'] = 'último registro local; consulta atual indisponível'
@@ -290,6 +295,7 @@ def codex(home, now, *, provider="codex", label=None, fetch=None):
                     result["reason"] = "Janela de cota inválida"
                     result["windows"] = []
                     return result
+        if provider == "web": result["source"] = WEB_SOURCE + " (último registro local)"
         result["remaining"] = effective(result, now)
         result["reason"] = "" if result["remaining"] is not None else "Observação vencida/incompleta; aguardando o provedor"
         summary = limits.get('rate_limit_reset_credits')
@@ -335,7 +341,15 @@ def claude(config, now, fetch, *, cache=None):
         return result
     expiry = timestamp(oauth.get("expiresAt", 0) / 1000) if isinstance(oauth.get("expiresAt"), (int, float)) else None
     if not expiry or expiry <= now:
-        result["reason"] = "Login expirado/sem validade comprovada; renove no Claude"
+        renewal = oauth.get("refreshTokenExpiresAt")
+        renewal = timestamp(renewal / 1000) if isinstance(renewal, (int, float)) else None
+        if expiry and renewal and renewal > now and isinstance(oauth.get("refreshToken"), str):
+            # The session is alive; only the client may renew it (never Fôlego).
+            result.update(plan=oauth.get("subscriptionType"),
+                          renewal="renovação local até " + dt.datetime.fromtimestamp(renewal).astimezone().strftime("%d/%m %H:%M"),
+                          reason="Token de acesso vencido; use o Claude Code para renová-lo e atualizar a cota")
+        else:
+            result["reason"] = "Login expirado/sem validade comprovada; renove no Claude"
         return result
     context = claude_account_context(config)
     def unchanged():
@@ -438,7 +452,86 @@ def claude(config, now, fetch, *, cache=None):
     return result
 
 
-def collect(env=None, *, now=None, fetch=http_json, discover=None):
+def grok_billing(home, *, timeout=20):
+    """Ask Grok's own CLI over ACP stdio; no prompt, token read or refresh here."""
+    executable = shutil.which('grok')
+    if not executable:
+        raise FileNotFoundError('cliente Grok não encontrado')
+    env = dict(os.environ, GROK_HOME=str(home))
+    requests = [dict(jsonrpc='2.0', id=1, method='initialize', params=dict(protocolVersion=1, clientCapabilities={})),
+                dict(jsonrpc='2.0', id=2, method='_x.ai/billing', params={})]
+    # An empty private cwd keeps the agent from indexing a real project.
+    with tempfile.TemporaryDirectory(prefix='folego-grok-') as cwd:
+        process = subprocess.Popen([executable, 'agent', '--no-leader', 'stdio'], cwd=cwd, env=env,
+                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        return _acp_result(process, requests, timeout)
+
+
+def _acp_result(process, requests, timeout):
+    try:
+        process.stdin.write(b''.join(json.dumps(r).encode() + b'\n' for r in requests))
+        process.stdin.flush()
+        selector, buffer, deadline = selectors.DefaultSelector(), b'', time.monotonic() + timeout
+        selector.register(process.stdout, selectors.EVENT_READ)
+        while time.monotonic() < deadline and len(buffer) <= MAX_FILE:
+            if not selector.select(max(0, deadline - time.monotonic())): break
+            chunk = os.read(process.stdout.fileno(), 65536)
+            if not chunk: break
+            buffer += chunk
+            *lines, buffer = buffer.split(b'\n')
+            for line in lines:
+                try: message = json.loads(line)
+                except ValueError: continue
+                if isinstance(message, dict) and message.get('id') == 2:
+                    if not isinstance(message.get('result'), dict):
+                        raise ValueError('Grok recusou a consulta de uso')
+                    return message['result']
+        raise TimeoutError('Grok não respondeu à consulta de uso')
+    finally:
+        process.stdin.close()  # the CLI exits on EOF; only our own child is followed
+        try: process.wait(10)
+        except subprocess.TimeoutExpired:
+            process.terminate()
+            process.wait(5)
+
+
+def grok(home, now, query, *, cache=None):
+    result = unknown('grok', 'Login do Grok não encontrado')
+    auth_path = Path(home) / 'auth.json'
+    if not auth_path.is_file():
+        return result
+    material = auth_path.read_bytes()[:MAX_FILE]
+    key = (str(Path(home).resolve()), hashlib.sha256(material).hexdigest())
+    cache = {} if cache is None else cache
+    previous = cache.get(key)
+    if previous and 0 <= now - previous['observed_at'] < 300:
+        previous = copy.deepcopy(previous)
+        previous['remaining'] = effective(previous, now)
+        return previous
+    payload = query(home)
+    if auth_path.read_bytes()[:MAX_FILE] != material:
+        return unknown('grok', 'Conta alterada durante a consulta')
+    config = payload.get('config')
+    period = config.get('currentPeriod') if isinstance(config, dict) else None
+    if not isinstance(period, dict):
+        result['reason'] = 'Grok não retornou um período de uso'
+        return result
+    name = {'USAGE_PERIOD_TYPE_WEEKLY': 'Semana', 'USAGE_PERIOD_TYPE_MONTHLY': 'Mês',
+            'USAGE_PERIOD_TYPE_DAILY': 'Dia'}.get(period.get('type'), 'Período')
+    window = quota_window(name, config.get('creditUsagePercent'), timestamp(period.get('end')), now)
+    if window is None:
+        result['reason'] = 'Resposta parcial: janela inválida'
+        return result
+    tier = payload.get('subscription_tier')
+    result.update(windows=[window], observed_at=now, plan=tier if isinstance(tier, str) else None,
+                  access='aceito pelo provedor nesta observação', source='consulta ao cliente Grok', reason='')
+    result['remaining'] = effective(result, now)
+    if len(cache) >= 16 and key not in cache: cache.pop(next(iter(cache)))
+    cache[key] = copy.deepcopy(result)
+    return result
+
+
+def collect(env=None, *, now=None, fetch=http_json, discover=None, grok_query=None):
     from .ai_accounts import inventory, settings
     native = env is None
     env = dict(os.environ if native else env)
@@ -459,10 +552,13 @@ def collect(env=None, *, now=None, fetch=http_json, discover=None):
                 item = codex(account['path'], now, provider=provider, fetch=fetch)
             elif provider == 'claude':
                 item = claude(account['path'], now, fetch, cache=_CLAUDE_CACHE)
-            else:
+            elif grok_query is None and not native:
                 item = unknown(provider, 'Percentual não disponibilizado nesta fonte')
+            else:
+                item = grok(account['path'], now, grok_query or grok_billing, cache=_GROK_CACHE)
+            if provider == 'grok':
                 item['paid_until'] = timestamp(configuration.get('grok_paid_until')) if account['default'] else None
-        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, subprocess.SubprocessError):
             item = unknown(provider, 'Fonte indisponível; confira o login no cliente')
         item.update(account_id=account['account_id'], label=account['label'], default=account['default'])
         billing = configuration.get('billing_accounts', {})

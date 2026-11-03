@@ -1,5 +1,26 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Leitura de cota Codex Web, Claude e Grok — 02/11/2026
+
+Sobre `51e3fed8ea5c728163f094feef9ca8288f6a954f`, mesma raiz/branch/PR #1.
+**Grok:** o próprio CLI responde `_x.ai/billing` via ACP stdio (`initialize` +
+billing, sem prompt, cwd temporário vazio, sai no EOF). `creditUsagePercent`
+e `currentPeriod` viram janela (Semana/Mês/Dia) com reset; plano do
+`subscription_tier`. Cache de 5 min por raiz/auth; troca de auth descarta.
+**Codex Web:** a raiz Web usa a mesma consulta oficial do Codex da sua conta;
+fonte rotulada como cota Codex da conta (turnos `chatgpt-web/` não trazem limite).
+**Claude:** token de acesso vencido com renovação local válida não é mais
+"login expirado"; mostra plano, validade da renovação e pede uso do Claude Code.
+Fôlego continua sem renovar credenciais; a cota volta quando o cliente renovar.
+
+No host (CLI, mesmo `collect`): Codex 30%, Web 18%, Grok 0% SuperGrok
+(semana até 07/11), Claude **?** com token local vencido em 01/11. Sem processo
+Grok remanescente. Testes: headless **1176 passed, 2 skipped**; Qt offscreen
+**1492 passed, 2 skipped**, sequenciais, HOME/XDG/TMP privados no scratchpad
+do agente — `./dev test` recusou por 20 workspaces retidos em `.scratch/dev-tests`
+(nada apagado; inspecionar antes de liberar). GUI em execução ainda carrega o
+código anterior até ser reaberta pela bandeja.
+
 ## Medidores circulares animados de IA — 02/11/2026
 
 Sobre `0239f4921e144ac839c5a4ead86c5d315bbf921d`, mesma raiz/branch/PR #1.

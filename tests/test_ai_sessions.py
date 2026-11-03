@@ -371,3 +371,78 @@ def test_claude_context_change_keeps_retry_after_for_the_same_token(tmp_path):
     ai.claude(root, NOW + 2, limited, cache=cache)
     ai.claude(root, NOW + 3, limited, cache=cache)
     assert len(calls) == 1 and next(iter(cache.values()))['retry_at'] == NOW + 7200
+
+
+def test_web_root_reads_its_account_quota_with_explicit_source(tmp_path):
+    root, _ = codex_auth(tmp_path)
+    def fetch(url, headers):
+        if url.endswith('/usage'):
+            return dict(account_id='account-fixture', rate_limit=dict(
+                primary_window=dict(used_percent=81, reset_at=NOW + 3600, limit_window_seconds=18000)))
+        raise OSError('optional detail unavailable')
+    item = ai.codex(root, NOW, provider='web', fetch=fetch)
+    assert item['provider'] == 'web' and item['remaining'] == 19
+    assert 'ChatGPT Web' in item['source'] and item['reason'] == ''
+
+
+def test_claude_stale_access_token_is_not_reported_as_expired_login(tmp_path):
+    config, path = credentials(tmp_path)
+    value = json.loads(path.read_text())
+    value['claudeAiOauth'].update(expiresAt=(NOW - 1) * 1000, refreshTokenExpiresAt=(NOW + 86400) * 1000,
+                                  subscriptionType='pro')
+    path.write_text(json.dumps(value))
+    def fetch(*args):
+        pytest.fail('stale access token was used')
+    item = ai.claude(config, NOW, fetch)
+    assert item['remaining'] is None and 'Token de acesso vencido' in item['reason']
+    assert item['plan'] == 'pro' and item['renewal'].startswith('renovação local')
+    value['claudeAiOauth']['refreshTokenExpiresAt'] = (NOW - 1) * 1000
+    path.write_text(json.dumps(value))
+    assert 'Login expirado' in ai.claude(config, NOW, fetch)['reason']
+
+
+def grok_home(home):
+    root = home / '.grok'
+    root.mkdir()
+    (root / 'auth.json').write_text('{"fixture": true}')
+    return root
+
+
+def billing(used, end=NOW + 86400, kind='USAGE_PERIOD_TYPE_WEEKLY'):
+    period = dict(type=kind, start='2026-10-31T00:00:00+00:00',
+                  end=dt.datetime.fromtimestamp(end, dt.timezone.utc).isoformat())
+    return dict(config=dict(creditUsagePercent=used, currentPeriod=period), subscription_tier='SuperGrok')
+
+
+def test_grok_billing_becomes_weekly_meter_and_is_cached(tmp_path):
+    root, calls = grok_home(tmp_path), []
+    def query(home):
+        calls.append(home)
+        return billing(37.5)
+    cache = {}
+    item = ai.grok(root, NOW, query, cache=cache)
+    assert item['remaining'] == 62 and item['windows'][0]['name'] == 'Semana' and item['plan'] == 'SuperGrok'
+    assert ai.grok(root, NOW + 60, query, cache=cache)['remaining'] == 62 and len(calls) == 1
+    ai.grok(root, NOW + 301, query, cache=cache)
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize('payload', [dict(), dict(config=dict(creditUsagePercent=120, currentPeriod=dict(end='2026-11-07T00:00:00Z'))),
+                                     billing(10, end=NOW - 1)])
+def test_grok_invalid_or_elapsed_billing_is_unknown(tmp_path, payload):
+    item = ai.grok(grok_home(tmp_path), NOW, lambda home: payload, cache={})
+    assert item['remaining'] is None
+
+
+def test_grok_account_change_during_query_discards_response(tmp_path):
+    root = grok_home(tmp_path)
+    def query(home):
+        (root / 'auth.json').write_text('{"other": true}')
+        return billing(10)
+    assert 'alterada' in ai.grok(root, NOW, query, cache={})['reason']
+
+
+def test_collect_uses_injected_grok_query(tmp_path):
+    grok_home(tmp_path)
+    items = ai.collect(env(tmp_path), now=NOW, grok_query=lambda home: billing(100))
+    assert next(i for i in items if i['provider'] == 'grok')['remaining'] == 0
