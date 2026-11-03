@@ -1,5 +1,19 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Modo Desempenho ativado no host — 03/11/2026
+
+A pedido do usuário, `steam-idle`, `edge-after-login` e `autostart-extras` foram
+postas em `automatic`; os dois conselhos continuam em `suggest`. Unit instalada
+com `performance install --confirmar`:
+`~/.config/systemd/user/folego-performance.service`, enabled e active, ~21 MB.
+Primeiro fechamento automático real às 09:53, com resultado `sucesso`: o
+`biglinux-welcome.service` foi parado pelo systemd do usuário e todos os
+processos revisados saíram. O gatilho foi "agentes em build/teste". Os outros
+autostarts aguardam o orçamento de 1/h por regra. Observação: com o Claude
+Desktop ativo, o gatilho por agentes ocupados fica quase sempre ligado; avaliar
+o limiar (`agents.BUSY_CPU`) após uso real. Desfazer:
+`performance uninstall --confirmar` ou o modo das regras na aba.
+
 ## Modo Desempenho, incremento 5 (endurecimento) — 03/11/2026
 
 `core/usage.py`: janela em foco (`kdotool`), áudio por PID (`pactl`), download em
