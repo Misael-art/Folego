@@ -240,7 +240,9 @@ def build_parser() -> argparse.ArgumentParser:
     ai.add_argument("--json", action="store_true")
 
     perf = commands.add_parser("performance", help="modo desempenho: observação por app; somente leitura")
-    perf.add_argument("sub", choices=["status"])
+    perf.add_argument("sub", choices=["status", "plan", "rules", "set"])
+    perf.add_argument("rule", nargs="?", help="com set: id da regra")
+    perf.add_argument("mode", nargs="?", choices=["off", "suggest"], help="com set: modo")
     perf.add_argument("--json", action="store_true")
 
     review = commands.add_parser("review", help="revisão durável, execução e reconciliação pelo mesmo ID")
@@ -905,30 +907,8 @@ def _emit_machine(payload: dict) -> None:
 
 
 def _protection_checker():
-    """Uma leitura de sessões/exclusões por varredura; falha fechado."""
-    try:
-        sessions = SessionRegistry().snapshot()
-        exclusions = ExclusionList().list()
-    except (SessionError, ExclusionError) as exc:
-        reason = f"proteção ilegível: {exc}"
-        return lambda proc: reason
-    by_key = {(item.pid, item.starttime): item
-              for item in sessions if not item.ended}
-
-    def check(proc):
-        session = by_key.get((proc.pid, proc.starttime))
-        if session is not None and session.keep_active:
-            return (f"sessão {session.session_id} marcada como manter ativo "
-                    f"({session.state})")
-        project = session.project if session is not None else ""
-        session_id = session.session_id if session is not None else ""
-        for item in exclusions:
-            if ExclusionList._match(item, proc, project, session_id):
-                suffix = " (manter ativo)" if item.keep_active else ""
-                return f"exclusão {item.kind}:{item.value}{suffix}"
-        return None
-
-    return check
+    from .core.process_protection import snapshot_checker
+    return snapshot_checker()
 
 
 def _reaper(protected_fn=None):
@@ -964,12 +944,49 @@ def _rss(rss_kb: int) -> str:
 
 def _cmd_performance(args) -> int:
     import time
-    from .core import perf_model
+    from . import paths
+    from .core import perf_model, perf_rules
+    rules_path = paths.performance_rules_path()
+    if args.sub in ("rules", "set"):
+        try:
+            modes = perf_rules.load_modes(rules_path)
+            if args.sub == "set":
+                if args.rule not in perf_rules.BY_ID or args.mode is None:
+                    sys.stderr.write("uso: folego performance set <regra> off|suggest\n")
+                    return EXIT_REFUSED
+                modes[args.rule] = args.mode
+                perf_rules.save_modes(rules_path, modes)
+        except (perf_rules.PolicyError, OSError) as exc:
+            sys.stderr.write(f"Modo Desempenho desligado: {exc}\n")
+            return EXIT_REFUSED
+        for rule in perf_rules.RULES:
+            print(f"{modes[rule.id]:<8} {rule.id:<18} {rule.title} — {rule.closer}")
+        return EXIT_OK
     collector = scan.collector_for()
     collector.collect()
     time.sleep(1.0)  # CPU fractions exist only across two samples
-    view = perf_model.observe(collector.collect())
+    snapshot = collector.collect()
+    view = perf_model.observe(snapshot, protected_fn=_protection_checker())
     act = view.activity
+    if args.sub == "plan":
+        try:
+            modes = perf_rules.load_modes(rules_path)
+        except perf_rules.PolicyError as exc:
+            sys.stderr.write(f"Modo Desempenho desligado: {exc}\n")
+            return EXIT_REFUSED
+        items = perf_rules.plan(view, snapshot.procs, modes, perf_rules.ConditionTracker(),
+                                time.monotonic())
+        if args.json:
+            print(json.dumps([s.__dict__ for s in items], indent=2, ensure_ascii=False))
+            return EXIT_OK
+        for item in items:
+            print(f"{item.title}: {item.label} · {_rss(item.rss_kb)} · {item.reason}"
+                  f" · espera {item.need_s:.0f} s · {item.action}")
+        if not items:
+            print("nenhuma sugestão agora")
+        print("somente sugestão: a espera só é provada por observação contínua (aba desempenho);"
+              " nada é fechado")
+        return EXIT_OK
     if args.json:
         print(json.dumps({
             "load": act.load, "agent_cpu": act.cpu_frac, "projects": sorted(act.projects),

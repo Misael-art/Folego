@@ -98,6 +98,11 @@ def exclusions_path() -> Path:
     return state_dir() / "exclusions.json"
 
 
+def performance_rules_path() -> Path:
+    """Modo por regra do Modo Desempenho; as regras em si ficam no código."""
+    return state_dir() / "performance-rules.json"
+
+
 def proc_root() -> str:
     return os.environ.get("DECKWELLNESS_PROC_ROOT", "/proc")
 

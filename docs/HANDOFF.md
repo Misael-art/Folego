@@ -1,5 +1,21 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Modo Desempenho, incremento 2 (regras e sugestões) — 03/11/2026
+
+`core/perf_rules.py`: regras embutidas e só de permissão (`steam-idle` com
+marcadores de jogo, `edge-after-login`, `autostart-extras` por units exatas,
+`mcp-duplicate` e `electron-bloat` como conselho). O usuário escolhe só o modo
+por regra (`off`/`suggest`) em `performance-rules.json` (state, schema 1);
+arquivo ilegível, regra desconhecida ou modo assistido/automático desligam tudo.
+Espera contínua por identidade (`ConditionTracker`); qualquer intervalo reinicia.
+Exclusões/`keep_active` agora protegem grupos (`snapshot_checker` movido para
+`core/process_protection.py`, mesmo uso no CLI). CLI `performance plan|rules|set`;
+aba com cards de sugestão e seletor por regra. Host real (CLI): Edge 2,4 GB,
+Steam 550 MB, ponte MCP duplicada e quatro autostarts sugeridos. Testes:
+headless **1193 passed, 2 skipped**; Qt **1513 passed, 2 skipped**. GUI reaberta
+pela bandeja: 51 ticks/10 s. Pendente: conferência visual da aba no KDE. Próximo:
+incremento 3 (Assistido: closers bandeja/unit, journal, revalidação, seguimento).
+
 ## Modo Desempenho, incremento 1 (observação) — 03/11/2026
 
 `core/agents.py` protege árvores de agentes (Claude/Codex/Desktop/Web) e todo

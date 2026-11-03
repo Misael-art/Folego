@@ -6,8 +6,8 @@ from pathlib import Path
 
 from .. import paths
 from . import procfs
-from .sessions import SessionRegistry, read_boot_id
-from .exclusions import ExclusionList
+from .sessions import SessionError, SessionRegistry, read_boot_id
+from .exclusions import ExclusionError, ExclusionList
 
 
 class ProcessProtection:
@@ -49,3 +49,30 @@ class ProcessProtection:
             return "limite de ancestralidade atingido; preservar"
         except Exception as exc:
             return f"proteção atual ilegível: {type(exc).__name__}: {exc}"
+
+
+def snapshot_checker():
+    """Uma leitura de sessões/exclusões por varredura; falha fechado."""
+    try:
+        sessions = SessionRegistry().snapshot()
+        exclusions = ExclusionList().list()
+    except (SessionError, ExclusionError) as exc:
+        reason = f"proteção ilegível: {exc}"
+        return lambda proc: reason
+    by_key = {(item.pid, item.starttime): item
+              for item in sessions if not item.ended}
+
+    def check(proc):
+        session = by_key.get((proc.pid, proc.starttime))
+        if session is not None and session.keep_active:
+            return (f"sessão {session.session_id} marcada como manter ativo "
+                    f"({session.state})")
+        project = session.project if session is not None else ""
+        session_id = session.session_id if session is not None else ""
+        for item in exclusions:
+            if ExclusionList._match(item, proc, project, session_id):
+                suffix = " (manter ativo)" if item.keep_active else ""
+                return f"exclusão {item.kind}:{item.value}{suffix}"
+        return None
+
+    return check

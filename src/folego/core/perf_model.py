@@ -44,6 +44,10 @@ class AppGroup:
     cpu_frac: float | None
     state: str
     reason: str
+    # True only when the sole protection is the group's class (session service or
+    # fixed label); an explicit rule may name such a unit. Agents and user
+    # exclusions are never overridable.
+    class_only: bool = False
 
     @property
     def procs(self) -> int:
@@ -89,7 +93,8 @@ def _protection(unit: str | None, label: str) -> str | None:
 
 
 def build(snapshot: Snapshot, activity: AgentActivity, *,
-          cgroup_fn: Callable[[int], str | None], uid: int | None = None) -> PerfView:
+          cgroup_fn: Callable[[int], str | None], uid: int | None = None,
+          protected_fn: Callable[[ProcInfo], str | None] | None = None) -> PerfView:
     buckets: dict[str | None, list[ProcInfo]] = {}
     for proc in snapshot.procs:
         if uid is not None and proc.uid != uid:
@@ -99,11 +104,15 @@ def build(snapshot: Snapshot, activity: AgentActivity, *,
     for unit, members in buckets.items():
         label = unit_label(unit) if unit else "?"
         agent = [p.pid for p in members if activity.protects(p.pid)]
+        user = next((r for r in map(protected_fn, members) if r), None) if protected_fn else None
         reason = _protection(unit, label)
+        class_only = False
         if agent:
             state, reason = AGENT, "hospeda trabalho de agente"
+        elif user:
+            state, reason = PROTECTED, user
         elif reason:
-            state = PROTECTED
+            state, class_only = PROTECTED, unit is not None
         else:
             state, reason = OBSERVED, "sem agente; elegível para regras"
         # Percent of one CPU; a member first seen in this sample has no delta yet.
@@ -112,7 +121,7 @@ def build(snapshot: Snapshot, activity: AgentActivity, *,
             unit or "?", label, tuple(sorted(p.pid for p in members)),
             sum(p.rss_kb for p in members),
             sum(fractions) if fractions else None,
-            state, reason))
+            state, reason, class_only))
     groups.sort(key=lambda g: g.rss_kb, reverse=True)
     mem = snapshot.mem
     return PerfView(tuple(groups), activity, snapshot.pressure_memory,
@@ -130,7 +139,7 @@ def cwd_of(pid: int, proc_root: str | None = None) -> str | None:
 
 
 def observe(snapshot: Snapshot, *, proc_root: str | None = None, uid: int | None = None,
-            git_cache: dict | None = None) -> PerfView:
+            git_cache: dict | None = None, protected_fn=None) -> PerfView:
     """Host observation over an already collected snapshot (CPU needs a prior sample)."""
     import os
     from . import agents
@@ -138,4 +147,4 @@ def observe(snapshot: Snapshot, *, proc_root: str | None = None, uid: int | None
     activity = agents.detect(snapshot.procs, cwd_fn=lambda pid: cwd_of(pid, proc_root),
                              git_cache=git_cache)
     return build(snapshot, activity, cgroup_fn=lambda pid: read_cgroup(pid, proc_root),
-                 uid=os.getuid() if uid is None else uid)
+                 uid=os.getuid() if uid is None else uid, protected_fn=protected_fn)
