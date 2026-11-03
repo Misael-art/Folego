@@ -1,0 +1,10 @@
+{
+  "HOME": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/gio-home-2",
+  "PATH": "/usr/bin:/bin",
+  "VIRTUAL_ENV": "<absent>",
+  "PYTHONPATH": "<absent>",
+  "GIO_LAUNCHED_DESKTOP_FILE": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/folego-qa.desktop",
+  "GIO_LAUNCHED_DESKTOP_FILE_PID": "2732531",
+  "pid": 2732531,
+  "argv": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/bin/python /home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/bin/folego "
+}

@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "product_sha": "a65b5f7f822ea55c520ad8e6b8598a00df741c5e",
+  "started_utc": "2026-10-30T03:50:47.598788+00:00",
+  "policy_sha256": "a643f3551da25a917e72eedb16029ff3f6b130a562b9991bdd88e0b649e87b32",
+  "command": ".dev/venv-gui/bin/python -I tools/soak_session.py --state NEW_PRIVATE_STATE --output NEW_OUTPUT --duration 7200 --job-interval 60 --sample-interval 10 --warmup 120 --platform wayland",
+  "source_manifest_sha256": "1fe0c6b61f7517845e58fdb05c1cf76e61df016456dd23f4aeae69cb188d2d36",
+  "files": {
+    "report.json": {
+      "original_sha256": "9597183877eac564082969897ce4bf999a1f22fa30629bcd24dba0daffa7d5cd",
+      "published_sha256": "e82aa5cdd6444aca29a586718381d42218d6817ae9d0a32f223a0d5861d41f23",
+      "published_bytes": 3358
+    },
+    "samples.jsonl": {
+      "original_sha256": "e9bea2b870bb1811e2e4aef6be0f6933b7a3ac950c06a2e4cc1a01cc74194c05",
+      "published_sha256": "c43d107d5f589af707fdcc52d55a4359f4b5333507a5a1cf30a60571394f1a9a",
+      "published_bytes": 1966200
+    },
+    "worker-results.jsonl": {
+      "original_sha256": "15819ee3e540f8ae9111e186c19c88ae6a8c57e3faaa964b7dbb9791909139ec",
+      "published_sha256": "15819ee3e540f8ae9111e186c19c88ae6a8c57e3faaa964b7dbb9791909139ec",
+      "published_bytes": 22921
+    },
+    "source-manifest.json": {
+      "original_sha256": "1fe0c6b61f7517845e58fdb05c1cf76e61df016456dd23f4aeae69cb188d2d36",
+      "published_sha256": "0226a4e08d52c1920a3afb0c6d8dd7c24fb41d20208b084911355b8bb11fe1fc",
+      "published_bytes": 12276
+    },
+    "analysis.json": {
+      "original_sha256": "2ff843d4b99b5012c97c77fd6d6385fd0662517336dc1e99b193e67bea41d185",
+      "published_sha256": "e624a65258ab23c90e40bda28bbb513e3a74bc727e431caa91345959790bdfd5",
+      "published_bytes": 2582
+    },
+    "paging-midpoint.json": {
+      "original_sha256": "5c4af1a2185ade5cabc8a23d5fa10940b2e2c279b3ef9b246761b4d62ec78a20",
+      "published_sha256": "5c4af1a2185ade5cabc8a23d5fa10940b2e2c279b3ef9b246761b4d62ec78a20",
+      "published_bytes": 251
+    }
+  },
+  "path_normalization": "QA state replaced by <qa-state>; checkout prefix removed; evidence directory made relative",
+  "temporary_lifecycle_verified_by_soak": false,
+  "physical_transitions_approved": false,
+  "residency_note": "Midpoint VmSwap was nonzero. RSS decrease is not proof of freed heap or absence of leaks."
+}

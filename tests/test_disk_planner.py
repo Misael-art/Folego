@@ -209,6 +209,34 @@ def test_walk_errors_are_surfaced_in_the_item(tmp_path):
     assert plan.items[0].ok is True
 
 
+def test_an_erroring_or_truncated_walk_is_never_reclaimable(tmp_path):
+    """R03: inventário incompleto não autoriza nem entra no total elegível.
+
+    O tamanho lido com erro de permissão e leitura truncada é "parcialmente
+    conhecido"; tratá-lo como recuperável transformava diagnóstico faltante em
+    promessa de liberação.
+    """
+    from folego.actions.disk.measure import TreeStat
+
+    home = _home(tmp_path)
+    (home / ".cache" / "pip").mkdir(parents=True)
+
+    def incomplete(path, **kw):
+        return TreeStat(str(path), 100, 1, 0, ("permission denied",), True)
+
+    plan = build_plan(
+        [DiskTarget("pip", "Cache do pip", "{home}/.cache/pip", mode="self",
+                    stale_days=None)],
+        home=home, measure=incomplete)
+
+    item = plan.items[0]
+    assert item.ok is True
+    assert item.truncated is True and item.errors
+    assert item.reclaimable is False
+    assert plan.total_bytes == 0, "bytes de leitura incompleta não somam elegível"
+    assert plan.reclaimable() == ()
+
+
 def test_default_targets_never_point_outside_home(tmp_path):
     from folego.actions.disk.planner import default_targets
 

@@ -61,6 +61,7 @@ class Plan:
 
 
 NEEDS_CONFIRM = "recusado: aplicar um tuning exige confirmação explícita"
+REVERT_NEEDS_CONFIRM = "recusado: reverter um tuning exige confirmação explícita"
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,7 @@ class RevertResult:
     reason: str | None = None
     backup_id: str | None = None
     sha: str | None = None
+    effect_started: bool = False
 
 
 @dataclass(frozen=True)
@@ -151,6 +153,8 @@ class TuningEngine:
             return self._refuse(plan, plan.blocked)
         if not confirm:
             return self._refuse(plan, NEEDS_CONFIRM)
+        if not (verdict := validate_target(target, [self.config_root])).ok:
+            return self._refuse(plan, verdict.reason)
         if tuning.requires_target_closed and (who := self.edge_running()):
             return self._refuse(plan, f"recusado: o Microsoft Edge está aberto ({who}). "
                                       f"Feche o Edge: ao sair ele regrava este arquivo "
@@ -183,8 +187,21 @@ class TuningEngine:
         self._audit("tuning.apply", plan, "applied", backup_id, started)
         return ApplyResult(tuning, target, True, None, backup_id, written)
 
-    def revert(self, tuning: Tuning) -> RevertResult:
+    def revert(self, tuning: Tuning, *, confirm: bool = False) -> RevertResult:
+        """Restore the latest backup. The same three gates as apply — explicit
+        confirmation, path guard, browser closed — because the direct entry
+        (``python -m ...worker revert``) must not be more permissive than the CLI,
+        and an open Edge would rewrite the file over the restore."""
         target = tuning.target()
+        if not confirm:
+            return RevertResult(tuning, target, False, REVERT_NEEDS_CONFIRM)
+        if not (verdict := validate_target(target, [self.config_root])).ok:
+            return RevertResult(tuning, target, False, verdict.reason)
+        if tuning.requires_target_closed and (who := self.edge_running()):
+            return RevertResult(tuning, target, False,
+                                f"recusado: o Microsoft Edge está aberto ({who}). "
+                                f"Feche o Edge: ao sair ele regrava este arquivo e "
+                                f"desfaz a reversão.")
         backup_id = self.backup.latest_backup_id(tuning.action_id)
         if backup_id is None:
             return RevertResult(tuning, target, False,
@@ -201,7 +218,8 @@ class TuningEngine:
         bad = [r for r in results if not r.ok]
         if bad:
             return RevertResult(tuning, target, False,
-                                f"falha ao restaurar: {bad[0].error}", backup_id)
+                                f"falha ao restaurar: {bad[0].error}", backup_id,
+                                effect_started=True)
         self._audit("tuning.revert", Plan(tuning, target, after_sha=entry["sha_before"]),
                     "reverted", backup_id, time.monotonic(),
                     targets=[f"{target.name} ← {backup_id}"])

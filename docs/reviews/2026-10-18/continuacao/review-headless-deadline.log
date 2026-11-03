@@ -1,0 +1,58 @@
+........................................................F............... [  8%]
+........................................................................ [ 16%]
+........................................................................ [ 24%]
+........................................................................ [ 32%]
+........................................................................ [ 40%]
+........................................................................ [ 48%]
+........................................................................ [ 56%]
+........................................................................ [ 64%]
+........................................................................ [ 72%]
+........................................................................ [ 80%]
+........................................................................ [ 89%]
+........................................................................ [ 97%]
+.........................                                                [100%]
+=================================== FAILURES ===================================
+___________________________ test_roundtrip_property ____________________________
+  + Exception Group Traceback (most recent call last):
+  |   File "/home/misael/Projects/Folego/tests/test_backup.py", line 117, in test_roundtrip_property
+  |     def test_roundtrip_property(payload, mutation, tmp_path_factory):
+  |                    ^^^^^^^^^^^^^^^^^^^
+  |   File "/home/misael/Projects/Folego/.scratch/i0-headless/lib/python3.14/site-packages/hypothesis/core.py", line 2299, in wrapped_test
+  |     raise the_error_hypothesis_found
+  | hypothesis.errors.FlakyFailure: Hypothesis test_roundtrip_property(payload=b'\xfd\x12', mutation=b'\xfd\x12', tmp_path_factory=TempPathFactory(_given_basetemp=PosixPath('/home/misael/Projects/Folego/.scratch/review-final-pure-XAQbuN/base'),
+  |  _trace=<pluggy._tracing.TagTracerSub object at 0x7f0ffea388a0>,
+  |  _basetemp=PosixPath('/home/misael/Projects/Folego/.scratch/review-final-pure-XAQbuN/base'),
+  |  _retention_count=3,
+  |  _retention_policy='all')) produces unreliable results: Failed on the first call but did not on a subsequent one (1 sub-exception)
+  | Failing test case: test_roundtrip_property(
+  |     tmp_path_factory=TempPathFactory(_given_basetemp=PosixPath('/home/misael/Projects/Folego/.scratch/review-final-pure-XAQbuN/base'),
+  |      _trace=<pluggy._tracing.TagTracerSub object at 0x7f0ffea388a0>,
+  |      _basetemp=PosixPath('/home/misael/Projects/Folego/.scratch/review-final-pure-XAQbuN/base'),
+  |      _retention_count=3,
+  |      _retention_policy='all'),
+  |     payload=b'\xfd\x12',
+  |     mutation=b'\xfd\x12',
+  | )
+  | Unreliable test timings! On an initial run, this test took 314.46ms, which exceeded the deadline of 200.00ms, but on a subsequent run it took 10.76 ms, which did not. If you expect this sort of variability in your test timings, consider turning deadlines off for this test by setting deadline=None.
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "/home/misael/Projects/Folego/.scratch/i0-headless/lib/python3.14/site-packages/hypothesis/core.py", line 1227, in _execute_once_for_engine
+    |     result = self.execute_once(data)
+    |   File "/home/misael/Projects/Folego/.scratch/i0-headless/lib/python3.14/site-packages/hypothesis/core.py", line 1165, in execute_once
+    |     result = self.test_runner(data, run)
+    |   File "/home/misael/Projects/Folego/.scratch/i0-headless/lib/python3.14/site-packages/hypothesis/core.py", line 827, in default_executor
+    |     return function(data)
+    |   File "/home/misael/Projects/Folego/.scratch/i0-headless/lib/python3.14/site-packages/hypothesis/core.py", line 1122, in run
+    |     return test(*args, **kwargs)
+    |   File "/home/misael/Projects/Folego/tests/test_backup.py", line 117, in test_roundtrip_property
+    |     def test_roundtrip_property(payload, mutation, tmp_path_factory):
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/home/misael/Projects/Folego/.scratch/i0-headless/lib/python3.14/site-packages/hypothesis/core.py", line 1049, in test
+    |     raise DeadlineExceeded(
+    |         datetime.timedelta(seconds=runtime), self.settings.deadline
+    |     )
+    | hypothesis.errors.DeadlineExceeded: Test took 314.46ms, which exceeds the deadline of 200.00ms. If you expect test cases to take this long, you can use @settings(deadline=...) to either set a higher deadline, or to disable it with deadline=None.
+    +------------------------------------
+=========================== short test summary info ============================
+FAILED tests/test_backup.py::test_roundtrip_property - DeadlineExceeded('Test...
+1 failed, 888 passed in 18.74s

@@ -1,0 +1,13 @@
+{
+  "HOME": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/launcher-home",
+  "XDG_CONFIG_HOME": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/launcher-home/.config",
+  "XDG_DATA_HOME": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/launcher-home/.local/share",
+  "XDG_STATE_HOME": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/launcher-home/.local/state",
+  "PATH": "/usr/bin:/bin",
+  "VIRTUAL_ENV": "<absent>",
+  "PYTHONPATH": "<absent>",
+  "GIO_LAUNCHED_DESKTOP_FILE": "<absent>",
+  "GIO_LAUNCHED_DESKTOP_FILE_PID": "<absent>",
+  "pid": 2723995,
+  "argv": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/bin/python /home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/bin/folego "
+}

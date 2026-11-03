@@ -1,0 +1,57 @@
+name: ci
+on: [push, pull_request]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  pure:
+    name: núcleo e CLI sem Qt
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./dev test-headless
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: headless-test-logs
+          path: |
+            .scratch/dev-tests/*/pytest.log
+            .scratch/dev-tests/*/run.json
+          retention-days: 7
+  qt-offscreen:
+    name: Qt offscreen em ambiente próprio
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo bash tools/system_deps.sh --apply
+      - run: ./dev test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: qt-test-logs
+          path: |
+            .scratch/dev-tests/*/pytest.log
+            .scratch/dev-tests/*/run.json
+          retention-days: 7
+  isolated-cli:
+    name: contratos da CLI em HOME descartável
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./dev setup --headless
+      - name: consultas sem efeitos no host
+        shell: bash
+        run: |
+          export HOME="$RUNNER_TEMP/folego-home"
+          export XDG_CONFIG_HOME="$HOME/.config"
+          export XDG_STATE_HOME="$HOME/.local/state"
+          export XDG_DATA_HOME="$HOME/.local/share"
+          mkdir -p "$HOME"
+          .dev/venv-headless/bin/folego doctor --json
+          .dev/venv-headless/bin/folego grant list --json
+          .dev/venv-headless/bin/folego automation status --json
+          .dev/venv-headless/bin/folego ecosystem --adapter projects --json
+          .dev/venv-headless/bin/folego migrate --json
+          .dev/venv-headless/bin/folego logs status --json

@@ -1,0 +1,41 @@
+{
+  "passed": true,
+  "platform": "wayland",
+  "pid": 509572,
+  "cases": [
+    {
+      "transparency": 0,
+      "background_alpha": 255,
+      "window_opacity": 1,
+      "alpha_buffer": 8
+    },
+    {
+      "transparency": 50,
+      "background_alpha": 128,
+      "window_opacity": 1,
+      "alpha_buffer": 8
+    },
+    {
+      "transparency": 100,
+      "background_alpha": 0,
+      "window_opacity": 1,
+      "alpha_buffer": 8
+    }
+  ],
+  "scope": "owned panel and opaque checkerboard; private HOME/XDG; no user data or native input",
+  "geometry": {
+    "backdrop": {
+      "x": 20.0,
+      "y": 0.0,
+      "width": 899.9999999999999,
+      "height": 570.3703703703703
+    },
+    "panel": {
+      "x": 200.0,
+      "y": 50.0,
+      "width": 560.0,
+      "height": 470.3703703703703
+    }
+  },
+  "capture_ack": true
+}

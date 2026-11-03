@@ -1,0 +1,12 @@
+{
+  "profile": "gui",
+  "status": "passed",
+  "runner_pid": 16576,
+  "uid": 1000,
+  "gid": 1007,
+  "python": "/home/misael/Projects/Folego/.dev/venv-gui/bin/python",
+  "workspace": "/home/misael/Projects/Folego/.scratch/dev-tests/run-izza7cer",
+  "started": 1793540915.9567413,
+  "exit_code": 0,
+  "elapsed_s": 33.784082889556885
+}

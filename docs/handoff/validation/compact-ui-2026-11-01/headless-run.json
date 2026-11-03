@@ -1,0 +1,12 @@
+{
+  "profile": "headless",
+  "status": "passed",
+  "runner_pid": 4185619,
+  "uid": 1000,
+  "gid": 1007,
+  "python": "/home/misael/Projects/Folego/.dev/venv-headless/bin/python",
+  "workspace": "/home/misael/Projects/Folego/.scratch/dev-tests/run-9xf5wb8e",
+  "started": 1793540519.6224158,
+  "exit_code": 0,
+  "elapsed_s": 19.163791179656982
+}

@@ -1,0 +1,9 @@
+{
+  "method": "native tray Sair do F\u00f4lego",
+  "old_gui_exited": true,
+  "owned_input_helper_exited": true,
+  "gui_lock_released": true,
+  "signals_sent": false,
+  "widget_visible": true,
+  "central_hidden": true
+}

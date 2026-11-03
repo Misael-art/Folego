@@ -1,0 +1,236 @@
+{
+  "status": "passed",
+  "scope": "owned Xvfb/KWin, not a physical X11 login",
+  "display": ":0",
+  "cases": [
+    {
+      "scale": "1",
+      "status": "passed",
+      "report": "/home/misael/Projects/Folego/docs/reviews/2026-10-18/desktop-validation/x11-final/scale-100/report.json"
+    },
+    {
+      "scale": "1.5",
+      "status": "passed",
+      "report": "/home/misael/Projects/Folego/docs/reviews/2026-10-18/desktop-validation/x11-final/scale-150/report.json"
+    },
+    {
+      "scale": "2",
+      "status": "passed",
+      "report": "/home/misael/Projects/Folego/docs/reviews/2026-10-18/desktop-validation/x11-final/scale-200/report.json"
+    },
+    {
+      "case": "native-x11-drag-and-tab",
+      "before": {
+        "pid": 108,
+        "qt": "6.12.0",
+        "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/lib/python3.14/site-packages/folego/__init__.py",
+        "platform": "xcb",
+        "elapsed_s": 0.49267243900249014,
+        "central": {
+          "visible": true,
+          "active": false,
+          "geometry": [
+            560,
+            406,
+            800,
+            628
+          ],
+          "client": [
+            800,
+            600
+          ],
+          "decorated": true,
+          "fullscreen": false,
+          "minimized": false,
+          "pixel_ratio": 1.0,
+          "screen": "screen",
+          "exposed": true,
+          "title": "Fôlego · aguardando primeira leitura"
+        },
+        "compact": {
+          "visible": true,
+          "active": true,
+          "geometry": [
+            200,
+            200,
+            420,
+            380
+          ],
+          "client": [
+            420,
+            380
+          ],
+          "decorated": false,
+          "fullscreen": false,
+          "minimized": false,
+          "pixel_ratio": 1.0,
+          "screen": "screen",
+          "exposed": true,
+          "title": "Fôlego — controle compacto"
+        },
+        "paused": false,
+        "tab": 0,
+        "focus": "Abrir a janela central do Fôlego",
+        "poller_stopped": false,
+        "tray": false,
+        "screens": [
+          {
+            "name": "screen",
+            "ratio": 1.0,
+            "geometry": [
+              0,
+              0,
+              1920,
+              1440
+            ]
+          }
+        ],
+        "last_command": {
+          "action": "compact"
+        },
+        "errors": []
+      },
+      "after": {
+        "pid": 108,
+        "qt": "6.12.0",
+        "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/lib/python3.14/site-packages/folego/__init__.py",
+        "platform": "xcb",
+        "elapsed_s": 0.7431668709978112,
+        "central": {
+          "visible": true,
+          "active": false,
+          "geometry": [
+            560,
+            406,
+            800,
+            628
+          ],
+          "client": [
+            800,
+            600
+          ],
+          "decorated": true,
+          "fullscreen": false,
+          "minimized": false,
+          "pixel_ratio": 1.0,
+          "screen": "screen",
+          "exposed": true,
+          "title": "Fôlego · aguardando primeira leitura"
+        },
+        "compact": {
+          "visible": true,
+          "active": true,
+          "geometry": [
+            280,
+            260,
+            420,
+            380
+          ],
+          "client": [
+            420,
+            380
+          ],
+          "decorated": false,
+          "fullscreen": false,
+          "minimized": false,
+          "pixel_ratio": 1.0,
+          "screen": "screen",
+          "exposed": true,
+          "title": "Fôlego — controle compacto"
+        },
+        "paused": false,
+        "tab": 0,
+        "focus": "Abrir a janela central do Fôlego",
+        "poller_stopped": false,
+        "tray": false,
+        "screens": [
+          {
+            "name": "screen",
+            "ratio": 1.0,
+            "geometry": [
+              0,
+              0,
+              1920,
+              1440
+            ]
+          }
+        ],
+        "last_command": {
+          "action": "compact"
+        },
+        "errors": []
+      },
+      "after_tab": {
+        "pid": 108,
+        "qt": "6.12.0",
+        "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/lib/python3.14/site-packages/folego/__init__.py",
+        "platform": "xcb",
+        "elapsed_s": 0.9925233730027685,
+        "central": {
+          "visible": true,
+          "active": false,
+          "geometry": [
+            560,
+            406,
+            800,
+            628
+          ],
+          "client": [
+            800,
+            600
+          ],
+          "decorated": true,
+          "fullscreen": false,
+          "minimized": false,
+          "pixel_ratio": 1.0,
+          "screen": "screen",
+          "exposed": true,
+          "title": "Fôlego · aguardando primeira leitura"
+        },
+        "compact": {
+          "visible": true,
+          "active": true,
+          "geometry": [
+            280,
+            260,
+            420,
+            380
+          ],
+          "client": [
+            420,
+            380
+          ],
+          "decorated": false,
+          "fullscreen": false,
+          "minimized": false,
+          "pixel_ratio": 1.0,
+          "screen": "screen",
+          "exposed": true,
+          "title": "Fôlego — controle compacto"
+        },
+        "paused": false,
+        "tab": 0,
+        "focus": "Ocultar somente o controle compacto",
+        "poller_stopped": false,
+        "tray": false,
+        "screens": [
+          {
+            "name": "screen",
+            "ratio": 1.0,
+            "geometry": [
+              0,
+              0,
+              1920,
+              1440
+            ]
+          }
+        ],
+        "last_command": {
+          "action": "compact"
+        },
+        "errors": []
+      },
+      "operation_journal_created": false
+    }
+  ]
+}

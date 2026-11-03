@@ -1,0 +1,107 @@
+{
+  "status": "interrupted_before_final_wheel",
+  "pid": 2696626,
+  "started_utc": "2026-10-18T10:34:29.009647+00:00",
+  "elapsed_s": 760.5017476650028,
+  "target_s": 7200.0,
+  "platform": "wayland",
+  "qt": "6.12.0",
+  "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/gui-venv/lib/python3.14/site-packages/folego/__init__.py",
+  "state": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/soak-wayland",
+  "metrics": {
+    "VmHWM": 88408,
+    "VmRSS": 88408,
+    "Threads": 6,
+    "fds": 15,
+    "cpu_s": 4.78936309,
+    "children_cpu_s": 1.53,
+    "io": {
+      "rchar": 52570899,
+      "wchar": 423893,
+      "syscr": 10477,
+      "syscw": 8527,
+      "read_bytes": 0,
+      "write_bytes": 5062656,
+      "cancelled_write_bytes": 4096
+    },
+    "children": []
+  },
+  "initial": {
+    "VmHWM": 64980,
+    "VmRSS": 64980,
+    "Threads": 4,
+    "fds": 14,
+    "cpu_s": 0.288610766,
+    "children_cpu_s": 0.0,
+    "io": {
+      "rchar": 6064218,
+      "wchar": 9760,
+      "syscr": 683,
+      "syscw": 32,
+      "read_bytes": 0,
+      "write_bytes": 20480,
+      "cancelled_write_bytes": 0
+    },
+    "children": []
+  },
+  "baseline": {
+    "VmHWM": 87972,
+    "VmRSS": 87972,
+    "Threads": 6,
+    "fds": 20,
+    "cpu_s": 1.104022451,
+    "children_cpu_s": 0.23,
+    "io": {
+      "rchar": 13529370,
+      "wchar": 68740,
+      "syscr": 2521,
+      "syscw": 1709,
+      "read_bytes": 0,
+      "write_bytes": 847872,
+      "cancelled_write_bytes": 4096
+    },
+    "children": [
+      2701620
+    ],
+    "widgets": 179,
+    "elapsed_s": 120.50502590399992
+  },
+  "peak": {
+    "rss_kb": 88408,
+    "fds": 25,
+    "children": 2,
+    "widgets": 187
+  },
+  "rss_trend_kb_per_hour": 2727.191358453709,
+  "cpu_average_percent": 0.5918135412336435,
+  "heartbeat_max_delay_ms": 68.66218700015452,
+  "heartbeat_histogram_ms": {
+    "100": 1,
+    "1": 14886,
+    "5": 317,
+    "10": 4
+  },
+  "widgets": 187,
+  "samples": 381,
+  "samples_cap": 600,
+  "collection_count": 381,
+  "collector_queue": 0,
+  "history_queue": 0,
+  "history_bytes_read": 51755,
+  "active_qprocesses": 0,
+  "job_counters": {
+    "worker_started": 13,
+    "worker_completed": 13,
+    "cancel_started": 2,
+    "cancel_completed": 2
+  },
+  "last_worker": {
+    "acao": "detect",
+    "ok": true,
+    "outcome": null,
+    "operation_id": null,
+    "reason": null
+  },
+  "failures": [],
+  "note": "Stopped at idle with no owned children; restarted two-hour run uses the final wheel."
+}

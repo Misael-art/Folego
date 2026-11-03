@@ -1,0 +1,30 @@
+name: Relatar um problema
+description: Ajude a reproduzir uma falha com segurança.
+labels: [bug]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: O que aconteceu?
+      description: Descreva o resultado esperado e o observado. Não inclua dados privados.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Como reproduzir
+      description: Use um exemplo descartável. Não sinalize processos de trabalho nem encha o runtime real.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Ambiente
+      placeholder: Distribuição, desktop, Wayland/X11, versão do Fôlego
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidência revisada
+      description: Logs ou capturas sem credenciais, dados pessoais ou caminhos privados desnecessários.

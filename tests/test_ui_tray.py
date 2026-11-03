@@ -73,9 +73,23 @@ class FakeWindow:
     def __init__(self):
         self.raise_calls = 0
         self.quits = 0
+        self.hides = 0
+        self.pauses = 0
+        self.compacts = 0
 
     def raise_to_user(self):
         self.raise_calls += 1
+
+    def show_compact(self):
+        self.compacts += 1
+
+    def hide_window(self):
+        self.hides += 1
+        return True
+
+    def toggle_pause(self):
+        self.pauses += 1
+        return bool(self.pauses % 2)
 
     def quit(self):
         self.quits += 1
@@ -108,6 +122,13 @@ def test_a_live_tray_shows_the_same_signal_as_the_title():
     assert tray.tray.visible is True
 
 
+def test_tray_route_exists_before_the_first_collection_arrives():
+    tray, _ = build()
+    tray.install()
+    assert tray.tray.visible
+    assert "aguardando primeira leitura" in tray.tray.tooltips[-1]
+
+
 def test_the_tray_menu_offers_only_viewing_actions():
     tray, window = build()
     tray.install()
@@ -115,6 +136,31 @@ def test_the_tray_menu_offers_only_viewing_actions():
     assert not [item for item in tray.tray.menu_items
                 if any(word in item.lower() for word in
                        ("encerrar", "aplicar", "matar", "limpar"))]
+
+
+def test_the_menu_keeps_hide_pause_and_quit_as_distinct_actions():
+    tray, window = build()
+    tray.install()
+
+    labels = tray.tray.menu_items
+    assert "Mostrar controle compacto" in labels
+    assert "Ocultar janela" in labels
+    assert "Pausar monitoramento" in labels
+    assert "Sair do Fôlego" in labels
+
+    menu = tray._context_menu
+    by_text = {action.text(): action for action in menu.actions()}
+    by_text["Mostrar controle compacto"].trigger()
+    by_text["Ocultar janela"].trigger()
+    by_text["Pausar monitoramento"].trigger()
+    by_text["Sair do Fôlego"].trigger()
+    assert (window.compacts, window.hides, window.pauses, window.quits) == \
+        (1, 1, 1, 1)
+
+    tray.set_paused(True)
+    assert by_text["Pausar monitoramento"].text() == "Retomar monitoramento"
+    tray.set_paused(False)
+    assert by_text["Pausar monitoramento"].text() == "Pausar monitoramento"
 
 
 def test_clicking_the_icon_brings_the_window_and_nothing_else():

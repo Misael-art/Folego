@@ -1,0 +1,95 @@
+{
+  "passed": true,
+  "platform": "wayland",
+  "cases": [
+    {
+      "case": "frameless central",
+      "native_frame_equals_client": true,
+      "compositor_geometry": {
+        "frame": [
+          1779,
+          230,
+          900,
+          620
+        ],
+        "client": [
+          1779,
+          230,
+          900,
+          620
+        ]
+      },
+      "client_size": [
+        900,
+        620
+      ],
+      "available": [
+        2560,
+        1080
+      ]
+    },
+    {
+      "case": "back to widget without tray",
+      "workers_active": true
+    },
+    {
+      "case": "return to previous central tab",
+      "tab": "op\u00e7\u00f5es",
+      "workers_active": true
+    },
+    {
+      "case": "native prompt selection",
+      "key": "design-mockups",
+      "clipboard": "intercepted in memory"
+    },
+    {
+      "case": "hover actions",
+      "collapsed": true,
+      "expanded": true,
+      "temperature": "61 \u00b0C demo",
+      "focus_preserved": true
+    },
+    {
+      "case": "native standard macro",
+      "macro": "undo",
+      "owned_target": true,
+      "result": "text edit"
+    },
+    {
+      "case": "native standard macro",
+      "macro": "redo",
+      "owned_target": true,
+      "result": "text edit"
+    },
+    {
+      "case": "native standard macro",
+      "macro": "save",
+      "owned_target": true,
+      "result": "native key delivery; no file or clipboard effect"
+    },
+    {
+      "case": "native standard macro",
+      "macro": "find",
+      "owned_target": true,
+      "result": "native key delivery; no file or clipboard effect"
+    },
+    {
+      "case": "native standard macro",
+      "macro": "terminal-copy",
+      "owned_target": true,
+      "result": "native key delivery; no file or clipboard effect"
+    },
+    {
+      "case": "native standard macro",
+      "macro": "terminal-paste",
+      "owned_target": true,
+      "result": "native key delivery; no file or clipboard effect"
+    },
+    {
+      "case": "explicit exit in controls",
+      "workers_stopped": true
+    }
+  ],
+  "errors": [],
+  "scope": "owned Qt windows and compositor metadata; private HOME/XDG/Pulse; no user text or resource effects"
+}

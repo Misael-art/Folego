@@ -1,0 +1,7 @@
+Python 3.14.7 is already installed
+Resolved 15 packages in 2ms
+Checked 8 packages in 0.43ms
+Managed Python: /home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.dev/venv-headless/bin/python
+QA workspace: /home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.scratch/dev-tests/run-0zy0yya7
+..........                                                               [100%]
+10 passed in 0.25s

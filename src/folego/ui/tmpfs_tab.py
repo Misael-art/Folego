@@ -8,18 +8,20 @@ silent "nothing happened" that could be read as success.
 """
 import sys
 import time
+import json
 
-from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import (QHBoxLayout, QHeaderView, QLabel, QMessageBox,
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
                                QPushButton, QProgressBar, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..actions.disk.planner import fmt_bytes
 from ..actions.tmpfs import trend
 
-JSON_ACTIONS = ("plan", "ledger", "release", "restore", "expire")
+JSON_ACTIONS = ("plan", "ledger", "release", "restore", "expire", "recover", "diagnose", "runtime-size")
 SAMPLES_KEPT = 600  # 20 min de poller de 2 s; a janela do ETA é de 15 min
-PENDING = "consultando o tmpfs (dry-run, nada é movido)…"
+PENDING = "ainda não analisado — use Atualizar plano."
+LOADING = "consultando o tmpfs (dry-run, nada é movido)…"
 VOLUME_COLUMNS = (("path", "volume"), ("fs_type", "tipo"), ("total", "total"),
                   ("used", "usado"), ("avail", "livre"), ("bar", "ocupação"),
                   ("eta", "lotar em"))
@@ -31,7 +33,13 @@ LEDGER_COLUMNS = (("entry_id", "id"), ("state", "estado"), ("size", "tamanho"),
 
 def argv_for(acao: str, target: str = "", confirm: bool = False) -> list:
     argv = [sys.executable, "-m", "folego", "tmpfs", acao]
-    if target:
+    if acao == "runtime-size":
+        if target:
+            argv.extend(["--reviewed-plan", target])
+    elif acao == "runtime-size-reconcile":
+        argv = [sys.executable, "-m", "folego", "tmpfs", "runtime-size",
+                "--reconciliar", target, "--json"]
+    elif target:
         argv.append(str(target))
     if acao in JSON_ACTIONS:
         argv.append("--json")
@@ -61,38 +69,65 @@ def _table(columns):
 
 
 def _fill(table, columns, rows, *, action=None, label=""):
-    """Preenche e devolve os botões da coluna de ato, na ordem das linhas."""
+    """Preenche e devolve os botões da coluna de ato, na ordem das linhas.
+
+    As células são **reutilizadas** quando o poll traz o mesmo número de linhas:
+    criar um `QProgressBar`/`QPushButton` novo a cada amostra deixava um widget
+    órfão por volume (visto no ensaio F8: 20 mil amostras → milhares de widgets e
+    RSS crescendo). O botão guarda a linha/ação atuais como atributos para o
+    callback continuar correto sem reconectar o sinal a cada atualização.
+    """
     table.setRowCount(len(rows))
     buttons = []
     for position, row in enumerate(rows):
         for column, (key, _) in enumerate(columns):
             if key == "bar":
-                bar = QProgressBar(table)
-                bar.setRange(0, 100)
-                bar.setTextVisible(False)
+                bar = table.cellWidget(position, column)
+                if not isinstance(bar, QProgressBar):
+                    bar = QProgressBar(table)
+                    bar.setRange(0, 100)
+                    bar.setTextVisible(False)
+                    table.setCellWidget(position, column, bar)
                 bar.setValue(row["pct"])
-                table.setCellWidget(position, column, bar)
             elif key == "act":
-                button = QPushButton(label, table)
-                button.clicked.connect(
-                    lambda _=False, r=row, a=action: a(r))
+                button = table.cellWidget(position, column)
+                if not isinstance(button, QPushButton):
+                    button = QPushButton(label, table)
+                    button.clicked.connect(
+                        lambda _=False, b=button: b._folego_action(b._folego_row))
+                    table.setCellWidget(position, column, button)
+                button.setText(label)
+                button._folego_action = action
+                button._folego_row = row
                 buttons.append(button)
-                table.setCellWidget(position, column, button)
             else:
-                table.setItem(position, column, QTableWidgetItem(str(row.get(key, ""))))
+                item = table.item(position, column)
+                if item is None:
+                    item = QTableWidgetItem()
+                    table.setItem(position, column, item)
+                item.setText(str(row.get(key, "")))
     return buttons
 
 
 class TmpfsTab(QWidget):
-    def __init__(self, *, jobs, confirm_fn=None, parent=None):
+    def __init__(self, *, jobs, confirm_fn=None, runtime_jobs=None, parent=None):
         super().__init__(parent)
         self._jobs = jobs
+        # O pedido de senha do polkit pode demorar: o redimensionamento tem fila própria.
+        self._runtime_jobs = runtime_jobs or jobs
+        self.runtime_options: list[dict] = []
         self._confirm = confirm_fn or self._ask_dialog
         self._samples: dict[str, list] = {}
         self.volume_rows: list[dict] = []
         self.plan_rows: list[dict] = []
         self.ledger_rows: list[dict] = []
         self.budget: dict = {}
+        self.victims: list[dict] = []
+        self._plan_ok = False
+        self._uncertain_text = ""
+        self._pending_review_id = ""
+        self._runtime_operation = ""
+        self._runtime_busy = False
         self.release_buttons: list[QPushButton] = []
         self.restore_buttons: list[QPushButton] = []
 
@@ -112,15 +147,41 @@ class TmpfsTab(QWidget):
         self.refresh_button.clicked.connect(self.refresh)
         self.expire_button = QPushButton("Expirar o excedente do orçamento")
         self.expire_button.clicked.connect(self.expire_clicked)
+        self.recover_button = QPushButton("Recuperar liberações inacabadas")
+        self.recover_button.clicked.connect(self.recover_clicked)
+        self.recover_button.setEnabled(False)
+        self.recover_button.setToolTip(
+            "nenhuma entrada staging no ledger: não há liberação inacabada")
         bar = QHBoxLayout()
         bar.addWidget(self.refresh_button)
         bar.addWidget(self.expire_button)
+        bar.addWidget(self.recover_button)
         bar.addStretch(1)
 
+        self.diagnosis = QLabel("")
+        self.diagnosis.setWordWrap(True)
+        self.diagnosis.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.runtime_label = QLabel("tamanho do runtime: sem leitura")
+        self.runtime_label.setWordWrap(True)
+        self.runtime_choice = QComboBox()
+        self.runtime_choice.setAccessibleName("Novo tamanho do runtime")
+        self.runtime_button = QPushButton("Aumentar runtime (pede senha)")
+        self.runtime_button.setEnabled(False)
+        self.runtime_button.clicked.connect(self.runtime_size_clicked)
+        self.runtime_reconcile = QPushButton("Verificar operação pendente")
+        self.runtime_reconcile.setEnabled(False)
+        self.runtime_reconcile.clicked.connect(self.reconcile_runtime)
+        runtime_bar = QHBoxLayout()
+        runtime_bar.addWidget(self.runtime_label, 1)
+        runtime_bar.addWidget(self.runtime_choice)
+        runtime_bar.addWidget(self.runtime_button)
+        runtime_bar.addWidget(self.runtime_reconcile)
+
         layout = QVBoxLayout(self)
-        for widget in (self.pressure, self.volume_table, self.summary, self.plan_table,
+        for widget in (self.pressure, self.diagnosis, self.volume_table, self.summary, self.plan_table,
                        self.budget_label, self.ledger_table, self.status):
             layout.addWidget(widget)
+        layout.addLayout(runtime_bar)
         layout.addLayout(bar)
 
     # -------------------------------------------------------------------- leitura
@@ -130,6 +191,13 @@ class TmpfsTab(QWidget):
         ts = time.time() if ts is None else ts
         self.volume_rows = []
         for volume in sorted(volumes, key=lambda v: v.used_frac, reverse=True):
+            if volume.quality != "ok":
+                self._samples.pop(volume.path, None)
+                self.volume_rows.append({"path": volume.path, "fs_type": volume.fs_type,
+                                         "total": "desconhecido", "used": "desconhecido",
+                                         "avail": "desconhecido", "pct": 0,
+                                         "eta": f"coleta falhou: {volume.error}"})
+                continue
             series = self._samples.setdefault(volume.path, [])
             series.append((ts, volume.used_bytes))
             del series[:-SAMPLES_KEPT]
@@ -142,25 +210,153 @@ class TmpfsTab(QWidget):
                 "pct": round(volume.used_frac * 100),
                 "eta": "—" if hours is None else _human_eta(hours)})
         _fill(self.volume_table, VOLUME_COLUMNS, self.volume_rows)
+        unknown = [volume for volume in volumes if volume.quality != "ok"]
+        if unknown:
+            self.pressure.setText("capacidade desconhecida: " + "; ".join(
+                f"{volume.path}: {volume.error}" for volume in unknown))
+            return
         if not self.volume_rows:
             self.pressure.setText("nenhum volume da watch-list montado")
             return
         worst = self.volume_rows[0]
         lotar = "" if worst["eta"] == "—" else f" · lota em {worst['eta']}"
-        self.pressure.setText(f"pior volume: {worst['path']} a {worst['pct']}%{lotar}")
+        # inodes são um teto separado dos bytes: um tmpfs pode ter folga de espaço
+        # e ainda recusar arquivos novos.
+        inode_worst = max((v for v in volumes if v.inodes_total),
+                          key=lambda v: v.inodes_frac, default=None)
+        inodes = ""
+        if inode_worst is not None and inode_worst.inodes_frac >= 0.75:
+            inodes = (f" · inodes de {inode_worst.path} a "
+                      f"{round(inode_worst.inodes_frac * 100)}%")
+        self.pressure.setText(f"pior volume: {worst['path']} a {worst['pct']}%{lotar}{inodes}")
 
     def refresh(self):
-        self.summary.setText(PENDING)
+        self.summary.setText(LOADING)
         self._jobs.run("plan", "", done=self.show_plan)
         self._jobs.run("ledger", "", done=self.show_ledger)
+        self._jobs.run("diagnose", "", done=self.show_diagnosis)
+        self._jobs.run("runtime-size", "", done=self.show_runtime_options)
+
+    # ------------------------------------------------------- diagnóstico e tamanho
+
+    def show_diagnosis(self, payload):
+        volume = (payload or {}).get("volume") or {}
+        consumers = (payload or {}).get("consumers")
+        if consumers is None:
+            self.diagnosis.setText("diagnóstico indisponível: " + str((payload or {}).get("reason", "sem resposta")))
+            return
+        if not consumers or (volume.get("used_pct") or 0) < 80:
+            self.diagnosis.setText("")
+            return
+        top = consumers[0]
+        lines = [f"Por que {volume.get('path')} está a {volume.get('used_pct')}%: "
+                 f"{top['path']} ocupa {fmt_bytes(int(top['bytes']))}."]
+        for path, size in top.get("largest_files", [])[:1]:
+            lines.append(f"Maior arquivo: {path} ({fmt_bytes(int(size))}).")
+        for holder in top.get("holders", [])[:2]:
+            lines.append(f"Aberto por PID {holder['pid']} ({holder['name']})"
+                         + (" — árvore órfã: quem a iniciou já saiu." if holder.get("adopted") else "."))
+        if top.get("official_action"):
+            lines.append(f"Dono: {top['owner']}. Caminho oficial: {top['official_action']}")
+        lines.append("O Fôlego não sinaliza sessões alheias; encerre pelo dono para preservar os dados.")
+        self.diagnosis.setText("\n".join(lines))
+
+    def show_runtime_options(self, payload):
+        pending = (payload or {}).get("pending_operation_ids") or []
+        if pending:
+            self._runtime_operation = pending[0]
+            self._uncertain_text = f"desconhecido: operação {pending[0]} · verifique antes de repetir"
+            self.runtime_reconcile.setEnabled(True)
+        self.runtime_choice.clear()
+        self.runtime_options = list((payload or {}).get("options") or [])
+        if not self.runtime_options:
+            self.runtime_label.setText("tamanho do runtime: " + str((payload or {}).get("reason", "sem leitura")))
+            self.runtime_button.setEnabled(False)
+            return
+        current = int(payload.get("current_bytes") or 0)
+        self.runtime_label.setText(f"Runtime {payload.get('runtime')}: {fmt_bytes(current)}. "
+                                   "Aumentar evita que agentes espalhem temporários pelo disco.")
+        for option in self.runtime_options:
+            text = f"{option['multiplier']}× · {option['mib']} MiB"
+            if not option["allowed"]:
+                text += " (acima do limite)"
+            self.runtime_choice.addItem(text, option["multiplier"])
+        bigger = self.runtime_choice.findData(2)
+        if bigger >= 0:
+            self.runtime_choice.setCurrentIndex(bigger)
+        self.runtime_button.setEnabled(not self._runtime_busy and any(
+            o["allowed"] and o["multiplier"] > 1 for o in self.runtime_options))
+        self._preserve_uncertain()
+
+    def runtime_size_clicked(self):
+        if self._uncertain_text or self._runtime_busy:
+            return
+        factor = self.runtime_choice.currentData()
+        option = next((o for o in self.runtime_options if o["multiplier"] == factor), None)
+        if option is None or factor == 1:
+            self.status.setText("escolha 2×, 3× ou 4× para aumentar o runtime")
+            return
+        if not option["allowed"]:
+            self.status.setText(f"recusado: {option['reason']}")
+            return
+        plan = option.get("plan")
+        if not plan:
+            self.status.setText("plano de tamanho ausente; atualize as opções")
+            return
+        if not self._confirm(
+                "Aumentar o runtime do usuário",
+                f"O runtime passa a ter {option['mib']} MiB. O sistema pedirá a senha de "
+                "administrador para gravar /etc/systemd/logind.conf.d/60-folego-runtime-size.conf "
+                "(configuração global do logind) e remontar seu volume agora, sem apagar nada. "
+                "É RAM: só ocupa o que for gravado. "
+                "Para voltar ao padrão, remova esse arquivo."):
+            self.status.setText("cancelado: tamanho do runtime inalterado")
+            return
+        self._runtime_operation = plan["operation_id"]
+        self._runtime_busy = True
+        self.runtime_button.setEnabled(False)
+        self.status.setText("aguardando a autenticação do sistema…")
+        self._runtime_jobs.run("runtime-size", json.dumps(plan), confirm=True, done=self.show_runtime_result)
+
+    def reconcile_runtime(self):
+        if self._runtime_operation and not self._runtime_busy:
+            self._runtime_busy = True
+            self.runtime_reconcile.setEnabled(False)
+            self._runtime_jobs.run("runtime-size-reconcile", self._runtime_operation,
+                                   done=self.show_runtime_result)
+
+    def show_runtime_result(self, payload):
+        payload = payload or {}
+        self._runtime_busy = False
+        if not payload or payload.get("outcome") == "desconhecido":
+            self._runtime_operation = payload.get("operation_id") or self._runtime_operation
+            self.show_mutation({**payload, "outcome": "desconhecido",
+                                "operation_id": self._runtime_operation})
+            self.runtime_reconcile.setEnabled(bool(self._runtime_operation))
+            return
+        if payload.get("operation_id") == self._runtime_operation:
+            self._uncertain_text = ""
+            self.runtime_reconcile.setEnabled(False)
+        if payload.get("outcome") == "parcial":
+            self.status.setText("parcial: " + str(payload.get("reason")) +
+                                f" · configuração anterior: {payload.get('previous_config')}")
+        elif payload.get("ok") and payload.get("after_bytes"):
+            self.status.setText(f"runtime agora com {fmt_bytes(int(payload['after_bytes']))} "
+                                f"(antes {fmt_bytes(int(payload.get('before_bytes') or 0))}); "
+                                f"configuração persistente em {payload.get('dropin')}")
+        else:
+            self.status.setText("pedido recusado: " + str(payload.get("reason") or "sem resposta"))
+        self._jobs.run("runtime-size", "", done=self.show_runtime_options)
 
     def show_plan(self, payload):
         if not payload or "reclaimable" not in payload:
             reason = (payload or {}).get("reason") or "o filho não respondeu"
+            self._plan_ok = False
             self.plan_rows, self.release_buttons = [], []
             self.plan_table.setRowCount(0)
             self.summary.setText("sem plano")
             self.status.setText(f"não foi possível planejar: {reason}")
+            self._preserve_uncertain()
             return
         candidates, protected = payload["reclaimable"], payload["protected"]
         self.plan_rows = [self._plan_row(i) for i in candidates] + \
@@ -171,23 +367,45 @@ class TmpfsTab(QWidget):
             f"liberáveis {fmt_bytes(payload['total_bytes'])} em {len(candidates)} "
             f"item(ns) · protegidos {len(protected)} · lidos "
             f"{payload['scanned_entries']} · impressão {payload['digest'][:16]}")
-        if payload["scanned_entries"] != len(candidates) + len(protected):
+        inconsistente = payload["scanned_entries"] != len(candidates) + len(protected)
+        self._plan_ok = not inconsistente
+        # R07: a interface não oferece uma ação que o executor já sabe bloquear —
+        # item protegido e plano inconsistente desabilitam o botão, com o motivo.
+        for row, button in zip(self.plan_rows, self.release_buttons):
+            if inconsistente:
+                button.setEnabled(False)
+                button.setToolTip("plano inconsistente: a contagem não fechou — "
+                                  "nada deve ser liberado")
+            elif not row["ok"]:
+                button.setEnabled(False)
+                button.setToolTip(row["reason"])
+        if inconsistente:
             self.status.setText("aviso: a contagem não fechou — o plano é incompleto "
                                 "e nada aqui deve ser liberado")
         else:
             self.status.setText("isto é um plano: nada foi movido. Liberar pede "
                                 "confirmação, e o item volta por esta aba.")
+        self._preserve_uncertain()
 
     def show_ledger(self, payload):
         if not payload or "records" not in payload:
+            # leitura que falhou não é leitura vazia: o orçamento e as vítimas da
+            # leitura anterior não podem continuar autorizando a aba a pedir o expire
+            self.budget, self.victims = {}, []
             self.ledger_rows, self.restore_buttons = [], []
             self.ledger_table.setRowCount(0)
+            self.recover_button.setEnabled(False)
+            self.recover_button.setToolTip(
+                "sem leitura do ledger: não há como provar uma liberação inacabada")
             self.budget_label.setText("sem leitura do ledger")
             self.status.setText(((payload or {}).get("reason")
                                  or "o filho não respondeu") + " (ledger)")
+            self._preserve_uncertain()
             return
         self.budget = payload.get("budget") or {}
+        self.victims = payload.get("victims") or []
         self.ledger_rows = [{"entry_id": r["entry_id"], "state": r["state"],
+                             "bytes": r["bytes"],
                              "size": fmt_bytes(r["bytes"]), "src": r["src"]}
                             for r in payload["records"]]
         # a linha `partial` mantém botão: quem recusa é o ato, com motivo — a aba
@@ -195,6 +413,13 @@ class TmpfsTab(QWidget):
         self.restore_buttons = _fill(self.ledger_table, LEDGER_COLUMNS,
                                      self.ledger_rows, action=self.restore_clicked,
                                      label="Restaurar")
+        staging = [row for row in self.ledger_rows if row["state"] == "staging"]
+        self.recover_button.setEnabled(bool(staging))
+        self.recover_button.setToolTip(
+            (f"{len(staging)} liberação(ões) inacabada(s): a origem viva permite "
+             "descartar o clone; origem sumida é preservada para decisão manual"
+             if staging else
+             "nenhuma entrada staging no ledger: não há liberação inacabada"))
         mais_velho = f"{self.budget['oldest_days']:.1f}".replace(".", ",")
         # o aviso de estouro do `ledger` humano sai pelo stderr, e o --json não o emite:
         # a aba só fala por JSON, então quem tem de derivar o estouro é ela
@@ -205,9 +430,17 @@ class TmpfsTab(QWidget):
         self.budget_label.setText(
             f"retido {fmt_bytes(self.budget['retained_bytes'])} na SSD em "
             f"{self.budget['retained_count']} item(ns) · o mais velho "
-            f"{mais_velho} d · RAM liberada "
+            f"{mais_velho} d · saiu da RAM e não voltou "
             f"{fmt_bytes(self.budget['freed_bytes'])} · folga "
             f"{fmt_bytes(self.budget['slack_bytes'])}{estouro}")
+        self._preserve_uncertain()
+
+    def _preserve_uncertain(self):
+        if self._uncertain_text:
+            self.status.setText(self._uncertain_text)
+            for button in (*self.release_buttons, *self.restore_buttons,
+                           self.expire_button, self.recover_button, self.runtime_button):
+                button.setEnabled(False)
 
     @staticmethod
     def _plan_row(item):
@@ -216,67 +449,149 @@ class TmpfsTab(QWidget):
                 "age": f"{item['age_days']:.0f} d",
                 "holders": ", ".join(str(p) for p in item["holder_pids"]) or "nenhum",
                 "state": "candidato" if item["ok"] else item["reason"],
+                "ok": bool(item["ok"]), "reason": item["reason"],
                 "item_id": item["item_id"]}
 
     # ----------------------------------------------------------------------- atos
 
     def release_clicked(self, row):
-        if not self._confirm(
-                "Liberar espaço em RAM",
+        if self._uncertain_text:
+            return
+        if not self._plan_ok:
+            self.status.setText("bloqueado: a contagem do plano não fechou — nada "
+                                "foi pedido ao executor")
+            return
+        if not row.get("ok"):
+            self.status.setText(f"bloqueado: {row.get('reason') or 'item protegido'}"
+                                " — nada foi pedido ao executor")
+            return
+        self._jobs.review_and_run("release", row["path"], title="Liberar espaço em RAM", confirm_fn=self._confirm,
+                expected_scope=[{"key": row["path"], "bytes": row["bytes"]}],
+                text=
                 f"Vou tirar {row['size']} de RAM movendo\n  {row['path']}\n"
                 "para a quarentena na SSD, verificando hash por arquivo antes de "
                 "apagar a origem.\n\n"
                 f"Processos com arquivo aberto aqui: {row['holders']}.\n"
                 "Volta por esta aba, com o id do registro — e enquanto estiver retido "
-                "conta no orçamento de retenção."):
-            self.status.setText(f"cancelado: nada foi liberado ({row['path']})")
-            return
-        self._jobs.run("release", row["path"], confirm=True, done=self.show_mutation)
+                "conta no orçamento de retenção.", done=self.show_mutation)
 
     def restore_clicked(self, row):
-        if not self._confirm(
-                "Devolver ao espaço temporário",
+        if self._uncertain_text:
+            return
+        self._jobs.review_and_run("restore", row["entry_id"], title="Devolver ao espaço temporário", confirm_fn=self._confirm,
+                expected_scope=[{"key": row["entry_id"], "bytes": row["bytes"]}],
+                text=
                 f"Vou copiar {row['size']} de volta para\n  {row['src']}\n"
                 "e apagar o clone na SSD depois que o hash bater. Se o caminho de "
                 "destino virou ponto de montagem, a recusa vem antes de qualquer "
-                "escrita."):
-            self.status.setText(f"cancelado: nada foi devolvido ({row['entry_id']})")
+                "escrita.", done=self.show_mutation)
+
+    def recover_clicked(self):
+        if self._uncertain_text:
             return
-        self._jobs.run("restore", row["entry_id"], confirm=True, done=self.show_mutation)
+        staging = [row for row in self.ledger_rows if row["state"] == "staging"]
+        if not staging:
+            self.status.setText(
+                "nada a recuperar: nenhuma liberação inacabada no ledger")
+            return
+        shown = staging[:8]
+        lines = "\n".join(f"  · {row['entry_id']} · {row['src']} · {row['size']}"
+                          for row in shown)
+        extra = (f"\n  … e mais {len(staging) - len(shown)}"
+                 if len(staging) > len(shown) else "")
+        self._jobs.review_and_run("recover", "", title="Recuperar liberações inacabadas", confirm_fn=self._confirm,
+                expected_scope=[{"key": item["entry_id"], "bytes": item["bytes"]} for item in staging],
+                text=
+                f"Vou fechar {len(staging)} entrada(s) deixadas em `staging`:\n"
+                f"{lines}{extra}\n\n"
+                "Com a origem ainda viva, o clone inacabado é descartado e o "
+                "caminho volta a ser liberável. Se a origem sumiu, o clone é "
+                "preservado — pode ser a única cópia — e o caso fica para decisão "
+                "manual. Nenhum conteúdo é apagado sem essa prova.", done=self.show_mutation)
 
     def expire_clicked(self):
+        if self._uncertain_text:
+            return
         if not self.budget:
             self.status.setText("sem leitura do ledger: nada a expirar")
             return
-        retained = fmt_bytes(self.budget.get("retained_bytes", 0))
-        if not self._confirm(
-                "Expirar retenção (irreversível)",
-                f"Vou apagar {retained} que estão retidos na SSD além do orçamento "
-                f"({self.budget.get('days', 0):g} dias ou "
-                f"{fmt_bytes(self.budget.get('max_bytes', 0))}).\n\n"
-                "Isto é irreversível: o conteúdo não volta, e o histórico do ledger "
-                "continua registrado."):
-            self.status.setText("cancelado: nada foi expirado")
+        # R07: a confirmação lista as vítimas EFETIVAS (idade vencida ou excesso),
+        # não o total retido — apagar "tudo" não é o que o ato faz
+        victims = self.victims or []
+        if not victims:
+            self.status.setText(
+                "nada a expirar: nenhuma entrada passou do orçamento "
+                f"({fmt_bytes(self.budget.get('retained_bytes', 0))} retidos)")
             return
-        self._jobs.run("expire", "", confirm=True, done=self.show_mutation)
+        total = sum(int(v.get("bytes", 0)) for v in victims)
+        shown = victims[:8]
+        lines = "\n".join(f"  · {v.get('entry_id')} · {fmt_bytes(int(v.get('bytes', 0)))}"
+                          f" · {v.get('src')}" for v in shown)
+        extra = f"\n  … e mais {len(victims) - len(shown)}" if len(victims) > len(shown) else ""
+        self._jobs.review_and_run("expire", "", title="Expirar retenção (irreversível)", confirm_fn=self._confirm,
+                expected_scope=[{"key": item["entry_id"], "bytes": item["bytes"]} for item in victims],
+                text=
+                f"Vou apagar {len(victims)} item(ns) que passaram do orçamento "
+                f"({self.budget.get('days', 0):g} dias ou "
+                f"{fmt_bytes(self.budget.get('max_bytes', 0))}):\n{lines}{extra}\n\n"
+                f"São {fmt_bytes(total)} no total. Isto é irreversível: o conteúdo "
+                "não volta, e o histórico do ledger continua registrado.", done=self.show_mutation)
 
     def show_mutation(self, payload):
-        if not payload:
-            self.status.setText("o filho não respondeu; nada é considerado feito")
+        if payload and payload.get("outcome") == "cancelamento":
+            self.status.setText(payload.get("reason", "cancelado: nenhum efeito solicitado"))
             return
-        if not payload.get("ok"):
-            self.status.setText("recusado: "
+        if not payload or payload.get("outcome") == "desconhecido":
+            payload = payload or {}
+            self._pending_review_id = payload.get("operation_id") or self._pending_review_id
+            self._uncertain_text = ("desconhecido: " + str(payload.get("reason") or "o filho não respondeu") +
+                " · operação " + str(payload.get("operation_id") or "consulte o histórico") +
+                " · não repetir antes de reconciliar")
+            self._preserve_uncertain()
+            return
+        # entrega 7: parcial não é recusa — parte do efeito existe (ex.: clone na
+        # SSD, origem intacta); o veredito traz os números do que de fato
+        # aconteceu, e o rótulo diz que o caminho não fechou
+        parcial = payload.get("outcome") == "parcial"
+        if not payload.get("ok") and not parcial:
+            label = "falha" if payload.get("outcome") == "falha" else "recusado"
+            self.status.setText(f"{label}: "
                                 f"{payload.get('reason') or 'motivo não informado'}")
             return
+        rotulo = "parcial: " if parcial else ""
         acao = payload.get("acao", "")
         if acao == "release":
-            self.status.setText(f"liberado {fmt_bytes(payload['freed_bytes'])} de RAM · "
+            # "liberado" (saiu da RAM) e "transferidos" (ocupa na SSD) são medidas
+            # diferentes; a contabilidade fina (6b) acrescenta o alocado real e a
+            # variação observada quando o payload os traz — payload antigo não
+            # inventa número (ausente/None não vira zero)
+            alocado = payload.get("allocated_bytes")
+            observado = payload.get("ram_observed_bytes")
+            detalhe = f" · {fmt_bytes(alocado)} alocados" if alocado is not None else ""
+            if observado is not None:
+                detalhe += f" · RAM {observado:+d} bytes"
+            self.status.setText(f"{rotulo}liberado "
+                                f"{fmt_bytes(payload['freed_bytes'])} de conteúdo · "
+                                f"transferidos {fmt_bytes(payload['bytes'])} para a SSD"
+                                f"{detalhe} · "
                                 f"id {payload['entry_id']} · devolva por esta aba")
         elif acao == "restore":
-            self.status.setText(f"devolvido {fmt_bytes(payload['bytes'])} para "
+            self.status.setText(f"{rotulo}devolvido {fmt_bytes(payload['bytes'])} para "
                                 f"{payload['restored_to']}")
+        elif acao == "recover":
+            dropped = payload.get("dropped") or []
+            kept = payload.get("kept") or []
+            lines = [f"{rotulo}{payload.get('reason') or 'recuperação concluída'}",
+                     f"descartados: {len(dropped)} · mantidos: {len(kept)}"]
+            lines += [f"aviso: {line}" for line in payload.get("errors") or ()]
+            lines += [f"manual: {line}" for line in payload.get("notes") or ()]
+            self.status.setText("\n".join(lines))
+        elif not payload.get("victims") and payload.get("reason"):
+            # "nada vencido": o motivo do executor, não um "expirado 0 bytes" que
+            # pareceria um ato que não aconteceu
+            self.status.setText(f"{rotulo}{payload['reason']}")
         else:
-            lines = [f"expirado {fmt_bytes(payload['freed_bytes'])} da SSD · "
+            lines = [f"{rotulo}expirado {fmt_bytes(payload['freed_bytes'])} da SSD · "
                      f"{len(payload.get('victims') or ())} item(ns)"]
             lines += [f"aviso: {line}" for line in payload.get("errors") or ()]
             self.status.setText("\n".join(lines))
@@ -284,11 +599,16 @@ class TmpfsTab(QWidget):
         # do callback do filho anterior
         QTimer.singleShot(0, self.refresh)
 
+    def resolve_operation(self, payload):
+        key = payload.get("operation_id")
+        if key and key == self._pending_review_id:
+            self._pending_review_id = ""
+            self._uncertain_text = ""
+            self.status.setText("verificado: " + str(payload.get("reason") or "resultado consultado"))
+            self.refresh()
+        elif key and key == self._runtime_operation:
+            self.show_runtime_result({**payload.get("effects", {}), **payload})
+
     def _ask_dialog(self, title: str, text: str) -> bool:
-        box = QMessageBox(self)
-        box.setWindowTitle(title)
-        box.setText(text)
-        box.setStandardButtons(QMessageBox.StandardButton.Yes |
-                               QMessageBox.StandardButton.No)
-        box.setDefaultButton(QMessageBox.StandardButton.No)
-        return box.exec() == QMessageBox.StandardButton.Yes
+        from .confirmation import confirm_text
+        return confirm_text(title, text, self)

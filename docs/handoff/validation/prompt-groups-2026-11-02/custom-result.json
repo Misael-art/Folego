@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "desktop_macro_from_menu": true,
+  "repeat_keeps_desktop_visible": true,
+  "custom_key_macro": true,
+  "target_text_preserved": true,
+  "scope": "owned KWin/Xvfb and private D-Bus in PID/network namespaces; host runtime hidden"
+}

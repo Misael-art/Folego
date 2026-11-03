@@ -38,10 +38,24 @@ def run_isolated(argv, *, timeout: float, lock: threading.Lock | None = MUTEX,
         return RunResult(tuple(command), refused="já existe uma mutação em voo; "
                                                  "tente de novo quando ela terminar")
     try:
-        proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        wrapped = command
+        manifest = (env or {}).get("FOLEGO_RUN_MANIFEST")
+        if manifest:
+            import sys
+            wrapped = [sys.executable, "-m", "folego.process.job_child", manifest, "--", *command]
+        proc = subprocess.Popen(wrapped, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 text=True, env=env, start_new_session=True)
         try:
             out, err = proc.communicate(timeout=timeout)
+            if manifest:
+                from ..safely.jobtemp import finish_job
+                import json
+                try:
+                    payload = json.loads(out.strip().splitlines()[-1])
+                    certain = isinstance(payload, dict) and payload.get("outcome") != "desconhecido"
+                    finish_job(manifest, proc.pid, certain=certain)
+                except (OSError, ValueError, IndexError):
+                    pass
             return RunResult(tuple(command), exit_code=proc.returncode, stdout=out,
                              stderr=err, pid=proc.pid)
         except subprocess.TimeoutExpired:

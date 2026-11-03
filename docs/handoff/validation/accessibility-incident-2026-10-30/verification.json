@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-30",
+  "python": "3.14.7",
+  "qt": "6.12.0",
+  "command": "./dev check",
+  "headless": {
+    "passed": 1037,
+    "skipped": 2,
+    "seconds": 29.94
+  },
+  "gui": {
+    "passed": 1291,
+    "skipped": 2,
+    "seconds": 50.21
+  },
+  "native_ui": {
+    "platform": "wayland",
+    "sizes": [
+      [
+        800,
+        600
+      ],
+      [
+        1280,
+        800
+      ]
+    ],
+    "effects": "simulated",
+    "report": "native-ui.json"
+  },
+  "host_repair": {
+    "virtual_keyboard": "visible verified, mode restored to 1",
+    "FTS3528": "dedicated adapter rebound; timeout persisted; no input node",
+    "profile": "5 enabled input identities saved, absent touch excluded",
+    "audio": "no host mute/volume mutation during QA",
+    "login": "effective SDDM config inspected; physical login not tested",
+    "emergency_keyboard": "Visible verified with prior hardware operation still unknown; no hardware retry",
+    "pending_hardware_operation": "58176bdf86c94e759e43f661630c5ce8",
+    "auth_without_dock": "Operator reported failure; guard fixed, physical acceptance pending"
+  },
+  "phasezero": {
+    "sha": "9ebb6487f036d052ddfa7837bc4200d2bfbfa63a",
+    "passed": 22,
+    "seconds": 6.37,
+    "environment": "compatible managed Folego Python; PhaseZero core doctor unavailable"
+  },
+  "product_sha": "617c2ad3b6ab3982094a261a1f0a8f2bdcd05bbd",
+  "ci_product_sha": {
+    "code_jobs_success": 6,
+    "reviews_skipped": [
+      "CodeRabbit",
+      "Sourcery"
+    ]
+  }
+}

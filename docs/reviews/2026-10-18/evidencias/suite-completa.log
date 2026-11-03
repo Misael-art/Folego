@@ -1,0 +1,50 @@
+........................................................................ [  7%]
+........................................................................ [ 14%]
+........................................................................ [ 21%]
+........................................................................ [ 28%]
+........................................................................ [ 35%]
+........................................................................ [ 42%]
+........................................................................ [ 49%]
+........................................................................ [ 56%]
+........................................................................ [ 63%]
+........................................................................ [ 70%]
+........................................................................ [ 77%]
+......................................................F................. [ 84%]
+........................................................................ [ 91%]
+........................................................................ [ 98%]
+............                                                             [100%]
+=================================== FAILURES ===================================
+___________ test_a_removed_suggestion_row_returns_hidden_to_the_pool ___________
+
+panel = (<folego.ui.dashboard_tab.DashboardTab(0x55651d006ca0) at 0x7f1c8c42af80>, [])
+qapp = <PySide6.QtWidgets.QApplication(0x55651d427f80) at 0x7f1c8c2fc140>
+
+    def test_a_removed_suggestion_row_returns_hidden_to_the_pool(panel, qapp):
+        """Ensaio F8: destruir a linha com `deleteLater` derrubava o processo quando
+        haviam conexões Python pendentes. A linha sai do layout, fica oculta e volta
+        no próximo poll — nada de C++/Python é destruído em pleno loop."""
+        view, _ = panel
+        view.show_snapshot(snap(psi10=14.0, apps=()))
+        row = view.rows[0]
+        before = view.list_box.count()
+    
+        view.show_snapshot(snap(psi10=0.0, apps=()))
+    
+        assert view.rows == []
+        assert view.list_box.count() == before - 1
+        assert row.parent() is not None and row.isHidden()
+        assert view._hidden_rows == [row]
+    
+        view.show_snapshot(snap(psi10=14.0, apps=()))
+        assert view.rows[0] is row
+        assert view._hidden_rows == []
+>       assert not row.isHidden(), "a linha do pool volta visível, sem recriação"
+E       AssertionError: a linha do pool volta visível, sem recriação
+E       assert not True
+E        +  where True = <built-in method isHidden of SuggestionRow object at 0x7f1c8c42be00>()
+E        +    where <built-in method isHidden of SuggestionRow object at 0x7f1c8c42be00> = <folego.ui.dashboard_tab.SuggestionRow(0x55651d59bf00) at 0x7f1c8c42be00>.isHidden
+
+tests/test_ui_dashboard.py:151: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_ui_dashboard.py::test_a_removed_suggestion_row_returns_hidden_to_the_pool
+1 failed, 1019 passed in 31.40s

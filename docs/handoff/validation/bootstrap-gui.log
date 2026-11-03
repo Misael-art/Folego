@@ -1,0 +1,30 @@
+Python 3.14.7 is already installed
+Using CPython 3.14.7
+Creating virtual environment at: .dev/venv-gui
+Resolved 15 packages in 3ms
+Downloading pyside6-essentials (80.4MiB)
+Downloading pyside6-addons (56.5MiB)
+Downloading pyside6-webengine (111.3MiB)
+ Downloaded pyside6-addons
+Downloading pyside6-pdf (2.7MiB)
+ Downloaded pyside6-pdf
+ Downloaded pyside6-essentials
+ Downloaded pyside6-webengine
+Prepared 6 packages in 7.23s
+Installed 14 packages in 2.27s
+ + folego==0.1.0 (from file:///home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout)
+ + hypothesis==6.170.1
+ + iniconfig==2.3.1
+ + packaging==26.3
+ + pluggy==1.7.0
+ + pygments==2.21.0
+ + pyside6==6.12.0
+ + pyside6-addons==6.12.0
+ + pyside6-essentials==6.12.0
+ + pyside6-pdf==6.12.0.140
+ + pyside6-webengine==6.12.0.140
+ + pytest==9.1.1
+ + shiboken6==6.12.0
+ + sortedcontainers==2.4.0
+Managed Python: /home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.dev/venv-gui/bin/python
+Ready: /home/misael/Projects/Folego/.scratch/migration-validation-20261024/checkout/.dev/venv-gui/bin/python

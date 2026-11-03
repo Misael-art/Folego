@@ -1,0 +1,69 @@
+{
+  "scope": "read-only recovery query of interrupted previous-boot QA fixture; not a two-hour soak acceptance",
+  "problems": [],
+  "intents": 31,
+  "results": 31,
+  "matching_ids": true,
+  "all_results_ok": true,
+  "fixture_original": false,
+  "query_exit": 0,
+  "query_operation_id": "edd187dc9c964ed68eeb519ce424bed4",
+  "query": {
+    "acao": "operation.query",
+    "exit": 0,
+    "ok": true,
+    "operation_id": "edd187dc9c964ed68eeb519ce424bed4",
+    "outcome": "sucesso",
+    "reason": null,
+    "state": {
+      "intent": {
+        "action": "tuning.apply",
+        "created_at": 1792323158.6148937,
+        "digest": "5819e37da83a76eb8f1915dddf6e88c79ed408c18da4fef8a8ebc56e87caffcd",
+        "expires_at": 1792323458.6148937,
+        "notes": [],
+        "operation_id": "edd187dc9c964ed68eeb519ce424bed4",
+        "params": {
+          "after_sha": "1af2206a07d34d7d0737bf33f786b5dddcb5e388f6cb5e88ae0d67572b203ea8",
+          "before_sha": "9520dc32e62268ba9a5bb50d7f344f1d1a2cda4e39eb531b5789f42602c9cd58"
+        },
+        "plan_version": 2,
+        "policy_version": 1,
+        "schema": 1,
+        "target": {
+          "detail": {
+            "dev": 47,
+            "ino": 35157243,
+            "mode": 33188,
+            "path": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/soak-final-wayland/home/.config/microsoft-edge/Local State"
+          },
+          "key": "edge.startup_boost",
+          "kind": "tuning",
+          "schema": 1
+        }
+      },
+      "intent_seq": 61,
+      "operation_id": "edd187dc9c964ed68eeb519ce424bed4",
+      "result": {
+        "action": "tuning.apply",
+        "effects": {
+          "backup_id": "tunings.edge.startup_boost/1792323158-ad4561e4",
+          "file": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/soak-final-wayland/home/.config/microsoft-edge/Local State",
+          "sha": "1af2206a07d34d7d0737bf33f786b5dddcb5e388f6cb5e88ae0d67572b203ea8"
+        },
+        "errors": [],
+        "finished_at": 1792323158.6322422,
+        "operation_id": "edd187dc9c964ed68eeb519ce424bed4",
+        "outcome": "sucesso",
+        "reason": null,
+        "schema": 1,
+        "started_at": 1792323158.624639,
+        "target_key": "edge.startup_boost"
+      },
+      "result_seq": 62,
+      "schema": 1,
+      "status": "concluida"
+    }
+  },
+  "journal_unchanged": true
+}

@@ -25,6 +25,8 @@ class SuggestionThresholds:
     edge_kb: int = 2 * GB_KB
     self_rss_kb: int = 300_000
     thumbnails_kb: int = GB_KB
+    tmpfs_yellow_frac: float = .75
+    tmpfs_red_frac: float = .90
 
 
 @dataclass(frozen=True)
@@ -45,14 +47,26 @@ def suggest(snapshot: Snapshot, *, orphan_count: int = 0,
             thresholds: SuggestionThresholds = SuggestionThresholds()
             ) -> tuple[Suggestion, ...]:
     out = []
+    for volume in snapshot.tmpfs:
+        if volume.quality != "ok":
+            continue
+        no_inodes = volume.inodes_total > 0 and volume.inodes_avail == 0
+        if volume.used_frac >= thresholds.tmpfs_yellow_frac or no_inodes:
+            critical = volume.used_frac >= thresholds.tmpfs_red_frac or no_inodes
+            out.append(Suggestion(
+                "tmpfs:" + volume.path, CRITICO if critical else ALTO,
+                f"{volume.path}: " + ("inodes esgotados" if no_inodes else
+                                      f"{volume.used_frac * 100:.0f}% ocupado"),
+                "Revise o diagnóstico e os donos na aba de temporários antes de escolher uma ação.",
+                "tmpfs"))
     psi10 = snapshot.pressure_memory.some_avg10 if snapshot.pressure_memory else 0.0
     if psi10 > thresholds.psi_memory_some_avg10:
         out.append(Suggestion(
             "pressao", CRITICO,
             f"Pressão de memória {psi10:.1f} — o kernel está esperando páginas",
             "psi/memory some avg10 acima de "
-            f"{thresholds.psi_memory_some_avg10:g}: fechando o Edge em background e "
-            "limpando /tmp sobra respiração imediata.",
+            f"{thresholds.psi_memory_some_avg10:g}: inspecione os consumidores no "
+            "Modo Desempenho e revise um alvo específico antes de fechar.",
             "memoria"))
 
     if snapshot.mem and snapshot.mem.mem_total_kb:
@@ -63,25 +77,26 @@ def suggest(snapshot: Snapshot, *, orphan_count: int = 0,
                 f"Sobrou {fmt_gb(avail)} GB livre de "
                 f"{fmt_gb(snapshot.mem.mem_total_kb)} GB",
                 "Menos de "
-                f"{thresholds.available_frac * 100:g}% disponível: a troca para zram "
-                "começa a custar frames.",
+                f"{thresholds.available_frac * 100:g}% disponível: confira quem usa "
+                "a memória e a pressão antes de escolher uma ação.",
                 "memoria"))
 
-    if snapshot.swap_total_kb and snapshot.swap_used_kb / snapshot.swap_total_kb > thresholds.zram_frac:
+    if (snapshot.swap_known and snapshot.swap_total_kb and
+            snapshot.swap_used_kb / snapshot.swap_total_kb > thresholds.zram_frac):
         pct = snapshot.swap_used_kb * 100 // snapshot.swap_total_kb
         out.append(Suggestion(
             "zram", ALTO,
             f"zram/swap em {pct}% dos {fmt_gb(snapshot.swap_total_kb)} GB",
-            "zram cheio comprime no lugar da CPU e aumenta o PSI; aliviar RAM "
-            "estrutura o resto.",
+            "Uso de swap/zram exige correlação com PSI e consumidores antes de "
+            "atribuir lentidão ou prometer alívio.",
             "memoria"))
 
     if snapshot.self_rss_kb > thresholds.self_rss_kb:
         out.append(Suggestion(
             "app", MEDIO,
             f"O próprio Fôlego está em {fmt_gb(snapshot.self_rss_kb)} GB",
-            "Acima do orçamento medido no M1: fechar a janela libera a UI e a "
-            "bandeja continua monitorando.",
+            "Acima do orçamento medido no M1: acompanhe a tendência e compare "
+            "com outros consumidores antes de agir.",
             "memoria"))
 
     edge = next((a for a in snapshot.apps if a.group == "edge"), None)
@@ -96,9 +111,10 @@ def suggest(snapshot: Snapshot, *, orphan_count: int = 0,
     if orphan_count:
         out.append(Suggestion(
             "orfaos", MEDIO,
-            f"{orphan_count} processo(s) órfão(ãos) comprovado(s)",
+            f"{orphan_count} processo(s) possivelmente abandonado(s)",
             "Adotados pelo supervisor da sessão, sem filhos vivos e sem consumir "
-            "CPU: encerrar devolve a RAM sem risco.",
+            "CPU: a decisão é sua — encerrar exige confirmação, e a próxima "
+            "leitura confirma (ou não) o efeito.",
             "orfaos"))
 
     if thumbnails_kb and thumbnails_kb > thresholds.thumbnails_kb:

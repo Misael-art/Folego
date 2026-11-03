@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0b1",
+  "modules_matched": 122,
+  "private_files": "absent",
+  "assets": {
+    "folego-0.2.0b1.tar.gz": {
+      "bytes": 476448,
+      "sha256": "d6d5e7622718a46fabdfc3f67800f926a42275be02dd5c43dd16c9e3a452d421"
+    },
+    "folego-0.2.0b1-py3-none-any.whl": {
+      "bytes": 327365,
+      "sha256": "b67bef67271dda4f84df3b8cf1cd9859542f31c4acdb17e322aa1a09758ffb7e"
+    }
+  }
+}

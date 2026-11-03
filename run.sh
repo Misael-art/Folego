@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Fôlego launcher — M1: RAM ao vivo no título · M4: painel de órfãos e grupo.
-# Só encerra processo depois de um clique com confirmação; sem clique, nada é sinalizado.
+# Compatibility launcher; the portable wrapper prepares its private environment.
 set -euo pipefail
-cd "$(dirname "$0")"
-export PYTHONPATH=src
-exec .venv/bin/python -m folego "$@"
+exec "$(dirname "$0")/dev" run "$@"

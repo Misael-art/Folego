@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "platform": "wayland",
+  "size": [
+    280,
+    292
+  ],
+  "before": {
+    "codex": 3,
+    "claude": 5,
+    "grok": 1
+  },
+  "after": {
+    "codex": 0,
+    "claude": 5,
+    "grok": 1
+  },
+  "focused_owned_target": true,
+  "durable_receipt": true,
+  "account_scoped_ack": true,
+  "after_default_codex": 1,
+  "scope": "synthetic transcripts; owned native window; provider lookup substituted"
+}

@@ -1,0 +1,53 @@
+{
+  "sha": "4802b79217390e4b6eb6f350ed0c0ab37a5ae005",
+  "checks": [
+    {
+      "name": "CodeRabbit",
+      "status": "completed",
+      "conclusion": "skipped",
+      "html_url": "https://github.com/Misael-art/Folego/runs/124994203087"
+    },
+    {
+      "name": "n\u00facleo e CLI sem Qt",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/Misael-art/Folego/actions/runs/41355380641/job/124994189537"
+    },
+    {
+      "name": "contratos da CLI em HOME descart\u00e1vel",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/Misael-art/Folego/actions/runs/41355380641/job/124994189386"
+    },
+    {
+      "name": "Qt offscreen em ambiente pr\u00f3prio",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/Misael-art/Folego/actions/runs/41355380641/job/124994189165"
+    },
+    {
+      "name": "Sourcery review",
+      "status": "completed",
+      "conclusion": "skipped",
+      "html_url": "https://github.com/Misael-art/Folego/runs/124994185192"
+    },
+    {
+      "name": "n\u00facleo e CLI sem Qt",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/Misael-art/Folego/actions/runs/41355375875/job/124994176293"
+    },
+    {
+      "name": "Qt offscreen em ambiente pr\u00f3prio",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/Misael-art/Folego/actions/runs/41355375875/job/124994176262"
+    },
+    {
+      "name": "contratos da CLI em HOME descart\u00e1vel",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/Misael-art/Folego/actions/runs/41355375875/job/124994176117"
+    }
+  ]
+}

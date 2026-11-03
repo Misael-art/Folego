@@ -1,0 +1,7 @@
+{
+  "status": "watching",
+  "pid": 598732,
+  "launch": "/home/misael/Projects/Folego/docs/reviews/2026-10-18/desktop-validation/soak-private-launch.json",
+  "report": "/home/misael/Projects/Folego/docs/reviews/2026-10-18/desktop-validation/soak-private-wayland/report.json",
+  "observed_utc": "2026-10-18T15:08:08.065984+00:00"
+}

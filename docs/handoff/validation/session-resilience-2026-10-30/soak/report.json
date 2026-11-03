@@ -1,0 +1,157 @@
+{
+  "status": "complete",
+  "pid": 1965134,
+  "started_utc": "2026-10-30T03:50:47.598788+00:00",
+  "elapsed_s": 7200.056755731999,
+  "target_s": 7200.0,
+  "elapsed_clock": "CLOCK_BOOTTIME",
+  "platform": "wayland",
+  "qt": "6.12.0",
+  "module": "src/folego/__init__.py",
+  "state": "<qa-state>",
+  "job_temp_root": "<qa-state>/general/folego-jobs",
+  "metrics": {
+    "VmHWM": 97776,
+    "VmRSS": 30920,
+    "Threads": 4,
+    "fds": 15,
+    "cpu_s": 72.439672745,
+    "children_cpu_s": 47.15,
+    "io": {
+      "rchar": 565310809,
+      "wchar": 5366660,
+      "syscr": 109412,
+      "syscw": 40972,
+      "read_bytes": 297959424,
+      "write_bytes": 71020544,
+      "cancelled_write_bytes": 4096
+    },
+    "children": []
+  },
+  "initial": {
+    "VmHWM": 69252,
+    "VmRSS": 69252,
+    "Threads": 4,
+    "fds": 14,
+    "cpu_s": 0.480831741,
+    "children_cpu_s": 0.0,
+    "io": {
+      "rchar": 5635550,
+      "wchar": 26272,
+      "syscr": 779,
+      "syscw": 32,
+      "read_bytes": 8126464,
+      "write_bytes": 69632,
+      "cancelled_write_bytes": 0
+    },
+    "children": []
+  },
+  "baseline": {
+    "VmHWM": 97824,
+    "VmRSS": 97824,
+    "Threads": 6,
+    "fds": 20,
+    "cpu_s": 1.797445719,
+    "children_cpu_s": 0.58,
+    "io": {
+      "rchar": 14748914,
+      "wchar": 107458,
+      "syscr": 2587,
+      "syscw": 1262,
+      "read_bytes": 8323072,
+      "write_bytes": 1204224,
+      "cancelled_write_bytes": 4096
+    },
+    "children": [
+      1972909
+    ],
+    "widgets": 306,
+    "elapsed_s": 120.21089016000042
+  },
+  "peak": {
+    "rss_kb": 98328,
+    "fds": 25,
+    "children": 2,
+    "widgets": 314
+  },
+  "rss_trend_kb_per_hour": -21832.678699901502,
+  "cpu_average_percent": 0.999420469105514,
+  "heartbeat_max_delay_ms": 197.00442099856446,
+  "heartbeat_histogram_ms": {
+    "250": 3,
+    "1": 136089,
+    "5": 6787,
+    "50": 295,
+    "10": 808,
+    "100": 7
+  },
+  "widgets": 314,
+  "widget_classes": {
+    "QSizeGrip": 1,
+    "QLabel": 76,
+    "QScrollArea": 2,
+    "QScrollBar": 46,
+    "QWidget": 80,
+    "QListView": 4,
+    "QComboBox": 4,
+    "QHeaderView": 11,
+    "QPushButton": 35,
+    "HealthGauge": 1,
+    "QProgressBar": 5,
+    "QFrame": 14,
+    "OptionsTab": 1,
+    "TuningsTab": 1,
+    "QStackedWidget": 1,
+    "QTableWidget": 5,
+    "SuggestionRow": 2,
+    "SidebarTabBar": 1,
+    "QAbstractButton": 5,
+    "SoakWindow": 1,
+    "ResourceCard": 4,
+    "QCheckBox": 1,
+    "QTabWidget": 1,
+    "QStatusBar": 1,
+    "OrphansPanel": 1,
+    "AccessibilityTab": 1,
+    "QToolButton": 2,
+    "QLineEdit": 1,
+    "QTreeWidget": 1,
+    "TmpfsTab": 1,
+    "DiskTab": 1,
+    "DashboardTab": 1,
+    "TuningRow": 2
+  },
+  "window": {
+    "enabled": false,
+    "minimized": false,
+    "tab": 0,
+    "input_isolated": true
+  },
+  "inventory_rows": {
+    "disk": 0,
+    "tmpfs_plan": 0
+  },
+  "samples": 600,
+  "samples_cap": 600,
+  "collection_count": 3600,
+  "collector_queue": 0,
+  "history_queue": 0,
+  "history_bytes_read": 4751835,
+  "active_qprocesses": 0,
+  "job_counters": {
+    "worker_started": 120,
+    "worker_completed": 120,
+    "cancel_started": 20,
+    "cancel_completed": 20
+  },
+  "last_worker": {
+    "acao": "revert",
+    "ok": true,
+    "outcome": "sucesso",
+    "operation_id": "292a36a77f2b485a9b88fb89ef0d1428",
+    "reason": null
+  },
+  "failures": [],
+  "planned_workers": 120,
+  "source_unchanged": true
+}

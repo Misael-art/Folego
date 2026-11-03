@@ -1,0 +1,28 @@
+{
+  "platform": "wayland",
+  "size": [
+    280,
+    254
+  ],
+  "cases": [
+    {
+      "gifts": "four providers, confirmed multi-account counts, beside deliveries",
+      "logical_width": 280,
+      "native_geometry": "Window {01eb1d8a-69d5-4388-ac78-8420b46fffee}\n  Position: 604,368\n  Geometry: 280x254.07407407407402\n"
+    },
+    {
+      "blink": "real QTimer bright/dim/bright; count never disappears",
+      "interval_ms": 800
+    },
+    {
+      "lifecycle": "hidden stops timer; return resumes"
+    },
+    {
+      "account": "gift selects secondary account with ticket; no redemption"
+    },
+    {
+      "invalidation": "expiry and zero hide gifts, stop timer, preserve deliveries"
+    }
+  ],
+  "passed": true
+}

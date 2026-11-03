@@ -1,0 +1,11 @@
+{
+  "state": "replaced",
+  "version": "0.2.0b2",
+  "method": "native tray Sair do F\u00f4lego",
+  "manual_signals": false,
+  "old_gui_exited": true,
+  "old_helper_exit": true,
+  "lock_released": true,
+  "compact_shown": true,
+  "central_hidden": true
+}

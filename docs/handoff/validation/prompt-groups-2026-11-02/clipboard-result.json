@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "case": "production menu selection, native clipboard and Shift+Insert into owned editor",
+  "scope": "owned Xvfb only; physical clipboard untouched",
+  "prompts": 12,
+  "selected": "design-mockups",
+  "selected_bytes": 9866,
+  "selected_sha256": "679b411c224337653971fe662e62a854f704a703203310f393c59bed06b0e8a9",
+  "custom_literal": "123"
+}

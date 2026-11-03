@@ -1,0 +1,107 @@
+{
+  "status": "running",
+  "pid": 2726534,
+  "started_utc": "2026-10-18T10:46:38.380895+00:00",
+  "elapsed_s": 2740.130659128001,
+  "target_s": 7200.0,
+  "platform": "wayland",
+  "qt": "6.12.0",
+  "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/lib/python3.14/site-packages/folego/__init__.py",
+  "state": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/soak-final-wayland",
+  "metrics": {
+    "VmHWM": 87524,
+    "VmRSS": 74680,
+    "Threads": 6,
+    "fds": 15,
+    "cpu_s": 17.814285253,
+    "children_cpu_s": 5.69,
+    "io": {
+      "rchar": 171119233,
+      "wchar": 1614040,
+      "syscr": 34372,
+      "syscw": 29340,
+      "read_bytes": 368640,
+      "write_bytes": 20000768,
+      "cancelled_write_bytes": 4096
+    },
+    "children": []
+  },
+  "initial": {
+    "VmHWM": 64844,
+    "VmRSS": 64844,
+    "Threads": 4,
+    "fds": 14,
+    "cpu_s": 0.300208422,
+    "children_cpu_s": 0.0,
+    "io": {
+      "rchar": 6065717,
+      "wchar": 9760,
+      "syscr": 683,
+      "syscw": 32,
+      "read_bytes": 0,
+      "write_bytes": 69632,
+      "cancelled_write_bytes": 0
+    },
+    "children": []
+  },
+  "baseline": {
+    "VmHWM": 87960,
+    "VmRSS": 87960,
+    "Threads": 6,
+    "fds": 20,
+    "cpu_s": 1.074053542,
+    "children_cpu_s": 0.23,
+    "io": {
+      "rchar": 13502710,
+      "wchar": 133201,
+      "syscr": 2437,
+      "syscw": 1631,
+      "read_bytes": 20480,
+      "write_bytes": 978944,
+      "cancelled_write_bytes": 4096
+    },
+    "children": [
+      2730870
+    ],
+    "widgets": 179,
+    "elapsed_s": 120.13268671100377
+  },
+  "peak": {
+    "rss_kb": 88204,
+    "fds": 25,
+    "children": 2,
+    "widgets": 187
+  },
+  "rss_trend_kb_per_hour": -21930.212597145,
+  "cpu_average_percent": 0.6391694050302533,
+  "heartbeat_max_delay_ms": 78.08776600286365,
+  "heartbeat_histogram_ms": {
+    "100": 1,
+    "1": 53674,
+    "5": 1083,
+    "10": 41,
+    "50": 1
+  },
+  "widgets": 187,
+  "samples": 600,
+  "samples_cap": 600,
+  "collection_count": 1370,
+  "collector_queue": 0,
+  "history_queue": 0,
+  "history_bytes_read": 671644,
+  "active_qprocesses": 0,
+  "job_counters": {
+    "worker_started": 46,
+    "worker_completed": 46,
+    "cancel_started": 7,
+    "cancel_completed": 7
+  },
+  "last_worker": {
+    "acao": "detect",
+    "ok": true,
+    "outcome": null,
+    "operation_id": null,
+    "reason": null
+  },
+  "failures": []
+}

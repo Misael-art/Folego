@@ -1,0 +1,10 @@
+Using Python 3.14.7 environment at: .scratch/desktop-validation-vvnNlb/installation-offline/removal-gui-venv
+Resolved 7 packages in 3ms
+Installed 7 packages in 253ms
+ + folego==0.1.0 (from file:///home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final2-wheels/folego-0.1.0-py3-none-any.whl)
+ + pyside6==6.12.0
+ + pyside6-addons==6.12.0
+ + pyside6-essentials==6.12.0
+ + pyside6-pdf==6.12.0.140
+ + pyside6-webengine==6.12.0.140
+ + shiboken6==6.12.0

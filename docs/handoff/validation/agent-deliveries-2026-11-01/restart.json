@@ -1,0 +1,24 @@
+{
+  "visible_widget": true,
+  "providers": [
+    {
+      "provider": "Codex",
+      "visible": true
+    },
+    {
+      "provider": "Codex Web",
+      "visible": true
+    },
+    {
+      "provider": "Claude",
+      "visible": true
+    },
+    {
+      "provider": "Grok",
+      "visible": true
+    }
+  ],
+  "restart": "old GUI did not respond to hidden AT-SPI exit; PID/starttime/argv verified, SIGTERM via pidfd, flock release observed; official ./dev gui launched once",
+  "platform": "KDE/Wayland",
+  "other_agents_stopped": false
+}

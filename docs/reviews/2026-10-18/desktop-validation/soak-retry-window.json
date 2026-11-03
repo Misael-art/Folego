@@ -1,0 +1,71 @@
+{
+  "scope": "Read-only KWin/AT-SPI query; no focus or input action",
+  "window": {
+    "app_id": "folego-soak",
+    "backend": "kwin",
+    "bounds": {
+      "height": 593,
+      "width": 900,
+      "x": 24,
+      "y": 0
+    },
+    "client_type": null,
+    "focused": false,
+    "hidden": true,
+    "pid": 221314,
+    "title": "Fôlego 🔴 · 14,5/15,3 GB livre 0,8 · app 0 MB",
+    "wm_class": "folego-soak",
+    "workspace": null
+  },
+  "accessibility_error": null,
+  "accessibility_tree": [
+    {
+      "actions": [],
+      "bounds": null,
+      "child_count": 1,
+      "depth": 0,
+      "description": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/bin/python",
+      "index": 0,
+      "name": "folego-soak",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/root",
+      "parent_index": null,
+      "role": "application",
+      "states": [
+        "enabled",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    },
+    {
+      "actions": [],
+      "bounds": {
+        "height": 565,
+        "width": 900,
+        "x": 0,
+        "y": 0
+      },
+      "child_count": 0,
+      "depth": 1,
+      "description": null,
+      "index": 1,
+      "name": "Fôlego 🔴 · 14,5/15,3 GB livre 0,8 · app 0 MB",
+      "object_ref": ":1.33/org/a11y/atspi/accessible/2147483654",
+      "parent_index": 0,
+      "role": "frame",
+      "states": [
+        "enabled",
+        "resizable",
+        "sensitive",
+        "showing",
+        "visible"
+      ],
+      "supports_editable_text": false,
+      "text": null,
+      "value": null
+    }
+  ]
+}

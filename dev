@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Portable development entrypoint. All managed downloads stay inside this repo.
+set -euo pipefail
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+cd -- "$ROOT"
+command=${1:-help}
+if (($#)); then shift; fi
+case "$command" in
+  help|--help|-h)
+    cat <<'HELP'
+./dev setup [--headless] [--system-deps]  Install pinned tools and dependencies
+./dev test [pytest arguments]           Full Qt suite, offscreen, private HOME
+./dev test-headless [pytest arguments]  Separate environment without Qt
+./dev check                            Both suites sequentially + diff check
+./dev gui                              Launch GUI (session startup defaults on)
+./dev run [CLI arguments]               CLI; no arguments launches GUI
+./dev doctor                           Read-only application diagnostics
+./dev status                           Paths and retained QA workspaces
+./dev export --output DIRECTORY [...]   Export committed recovery archives
+./dev system-deps [--apply]             Preview/apply native package installation
+
+Linux + Bash required. First setup downloads uv/Python/packages. Native packages
+need --system-deps (or system-deps --apply) and administrator access. Setup does
+not enable services. GUI session startup defaults on; change it in Options.
+No shell profile changes or automatic resource cleanup.
+HELP
+    exit 0 ;;
+  system-deps) exec bash "$ROOT/tools/system_deps.sh" "$@" ;;
+  status)
+    printf 'Project: %s\nManaged tools: %s/.dev\nQA: %s/.scratch/dev-tests\n' "$ROOT" "$ROOT" "$ROOT"
+    if [[ -d .dev ]]; then du -sh .dev; fi
+    if [[ -d .scratch/dev-tests ]]; then du -sh .scratch/dev-tests; fi
+    exit 0 ;;
+  check)
+    "$ROOT/dev" test-headless
+    "$ROOT/dev" test
+    if command -v git >/dev/null 2>&1 && [[ -e .git ]]; then
+      git diff --check
+    else
+      echo 'Git diff check skipped: this is not a Git checkout.' >&2
+    fi
+    exit 0 ;;
+  setup|test|test-headless|gui|run|doctor|export) ;;
+  *) printf 'Unknown command: %s\nUse ./dev help\n' "$command" >&2; exit 2 ;;
+esac
+
+profile=gui
+if [[ "$command" == test-headless || "$command" == doctor || "$command" == export || ( "$command" == run && $# -gt 0 ) ]]; then profile=headless; fi
+if [[ "$command" == setup ]]; then
+  install_native=0
+  for option in "$@"; do
+    case "$option" in
+      --headless) profile=headless ;;
+      --system-deps) install_native=1 ;;
+      *) printf 'Unknown setup option: %s\n' "$option" >&2; exit 2 ;;
+    esac
+  done
+  if ((install_native)); then bash "$ROOT/tools/system_deps.sh" --apply; fi
+fi
+bash "$ROOT/tools/bootstrap.sh" "$profile" >&2
+environment="$ROOT/.dev/venv-$profile"
+unset PYTHONHOME PYTHONPATH QT_PLUGIN_PATH QML2_IMPORT_PATH
+if [[ "$command" != test && "$command" != test-headless ]]; then
+  [[ ! -L "$ROOT/.dev/runtime" ]] || { echo 'Refusing symbolic runtime root.' >&2; exit 2; }
+  mkdir -p "$ROOT/.dev/runtime/general" "$ROOT/.dev/runtime/pytest-root"
+  export TMPDIR="$ROOT/.dev/runtime/general" PYTEST_DEBUG_TEMPROOT="$ROOT/.dev/runtime/pytest-root"
+fi
+case "$command" in
+  setup) printf 'Ready: %s\n' "$environment/bin/python" ;;
+  test|test-headless) exec "$environment/bin/python" "$ROOT/tools/dev_session.py" "$profile" "$@" ;;
+  gui) exec "$environment/bin/folego" ;;
+  run) exec "$environment/bin/folego" "$@" ;;
+  doctor) exec "$environment/bin/folego" doctor --json ;;
+  export) exec "$environment/bin/python" -I "$ROOT/tools/export_recovery.py" "$@" ;;
+esac

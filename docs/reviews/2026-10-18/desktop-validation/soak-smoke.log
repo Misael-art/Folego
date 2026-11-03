@@ -1,0 +1,2 @@
+{"pid": 2693486, "target_s": 8.0, "output": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/soak-smoke-report"}
+{"status": "complete", "elapsed_s": 8.017052677998436, "failures": ["cancelled mutation incorrectly reported as known/no-effect", "tuning worker did not complete successfully"]}

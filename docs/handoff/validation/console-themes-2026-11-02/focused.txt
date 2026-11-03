@@ -1,0 +1,7 @@
+Python 3.14.7 is already installed
+Resolved 15 packages in 2ms
+Checked 14 packages in 0.80ms
+Managed Python: /home/misael/Projects/Folego/.dev/venv-gui/bin/python
+QA workspace: /home/misael/Projects/Folego/.scratch/dev-tests/run-ksrgwgco
+..............................................                           [100%]
+46 passed in 16.09s

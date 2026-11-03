@@ -1,0 +1,22 @@
+{
+  "before": [
+    {
+      "name": "Abrir a janela central do Fôlego",
+      "role": "push button"
+    },
+    {
+      "name": "temporários",
+      "role": "page tab"
+    }
+  ],
+  "after": [
+    {
+      "name": "Ocultar somente o controle compacto",
+      "role": "push button"
+    },
+    {
+      "name": "temporários",
+      "role": "page tab"
+    }
+  ]
+}

@@ -7,12 +7,44 @@ import pytest
 REAL_EDGE_LOCAL_STATE = Path.home() / ".config" / "microsoft-edge" / "Local State"
 
 
+def pytest_addoption(parser):
+    parser.addoption("--without-qt", action="store_true",
+                     help="Exclude Qt test modules before importing them")
+
+
+def pytest_ignore_collect(collection_path, config):
+    if config.getoption("--without-qt"):
+        return (collection_path.name.startswith("test_ui_") or
+                collection_path.name in {"test_workers.py", "test_workers_offload.py"})
+    return None
+
+
 @pytest.fixture(scope="session")
 def qapp():
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
     app = QApplication.instance() or QApplication([])
     yield app
+
+
+@pytest.fixture(autouse=True)
+def dispose_qt_windows(request):
+    """Dispose each test's Qt trees while their Python wrappers still live.
+
+    Keeping closed windows until a later GC cycle lets Shiboken encounter
+    wrappers whose native parent was already destroyed during another test.
+    Pure tests never import Qt through this fixture.
+    """
+    yield
+    if "qapp" not in request.fixturenames:
+        return
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QApplication
+    windows = list(QApplication.topLevelWidgets())
+    for window in windows:
+        window.close()
+        window.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 def _edge_tripwire_state():

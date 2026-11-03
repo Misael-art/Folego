@@ -1,0 +1,73 @@
+{
+  "platform": "wayland",
+  "size": [
+    280,
+    275
+  ],
+  "cases": [
+    {
+      "tooltip": "Qt help event in non-focusing widget",
+      "fields": [
+        "quota",
+        "reset",
+        "tickets",
+        "monthly"
+      ]
+    },
+    {
+      "position": "bottom",
+      "requested": [
+        0,
+        309,
+        948,
+        284
+      ],
+      "confirmed": [
+        0,
+        309,
+        948,
+        284
+      ],
+      "visible": true
+    },
+    {
+      "position": "top",
+      "requested": [
+        0,
+        0,
+        948,
+        284
+      ],
+      "confirmed": [
+        0,
+        0,
+        948,
+        284
+      ],
+      "visible": true
+    },
+    {
+      "position": "bottom",
+      "requested": [
+        0,
+        313,
+        948,
+        280
+      ],
+      "confirmed": [
+        0,
+        313,
+        948,
+        280
+      ],
+      "visible": true
+    },
+    {
+      "input": "native key into owned focused field"
+    },
+    {
+      "editing": "native AT-SPI select/delete only the owned focused field"
+    }
+  ],
+  "passed": true
+}

@@ -1,0 +1,148 @@
+{
+  "status": "running",
+  "pid": 304327,
+  "started_utc": "2026-10-18T13:19:01.436788+00:00",
+  "elapsed_s": 6440.424947884,
+  "target_s": 7200.0,
+  "platform": "wayland",
+  "qt": "6.12.0",
+  "module": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-gui-venv/lib/python3.14/site-packages/folego/__init__.py",
+  "state": "/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/soak-controlled-wayland",
+  "metrics": {
+    "VmHWM": 95624,
+    "VmRSS": 24564,
+    "Threads": 6,
+    "fds": 15,
+    "cpu_s": 43.672639849,
+    "children_cpu_s": 16.009999999999998,
+    "io": {
+      "rchar": 390994320,
+      "wchar": 4531205,
+      "syscr": 78611,
+      "syscw": 68955,
+      "read_bytes": 86761472,
+      "write_bytes": 48406528,
+      "cancelled_write_bytes": 4096
+    },
+    "children": []
+  },
+  "initial": {
+    "VmHWM": 64960,
+    "VmRSS": 64960,
+    "Threads": 4,
+    "fds": 14,
+    "cpu_s": 0.290316159,
+    "children_cpu_s": 0.0,
+    "io": {
+      "rchar": 6062498,
+      "wchar": 9769,
+      "syscr": 675,
+      "syscw": 33,
+      "read_bytes": 0,
+      "write_bytes": 36864,
+      "cancelled_write_bytes": 0
+    },
+    "children": []
+  },
+  "baseline": {
+    "VmHWM": 94728,
+    "VmRSS": 92740,
+    "Threads": 6,
+    "fds": 20,
+    "cpu_s": 1.248544274,
+    "children_cpu_s": 0.25,
+    "io": {
+      "rchar": 13528577,
+      "wchar": 86627,
+      "syscr": 2584,
+      "syscw": 1909,
+      "read_bytes": 1929216,
+      "write_bytes": 892928,
+      "cancelled_write_bytes": 4096
+    },
+    "children": [
+      310784
+    ],
+    "widgets": 181,
+    "elapsed_s": 120.42726548800056
+  },
+  "peak": {
+    "rss_kb": 96092,
+    "fds": 25,
+    "children": 2,
+    "widgets": 189
+  },
+  "rss_trend_kb_per_hour": -42890.81227139787,
+  "cpu_average_percent": 0.6735941190379565,
+  "heartbeat_max_delay_ms": 69.31190399991465,
+  "heartbeat_histogram_ms": {
+    "100": 3,
+    "1": 124937,
+    "5": 3707,
+    "50": 24,
+    "10": 135
+  },
+  "widgets": 189,
+  "widget_classes": {
+    "QAbstractButton": 5,
+    "QLabel": 34,
+    "QWidget": 57,
+    "QHeaderView": 11,
+    "TuningsTab": 1,
+    "QPushButton": 19,
+    "QScrollBar": 36,
+    "SoakWindow": 1,
+    "TuningRow": 2,
+    "QToolButton": 2,
+    "QFrame": 1,
+    "QSizeGrip": 1,
+    "QStackedWidget": 1,
+    "QListView": 1,
+    "DiskTab": 1,
+    "QTableWidget": 5,
+    "SuggestionRow": 2,
+    "QTabWidget": 1,
+    "QTabBar": 1,
+    "QTreeWidget": 1,
+    "QStatusBar": 1,
+    "TmpfsTab": 1,
+    "QComboBox": 1,
+    "OrphansPanel": 1,
+    "DashboardTab": 1,
+    "QProgressBar": 1
+  },
+  "window": {
+    "enabled": false,
+    "minimized": false,
+    "tab": 0,
+    "input_isolated": true
+  },
+  "inventory_rows": {
+    "disk": 0,
+    "tmpfs_plan": 0
+  },
+  "samples": 600,
+  "samples_cap": 600,
+  "collection_count": 3221,
+  "collector_queue": 0,
+  "history_queue": 0,
+  "history_bytes_read": 3611699,
+  "active_qprocesses": 0,
+  "job_counters": {
+    "worker_started": 108,
+    "worker_completed": 108,
+    "cancel_started": 18,
+    "cancel_completed": 18
+  },
+  "last_worker": {
+    "acao": "revert",
+    "ok": false,
+    "outcome": "recusa",
+    "operation_id": null,
+    "reason": "temporários do filho não preparados: temporários: limite de execuções retidas; revisão manual necessária"
+  },
+  "failures": [
+    "cancelled mutation incorrectly reported as known/no-effect",
+    "tuning worker did not complete successfully"
+  ]
+}

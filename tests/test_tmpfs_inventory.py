@@ -58,7 +58,13 @@ def test_kind_uid_and_size(tmp_path):
     child(root, "arquivo", content="12345")
     child(root, "dir-velho", is_dir=True)
     sock = socket.socket(socket.AF_UNIX)
-    sock.bind(str(root / "sock"))
+    # The real socket stays in this disposable tree; a short fd alias avoids
+    # sockaddr_un's path limit when --basetemp is deep on persistent storage.
+    directory_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        sock.bind(f"/proc/self/fd/{directory_fd}/sock")
+    finally:
+        os.close(directory_fd)
     os.mkfifo(root / "fifo")
 
     by_name = {e.name: e for e in inventory.inventory(str(root), (), EMPTY, now=NOW)}

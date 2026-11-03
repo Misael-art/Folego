@@ -7,7 +7,7 @@ disappearing — a silent "nothing happened" would look like success.
 """
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (QGridLayout, QGroupBox, QLabel, QMessageBox,
-                               QPushButton, QVBoxLayout, QWidget)
+                               QPushButton, QSizePolicy, QVBoxLayout, QWidget)
 
 from ..actions.tunings.registry import TUNINGS
 
@@ -20,9 +20,15 @@ class TuningRow(QGroupBox):
         self.tuning = tuning
         self.file_label = QLabel("")
         self.file_label.setWordWrap(True)
+        self.file_label.setSizePolicy(QSizePolicy.Policy.Ignored,
+                                      QSizePolicy.Policy.Preferred)
         self.state_label = QLabel(PENDING)
+        self.state_label.setWordWrap(True)
         self.verdict = QLabel("")
         self.verdict.setWordWrap(True)
+        why = QLabel(tuning.why)
+        why.setWordWrap(True)
+        why.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.apply_button = QPushButton("Aplicar")
         self.revert_button = QPushButton("Reverter")
         for button in (self.apply_button, self.revert_button):
@@ -34,7 +40,8 @@ class TuningRow(QGroupBox):
         grid.addWidget(QLabel("arquivo:"), 1, 0)
         grid.addWidget(self.file_label, 1, 1)
         grid.addWidget(QLabel("motivo:"), 2, 0)
-        grid.addWidget(QLabel(tuning.why), 2, 1)
+        grid.addWidget(why, 2, 1)
+        grid.setColumnStretch(1, 1)
 
         buttons = QVBoxLayout()
         buttons.addWidget(self.apply_button)
@@ -42,6 +49,7 @@ class TuningRow(QGroupBox):
         outer = QGridLayout()
         outer.addLayout(grid, 0, 0)
         outer.addLayout(buttons, 0, 1)
+        outer.setColumnStretch(0, 1)
         layout = QVBoxLayout(self)
         layout.addLayout(outer)
         layout.addWidget(self.verdict)
@@ -54,6 +62,8 @@ class TuningsTab(QWidget):
         self._confirm = confirm_fn or self._ask_dialog
         self._tunings = tuple(tunings if tunings is not None else TUNINGS)
         self._applied: set[str] = set()
+        self._uncertain: set[str] = set()
+        self._pending_ids = {}
 
         layout = QVBoxLayout(self)
         self.rows: list[TuningRow] = []
@@ -92,7 +102,8 @@ class TuningsTab(QWidget):
         row.file_label.setText(str(payload.get("file") or "—"))
         if payload.get("error"):
             row.state_label.setText(payload["error"])
-            row.verdict.setText("")
+            if tuning.id not in self._uncertain:
+                row.verdict.setText("")
             return
         if not payload.get("exists"):
             row.state_label.setText("arquivo não existe")
@@ -109,43 +120,58 @@ class TuningsTab(QWidget):
         else:
             row.state_label.setText("desligado (já econômico)")
         row.revert_button.setEnabled(True)
+        if self._uncertain:
+            row.apply_button.setEnabled(False)
+            row.revert_button.setEnabled(False)
 
     # -------------------------------------------------------------------- acts
 
     def apply_clicked(self, tuning):
+        if self._uncertain:
+            return
         row = self.row_for(tuning.id)
-        if not self._confirm(
-                "Aplicar ajuste",
+        self._jobs.review_and_run("apply", tuning.id, title="Aplicar ajuste", confirm_fn=self._confirm,
+                expected_scope=[{"key": row.file_label.text()}],
+                text=
                 f"Vou escrever em {row.file_label.text() or 'arquivo do navegador'}.\n\n"
                 "O Microsoft Edge precisa estar fechado: ao sair ele regrava este "
                 "arquivo e desfaz o ajuste.\n"
-                "Uma cópia do arquivo atual fica em backup e pode ser revertida."):
-            row.verdict.setText("cancelado: nada foi escrito")
-            return
-        self._jobs.run("apply", tuning.id, confirm=True,
+                "Uma cópia do arquivo atual fica em backup e pode ser revertida.",
                        done=lambda payload: self.show_mutation("aplicado", tuning,
                                                                payload))
 
     def revert_clicked(self, tuning):
-        row = self.row_for(tuning.id)
-        if not self._confirm(
-                "Reverter ajuste",
-                "Vou devolver este arquivo ao último backup feito pelo Fôlego. "
-                "Alterações feitas depois disso pelo próprio Edge seriam descartadas."):
-            row.verdict.setText("cancelado: nada foi restaurado")
+        if self._uncertain:
             return
-        self._jobs.run("revert", tuning.id, confirm=True,
+        row = self.row_for(tuning.id)
+        self._jobs.review_and_run("revert", tuning.id, title="Reverter ajuste", confirm_fn=self._confirm,
+                expected_scope=[{"key": row.file_label.text()}],
+                text=
+                "Vou devolver este arquivo ao último backup feito pelo Fôlego. "
+                "Alterações feitas depois disso pelo próprio Edge seriam descartadas.",
                        done=lambda payload: self.show_mutation("restaurado", tuning,
                                                                payload))
 
     def show_mutation(self, success_word: str, tuning, payload):
         row = self.row_for(tuning.id)
-        if payload is None:
-            row.verdict.setText("o filho não respondeu; nada é considerado feito")
+        if payload and payload.get("outcome") == "cancelamento":
+            row.verdict.setText(payload.get("reason", "cancelado: nenhum efeito solicitado"))
             return
-        if not payload.get("ok"):
-            row.verdict.setText("recusado: "
-                                f"{payload.get('reason') or 'motivo não informado'}")
+        if not payload or payload.get("outcome") == "desconhecido":
+            self._uncertain.add(tuning.id)
+            self._pending_ids[tuning.id] = (payload or {}).get("operation_id")
+            payload = payload or {}
+            for other in self.rows:
+                other.apply_button.setEnabled(False)
+                other.revert_button.setEnabled(False)
+            row.verdict.setText("desconhecido: " + str(payload.get("reason") or "o filho não respondeu") +
+                " · operação " + str(payload.get("operation_id") or "consulte o histórico") +
+                " · não repetir antes de reconciliar")
+            return
+        if not payload.get("ok") or payload.get("outcome") in ("parcial", "falha", "recusa"):
+            label = {"parcial": "parcial", "falha": "falha"}.get(payload.get("outcome"), "recusado")
+            row.verdict.setText(f"{label}: {payload.get('reason') or 'motivo não informado'}" +
+                (f" · operação {payload['operation_id']}" if payload.get("operation_id") else ""))
             return
         if payload.get("acao") == "apply" and not payload.get("changed", True):
             row.verdict.setText(payload.get("reason") or "nada a fazer")
@@ -158,14 +184,17 @@ class TuningsTab(QWidget):
         if payload.get("backup_id"):
             parts.append(f"backup {payload['backup_id']}")
         row.verdict.setText(" · ".join(parts))
-        # re-read through the event loop: a fresh verdict must not nest
         QTimer.singleShot(0, self.refresh)
 
+    def resolve_operation(self, payload):
+        key = payload.get("operation_id")
+        resolved = [tuning for tuning, operation in self._pending_ids.items() if key and operation == key]
+        for tuning in resolved:
+            self._uncertain.discard(tuning)
+            self._pending_ids.pop(tuning, None)
+            self.row_for(tuning).verdict.setText("verificado: " + str(payload.get("reason") or "resultado consultado"))
+        if resolved: QTimer.singleShot(0, self.refresh)
+
     def _ask_dialog(self, title: str, text: str) -> bool:
-        box = QMessageBox(self)
-        box.setWindowTitle(title)
-        box.setText(text)
-        box.setStandardButtons(QMessageBox.StandardButton.Yes |
-                               QMessageBox.StandardButton.No)
-        box.setDefaultButton(QMessageBox.StandardButton.No)
-        return box.exec() == QMessageBox.StandardButton.Yes
+        from .confirmation import confirm_text
+        return confirm_text(title, text, self)

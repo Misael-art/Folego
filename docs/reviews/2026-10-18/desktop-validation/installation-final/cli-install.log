@@ -1,0 +1,5 @@
+Using Python 3.14.7 environment at: .scratch/desktop-validation-vvnNlb/installation-retry/wheel-cli-venv
+Resolved 1 package in 1ms
+Prepared 1 package in 11ms
+Installed 1 package in 45ms
+ + folego==0.1.0 (from file:///home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final2-wheels/folego-0.1.0-py3-none-any.whl)

@@ -1,0 +1,7 @@
+{
+  "status": "stopped_after_retention_cap_refusal",
+  "pid": 304327,
+  "children_before_signal": [],
+  "retained_runs_shared_root": 256,
+  "reason": "Earlier attempts pooled TMPDIR; repeat with private per-attempt root. No cleanup and no cap change."
+}

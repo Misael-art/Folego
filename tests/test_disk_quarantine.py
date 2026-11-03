@@ -144,25 +144,63 @@ def test_reconcile_repairs_an_interrupted_move(area, fake_home):
     q = make_quarantine(fake_home)
     entry = q.move_in(area)
     raw = json.loads(q.manifest_path.read_text())
-    raw[0]["state"] = "planned"
+    raw["entries"][0]["state"] = "planned"
     q.manifest_path.write_text(json.dumps(raw))
 
-    repaired = q.reconcile()
+    report = q.reconcile()
 
-    assert repaired == [entry.entry_id]
+    assert report.repaired == (entry.entry_id,)
+    assert report.dropped == () and report.manual == ()
     assert q.entries()[entry.entry_id].state == "stored"
 
 
 def test_reconcile_leaves_true_planned_entries_alone(area, fake_home):
     q = make_quarantine(fake_home)
     q.root.mkdir(parents=True, exist_ok=True)
+    # formato legado (lista crua): continua legível, e migra na primeira escrita
     q.manifest_path.write_text(json.dumps([{
         "entry_id": "ghost-1", "original": str(area / "ghost"),
         "stored": str(q.root / "ghost-1"), "bytes": 0, "state": "planned",
         "moved_at": "", "action_id": "disk.quarantine"}]))
 
-    assert q.reconcile() == []
+    report = q.reconcile()
+
+    assert report.repaired == () and report.dropped == ()
+    assert report.manual == ("ghost-1",), "ambíguo não vira remoção nem fechamento"
     assert q.entries()["ghost-1"].state == "planned"
+
+
+def test_reconcile_closes_a_planned_row_that_never_renamed(area, fake_home):
+    """Origem intacta e sem payload: o rename nunca aconteceu; fechar é honesto."""
+    q = make_quarantine(fake_home)
+    q.root.mkdir(parents=True, exist_ok=True)
+    q.manifest_path.write_text(json.dumps([{
+        "entry_id": "no-rename", "original": str(area),
+        "stored": str(q.root / "no-rename"), "bytes": 0, "state": "planned",
+        "moved_at": "", "action_id": "disk.quarantine"}]))
+
+    report = q.reconcile()
+
+    assert report.dropped == ("no-rename",) and report.repaired == ()
+    assert q.entries()["no-rename"].state == "dropped"
+    assert area.exists(), "nenhum dado tocado"
+
+
+def test_reconcile_leaves_ambiguous_transitions_for_manual(area, fake_home):
+    """Ambos existem: o usuário recriou a origem e o clone é dado real — nada de auto."""
+    q = make_quarantine(fake_home)
+    q.root.mkdir(parents=True, exist_ok=True)
+    stored = q.root / "ambos"
+    stored.mkdir()
+    q.manifest_path.write_text(json.dumps([{
+        "entry_id": "ambos", "original": str(area), "stored": str(stored),
+        "bytes": 0, "state": "planned", "moved_at": "",
+        "action_id": "disk.quarantine"}]))
+
+    report = q.reconcile()
+
+    assert report.manual == ("ambos",) and report.repaired == () and report.dropped == ()
+    assert q.entries()["ambos"].state == "planned"
 
 
 def test_move_in_refuses_inside_the_quarantine_root_itself(area, fake_home):
@@ -189,3 +227,104 @@ def test_manifest_is_owner_only(area, fake_home):
     q.move_in(area)
 
     assert (q.manifest_path.stat().st_mode & 0o077) == 0
+
+
+def test_the_manifest_is_versioned_and_keeps_the_previous_generation(area, fake_home):
+    q = make_quarantine(fake_home)
+    entry = q.move_in(area)
+
+    payload = json.loads(q.manifest_path.read_text())
+    assert payload["schema"] == 1
+    assert payload["entries"][0]["state"] == "stored"
+    backup = q.manifest_path.with_name("manifest.json.bak")
+    assert json.loads(backup.read_text())["entries"][0]["state"] == "planned", \
+        "o backup é a geração imediatamente anterior"
+
+    q.restore(entry.entry_id)
+
+    assert json.loads(backup.read_text())["entries"][0]["state"] == "stored"
+    assert (backup.stat().st_mode & 0o077) == 0
+
+
+def test_a_legacy_list_manifest_is_read_and_migrated_with_backup(area, fake_home):
+    q = make_quarantine(fake_home)
+    stored = q.root / "antigo"
+    stored.mkdir(parents=True)
+    (stored / "f.bin").write_bytes(b"aaa")
+    legacy = [{
+        "entry_id": "antigo", "original": str(area), "stored": str(stored),
+        "bytes": 3, "state": "stored", "moved_at": "2026-01-01T00:00:00Z",
+        "action_id": "disk.quarantine"}]
+    q.manifest_path.write_text(json.dumps(legacy))
+
+    assert q.entries()["antigo"].state == "stored", "lista crua continua legível"
+
+    assert q.purge("antigo").ok is True  # a primeira escrita migra o formato
+
+    backup = q.manifest_path.with_name("manifest.json.bak")
+    assert json.loads(backup.read_text()) == legacy, "o original fica no backup"
+    assert json.loads(q.manifest_path.read_text())["schema"] == 1
+
+
+def test_a_corrupt_manifest_blocks_every_mutation(area, fake_home):
+    """R13: corrupção bloqueia mutação — nunca se recomeça de um manifesto vazio."""
+    q = make_quarantine(fake_home)
+    q.root.mkdir(parents=True, exist_ok=True)
+    q.manifest_path.write_text("lixo{")
+
+    with pytest.raises(PermissionError, match="inconsistente"):
+        q.move_in(area)
+
+    restored = q.restore("qualquer")
+    assert restored.ok is False and "inconsistente" in restored.reason
+    purged = q.purge("qualquer")
+    assert purged.ok is False and "inconsistente" in purged.reason
+    assert area.exists(), "nada foi tocado"
+    assert q.entries() == {}
+    assert q.inspect()[1], "o problema é relatado, não engolido"
+
+
+def test_a_relative_path_in_the_manifest_blocks_mutation(area, fake_home):
+    """`Path("")` é `.`: caminho registrado tem de ser absoluto, senão não se muta."""
+    q = make_quarantine(fake_home)
+    q.root.mkdir(parents=True, exist_ok=True)
+    q.manifest_path.write_text(json.dumps({"schema": 1, "entries": [{
+        "entry_id": "mau", "original": str(area), "stored": "relativo/x",
+        "bytes": 0, "state": "stored", "moved_at": "", "action_id": "disk.quarantine"}]}))
+
+    out = q.purge("mau")
+
+    assert out.ok is False and "absoluto" in out.reason
+    assert area.exists()
+
+
+def test_a_payload_outside_the_private_root_is_a_problem(area, fake_home, tmp_path):
+    """O guard aceita qualquer caminho sob a home; o payload tem de estar na raiz.
+
+    Sem o confinamento, um manifesto edito apontaria o `purge` para outro lugar
+    do disco — entrada, payload e raiz são uma relação validada, não um convite.
+    """
+    q = make_quarantine(fake_home)
+    q.root.mkdir(parents=True, exist_ok=True)
+    fora = tmp_path / "fora-da-raiz"
+    fora.mkdir()
+    q.manifest_path.write_text(json.dumps({"schema": 1, "entries": [{
+        "entry_id": "fugitivo", "original": str(area), "stored": str(fora),
+        "bytes": 0, "state": "stored", "moved_at": "",
+        "action_id": "disk.quarantine"}]}))
+
+    out = q.purge("fugitivo")
+
+    assert out.ok is False and "raiz privada" in out.reason
+    assert fora.exists(), "nada fora da raiz privada pode ser tocado"
+
+
+def test_reconcile_refuses_a_corrupt_manifest_without_writing(area, fake_home):
+    q = make_quarantine(fake_home)
+    q.root.mkdir(parents=True, exist_ok=True)
+    q.manifest_path.write_text("lixo{")
+
+    report = q.reconcile()
+
+    assert report.problems and not report.mutated
+    assert q.manifest_path.read_text() == "lixo{", "nada foi reescrito por cima"

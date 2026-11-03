@@ -70,6 +70,12 @@ def classify(entry, policy: Policy) -> Eligibility:
         pids = ", ".join(str(p) for p in entry.holder_pids)
         return Eligibility(False, f"refused: {len(entry.holder_pids)} processo(s) "
                                   f"com fd aberto: {pids}")
+    if entry.holder_state != "complete":
+        detalhe = "; ".join(entry.holder_errors) or "sem detalhe"
+        return Eligibility(False,
+                           f"refused: o índice de holders de arquivo não pôde ser "
+                           f"lido por inteiro ({entry.holder_state}: {detalhe}) — "
+                           f"uso não provado")
     if entry.truncated or entry.errors:
         por = ("truncada" if entry.truncated
                else f"{len(entry.errors)} erro(s) de walk")

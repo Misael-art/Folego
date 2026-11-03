@@ -36,6 +36,8 @@ class TmpfsEntry:
     holder_pids: tuple = ()
     truncated: bool = False
     errors: tuple = ()
+    holder_state: str = "complete"
+    holder_errors: tuple = ()
 
 
 def kind_of(mode: int) -> str:
@@ -60,7 +62,9 @@ def entry_at(path, mounts, holders, *, volume: str, now=None, deadline_s: float 
         st = lstat_fn(path_str)
     except OSError as err:
         return TmpfsEntry(path_str, p.name, volume, "missing", -1, 0, 0, 0.0, False,
-                          False, (), False, (f"{path_str}: {err.strerror or err}",))
+                          False, (), False,
+                          (f"{path_str}: {err.strerror or err}",),
+                          holders.state, tuple(holders.errors))
 
     kind = kind_of(st.st_mode)
     is_point, under = _mount_state(path_str, mounts)
@@ -77,7 +81,8 @@ def entry_at(path, mounts, holders, *, volume: str, now=None, deadline_s: float 
 
     return TmpfsEntry(path_str, p.name, volume, kind, st.st_uid, size, files,
                       max(0.0, (now - newest_ns / 10**9) / DAY_S), is_point, under,
-                      tuple(sorted(holders.pids_holding(path_str))), truncated, errors)
+                      tuple(sorted(holders.pids_holding(path_str))), truncated, errors,
+                      holders.state, tuple(holders.errors))
 
 
 def inventory(volume, mounts, holders, *, now=None, deadline_s: float = 10.0,

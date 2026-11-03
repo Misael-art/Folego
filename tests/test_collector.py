@@ -7,7 +7,8 @@ from folego.core import collector, sysfs
 def syszram(tmp_path):
     z = tmp_path / "block" / "zram0"
     z.mkdir(parents=True)
-    # orig comp same mem_used max_comp mem_limit freed uncomp pages_comp priority
+    # ABI do kernel (admin-guide/blockdev/zram): orig comp mem_used_total mem_limit
+    # mem_used_max same_pages pages_compacted ... — o quarto campo é o limite, não o usado.
     (z / "mm_stat").write_text("4081590272 811380737 104857600 893075456 0 0 0 995723 995723 0\n")
     return tmp_path
 
@@ -16,7 +17,7 @@ def test_zram_mm_stat_reads_orig_comp_and_used(syszram):
     m = sysfs.read_zram_mm_stat(syszram)
     assert m.orig_data_kb == 3985928  # 4081590272 // 1024
     assert m.compr_data_kb == 792364
-    assert m.mem_used_total_kb == 872144
+    assert m.mem_used_total_kb == 102400  # 104857600 // 1024, o TERCEIRO campo
 
 
 def test_zram_missing_gives_none(tmp_path):
@@ -42,6 +43,17 @@ def test_snapshot_aggregates_memory_and_swap(env):
     assert snap.mem.mem_total_kb == 14374304
     assert snap.swap_used_kb == 3984256  # from /proc/swaps total across devices
     assert snap.errors == ()
+
+
+def test_malformed_swap_inventory_is_partial_and_cannot_prove_zero(env):
+    proc_root, sys_root = env
+    (proc_root / "swaps").write_text(
+        "Filename Type Size Used Priority\n/dev/zram1 partition INVALID 0 5\n")
+    snap = collector.MetricsCollector(proc_root=proc_root, sys_root=sys_root).collect()
+    assert snap.source("swaps").status == "partial"
+    assert "linha 2" in snap.source("swaps").detail
+    assert not snap.swap_known
+    assert snap.swap_total_kb == 0  # número parcial não comprova inventário vazio
 
 
 def test_app_groups_merge_browser_renderer_processes(env):

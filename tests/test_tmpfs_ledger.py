@@ -153,8 +153,105 @@ def test_a_corrupt_line_is_skipped_not_fatal(book):
     assert book.retained_count() == 1
 
 
+def test_a_new_line_carries_its_schema(book):
+    book.append(**rec())
+    row = json.loads(book.path.read_text(encoding="utf-8").splitlines()[0])
+    assert row["schema"] == L.SCHEMA == 1
+
+
+def test_a_legacy_line_without_schema_is_still_readable(book):
+    """Migração: o formato antigo continua valendo; o campo novo não o invalida."""
+    book.path.parent.mkdir(parents=True, exist_ok=True)
+    book.path.write_text(json.dumps(rec()) + "\n", encoding="utf-8")
+
+    assert book.records()["1700-a"].state == L.STATE_RELEASED
+    assert book.problems() == []
+
+
+def test_a_future_schema_is_a_problem_not_data(book):
+    book.path.parent.mkdir(parents=True, exist_ok=True)
+    book.path.write_text(json.dumps({**rec(), "schema": L.SCHEMA + 1}) + "\n",
+                         encoding="utf-8")
+
+    assert book.problems() and "schema" in book.problems()[0]
+    assert book.records() == {}, "linha que esta versão não entende não vira dado"
+
+
+def test_a_corrupt_line_is_reported_by_load_not_only_skipped(book):
+    book.append(**rec(entry_id="a"))
+    with open(book.path, "a", encoding="utf-8") as f:
+        f.write("{isto não é json}\n")
+
+    rows, problems = book.load()
+
+    assert len(rows) == 1 and problems and "linha 2" in problems[0]
+    assert book.problems(), "quem muta recusa; a leitura mostra o que dá para ler"
+    assert book.retained_count() == 1
+
+
+def test_a_wrong_typed_bytes_field_does_not_break_the_reading(book):
+    """Edição à mão: campo numérico inválido não derruba contagem nem orçamento."""
+    book.path.parent.mkdir(parents=True, exist_ok=True)
+    book.path.write_text(json.dumps({**rec(entry_id="mau", bytes="muito")}) + "\n",
+                         encoding="utf-8")
+
+
+    assert book.records()["mau"].bytes == 0, "coagido, não um crash"
+    assert book.retained_bytes() == 0
+    assert book.over_budget(now=NOW) == ()
+
+
+def test_a_row_without_the_optional_audit_field_hydrates_intact(book):
+    """Remover `audit_event_id` à mão não pode blankar `stored`/`src`/`state`.
+
+    Achado da entrega 6a: o campo sem default fazia a linha cair no fallback de
+    "versão futura" e hidratar com `stored=""` — campos legíveis descartados em
+    silêncio, e o clone vivo deixava de contar na cota conjunta do staging.
+    """
+    linha = rec(entry_id="manual", stored="/home/u/.local/share/folego/retida/x")
+    linha.pop("audit_event_id")
+    book.path.parent.mkdir(parents=True, exist_ok=True)
+    book.path.write_text(json.dumps(linha) + "\n", encoding="utf-8")
+
+    record = book.records()["manual"]
+    assert record.stored == "/home/u/.local/share/folego/retida/x"
+    assert record.src == "/tmp/velho" and record.state == L.STATE_RELEASED
+    assert record.bytes == 1024 and record.action_id == "tmpfs.release"
+
+
 def test_find_accepts_entry_id_or_the_tail_of_a_path(book):
     book.append(**rec(entry_id="1700-deadbeef", src="/tmp/qoder-cli-1000/x"))
     assert book.find("1700-deadbeef").entry_id == "1700-deadbeef"
     assert book.find("/tmp/qoder-cli-1000/x").entry_id == "1700-deadbeef"
     assert book.find("inexistente") is None
+
+
+def test_find_prefers_the_active_cycle_over_an_old_restored_one(book):
+    """R04: o mesmo caminho em dois ciclos não pode devolver o ciclo velho.
+
+    `release_item` usa a busca para impedir duplicação ativa: devolver o ciclo
+    restaurado liberava uma segunda cópia enquanto o clone ativo seguia na SSD.
+    """
+    src = "/tmp/qoder-cli-1000"
+    book.append(**rec(entry_id="old", src=src, state=L.STATE_RESTORED, ts=stamp(10)))
+    book.append(**rec(entry_id="new", src=src, state=L.STATE_RELEASED, ts=stamp(1)))
+    assert book.find(src).entry_id == "new"
+
+
+def test_three_cycles_on_the_same_path_follow_the_active_one(book):
+    src = "/tmp/qoder-cli-1000"
+    book.append(**rec(entry_id="c1", src=src, state=L.STATE_RESTORED, ts=stamp(30)))
+    book.append(**rec(entry_id="c2", src=src, state=L.STATE_RESTORED, ts=stamp(20)))
+    book.append(**rec(entry_id="c3", src=src, state=L.STATE_RELEASED, ts=stamp(2)))
+    assert book.find(src).entry_id == "c3"
+
+    # o ciclo ativo é restaurado: sem ativo, a busca segue o mais recente
+    book.append(**rec(entry_id="c2", src=src, state=L.STATE_RELEASED, ts=stamp(1)))
+    assert book.find(src).entry_id == "c2"
+
+
+def test_find_with_no_active_cycle_returns_the_most_recent(book):
+    src = "/tmp/qoder-cli-1000"
+    book.append(**rec(entry_id="c1", src=src, state=L.STATE_RESTORED, ts=stamp(9)))
+    book.append(**rec(entry_id="c2", src=src, state=L.STATE_EXPIRED, ts=stamp(3)))
+    assert book.find(src).entry_id == "c2"

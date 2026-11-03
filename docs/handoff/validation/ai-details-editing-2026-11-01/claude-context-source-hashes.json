@@ -1,0 +1,12 @@
+{
+  "reference": {
+    "repository": "PhaseZero",
+    "revision": "53d62e2d14f7edafe5cefea77f46fb0a7dca5cc0",
+    "path": "linux/ai/quota_meter.py",
+    "sha256": "d7169f8000bc73a6342deec6c6167b2a60bd04db4e5b3a89fe3545b69c4c09d3"
+  },
+  "sources": {
+    "src/folego/core/ai_sessions.py": "5e28c97d74c70478d506c08edc1c97a30af1dc20e2e21301e4d37508c65d64c7",
+    "tests/test_ai_sessions.py": "8e1ad5d128303cd033f664ba831582ec8fa8f0e68af494b9752302e9fb3b0946"
+  }
+}

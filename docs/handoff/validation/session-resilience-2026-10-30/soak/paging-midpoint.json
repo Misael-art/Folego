@@ -1,0 +1,8 @@
+{
+  "VmHWM": "97776 kB",
+  "VmRSS": "28044 kB",
+  "VmSwap": "24316 kB",
+  "observed_epoch": 1793335851.753414,
+  "elapsed_s": 3600.2099852380015,
+  "note": "RSS residency can change through paging; not proof of heap reclamation or absence of leaks"
+}

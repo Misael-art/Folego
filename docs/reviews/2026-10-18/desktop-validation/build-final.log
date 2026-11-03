@@ -1,0 +1,251 @@
+Building wheel...
+running egg_info
+writing src/folego.egg-info/PKG-INFO
+writing dependency_links to src/folego.egg-info/dependency_links.txt
+writing entry points to src/folego.egg-info/entry_points.txt
+writing requirements to src/folego.egg-info/requires.txt
+writing top-level names to src/folego.egg-info/top_level.txt
+reading manifest file 'src/folego.egg-info/SOURCES.txt'
+writing manifest file 'src/folego.egg-info/SOURCES.txt'
+running bdist_wheel
+running build
+running build_py
+copying src/folego/ui/main_window.py -> build/lib/folego/ui
+running egg_info
+writing src/folego.egg-info/PKG-INFO
+writing dependency_links to src/folego.egg-info/dependency_links.txt
+writing entry points to src/folego.egg-info/entry_points.txt
+writing requirements to src/folego.egg-info/requires.txt
+writing top-level names to src/folego.egg-info/top_level.txt
+reading manifest file 'src/folego.egg-info/SOURCES.txt'
+writing manifest file 'src/folego.egg-info/SOURCES.txt'
+installing to build/bdist.linux-x86_64/wheel
+running install
+running install_lib
+creating build/bdist.linux-x86_64/wheel
+creating build/bdist.linux-x86_64/wheel/folego
+copying build/lib/folego/__init__.py -> build/bdist.linux-x86_64/wheel/./folego
+copying build/lib/folego/__main__.py -> build/bdist.linux-x86_64/wheel/./folego
+copying build/lib/folego/app.py -> build/bdist.linux-x86_64/wheel/./folego
+copying build/lib/folego/paths.py -> build/bdist.linux-x86_64/wheel/./folego
+copying build/lib/folego/cli.py -> build/bdist.linux-x86_64/wheel/./folego
+copying build/lib/folego/doctor.py -> build/bdist.linux-x86_64/wheel/./folego
+creating build/bdist.linux-x86_64/wheel/folego/safely
+copying build/lib/folego/safely/__init__.py -> build/bdist.linux-x86_64/wheel/./folego/safely
+copying build/lib/folego/safely/hashing.py -> build/bdist.linux-x86_64/wheel/./folego/safely
+copying build/lib/folego/safely/atomicfile.py -> build/bdist.linux-x86_64/wheel/./folego/safely
+copying build/lib/folego/safely/guard.py -> build/bdist.linux-x86_64/wheel/./folego/safely
+copying build/lib/folego/safely/backup.py -> build/bdist.linux-x86_64/wheel/./folego/safely
+copying build/lib/folego/safely/audit.py -> build/bdist.linux-x86_64/wheel/./folego/safely
+copying build/lib/folego/safely/jsonedit.py -> build/bdist.linux-x86_64/wheel/./folego/safely
+copying build/lib/folego/safely/selftest.py -> build/bdist.linux-x86_64/wheel/./folego/safely
+copying build/lib/folego/safely/mounts.py -> build/bdist.linux-x86_64/wheel/./folego/safely
+copying build/lib/folego/safely/persist.py -> build/bdist.linux-x86_64/wheel/./folego/safely
+copying build/lib/folego/safely/procs.py -> build/bdist.linux-x86_64/wheel/./folego/safely
+copying build/lib/folego/safely/jobtemp.py -> build/bdist.linux-x86_64/wheel/./folego/safely
+creating build/bdist.linux-x86_64/wheel/folego/core
+copying build/lib/folego/core/__init__.py -> build/bdist.linux-x86_64/wheel/./folego/core
+copying build/lib/folego/core/procfs.py -> build/bdist.linux-x86_64/wheel/./folego/core
+copying build/lib/folego/core/sysfs.py -> build/bdist.linux-x86_64/wheel/./folego/core
+copying build/lib/folego/core/browser.py -> build/bdist.linux-x86_64/wheel/./folego/core
+copying build/lib/folego/core/tmpfs.py -> build/bdist.linux-x86_64/wheel/./folego/core
+copying build/lib/folego/core/snapshot.py -> build/bdist.linux-x86_64/wheel/./folego/core
+copying build/lib/folego/core/collector.py -> build/bdist.linux-x86_64/wheel/./folego/core
+copying build/lib/folego/core/orphans.py -> build/bdist.linux-x86_64/wheel/./folego/core
+copying build/lib/folego/core/suggestions.py -> build/bdist.linux-x86_64/wheel/./folego/core
+copying build/lib/folego/core/health.py -> build/bdist.linux-x86_64/wheel/./folego/core
+copying build/lib/folego/core/sessions.py -> build/bdist.linux-x86_64/wheel/./folego/core
+copying build/lib/folego/core/exclusions.py -> build/bdist.linux-x86_64/wheel/./folego/core
+copying build/lib/folego/core/instance.py -> build/bdist.linux-x86_64/wheel/./folego/core
+copying build/lib/folego/core/migrate.py -> build/bdist.linux-x86_64/wheel/./folego/core
+copying build/lib/folego/core/runtime.py -> build/bdist.linux-x86_64/wheel/./folego/core
+copying build/lib/folego/core/process_protection.py -> build/bdist.linux-x86_64/wheel/./folego/core
+creating build/bdist.linux-x86_64/wheel/folego/process
+copying build/lib/folego/process/__init__.py -> build/bdist.linux-x86_64/wheel/./folego/process
+copying build/lib/folego/process/runner.py -> build/bdist.linux-x86_64/wheel/./folego/process
+creating build/bdist.linux-x86_64/wheel/folego/actions
+copying build/lib/folego/actions/__init__.py -> build/bdist.linux-x86_64/wheel/./folego/actions
+creating build/bdist.linux-x86_64/wheel/folego/actions/tunings
+copying build/lib/folego/actions/tunings/__init__.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tunings
+copying build/lib/folego/actions/tunings/model.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tunings
+copying build/lib/folego/actions/tunings/registry.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tunings
+copying build/lib/folego/actions/tunings/engine.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tunings
+copying build/lib/folego/actions/tunings/worker.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tunings
+copying build/lib/folego/actions/tunings/coordinated.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tunings
+creating build/bdist.linux-x86_64/wheel/folego/actions/tunings/specs
+copying build/lib/folego/actions/tunings/specs/__init__.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tunings/specs
+copying build/lib/folego/actions/tunings/specs/startup_boost.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tunings/specs
+copying build/lib/folego/actions/tunings/specs/background_mode.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tunings/specs
+creating build/bdist.linux-x86_64/wheel/folego/actions/orphans
+copying build/lib/folego/actions/orphans/__init__.py -> build/bdist.linux-x86_64/wheel/./folego/actions/orphans
+copying build/lib/folego/actions/orphans/scan.py -> build/bdist.linux-x86_64/wheel/./folego/actions/orphans
+copying build/lib/folego/actions/orphans/reaper.py -> build/bdist.linux-x86_64/wheel/./folego/actions/orphans
+copying build/lib/folego/actions/orphans/coordinated.py -> build/bdist.linux-x86_64/wheel/./folego/actions/orphans
+creating build/bdist.linux-x86_64/wheel/folego/actions/disk
+copying build/lib/folego/actions/disk/__init__.py -> build/bdist.linux-x86_64/wheel/./folego/actions/disk
+copying build/lib/folego/actions/disk/measure.py -> build/bdist.linux-x86_64/wheel/./folego/actions/disk
+copying build/lib/folego/actions/disk/quarantine.py -> build/bdist.linux-x86_64/wheel/./folego/actions/disk
+copying build/lib/folego/actions/disk/tmpclean.py -> build/bdist.linux-x86_64/wheel/./folego/actions/disk
+copying build/lib/folego/actions/disk/planner.py -> build/bdist.linux-x86_64/wheel/./folego/actions/disk
+copying build/lib/folego/actions/disk/coordinated.py -> build/bdist.linux-x86_64/wheel/./folego/actions/disk
+copying build/lib/folego/actions/disk/review.py -> build/bdist.linux-x86_64/wheel/./folego/actions/disk
+creating build/bdist.linux-x86_64/wheel/folego/actions/tmpfs
+copying build/lib/folego/actions/tmpfs/__init__.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tmpfs
+copying build/lib/folego/actions/tmpfs/holders.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tmpfs
+copying build/lib/folego/actions/tmpfs/inventory.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tmpfs
+copying build/lib/folego/actions/tmpfs/policy.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tmpfs
+copying build/lib/folego/actions/tmpfs/plan.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tmpfs
+copying build/lib/folego/actions/tmpfs/trend.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tmpfs
+copying build/lib/folego/actions/tmpfs/ledger.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tmpfs
+copying build/lib/folego/actions/tmpfs/release.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tmpfs
+copying build/lib/folego/actions/tmpfs/coordinated.py -> build/bdist.linux-x86_64/wheel/./folego/actions/tmpfs
+creating build/bdist.linux-x86_64/wheel/folego/store
+copying build/lib/folego/store/__init__.py -> build/bdist.linux-x86_64/wheel/./folego/store
+creating build/bdist.linux-x86_64/wheel/folego/ui
+copying build/lib/folego/ui/__init__.py -> build/bdist.linux-x86_64/wheel/./folego/ui
+copying build/lib/folego/ui/workers.py -> build/bdist.linux-x86_64/wheel/./folego/ui
+copying build/lib/folego/ui/tunings_tab.py -> build/bdist.linux-x86_64/wheel/./folego/ui
+copying build/lib/folego/ui/tray.py -> build/bdist.linux-x86_64/wheel/./folego/ui
+copying build/lib/folego/ui/disk_tab.py -> build/bdist.linux-x86_64/wheel/./folego/ui
+copying build/lib/folego/ui/title_signal.py -> build/bdist.linux-x86_64/wheel/./folego/ui
+copying build/lib/folego/ui/tune_jobs.py -> build/bdist.linux-x86_64/wheel/./folego/ui
+copying build/lib/folego/ui/tmpfs_tab.py -> build/bdist.linux-x86_64/wheel/./folego/ui
+copying build/lib/folego/ui/theme.py -> build/bdist.linux-x86_64/wheel/./folego/ui
+copying build/lib/folego/ui/desktop_caps.py -> build/bdist.linux-x86_64/wheel/./folego/ui
+copying build/lib/folego/ui/dashboard_tab.py -> build/bdist.linux-x86_64/wheel/./folego/ui
+copying build/lib/folego/ui/orphans_panel.py -> build/bdist.linux-x86_64/wheel/./folego/ui
+copying build/lib/folego/ui/compact.py -> build/bdist.linux-x86_64/wheel/./folego/ui
+copying build/lib/folego/ui/main_window.py -> build/bdist.linux-x86_64/wheel/./folego/ui
+creating build/bdist.linux-x86_64/wheel/folego/orchestration
+copying build/lib/folego/orchestration/models.py -> build/bdist.linux-x86_64/wheel/./folego/orchestration
+copying build/lib/folego/orchestration/journal.py -> build/bdist.linux-x86_64/wheel/./folego/orchestration
+copying build/lib/folego/orchestration/coordinator.py -> build/bdist.linux-x86_64/wheel/./folego/orchestration
+copying build/lib/folego/orchestration/__init__.py -> build/bdist.linux-x86_64/wheel/./folego/orchestration
+copying build/lib/folego/orchestration/bridge.py -> build/bdist.linux-x86_64/wheel/./folego/orchestration
+copying build/lib/folego/orchestration/grants.py -> build/bdist.linux-x86_64/wheel/./folego/orchestration
+copying build/lib/folego/orchestration/automation.py -> build/bdist.linux-x86_64/wheel/./folego/orchestration
+copying build/lib/folego/orchestration/config.py -> build/bdist.linux-x86_64/wheel/./folego/orchestration
+copying build/lib/folego/orchestration/decisions.py -> build/bdist.linux-x86_64/wheel/./folego/orchestration
+copying build/lib/folego/orchestration/history.py -> build/bdist.linux-x86_64/wheel/./folego/orchestration
+creating build/bdist.linux-x86_64/wheel/folego/adapters
+copying build/lib/folego/adapters/base.py -> build/bdist.linux-x86_64/wheel/./folego/adapters
+copying build/lib/folego/adapters/caches.py -> build/bdist.linux-x86_64/wheel/./folego/adapters
+copying build/lib/folego/adapters/projects.py -> build/bdist.linux-x86_64/wheel/./folego/adapters
+copying build/lib/folego/adapters/containers.py -> build/bdist.linux-x86_64/wheel/./folego/adapters
+copying build/lib/folego/adapters/libvirt.py -> build/bdist.linux-x86_64/wheel/./folego/adapters
+copying build/lib/folego/adapters/mounts.py -> build/bdist.linux-x86_64/wheel/./folego/adapters
+copying build/lib/folego/adapters/__init__.py -> build/bdist.linux-x86_64/wheel/./folego/adapters
+copying build/lib/folego/adapters/inventory.py -> build/bdist.linux-x86_64/wheel/./folego/adapters
+copying build/lib/folego/adapters/pytest_fixtures.py -> build/bdist.linux-x86_64/wheel/./folego/adapters
+running install_egg_info
+Copying src/folego.egg-info to build/bdist.linux-x86_64/wheel/./folego-0.1.0-py3.14.egg-info
+running install_scripts
+creating build/bdist.linux-x86_64/wheel/folego-0.1.0.dist-info/WHEEL
+creating '/home/misael/Projects/Folego/.scratch/desktop-validation-vvnNlb/final-wheels/.tmp-_86lymfr/folego-0.1.0-py3-none-any.whl' and adding 'build/bdist.linux-x86_64/wheel' to it
+adding 'folego/__init__.py'
+adding 'folego/__main__.py'
+adding 'folego/app.py'
+adding 'folego/cli.py'
+adding 'folego/doctor.py'
+adding 'folego/paths.py'
+adding 'folego/actions/__init__.py'
+adding 'folego/actions/disk/__init__.py'
+adding 'folego/actions/disk/coordinated.py'
+adding 'folego/actions/disk/measure.py'
+adding 'folego/actions/disk/planner.py'
+adding 'folego/actions/disk/quarantine.py'
+adding 'folego/actions/disk/review.py'
+adding 'folego/actions/disk/tmpclean.py'
+adding 'folego/actions/orphans/__init__.py'
+adding 'folego/actions/orphans/coordinated.py'
+adding 'folego/actions/orphans/reaper.py'
+adding 'folego/actions/orphans/scan.py'
+adding 'folego/actions/tmpfs/__init__.py'
+adding 'folego/actions/tmpfs/coordinated.py'
+adding 'folego/actions/tmpfs/holders.py'
+adding 'folego/actions/tmpfs/inventory.py'
+adding 'folego/actions/tmpfs/ledger.py'
+adding 'folego/actions/tmpfs/plan.py'
+adding 'folego/actions/tmpfs/policy.py'
+adding 'folego/actions/tmpfs/release.py'
+adding 'folego/actions/tmpfs/trend.py'
+adding 'folego/actions/tunings/__init__.py'
+adding 'folego/actions/tunings/coordinated.py'
+adding 'folego/actions/tunings/engine.py'
+adding 'folego/actions/tunings/model.py'
+adding 'folego/actions/tunings/registry.py'
+adding 'folego/actions/tunings/worker.py'
+adding 'folego/actions/tunings/specs/__init__.py'
+adding 'folego/actions/tunings/specs/background_mode.py'
+adding 'folego/actions/tunings/specs/startup_boost.py'
+adding 'folego/adapters/__init__.py'
+adding 'folego/adapters/base.py'
+adding 'folego/adapters/caches.py'
+adding 'folego/adapters/containers.py'
+adding 'folego/adapters/inventory.py'
+adding 'folego/adapters/libvirt.py'
+adding 'folego/adapters/mounts.py'
+adding 'folego/adapters/projects.py'
+adding 'folego/adapters/pytest_fixtures.py'
+adding 'folego/core/__init__.py'
+adding 'folego/core/browser.py'
+adding 'folego/core/collector.py'
+adding 'folego/core/exclusions.py'
+adding 'folego/core/health.py'
+adding 'folego/core/instance.py'
+adding 'folego/core/migrate.py'
+adding 'folego/core/orphans.py'
+adding 'folego/core/process_protection.py'
+adding 'folego/core/procfs.py'
+adding 'folego/core/runtime.py'
+adding 'folego/core/sessions.py'
+adding 'folego/core/snapshot.py'
+adding 'folego/core/suggestions.py'
+adding 'folego/core/sysfs.py'
+adding 'folego/core/tmpfs.py'
+adding 'folego/orchestration/__init__.py'
+adding 'folego/orchestration/automation.py'
+adding 'folego/orchestration/bridge.py'
+adding 'folego/orchestration/config.py'
+adding 'folego/orchestration/coordinator.py'
+adding 'folego/orchestration/decisions.py'
+adding 'folego/orchestration/grants.py'
+adding 'folego/orchestration/history.py'
+adding 'folego/orchestration/journal.py'
+adding 'folego/orchestration/models.py'
+adding 'folego/process/__init__.py'
+adding 'folego/process/runner.py'
+adding 'folego/safely/__init__.py'
+adding 'folego/safely/atomicfile.py'
+adding 'folego/safely/audit.py'
+adding 'folego/safely/backup.py'
+adding 'folego/safely/guard.py'
+adding 'folego/safely/hashing.py'
+adding 'folego/safely/jobtemp.py'
+adding 'folego/safely/jsonedit.py'
+adding 'folego/safely/mounts.py'
+adding 'folego/safely/persist.py'
+adding 'folego/safely/procs.py'
+adding 'folego/safely/selftest.py'
+adding 'folego/store/__init__.py'
+adding 'folego/ui/__init__.py'
+adding 'folego/ui/compact.py'
+adding 'folego/ui/dashboard_tab.py'
+adding 'folego/ui/desktop_caps.py'
+adding 'folego/ui/disk_tab.py'
+adding 'folego/ui/main_window.py'
+adding 'folego/ui/orphans_panel.py'
+adding 'folego/ui/theme.py'
+adding 'folego/ui/title_signal.py'
+adding 'folego/ui/tmpfs_tab.py'
+adding 'folego/ui/tray.py'
+adding 'folego/ui/tune_jobs.py'
+adding 'folego/ui/tunings_tab.py'
+adding 'folego/ui/workers.py'
+adding 'folego-0.1.0.dist-info/METADATA'
+adding 'folego-0.1.0.dist-info/WHEEL'
+adding 'folego-0.1.0.dist-info/entry_points.txt'
+adding 'folego-0.1.0.dist-info/top_level.txt'
+adding 'folego-0.1.0.dist-info/RECORD'
+removing build/bdist.linux-x86_64/wheel
+Successfully built .scratch/desktop-validation-vvnNlb/final-wheels/folego-0.1.0-py3-none-any.whl

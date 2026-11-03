@@ -1,0 +1,34 @@
+{
+  "README.md": {
+    "bytes": 3103,
+    "sha256": "4a42c35856e3e6e3f98974debd63ea8468012b3b89f1fb09ffee745f824515cc"
+  },
+  "central.png": {
+    "bytes": 100427,
+    "sha256": "93dc5fd2822299237452507bcd3bf16e821b9c408d42e35248a8ffd338875f73"
+  },
+  "compact.png": {
+    "bytes": 39169,
+    "sha256": "6b88f8a3ce66ab91acb45dd15995c28a1cbfa056ed9d7631b5274d39fbdc6c4e"
+  },
+  "controls.png": {
+    "bytes": 8163,
+    "sha256": "4b2d6d512949e6cfc353c255b7180a4f8e9a422f467821d654133e2071b6bf47"
+  },
+  "headless.txt": {
+    "bytes": 1313,
+    "sha256": "d962a0519832a94b2d42f32749fcf17807651e18c73694fe93800db67bf44a1a"
+  },
+  "live-gui.json": {
+    "bytes": 152,
+    "sha256": "77cf0cbc16ce3db1133865fe704f951698343c598a7964d1b39d7e352c712e99"
+  },
+  "qt.txt": {
+    "bytes": 1633,
+    "sha256": "516ab15a6f2de59a6e0952870f182a1c809000cfb46954a4fd50db31f6719ab8"
+  },
+  "result.json": {
+    "bytes": 911,
+    "sha256": "1301a351461ae3fc951e273392257e7d78071474bb16a9b9ba9bd4de9918805e"
+  }
+}

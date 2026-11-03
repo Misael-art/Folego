@@ -169,8 +169,10 @@ def build_plan(targets, *, home=None, now: float | None = None,
             stat = measure(child, deadline_s=deadline_s)
             seen.add(str(stat.path))
             age_days = max(0.0, (now - stat.newest_ns / 10**9) / DAY_S)
-            reclaimable = stat.bytes > 0 and (
-                target.stale_days is None or age_days >= target.stale_days)
+            # leitura incompleta não é promessa: um walk com erro ou truncado sabe o
+            # tamanho "por baixo" e nunca entra no total elegível (R03)
+            reclaimable = (stat.bytes > 0 and not stat.errors and not stat.truncated and
+                           (target.stale_days is None or age_days >= target.stale_days))
             items.append(PlanItem(
                 target.id, target.label, str(stat.path), stat.bytes, stat.files,
                 stat.newest_ns, age_days, reclaimable, True, "ok",

@@ -1,0 +1,8 @@
+{
+  "profile": "headless",
+  "status": "passed",
+  "python": "/home/misael/Projects/Folego/.dev/venv-headless/bin/python",
+  "started": 1793557813.3253891,
+  "exit_code": 0,
+  "elapsed_s": 21.618682622909546
+}

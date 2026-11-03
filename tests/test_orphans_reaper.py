@@ -6,20 +6,23 @@ is still the same process (starttime) and still outside the pre-list.
 """
 import shutil
 import signal
+import os
 
 import pytest
 
 from folego.actions.orphans.reaper import Reaper
 from folego.core.orphans import GroupMember, GroupTarget, OrphanCandidate
+from folego.safely import procs
 from folego.safely.audit import AuditLog
 from fixtures_proc import pid_dir
 
 TERM = signal.SIGTERM
 KILL = signal.SIGKILL
+UID = os.getuid()
 
 
 def candidate(pid=500, comm="worker", starttime=12345):
-    return OrphanCandidate(pid=pid, comm=comm, state="S", uid=1000, rss_kb=2000,
+    return OrphanCandidate(pid=pid, comm=comm, state="S", uid=UID, rss_kb=2000,
                            swap_kb=0, starttime=starttime, idle_s=900.0)
 
 
@@ -49,7 +52,8 @@ def reaper(live, kills, log):
     def kill_fn(pid, sig):
         kills.append((pid, sig))
 
-    return Reaper(proc_root=live, kill_fn=kill_fn, audit=log)
+    return Reaper(proc_root=live, kill_fn=kill_fn, audit=log,
+                  pin_fn=procs.unsupported, follow_up_s=0.0)
 
 
 # ------------------------------------------------------------------ SIGTERM
@@ -186,7 +190,7 @@ def test_force_still_rechecks_before_killing(reaper, live, kills):
 
 def test_a_group_member_can_be_forced_without_the_orphan_rule(reaper, live, kills):
     """Children of a browser always have a live parent; escalation must still be possible."""
-    member = GroupMember(401, "msedge", 1000, 222, 400)
+    member = GroupMember(401, "msedge", UID, 222, 400)
     pid_dir(live, 401, comm="msedge", starttime=222, ppid=400)
 
     result = reaper.force(member, confirm=True, require_orphan=False)
@@ -196,7 +200,7 @@ def test_a_group_member_can_be_forced_without_the_orphan_rule(reaper, live, kill
 
 
 def test_the_orphan_rule_still_blocks_force_when_the_caller_demands_it(reaper, live, kills):
-    member = GroupMember(401, "msedge", 1000, 222, 400)
+    member = GroupMember(401, "msedge", UID, 222, 400)
     pid_dir(live, 401, comm="msedge", starttime=222, ppid=400)
 
     result = reaper.force(member, confirm=True)
@@ -213,7 +217,7 @@ def a_browser_group(root):
     for pid, starttime in members:
         pid_dir(root, pid, comm="msedge", starttime=starttime, ppid=400)
     return GroupTarget("edge", "Microsoft Edge",
-                       tuple(GroupMember(pid, "msedge", 1000, start, 400)
+                       tuple(GroupMember(pid, "msedge", UID, start, 400)
                              for pid, start in members))
 
 
@@ -254,8 +258,8 @@ def test_group_refuses_a_protected_member_even_when_the_caller_asked(reaper, liv
     pid_dir(live, 400, comm="msedge", starttime=111, ppid=10)
     pid_dir(live, 401, comm="chrome_crashpad", starttime=222, ppid=400)
     target = GroupTarget("chrome", "Google Chrome/Chromium", (
-        GroupMember(401, "chrome_crashpad", 1000, 222, 400),
-        GroupMember(400, "msedge", 1000, 111, 10)))
+        GroupMember(401, "chrome_crashpad", UID, 222, 400),
+        GroupMember(400, "msedge", UID, 111, 10)))
 
     results = reaper.terminate_group(target)
 
@@ -269,7 +273,7 @@ def test_group_mode_refuses_a_member_that_got_a_driver_after_the_list(reaper, li
     pid_dir(live, 400, comm="msedge", starttime=111, ppid=10,
             cmdline=["/usr/bin/msedge", "--remote-debugging-port=9222"])
     target = GroupTarget("edge", "Microsoft Edge",
-                         (GroupMember(400, "msedge", 1000, 111, 10),))
+                         (GroupMember(400, "msedge", UID, 111, 10),))
 
     result = reaper.terminate_group(target)[0]
 
@@ -282,7 +286,7 @@ def test_group_mode_refuses_an_automation_shell(reaper, live, kills):
             cmdline=["/home/u/.cache/ms-playwright/chromium_headless_shell-1223"
                      "/chrome-headless-shell", "--headless"])
     target = GroupTarget("chrome", "Google Chrome/Chromium",
-                         (GroupMember(400, "chrome-headless", 1000, 111, 10),))
+                         (GroupMember(400, "chrome-headless", UID, 111, 10),))
 
     result = reaper.terminate_group(target)[0]
 
@@ -302,3 +306,191 @@ def test_a_proven_orphan_shell_is_still_killable(reaper, live, kills):
 
     assert result.ok
     assert kills == [(400, TERM)]
+
+
+# -------------------------------------------- acompanhamento e identidade (entrega 8)
+
+class Clock:
+    """Relógio falso: o prazo do acompanhamento passa sem dormir de verdade."""
+
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self):
+        return self.t
+
+    def sleep(self, seconds):
+        self.t += seconds
+
+
+def test_sigterm_is_followed_until_the_process_is_gone(live, kills):
+    proc(live)
+    clock = Clock()
+
+    def kill(pid, sig):
+        kills.append((pid, sig))
+        shutil.rmtree(live / str(pid))
+
+    reaper = Reaper(proc_root=live, kill_fn=kill, pin_fn=procs.unsupported,
+                    follow_up_s=2.0, poll_s=0.05, clock=clock, sleep=clock.sleep)
+
+    result = reaper.terminate(candidate())
+
+    assert result.ok and result.exited is True
+    assert result.identity == "starttime"
+    assert clock.t == 0.0, "saiu na primeira leitura: não gasta o prazo"
+
+
+def test_a_sigterm_survivor_is_named_and_never_escalated(live, kills):
+    proc(live)
+    clock = Clock()
+    reaper = Reaper(proc_root=live,
+                    kill_fn=lambda pid, sig: kills.append((pid, sig)),
+                    pin_fn=procs.unsupported, follow_up_s=0.2, poll_s=0.05,
+                    clock=clock, sleep=clock.sleep)
+
+    result = reaper.terminate(candidate())
+
+    assert result.ok and result.exited is False
+    assert kills == [(500, TERM)], "sobreviver ao SIGTERM não autoriza SIGKILL"
+    assert clock.t >= 0.2
+
+
+def test_sigkill_is_followed_too(live, kills):
+    proc(live)
+    clock = Clock()
+
+    def kill(pid, sig):
+        kills.append((pid, sig))
+        shutil.rmtree(live / str(pid))
+
+    reaper = Reaper(proc_root=live, kill_fn=kill, pin_fn=procs.unsupported,
+                    follow_up_s=1.0, clock=clock, sleep=clock.sleep)
+
+    result = reaper.force(candidate(), confirm=True)
+
+    assert result.ok and result.signal == KILL and result.exited is True
+
+
+def test_group_follow_up_waits_once_for_the_whole_family(live, kills):
+    target = a_browser_group(live)
+    clock = Clock()
+
+    def kill(pid, sig):
+        kills.append((pid, sig))
+        shutil.rmtree(live / str(pid))
+
+    reaper = Reaper(proc_root=live, kill_fn=kill, pin_fn=procs.unsupported,
+                    follow_up_s=2.0, poll_s=0.05, clock=clock, sleep=clock.sleep)
+
+    results = reaper.terminate_group(target)
+
+    assert all(x.exited is True for x in results)
+    assert clock.t == 0.0, "a leva inteira saiu antes de qualquer espera"
+
+
+def test_group_survivors_are_reported_without_killing_again(live, kills):
+    target = a_browser_group(live)
+    clock = Clock()
+    reaper = Reaper(proc_root=live,
+                    kill_fn=lambda pid, sig: kills.append((pid, sig)),
+                    pin_fn=procs.unsupported, follow_up_s=0.2, poll_s=0.05,
+                    clock=clock, sleep=clock.sleep)
+
+    results = reaper.terminate_group(target)
+
+    assert all(x.exited is False for x in results)
+    assert kills == [(402, TERM), (401, TERM), (400, TERM)]
+    assert clock.t >= 0.2
+
+
+def test_manual_kill_batch_has_one_shared_follow_deadline(live, kills):
+    target = a_browser_group(live)
+    clock = Clock()
+    reaper = Reaper(proc_root=live,
+                    kill_fn=lambda pid, sig: kills.append((pid, sig)),
+                    pin_fn=procs.unsupported, follow_up_s=.2, poll_s=.05,
+                    clock=clock, sleep=clock.sleep)
+    results = reaper.force_many(target.members, confirm=True, require_orphan=False)
+    assert all(result.ok and result.exited is False for result in results)
+    assert kills == [(402, KILL), (401, KILL), (400, KILL)]
+    assert .2 <= clock.t < .25, "prazo coletivo não cresce com número de alvos"
+
+
+def test_unreadable_process_after_signal_is_not_reported_as_exited(live, kills):
+    proc(live)
+    clock = Clock()
+    def kill(pid, sig):
+        kills.append((pid, sig))
+        (live / str(pid) / "stat").write_text("corrupt stat")
+    reaper = Reaper(proc_root=live, kill_fn=kill, pin_fn=procs.unsupported,
+                    follow_up_s=.2, clock=clock, sleep=clock.sleep)
+    result = reaper.terminate(candidate())
+    assert result.ok and result.exited is None
+    assert kills == [(500, TERM)]
+    assert clock.t >= .2
+
+
+def test_the_identity_method_comes_from_the_pinner(live, monkeypatch):
+    proc(live)
+    seen = []
+
+    def fake_pin(pid):
+        return procs.Pin(pid=pid, fd=None, supported=True)
+
+    def fake_send(pinned, sig, *, kill_fn):
+        seen.append((pinned.pid, sig))
+
+    monkeypatch.setattr(procs, "send", fake_send)
+    reaper = Reaper(proc_root=live, pin_fn=fake_pin, follow_up_s=0.0)
+
+    result = reaper.terminate(candidate())
+
+    assert result.ok and result.identity == "pidfd"
+    assert seen == [(500, TERM)]
+
+
+def test_a_pin_failure_is_a_recusa_with_no_signal(live, kills):
+    proc(live)
+
+    def gone(pid):
+        raise ProcessLookupError()
+
+    reaper = Reaper(proc_root=live,
+                    kill_fn=lambda pid, sig: kills.append((pid, sig)),
+                    pin_fn=gone)
+
+    result = reaper.terminate(candidate())
+
+    assert not result.ok and "não existe mais" in result.reason
+    assert kills == []
+
+
+def test_session_protection_is_rechecked_at_act_time(live, kills, log):
+    proc(live)
+    reaper = Reaper(proc_root=live,
+                    kill_fn=lambda pid, sig: kills.append((pid, sig)),
+                    pin_fn=procs.unsupported, follow_up_s=0.0,
+                    protected_fn=lambda p: "sessão abc marcada como manter ativo")
+
+    result = reaper.terminate(candidate())
+
+    assert not result.ok and "proteção" in result.reason
+    assert kills == []
+
+
+def test_an_unreadable_protection_source_fails_closed(live, kills, log):
+    proc(live)
+
+    def broken(_proc):
+        raise OSError("registro ilegível")
+
+    reaper = Reaper(proc_root=live,
+                    kill_fn=lambda pid, sig: kills.append((pid, sig)),
+                    pin_fn=procs.unsupported, follow_up_s=0.0,
+                    protected_fn=broken)
+
+    result = reaper.terminate(candidate())
+
+    assert not result.ok and "ilegível" in result.reason
+    assert kills == []

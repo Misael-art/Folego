@@ -1,0 +1,6 @@
+{
+  "passed": true,
+  "case": "production menu selection, native clipboard and Shift+Insert into owned editor",
+  "scope": "owned Xvfb only; physical clipboard untouched",
+  "prompts": 11
+}

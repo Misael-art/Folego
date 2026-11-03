@@ -1,5 +1,11 @@
 from folego.core.snapshot import (MemInfo, Pressure, Snapshot)
 from folego.ui.main_window import MainWindow
+from fixtures_automation import stores
+
+
+def make_window(**kw):
+    config_store, grant_store = stores()
+    return MainWindow(config_store=config_store, grant_store=grant_store, **kw)
 
 
 def a_snapshot(available_kb=5_000_000, total_kb=14_374_304):
@@ -12,21 +18,21 @@ def a_snapshot(available_kb=5_000_000, total_kb=14_374_304):
 
 
 def test_main_window_shows_live_ram_in_title(qapp):
-    win = MainWindow(collector_factory=lambda: a_snapshot())
+    win = make_window(collector_factory=lambda: a_snapshot())
     win.apply_snapshot(a_snapshot())
     assert win.windowTitle().startswith("Fôlego 🟢 ·")
     assert "app 87 MB" in win.windowTitle()  # 90000 kB -> 87 MB
 
 
 def test_main_window_title_updates_on_red(qapp):
-    win = MainWindow(collector_factory=lambda: a_snapshot())
+    win = make_window(collector_factory=lambda: a_snapshot())
     win.apply_snapshot(a_snapshot(available_kb=1_000_000))
     assert "🔴" in win.windowTitle()
 
 
 def test_main_window_survives_snapshot_without_meminfo(qapp):
     from dataclasses import replace
-    win = MainWindow(collector_factory=lambda: a_snapshot())
+    win = make_window(collector_factory=lambda: a_snapshot())
     win.apply_snapshot(replace(a_snapshot(), mem=None))
     assert "meminfo indisponível" in win.windowTitle()
 
@@ -36,7 +42,7 @@ def test_main_window_surfaces_poll_errors(qapp):
     def boom():
         raise OSError(28, "No space left on device")
 
-    win = MainWindow(collector_factory=lambda: boom)
+    win = make_window(collector_factory=lambda: boom)
     win.start()
     win._poller.poll_once()  # o timer faria isso; no teste dirigimos direto
     assert "No space left" in win.dashboard.status.text()
@@ -51,7 +57,7 @@ def test_main_window_error_clears_on_good_snapshot(qapp):
             raise OSError("disk hiccup")
         return a_snapshot()
 
-    win = MainWindow(collector_factory=lambda: flaky)
+    win = make_window(collector_factory=lambda: flaky)
     win.start()
     win._poller.poll_once()
     win._poller.poll_once()

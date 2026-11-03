@@ -1,0 +1,34 @@
+[
+  {
+    "provider": "codex",
+    "accounts": 3,
+    "defaults": 1,
+    "current_quota": 3,
+    "tickets_reported": 3,
+    "monthly_reference": 0
+  },
+  {
+    "provider": "web",
+    "accounts": 3,
+    "defaults": 1,
+    "current_quota": 0,
+    "tickets_reported": 0,
+    "monthly_reference": 0
+  },
+  {
+    "provider": "claude",
+    "accounts": 1,
+    "defaults": 1,
+    "current_quota": 0,
+    "tickets_reported": 0,
+    "monthly_reference": 0
+  },
+  {
+    "provider": "grok",
+    "accounts": 1,
+    "defaults": 1,
+    "current_quota": 0,
+    "tickets_reported": 0,
+    "monthly_reference": 0
+  }
+]

@@ -13,8 +13,11 @@ import pytest
 
 from folego import cli, paths
 from folego.actions.tmpfs.ledger import MAX_RETAINED_BYTES, Ledger
+from folego.actions.tmpfs.release import ReleaseResult
 from folego.cli import main
 from folego.core.tmpfs import TmpfsVolume
+from folego.orchestration import (ActionResult, Coordinated, Coordinator, Journal,
+                                  Outcome)
 from folego.safely.audit import AuditLog
 
 DAY = 86_400
@@ -254,12 +257,14 @@ def test_tmpfs_plan_says_a_zero_item_scan_is_not_proof_of_cleanliness(fake_tmp,
 
 
 def tmpfs_env(tmp_path, fake_tmp, monkeypatch):
-    """CLI e atos no mesmo chão falso: ledger, quarentena, raízes do guard e auditoria.
+    """CLI e atos no mesmo chão falso: ledger, quarentena, raízes, auditoria e coordenador.
 
-    As quatro costuras, não três: `AuditLog()` sem caminho escreve no
+    As cinco costuras, não três: `AuditLog()` sem caminho escreve no
     `~/.local/state/folego/audit.jsonl` do host, e uma suíte de mutação que só
     troca ledger e destino deixaria rastro real fora do `tmp_path`. O arquivo de
-    auditoria também é onde se conta o evento por transição.
+    auditoria também é onde se conta o evento por transição. O coordenador (F2)
+    é a quinta: sem trocá-lo, o diário de intenção e a trava entre processos
+    caem no estado real do host a cada mutação confirmada.
     """
     root, volume = fake_tmp
     monkeypatch.setattr(cli, "_tmpfs_ledger",
@@ -269,6 +274,18 @@ def tmpfs_env(tmp_path, fake_tmp, monkeypatch):
     monkeypatch.setattr(cli, "_tmpfs_now", lambda: time.time())
     monkeypatch.setattr(cli, "_tmpfs_audit",
                         lambda: AuditLog(tmp_path / "state" / "audit.jsonl"))
+    monkeypatch.setattr(cli, "_tmpfs_coordinator",
+                        lambda: Coordinator(journal=Journal(tmp_path / "state"
+                                                            / "operations.jsonl"),
+                                            lock_path=tmp_path / "state"
+                                            / "coordinator.lock"))
+    # sexta costura (F2/entrega 6): a verificação do destino persistente lê a
+    # tabela de montes DENTRO do ato; o host falso é "btrfs em volta, tmpfs no
+    # volume". Sem ela o `/proc` falso (vazio) faria toda liberação recusar por
+    # monte desconhecido — que é a resposta certa para um host ilegível.
+    monkeypatch.setattr("folego.actions.tmpfs.release.read_mounts",
+                        lambda proc_root=None: ((str(root), "tmpfs"),
+                                                (str(tmp_path), "btrfs")))
     return root, volume
 
 
@@ -294,6 +311,24 @@ def test_release_refuses_without_confirmation(tmp_path, fake_tmp, monkeypatch, c
     assert "--confirmar" in capsys.readouterr().err
 
 
+def test_release_keeps_observed_effects_unknown_if_final_record_fails(tmp_path, fake_tmp, monkeypatch, capsys):
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    def full(self, result):
+        raise OSError(28, "final journal full")
+    monkeypatch.setattr(Journal, "append_result", full)
+    target = root / "qoder-cli-1000"
+    assert main(["tmpfs", "release", str(target), "--confirmar", "--json"]) == 5
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["outcome"] == "desconhecido" and payload["ok"] is False
+    assert "não persistido" in payload["reason"]
+    assert payload["effects"]["bytes"] == 4096
+    copies = list((tmp_path / "retida").rglob("blob.bin"))
+    assert len(copies) == 1 and copies[0].read_bytes() == b"a" * 4096
+    assert not target.exists()
+    state = Journal(tmp_path / "state/operations.jsonl").state_of(payload["operation_id"])
+    assert state.intent is not None and state.result is None
+
+
 def test_release_moves_the_item_and_prints_the_entry_id(tmp_path, fake_tmp, monkeypatch,
                                                         capsys):
     root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
@@ -305,9 +340,38 @@ def test_release_moves_the_item_and_prints_the_entry_id(tmp_path, fake_tmp, monk
     assert not (root / "qoder-cli-1000").exists()
     assert any((tmp_path / "retida").rglob("blob.bin"))
     assert "tmpfs restore" in out, "a saída tem de dizer como desfazer"
+    assert "no SSD" in out and "variação observada" in out, \
+        "a contabilidade fina separa lógico, alocado e observado"
     # os dois livros do §7: a liberação é uma transição registrada, não um unlink mudo
     assert _ledger_records(tmp_path)[-1]["state"] == "released"
-    assert _audit_events(tmp_path, "tmpfs.release") == ["partial", "released"]
+    assert _audit_events(tmp_path, "tmpfs.release") == ["staging", "partial", "released"]
+
+
+def test_release_refuses_a_ram_destination_through_the_cli(tmp_path, fake_tmp, monkeypatch,
+                                                           capsys):
+    """F2/entrega 6: o destino é verificado no ato — tmpfs não é retenção.
+
+    O `/proc` falso declara o destino como tmpfs (e o resto como btrfs): a
+    liberação tem de recusar antes de copiar, a origem fica intacta e a recusa
+    entra no diário como `recusa` — nunca como sucesso silencioso.
+    """
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    dest = tmp_path / "retida"
+    dest.mkdir(parents=True)
+    monkeypatch.setattr("folego.actions.tmpfs.release.read_mounts",
+                        lambda proc_root=None: ((str(dest), "tmpfs"),
+                                                ("/", "btrfs")))
+
+    code = main(["tmpfs", "release", str(root / "qoder-cli-1000"), "--confirmar"])
+
+    captured = capsys.readouterr()
+    assert code == cli.EXIT_REFUSED and "RAM" in captured.err
+    assert (root / "qoder-cli-1000" / "blob.bin").exists(), "a origem está intacta"
+    assert list(dest.iterdir()) == [], "nada foi copiado"
+    assert _ledger_records(tmp_path) == [], "nem linha staging"
+    records = _journal_records(tmp_path)
+    assert [r["kind"] for r in records] == ["intent", "result"]
+    assert records[1]["result"]["outcome"] == "recusa"
 
 
 def test_release_of_a_protected_item_is_refused_with_its_reason(tmp_path, fake_tmp,
@@ -357,8 +421,8 @@ def test_restore_returns_the_item_to_its_original_path(tmp_path, fake_tmp, monke
     assert _audit_events(tmp_path, "tmpfs.restore") == ["restored"]
 
 
-def test_ledger_prints_ram_freed_against_ssd_retained(tmp_path, fake_tmp, monkeypatch,
-                                                       capsys):
+def test_ledger_separates_bytes_that_left_ram_from_ssd_retained(tmp_path, fake_tmp,
+                                                                 monkeypatch, capsys):
     root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
     main(["tmpfs", "release", str(root / "qoder-cli-1000"), "--confirmar"])
     capsys.readouterr()
@@ -366,10 +430,11 @@ def test_ledger_prints_ram_freed_against_ssd_retained(tmp_path, fake_tmp, monkey
     out = capsys.readouterr().out
     assert code == 0
     assert "qoder-cli-1000" in out
-    # o nome do teste promete "RAM liberada contra SSD retida": as grandezas têm de aparecer,
+    # o nome do teste promete "saiu da RAM contra SSD retida": as grandezas têm de aparecer,
     # e a vírgula é a regra de cópia do projeto, não enfeite
     assert "retido na SSD: 4,0 KB em 1 item(ns) · mais velho 0,0 d" in out
-    assert "RAM liberada de fato: 4,0 KB" in out
+    assert "saiu da RAM e não voltou: 4,0 KB" in out
+    assert "RAM liberada de fato" not in out, "o histórico não se apresenta como RAM livre"
     assert "orçamento" in out
 
 
@@ -382,6 +447,23 @@ def test_ledger_json_is_one_line_with_the_budget(tmp_path, fake_tmp, monkeypatch
     assert payload["records"] == []
     assert payload["budget"]["retained_bytes"] == 0
     assert payload["budget"]["slack_bytes"] == MAX_RETAINED_BYTES
+    assert payload["victims"] == [], "sem retenção não há vítima de expiração"
+
+
+def test_ledger_json_lists_the_effective_expire_victims(tmp_path, fake_tmp, monkeypatch,
+                                                        capsys):
+    """R07: a aba confirma o expire com as vítimas efetivas — que vêm daqui."""
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    Ledger(tmp_path / "state" / "tmp-ledger.jsonl").append(
+        entry_id="estouro-1", src=str(root / "qoder-cli-1000"), volume=str(root),
+        stored=str(tmp_path / "retida" / "estouro-1"), bytes=MAX_RETAINED_BYTES + 1,
+        sha256="0" * 64, age_days=1.0, matched_pattern=None, holder_pids=(),
+        state="released", action_id="tmpfs.release", audit_event_id="e" * 32)
+    main(["tmpfs", "ledger", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["victims"] == [{"entry_id": "estouro-1",
+                                   "bytes": MAX_RETAINED_BYTES + 1,
+                                   "src": str(root / "qoder-cli-1000")}]
 
 
 def test_ledger_warns_when_the_retention_bursts_the_budget(tmp_path, fake_tmp,
@@ -401,6 +483,64 @@ def test_ledger_warns_when_the_retention_bursts_the_budget(tmp_path, fake_tmp,
     captured = capsys.readouterr()
     assert "estourou o orçamento" in captured.err
     assert "tmpfs expire" in captured.err, "o aviso tem de dizer o que fazer"
+
+
+def test_ledger_names_an_inconsistent_jsonl_instead_of_hiding_it(tmp_path, fake_tmp,
+                                                                 monkeypatch, capsys):
+    """Linha ilegível aparece no relatório (JSON e texto); a leitura segue com o resto."""
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    book = Ledger(tmp_path / "state" / "tmp-ledger.jsonl")
+    book.append(entry_id="ok-1", src=str(root / "qoder-cli-1000"), volume=str(root),
+                stored=str(tmp_path / "retida" / "ok-1"), bytes=10,
+                sha256="0" * 64, age_days=1.0, state="released",
+                action_id="tmpfs.release")
+    with book.path.open("a", encoding="utf-8") as fh:
+        fh.write("{quebrado}\n")
+
+    assert main(["tmpfs", "ledger", "--json"]) == cli.EXIT_OK
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["problems"] and "linha 2" in payload["problems"][0]
+    assert [r["entry_id"] for r in payload["records"]] == ["ok-1"]
+
+    assert main(["tmpfs", "ledger"]) == cli.EXIT_OK
+    err = capsys.readouterr().err
+    assert "ledger inconsistente" in err and "linha 2" in err
+    assert "recusadas" in err
+
+
+def test_an_inconsistent_ledger_refuses_tmpfs_mutations_through_the_cli(
+        tmp_path, fake_tmp, monkeypatch, capsys):
+    """A porta do ledger vale na CLI: recusa no stderr e código de recusa, sem stdout."""
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    book = Ledger(tmp_path / "state" / "tmp-ledger.jsonl")
+    book.path.parent.mkdir(parents=True, exist_ok=True)
+    book.path.write_text("{quebrado}\n", encoding="utf-8")
+
+    code = main(["tmpfs", "release", str(root / "qoder-cli-1000"), "--confirmar"])
+    captured = capsys.readouterr()
+    assert code == cli.EXIT_REFUSED and "ledger inconsistente" in captured.err
+    assert captured.out == ""
+
+    code = main(["tmpfs", "restore", "qualquer-id", "--confirmar"])
+    assert code == cli.EXIT_REFUSED
+    assert "ledger inconsistente" in capsys.readouterr().err
+
+    code = main(["tmpfs", "expire", "--confirmar", "--irreversivel"])
+    assert code == cli.EXIT_REFUSED
+    assert "ledger inconsistente" in capsys.readouterr().err
+
+    code = main(["tmpfs", "recover", "--confirmar"])
+    assert code == cli.EXIT_REFUSED
+    assert "ledger inconsistente" in capsys.readouterr().err
+    # achado da entrega 7: o veredito do recover confirmado falava `sucesso` por
+    # cima da recusa do ledger; o diário agora diz `recusa`, como a CLI sempre disse
+    verdict = [r for r in _journal_records(tmp_path)
+               if r["kind"] == "result"][-1]["result"]
+    assert verdict["outcome"] == "recusa"
+
+    code = main(["tmpfs", "recover"])
+    assert code == cli.EXIT_REFUSED, "nem o dry-run decide com mapa incompleto"
+    assert "ledger inconsistente" in capsys.readouterr().err
 
 
 def test_release_refuses_a_path_the_plan_never_classified(tmp_path, fake_tmp,
@@ -445,24 +585,46 @@ def test_release_uses_the_guard_roots_of_the_seam(tmp_path, fake_tmp, monkeypatc
     assert (root / "qoder-cli-1000" / "blob.bin").exists(), "nada foi apagado"
 
 
-def test_the_mutation_seams_default_to_the_ssd_not_ram(fake_home):
+def test_the_mutation_seams_default_to_the_retention_paths(fake_home):
     """O corpo das costuras também é contrato, e nenhum teste de mutação o alcança.
 
     Todos os testes desta tarefa trocam `_tmpfs_dest` por `tmp_path` -- que é o certo,
     porque senão a suíte escreveria no host -- e por isso nenhum deles exercita o
-    default. O default É a frase do docstring de `paths.py:25-27` ("Retenção de tmpfs:
-    o destino é a SSD, nunca um tmpfs (RAM)"): trocar `tmp_quarantine_dir()` por
-    `tmp_dir()`, ou por um caminho sob `/tmp`, sobreviveria à suíte inteira e gravaria
-    a retenção no mesmo volume que se quer esvaziar. Sob `fake_home` os quatro caminhos
-    caem no chão falso, então a asserção é de nome e de raiz, não de host.
+    default. O default É a frase do docstring de `paths.py` ("Retenção de tmpfs: o
+    destino é a SSD, nunca um tmpfs (RAM)"). O que **não** se afirma aqui é prefixo de
+    caminho: isso dependia do temporário do host (R12/F0). O tipo do monte decide, e
+    a decisão tem teste próprio abaixo com a regra de `safely/mounts.py`.
     """
     dest = cli._tmpfs_dest()
     assert dest == paths.tmp_quarantine_dir()
     assert str(paths.data_dir()) in str(dest), dest
-    assert not str(dest).startswith(("/tmp", "/run/user", "/dev/shm")), dest
     assert cli._tmpfs_ledger().path == paths.tmp_ledger_path()
     assert cli._tmpfs_audit().path == paths.audit_log_path()
     assert cli._tmpfs_guard_roots(), "o guard precisa de raízes padrão, não vazias"
+    coord = cli._tmpfs_coordinator()
+    assert coord.journal.path == paths.operations_journal_path()
+    assert coord.lock_path == paths.coordinator_lock_path()
+
+
+def test_the_default_destination_is_judged_by_its_mount_not_by_its_path(fake_home):
+    """A premissa ambiental removida: o monte do destino decide, não o prefixo.
+
+    Sob `fake_home` o destino cai no temporário do pytest, que pode estar em tmpfs
+    (o da revisão estava) ou em disco. Os dois veredictos são válidos: o que não
+    pode existir é aceitar em silêncio um destino que é RAM — por isso a asserção
+    cobre os dois ramos em vez de presumir o host.
+    """
+    from folego.core.tmpfs import read_mounts
+    from folego.safely import mounts as mount_rules
+
+    dest = cli._tmpfs_dest()
+    verdict = mount_rules.destination_verdict(dest, mounts=read_mounts(None))
+    if verdict.ok:
+        assert verdict.fs_type not in mount_rules.RAM_FS_TYPES
+        assert verdict.mount, "um destino aceito precisa nomear seu monte"
+    else:
+        assert verdict.reason.startswith("refused")
+        assert ("RAM" in verdict.reason or "conhecido" in verdict.reason), verdict.reason
 
 
 def test_expire_requires_both_flags(tmp_path, fake_tmp, monkeypatch, capsys):
@@ -529,10 +691,16 @@ def test_expire_reports_a_payload_that_vanished(tmp_path, fake_tmp, monkeypatch,
         shutil.rmtree(carne)
 
     code = main(["tmpfs", "expire", "--dias", "14", "--confirmar", "--irreversivel"])
-    assert code == cli.EXIT_OK, "sem vítima apagada o ato não falhou, esvaziou"
+    assert code == cli.EXIT_PARTIAL, \
+        "suspeita relatada não vira sucesso limpo nem no código de saída"
     captured = capsys.readouterr()
     assert "aviso:" in captured.err and "já não existia" in captured.err, captured.err
     assert "aviso:" not in captured.out, "a suspeita não divide linha com o veredito"
+    verdict = [r for r in _journal_records(tmp_path)
+               if r["kind"] == "result"][-1]["result"]
+    assert verdict["outcome"] == "parcial", \
+        "suspeita relatada nunca vira sucesso limpo no diário"
+    assert verdict["errors"] and "já não existia" in verdict["errors"][0]
 
 
 def test_restore_of_an_unknown_id_is_refused_and_says_so(tmp_path, fake_tmp, monkeypatch,
@@ -602,6 +770,18 @@ def _audit_events(tmp_path, kind: str) -> list:
     return out
 
 
+def _journal_records(tmp_path) -> list:
+    """O diário de intenção do coordenador (F2), lido do chão falso.
+
+    Sem trocar o coordenador no fixture, este arquivo cairia no estado real do
+    host; sem lê-lo, a integração passaria sem provar registro nenhum.
+    """
+    path = tmp_path / "state" / "operations.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines()]
+
+
 def test_tmpfs_plan_now_points_at_a_command_that_exists(fake_tmp, capsys):
     """O hint do plano só vale depois do `release` existir no argparse.
 
@@ -637,12 +817,335 @@ def test_release_json_is_one_line_and_restore_names_the_target(tmp_path, fake_tm
     assert code == 0 and got["restored_to"] == target
 
 
-def test_a_mutation_refusal_keeps_stdout_empty_and_stderr_explains(tmp_path, fake_tmp,
-                                                                   monkeypatch, capsys):
+def test_mutation_refusals_carry_the_outcome_on_stdout_with_json(tmp_path, fake_tmp,
+                                                                 monkeypatch, capsys):
+    """Entrega 7: com --json, a recusa sai como objeto único no stdout.
+
+    O consumidor de máquina não depende do stderr nem de inferir pelo código: o
+    mesmo `outcome`/`exit` do protocolo viajam no objeto (e o veredito acrescenta
+    `operation_id`/`effects` quando a operação chegou a ser coordenada); o stderr
+    continua sendo a voz humana. Antes da entrega 7 o stdout ficava vazio e a aba
+    só podia dizer "o filho não respondeu".
+    """
     root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    # recusa antes da porta: o alvo nem está no plano
+    code = main(["tmpfs", "release", str(root / "nao-existe"), "--confirmar", "--json"])
+    captured = capsys.readouterr()
+    assert code == cli.EXIT_REFUSED
+    payload = json.loads(captured.out)
+    assert payload["acao"] == "release" and payload["ok"] is False
+    assert payload["exit"] == cli.EXIT_REFUSED and payload["outcome"] == "recusa"
+    assert "não está no plano" in payload["reason"]
+    assert "refused" in captured.err
+    # recusa do domínio depois do plano: o veredito viaja junto no objeto
     code = main(["tmpfs", "release", str(root / "pytest-of-misael"), "--confirmar",
                  "--json"])
     captured = capsys.readouterr()
     assert code == cli.EXIT_REFUSED
-    assert captured.out == "", "recusa é stderr: a linha --json tem de ser parseável"
+    payload = json.loads(captured.out)
+    assert payload["outcome"] == "recusa" and "refused" in payload["reason"]
+    assert payload["operation_id"] and "effects" in payload
     assert "refused" in captured.err
+
+
+def test_missing_confirm_answers_exit_2_on_both_faces(tmp_path, fake_tmp, monkeypatch,
+                                                      capsys):
+    """Entrega 7: sem --confirmar o desfecho é `falta confirmar` (2) no código e no JSON."""
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    code = main(["tmpfs", "release", str(root / "qoder-cli-1000"), "--json"])
+    captured = capsys.readouterr()
+    assert code == cli.EXIT_NEEDS_CONFIRM
+    payload = json.loads(captured.out)
+    assert payload["exit"] == cli.EXIT_NEEDS_CONFIRM and payload["ok"] is False
+    assert payload["outcome"] == "recusa"
+    assert "exige --confirmar" in payload["reason"]
+    assert payload["reason"] in captured.err
+
+
+def test_a_partial_release_is_exit_3_with_the_domain_numbers(tmp_path, fake_tmp,
+                                                             monkeypatch, capsys):
+    """Entrega 7: parcial tem código próprio (3) e o objeto diz o desfecho real.
+
+    A recusa de remoção da origem deixa clone na SSD: parte do efeito existe, e a
+    CLI devolve o mesmo `parcial` que o diário registrou — nunca 1 ("recusa"), que
+    diria que nada aconteceu.
+    """
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    target = str(root / "qoder-cli-1000")
+
+    def fake_release(**_kwargs):
+        partial = ReleaseResult(
+            False, "1700-abcd",
+            "parcial: o clone está em /ssd/1700-abcd e registrado como partial; "
+            "a origem não foi removida (Operation not permitted); nada foi perdido",
+            bytes=4096, stored="/ssd/1700-abcd", freed_bytes=0,
+            allocated_bytes=8192, ram_observed_bytes=None)
+        verdict = ActionResult(
+            action="tmpfs.release", outcome=Outcome.PARTIAL, target_key=target,
+            reason=partial.reason,
+            effects={"entry_id": partial.entry_id, "bytes": partial.bytes,
+                     "stored": partial.stored, "sha256": "",
+                     "freed_bytes": 0, "allocated_bytes": 8192,
+                     "ram_observed_bytes": None})
+        return Coordinated(result=partial, verdict=verdict)
+
+    monkeypatch.setattr(cli.tmpfs_coordinated, "release", fake_release)
+    code = main(["tmpfs", "release", target, "--confirmar", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert code == cli.EXIT_PARTIAL
+    assert payload["exit"] == cli.EXIT_PARTIAL and payload["outcome"] == "parcial"
+    assert payload["ok"] is False and payload["entry_id"] == "1700-abcd"
+    assert payload["bytes"] == 4096 and payload["freed_bytes"] == 0
+    assert payload["allocated_bytes"] == 8192 and payload["ram_observed_bytes"] is None
+    assert payload["reason"].startswith("parcial:")
+    # a face humana devolve o mesmo código e o motivo no stderr
+    code = main(["tmpfs", "release", target, "--confirmar"])
+    captured = capsys.readouterr()
+    assert code == cli.EXIT_PARTIAL and "parcial:" in captured.err
+
+
+def test_an_unexpected_error_is_a_documented_failure(capsys, monkeypatch):
+    """Entrega 7: exceção vira `falha` (4) com objeto no --json, não traceback cru."""
+    def boom(_ns):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setitem(cli._TMPFS_HANDLERS, "ledger", boom)
+    code = main(["tmpfs", "ledger", "--json"])
+    captured = capsys.readouterr()
+    assert code == cli.EXIT_FAILED
+    payload = json.loads(captured.out)
+    assert payload["ok"] is False and payload["exit"] == cli.EXIT_FAILED
+    assert payload["outcome"] == "falha" and "kaboom" in payload["reason"]
+    assert "falha: RuntimeError: kaboom" in captured.err
+    assert "FOLEGO_TRACEBACK" in captured.err, "o traceback tem porta de saída"
+
+
+def test_interrupting_a_command_is_desconhecido_not_cancelamento(capsys, monkeypatch):
+    """Ctrl-C no meio não prova ausência de efeitos: 5, nunca 6 (reservado)."""
+    def interrupted(_ns):
+        raise KeyboardInterrupt
+
+    monkeypatch.setitem(cli._TMPFS_HANDLERS, "ledger", interrupted)
+    code = main(["tmpfs", "ledger", "--json"])
+    captured = capsys.readouterr()
+    assert code == cli.EXIT_UNKNOWN
+    payload = json.loads(captured.out)
+    assert payload["exit"] == cli.EXIT_UNKNOWN and payload["outcome"] == "desconhecido"
+    assert "interrompido" in captured.err
+
+
+def test_every_outcome_has_one_documented_exit_code():
+    """O protocolo não pode ganhar desfecho sem código, nem dois códigos iguais."""
+    assert set(cli.EXIT_BY_OUTCOME) == set(Outcome)
+    codes = [cli.EXIT_BY_OUTCOME[o] for o in Outcome]
+    assert len(set(codes)) == len(codes)
+    assert cli.EXIT_BY_OUTCOME[Outcome.OK] == cli.EXIT_OK == 0
+    assert cli.EXIT_BY_OUTCOME[Outcome.REFUSED] == cli.EXIT_REFUSED == 1
+    assert cli.EXIT_BY_OUTCOME[Outcome.CANCELLED] == cli.EXIT_CANCELLED == 6
+
+
+def test_a_confirmed_release_is_journaled_intent_before_result(tmp_path, fake_tmp,
+                                                               monkeypatch, capsys):
+    """F2: a mutação real passa pelo coordenador — intenção no diário, depois resultado.
+
+    A ordem é o contrato, e aqui ela é observável: a linha `intent` tem de existir
+    antes da `result`, com a ação, o alvo e os parâmetros reais do ato; o veredito
+    nomeia o efeito que o stdout anunciou.
+    """
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    code = main(["tmpfs", "release", str(root / "qoder-cli-1000"), "--confirmar",
+                 "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert code == cli.EXIT_OK
+    # o envelope do sucesso diz o desfecho e o código por si (entrega 7)
+    assert payload["exit"] == cli.EXIT_OK and payload["outcome"] == "sucesso"
+
+    records = _journal_records(tmp_path)
+    assert [r["kind"] for r in records] == ["intent", "result"], \
+        "o diário registra a intenção antes do efeito"
+    intent, result = records[0]["plan"], records[1]["result"]
+    assert intent["action"] == "tmpfs.release"
+    assert intent["target"]["key"] == str(root / "qoder-cli-1000")
+    assert intent["params"] == {"bytes": 4096, "volume": str(root)}
+    assert len(intent["digest"]) == 64
+    assert result["outcome"] == "sucesso" and result["operation_id"] == \
+        records[0]["operation_id"]
+    assert result["effects"]["entry_id"] == payload["entry_id"]
+    assert result["effects"]["freed_bytes"] == 4096
+    # contabilidade fina (6b): o alocado é medido no clone que ficou, e o
+    # observado atravessa o veredito — os dois números são o mesmo nos dois canos
+    esperado = sum(p.stat().st_blocks * 512
+                   for p in (tmp_path / "retida").rglob("*")
+                   if p.is_file() and not p.is_symlink())
+    assert payload["allocated_bytes"] == esperado
+    assert result["effects"]["allocated_bytes"] == esperado
+    assert isinstance(payload["ram_observed_bytes"], int)
+    assert result["effects"]["ram_observed_bytes"] == payload["ram_observed_bytes"]
+
+
+def test_a_confirmed_mutation_the_domain_refuses_is_journaled_as_recusa(tmp_path,
+                                                                        fake_tmp,
+                                                                        monkeypatch,
+                                                                        capsys):
+    """Recusa do domínio não apaga a operação do diário: o ato foi intentado e negado.
+
+    O chão é o mesmo do teste de costura do guard: raízes erradas fazem o domínio
+    recusar *depois* de o plano classificá-lo elegível — o caso em que a porta do
+    coordenador abriu e quem disse não foi a revalidação do ato.
+    """
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    monkeypatch.setattr(cli, "_tmpfs_guard_roots", lambda: [tmp_path / "guard-fora"])
+
+    code = main(["tmpfs", "release", str(root / "qoder-cli-1000"), "--confirmar"])
+
+    assert code == cli.EXIT_REFUSED
+    assert "allowed root" in capsys.readouterr().err
+    records = _journal_records(tmp_path)
+    assert [r["kind"] for r in records] == ["intent", "result"]
+    verdict = records[1]["result"]
+    assert verdict["outcome"] == "recusa"
+    assert "allowed root" in verdict["reason"]
+    assert not (tmp_path / "retida").exists(), "nada foi retido"
+
+
+def test_a_corrupt_journal_blocks_the_mutation_before_any_copy(tmp_path, fake_tmp,
+                                                               monkeypatch, capsys):
+    """Diário ilegível fecha a porta: sem intenção registrável, o ato não roda.
+
+    Falhar fechado é o ponto: um diário com linha quebrada (escrita interrompida,
+    edição à mão) poderia esconder uma intenção sem resultado — mutar em cima disso
+    é como reaplicar às cegas. O arquivo não pode ganhar nada por cima do problema.
+    """
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    journal = tmp_path / "state" / "operations.jsonl"
+    journal.parent.mkdir(parents=True)
+    journal.write_text("lixo\n", encoding="utf-8")
+
+    code = main(["tmpfs", "release", str(root / "qoder-cli-1000"), "--confirmar"])
+
+    assert code == cli.EXIT_REFUSED
+    assert "diário inconsistente" in capsys.readouterr().err
+    assert journal.read_text() == "lixo\n", "nada foi anexado por cima do problema"
+    assert not (tmp_path / "retida").exists(), "a porta fechou antes de copiar"
+    assert (root / "qoder-cli-1000" / "blob.bin").exists(), "a origem está intacta"
+
+
+def test_an_unconfirmed_release_never_touches_the_journal(tmp_path, fake_tmp,
+                                                          monkeypatch, capsys):
+    """Dry-run é dry-run: recusa de flag não vira operação registrada."""
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    code = main(["tmpfs", "release", str(root / "qoder-cli-1000")])
+    assert code == cli.EXIT_NEEDS_CONFIRM
+    assert "--confirmar" in capsys.readouterr().err
+    assert _journal_records(tmp_path) == []
+    assert not (tmp_path / "state" / "operations.jsonl").exists()
+
+
+def test_restore_and_expire_are_journaled_too(tmp_path, fake_tmp, monkeypatch, capsys):
+    """Os três atos mutantes entram pela mesma porta: nenhuma rota fica de fora."""
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    main(["tmpfs", "release", str(root / "qoder-cli-1000"), "--confirmar", "--json"])
+    entry_id = json.loads(capsys.readouterr().out)["entry_id"]
+
+    assert main(["tmpfs", "restore", entry_id, "--confirmar"]) == cli.EXIT_OK
+    capsys.readouterr()  # a linha humana do restore não pode entrar no JSON do release
+    records = _journal_records(tmp_path)
+    assert [r["plan"]["action"] for r in records if r["kind"] == "intent"] == \
+        ["tmpfs.release", "tmpfs.restore"]
+    restored = records[-1]["result"]
+    assert restored["outcome"] == "sucesso"
+    assert restored["effects"]["entry_id"] == entry_id
+    assert restored["effects"]["restored_to"] == str(root / "qoder-cli-1000")
+
+    main(["tmpfs", "release", str(root / "qoder-cli-1000"), "--confirmar", "--json"])
+    second_entry = json.loads(capsys.readouterr().out)["entry_id"]
+    backdate(tmp_path, 40)
+    assert main(["tmpfs", "expire", "--dias", "14", "--confirmar",
+                 "--irreversivel"]) == cli.EXIT_OK
+    assert capsys.readouterr().err == "", "sem suspeita, sem aviso"
+
+    records = _journal_records(tmp_path)
+    expire_intents = [r for r in records if r["kind"] == "intent"
+                      and r["plan"]["action"] == "tmpfs.expire"]
+    assert len(expire_intents) == 1, "uma operação de expire, uma intenção"
+    assert expire_intents[0]["plan"]["params"] == {"days": 14.0,
+                                                   "max_bytes": MAX_RETAINED_BYTES}
+    assert records[-1]["kind"] == "result", "o expire é a última operação"
+    verdict = records[-1]["result"]
+    assert verdict["outcome"] == "sucesso"
+    assert verdict["effects"]["freed_bytes"] == 4096
+    assert verdict["effects"]["victims"] == [second_entry]
+
+
+def _seed_staging(tmp_path, *, entry_id, src, stored):
+    """A linha `staging` como o release a teria deixado antes do primeiro byte."""
+    Ledger(tmp_path / "state" / "tmp-ledger.jsonl").append(
+        entry_id=entry_id, src=str(src), volume=str(src), stored=str(stored),
+        bytes=0, sha256="", age_days=1.0, matched_pattern=None, holder_pids=(),
+        state="staging", action_id="tmpfs.release", audit_event_id="")
+
+
+def test_tmpfs_recover_dry_run_then_confirm(tmp_path, fake_tmp, monkeypatch, capsys):
+    """O recover da CLI: inventário sem flag, descarte confirmado, diário junto."""
+    root, _ = tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    origem = root / "qoder-cli-1000"          # viva: o clone inacabado é redundante
+    clone = tmp_path / "retida" / "20261017T000000Z" / "qoder-cli-1000"
+    clone.mkdir(parents=True)
+    (clone / "blob.bin").write_bytes(b"a" * 4096)
+    _seed_staging(tmp_path, entry_id="st-1", src=origem, stored=clone)
+
+    code = main(["tmpfs", "recover", "--json"])
+    got = json.loads(capsys.readouterr().out)
+    assert code == cli.EXIT_OK and got["dry_run"] is True
+    assert got["dropped"] == ["st-1"] and got["kept"] == []
+    assert clone.exists(), "dry-run não toca no clone"
+    assert _ledger_records(tmp_path)[0]["state"] == "staging"
+
+    code = main(["tmpfs", "recover", "--confirmar", "--json"])
+    got = json.loads(capsys.readouterr().out)
+    assert code == cli.EXIT_OK and got["ok"] is True and got["dropped"] == ["st-1"]
+    assert not clone.exists()
+    assert _ledger_records(tmp_path)[-1]["state"] == "dropped"
+    assert (origem / "blob.bin").exists(), "a origem é a âncora e continua intacta"
+    records = _journal_records(tmp_path)
+    assert [r["kind"] for r in records] == ["intent", "result"]
+    assert records[0]["plan"]["action"] == "tmpfs.recover"
+    assert records[0]["plan"]["target"] == {"schema": 1, "kind": "group",
+                                            "key": "tmpfs.staging", "detail": {}}
+    assert records[1]["result"]["outcome"] == "sucesso"
+    assert records[1]["result"]["effects"]["dropped"] == ["st-1"]
+
+
+def test_tmpfs_recover_keeps_the_clone_when_the_origin_is_gone(tmp_path, fake_tmp,
+                                                               monkeypatch, capsys):
+    """Origem sumida: a CLI preserva o clone e o desfecho é parcial — como o diário.
+
+    Decisão manual pendente não é sucesso: a CLI devolve o mesmo `parcial` que o
+    veredito registrou (entrega 7), em vez de um 0 que diria "acabou".
+    """
+    tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    clone = tmp_path / "retida" / "stamp" / "sumida"
+    clone.mkdir(parents=True)
+    (clone / "unico.bin").write_bytes(b"z" * 16)
+    _seed_staging(tmp_path, entry_id="st-2", src=tmp_path / "origem-que-sumiu",
+                  stored=clone)
+
+    code = main(["tmpfs", "recover", "--confirmar"])
+
+    out = capsys.readouterr().out
+    assert code == cli.EXIT_PARTIAL
+    assert "decisão manual" in out and "não foi tocado" in out
+    assert clone.exists() and _ledger_records(tmp_path)[-1]["state"] == "staging", \
+        "sem certificação e sem origem, nada se apaga"
+    verdict = _journal_records(tmp_path)[-1]["result"]
+    assert verdict["outcome"] == "parcial"
+    assert verdict["effects"]["kept"] == ["st-2"]
+
+
+def test_tmpfs_recover_with_a_clean_ledger_says_there_is_nothing(tmp_path, fake_tmp,
+                                                                 monkeypatch, capsys):
+    tmpfs_env(tmp_path, fake_tmp, monkeypatch)
+    code = main(["tmpfs", "recover", "--confirmar"])
+    out = capsys.readouterr().out
+    assert code == cli.EXIT_OK and "nada a recuperar" in out
+    assert _ledger_records(tmp_path) == []
