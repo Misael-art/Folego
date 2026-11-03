@@ -1,5 +1,43 @@
 # Passagem para o próximo agente — atualizada em 03/11/2026
 
+## Modo Desempenho: uso desconhecido protege o alvo — 03/11/2026
+
+Reconfirmação viva, somente leitura: `folego-performance.service` está enabled e
+active, sem reinícios; as regras Steam, Edge e autostarts seguem em `automatic`,
+as duas regras de conselho em `suggest`. O diário automático registra **cinco**
+fechamentos com sucesso (três autostarts, um Steam e um Edge), zero falhas e
+disjuntor fechado; o resumo de apenas um fechamento abaixo é histórico.
+Observação, regra, proteção, aviso/carência, plano, Coordinator, acompanhamento
+e orçamento foram conferidos nos caminhos de produção. Nenhum app real foi
+fechado nesta revisão.
+
+Reprodução descartável antes da correção: `kdotool` com saída vazia e áudio
+ativo sem PID davam resposta de uso livre; inventário de `fd` negado ou
+`fdinfo` ausente também era ignorado. `core/usage.py` agora devolve motivo
+desconhecido nesses casos, inclusive PID inválido, linha `flags` malformada e
+arquivo de download aberto marcado como deleted. O plano e a revalidação já
+bloqueavam qualquer motivo de uso; nenhum grant foi ampliado. Regressões
+focadas `tests/test_usage.py`: **5 passed**; antes da correção duas falhavam.
+
+QA em janela própria na sessão KDE/Wayland real: aba Desempenho aberta no
+`MainWindow`, plataforma `wayland`, captura da janela inspecionada com navegação,
+estado, cards e regras visíveis. HOME/XDG privados, sem iniciar supervisor ou
+executor da sessão. Desligar/ligar pela CLI sobre esse estado privado mostrou
+`paused=true` e depois `false`, sem falhas ou histórico; os testes de UI cobrem
+o botão e o pedido de confirmação. Observação contínua somente de leitura:
+**16 amostras em 225 s**, uma a cada 15 s, todas `interactive`, CPU protegida
+entre 19,3% e 78,1% de um núcleo após a primeira amostra sem taxa; PSI de
+memória máximo 0,02%. O gatilho `busy` visto durante build/testes não persistiu
+com a carga menor. Isto não é um soak de horas nem valida entrada física,
+leitor de tela ou a unit real por alternância forçada.
+
+Host: `./dev test-headless` **1237 passed, 2 skipped**; `./dev test` **1562
+passed, 2 skipped** após o ajuste final de parsing. Python 3.14.7 gerenciado, HOME/XDG privados e
+suítes sequenciais; nenhuma unit, app ou estado automático real foi alterado.
+Próximo: retenção de temporários administrados e fluxo Dar fôlego. A retenção
+viva segue bloqueada por cinco processos do mesmo UID com `/proc/environ`
+inacessível: não interpretar a ausência de referência como comprovada.
+
 ## Revisões: recibo reconciliado libera slot ativo — 03/11/2026
 
 Reprodução em HOME descartável antes da correção: `review.reconcile(id)`
@@ -17,7 +55,8 @@ Testes focados `test_session_resilience.py`: **22 passed**, incluindo resultado
 conhecido, repetição, queda entre link/unlink e conflito. Host:
 `./dev test-headless` **1236 passed, 2 skipped**; `./dev test` **1561 passed,
 2 skipped**. HOME/XDG privados, efeito somente em fixtures. Próximo: Modo
-Desempenho no host e aceites físicos seguros.
+Desempenho no host e aceites físicos seguros. CI de `9981fd9` passou nos dois
+jobs Qt, dois headless e dois de contratos CLI.
 
 ## Início com a sessão: escolha e unit em ordem única — 03/11/2026
 

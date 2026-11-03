@@ -39,11 +39,12 @@ def focused_pid(run=subprocess.run) -> int | None | str:
     if done.returncode != 0:
         return "foco desconhecido: kdotool falhou"
     if not text:
-        return None
+        return "foco desconhecido: resposta vazia"
     try:
-        return int(text[-1])
+        pid = int(text[-1])
     except ValueError:
         return "foco desconhecido: resposta inesperada"
+    return pid if pid > 0 else "foco desconhecido: PID inválido"
 
 
 def audio_pids(run=subprocess.run) -> frozenset[int] | str:
@@ -58,14 +59,21 @@ def audio_pids(run=subprocess.run) -> frozenset[int] | str:
         return f"áudio desconhecido: {exc}"
     if streams is None:
         return "áudio desconhecido: pactl falhou"
+    if not isinstance(streams, list):
+        return "áudio desconhecido: resposta inesperada"
     pids = set()
     for stream in streams:
+        if not isinstance(stream, dict):
+            return "áudio desconhecido: stream inesperado"
         if stream.get("corked"):
             continue
         try:
-            pids.add(int(stream.get("properties", {}).get("application.process.id")))
-        except (TypeError, ValueError):
-            continue
+            pid = int(stream.get("properties", {}).get("application.process.id"))
+        except (AttributeError, TypeError, ValueError):
+            return "áudio desconhecido: stream ativo sem PID"
+        if pid <= 0:
+            return "áudio desconhecido: PID inválido"
+        pids.add(pid)
     return frozenset(pids)
 
 
@@ -75,26 +83,22 @@ def probe(run=subprocess.run) -> Probes:
 
 def _open_files(pid: int, proc_root: str) -> Iterable[tuple[str, int]]:
     base = f"{proc_root}/{pid}"
-    try:
-        fds = os.listdir(f"{base}/fd")
-    except OSError:
-        return
+    fds = os.listdir(f"{base}/fd")
     for fd in fds:
-        try:
-            target = os.readlink(f"{base}/fd/{fd}")
-        except OSError:
-            continue
+        target = os.readlink(f"{base}/fd/{fd}")
         if not target.startswith("/"):
             continue
-        flags = 0
-        try:
-            with open(f"{base}/fdinfo/{fd}") as info:
-                for line in info:
-                    if line.startswith("flags:"):
-                        flags = int(line.split()[1], 8)
-                        break
-        except (OSError, ValueError):
-            pass
+        flags = None
+        with open(f"{base}/fdinfo/{fd}") as info:
+            for line in info:
+                if line.startswith("flags:"):
+                    parts = line.split()
+                    if len(parts) != 2:
+                        raise ValueError(f"fdinfo sem flags válidas: {pid}/{fd}")
+                    flags = int(parts[1], 8)
+                    break
+        if flags is None:
+            raise ValueError(f"fdinfo sem flags: {pid}/{fd}")
         yield target, flags
 
 
@@ -111,10 +115,13 @@ def in_use(pids: Iterable[int], *, probes: Probes, projects: Iterable[str],
     if members & probes.audio:
         return "tocando áudio"
     roots = tuple(p.rstrip("/") + "/" for p in projects)
-    for pid in members:
-        for target, flags in files(pid, proc_root):
-            if target.endswith(DOWNLOAD_SUFFIXES):
-                return "download em andamento"
-            if flags & _WRITE and roots and target.startswith(roots):
-                return "arquivo de projeto aberto para escrita"
+    try:
+        for pid in members:
+            for target, flags in files(pid, proc_root):
+                if target.removesuffix(" (deleted)").endswith(DOWNLOAD_SUFFIXES):
+                    return "download em andamento"
+                if flags & _WRITE and roots and target.startswith(roots):
+                    return "arquivo de projeto aberto para escrita"
+    except (OSError, ValueError) as exc:
+        return f"arquivos abertos desconhecidos: {exc}"
     return None

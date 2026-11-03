@@ -14,17 +14,21 @@ def test_focus_and_audio_probes_parse_and_fail_protective(monkeypatch):
     monkeypatch.setattr(usage.shutil, "which", lambda name: "/usr/bin/" + name)
     assert usage.focused_pid(runner("{uuid}\n4242\n")) == 4242
     assert isinstance(usage.focused_pid(runner("", 1)), str)
+    assert isinstance(usage.focused_pid(runner("")), str)
+    assert isinstance(usage.focused_pid(runner("-1")), str)
     streams = [{"corked": False, "properties": {"application.process.id": "7"}},
                {"corked": True, "properties": {"application.process.id": "8"}}]
     assert usage.audio_pids(runner(json.dumps(streams))) == {7}
     assert isinstance(usage.audio_pids(runner("not json")), str)
+    assert isinstance(usage.audio_pids(runner(json.dumps([
+        {"corked": False, "properties": {}}]))), str)
     monkeypatch.setattr(usage.shutil, "which", lambda name: None)
     assert isinstance(usage.focused_pid(), str) and isinstance(usage.audio_pids(), str)
 
 
 def test_in_use_reasons(tmp_path):
     calm = usage.Probes(None, frozenset())
-    files = {1: [("/home/u/Downloads/a.iso.crdownload", os.O_WRONLY)],
+    files = {1: [("/home/u/Downloads/a.iso.crdownload (deleted)", os.O_WRONLY)],
              2: [("/p/repo/src/x.py", os.O_RDWR)], 3: [("/p/repo/src/x.py", os.O_RDONLY)]}
     fake = lambda pid, root: files.get(pid, ())
     check = lambda pids, probes=calm: usage.in_use(pids, probes=probes, projects={"/p/repo"}, files=fake)
@@ -34,6 +38,24 @@ def test_in_use_reasons(tmp_path):
     assert check([1]) == "download em andamento"
     assert check([2]) == "arquivo de projeto aberto para escrita"
     assert check([3]) is None and check([9]) is None
+
+
+def test_unreadable_fd_inventory_or_project_fd_flags_protects_target(tmp_path, monkeypatch):
+    calm = usage.Probes(None, frozenset())
+    monkeypatch.setattr(usage.os, "listdir", lambda path: (_ for _ in ()).throw(PermissionError("fd denied")))
+    assert "desconhecid" in usage.in_use([123], probes=calm, projects={"/p/repo"},
+                                           proc_root=str(tmp_path))
+    monkeypatch.undo()
+    fd = tmp_path / "123/fd"
+    fd.mkdir(parents=True)
+    (fd / "4").symlink_to("/p/repo/src/main.py")
+    assert "desconhecid" in usage.in_use([123], probes=calm, projects={"/p/repo"},
+                                           proc_root=str(tmp_path))
+    fdinfo = tmp_path / "123/fdinfo"
+    fdinfo.mkdir()
+    (fdinfo / "4").write_text("flags:\n")
+    assert "desconhecid" in usage.in_use([123], probes=calm, projects={"/p/repo"},
+                                           proc_root=str(tmp_path))
 
 
 def test_automation_flags_make_a_browser_an_agent():
