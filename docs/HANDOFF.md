@@ -1,5 +1,50 @@
 # Passagem para o próximo agente — atualizada em 03/11/2026
 
+## Estado vigente e matriz de aceite — 03/11/2026
+
+Na branch `codex/portable-handoff-20261024`, os incrementos publicados
+`98bd49c`, `e199e24`, `a7edb43`, `c363363`, `9981fd9`, `e5dfb5c`,
+`9fcbbd2` e `426ae39` cobrem, respectivamente, diário incompleto, oráculo Qt,
+swap parcial, corrida de início, recibo reconciliado, proteção de uso incerto
+no Desempenho, inventário/recuperação de temporários e revisão pelo mesmo ID
+em “Dar fôlego”. O SHA `426ae39` passou nos seis jobs de produto do CI (dois
+headless, dois Qt e dois de contratos CLI; revisores automáticos skipped).
+Último gate local de código: `./dev test-headless` **1241 passed, 2 skipped** e
+`./dev test` **1569 passed, 2 skipped**, Python 3.14.7 gerenciado, HOME/XDG
+privados e Qt offscreen. As seções abaixo guardam reproduções, comandos,
+contagens, evidências e limites de cada incremento.
+
+Neste lote de passagem e texto da aba Opções, `./dev test-headless` terminou
+**1240 passed, 2 skipped, 1 failed**: `test_backup.py::test_roundtrip_property`
+excedeu o deadline existente de 200 ms na primeira tentativa (329 ms) e levou
+9 ms ao repetir internamente; uma repetição focada no mesmo workspace próprio
+teve o mesmo tipo de falha (334 ms e depois 115 ms). O código de backup não foi
+alterado e nenhum limite foi elevado. A execução e o log falhos foram
+preservados em `.scratch/dev-tests/run-b4jvfeyr`; o limite de 20 workspaces
+impediu abrir outro pelo wrapper sem remover evidências alheias ou incertas.
+Com o ambiente privado do wrapper e base exclusiva dentro desse workspace,
+`test_ui_options.py` deu **9 passed** no Qt offscreen. `git diff --check` passou.
+Uma janela própria de Opções foi mostrada no plugin Wayland da sessão KDE real,
+com HOME/XDG privados; o novo texto ficou visível e a captura
+`run-b4jvfeyr/options-wayland.png` foi inspecionada. A captura do widget não
+certifica entrada física nem o login.
+O CI do próximo SHA deve ser consultado antes de concluir o gate publicado.
+
+| Aceite | Evidência nesta fonte | Dependência ainda aberta |
+| --- | --- | --- |
+| Diário, swap, início e revisão | Regressões pelos fluxos oficiais CLI/GUI; CI verde em `426ae39` | Nenhuma para o contrato simulado; comportamento físico segue linhas abaixo. |
+| Desempenho | Unit e regras atuais consultadas; cinco fechamentos históricos no diário; 225 s de observação somente leitura, 16 amostras; aba inspecionada em janela própria no KDE/Wayland; desligar/ligar testado em estado privado | Soak de horas com orçamento definido na fonte atual e efeito seguro apenas em alvos descartáveis próprios. Não fechar apps reais para prova. |
+| Temporários | Inventário, localização de recuperação e bloqueios testados em árvores próprias; 192 runs vivos observados, nenhum movido | Cinco processos do mesmo UID negam `/proc/environ`; sem prova de ausência de consumidores, retenção real fica bloqueada. Não mudar permissões ou ignorar a incerteza. |
+| “Dar fôlego” | CTA e aba vistos no Wayland; plano, confirmação, efeito em filho próprio, consulta e repetição pelo mesmo ID validados pela CLI; clique duplo e arraste cobertos por Qt | Entrada física de arraste/clique no compositor não foi ensaiada. |
+| Entrada e acessibilidade | Sessão Wayland real; supervisor de entrada ativo; consulta mostrou cinco entradas no baseline, dois bloqueios e uma operação pendente sem efeito novo | Toque FTS3528 ausente; concluir operação pendente e testar hardware em QA própria. Leitor de tela Orca está instalado, mas não foi operado. |
+| Desktop e sessão | Janelas próprias da central abertas e inspecionadas no KDE/Wayland; startup da central/unit consultado como ativo e habilitado | Login/SDDM, logout, suspend/resume, dock, Steam e leitor de tela exigem janela de QA física sem interromper a sessão de trabalho. |
+| Soak de duas horas | 7200,057 s aprovados em 30/10 para fonte congelada `a65b5f7`; relatório histórico abaixo | Repetir na fonte atual, em janela real de duas horas e com orçamento/telemetria próprios. Não somar tentativas nem tratar 225 s como soak. |
+
+Próximo passo executável em ambiente apropriado: resolver a leitura dos
+consumidores pelo owner sem ampliar permissões às cegas; depois testar retenção
+de runs próprios elegíveis. Agendar QA física de entrada/login e soak da fonte
+atual. Nenhum merge, release ou deploy foi feito.
+
 ## Dar fôlego: análise, revisão e resultado pelo mesmo ID — 03/11/2026
 
 Reprodução do caminho anterior: a recomendação prioritária de memória voltava
@@ -1289,7 +1334,7 @@ CI ainda em andamento no último marco (a base tinha falha ShellCheck 0.9).
 Esta nota posterior muda somente documentação/metadados de validação. Nenhuma
 pendência física ou incerta foi liberada para obter esse checkpoint.
 
-## Retomada vigente: resiliência e início com a sessão
+## Registro histórico: resiliência e início com a sessão
 
 Base deste incremento: `26b1567db77648c7a8a0fdbc4c41bd0884cbb2ac`. O usuário
 autorizou todas as recomendações da revisão posterior de entrada e pediu uma
@@ -1298,7 +1343,8 @@ as pendências históricas equivalentes, sem promover aceites físicos antigos.
 
 - **Opções:** sétima aba, preferência durável e autostart XDG gerenciado;
   sincronização da unit própria de observação no login. Desligar persiste após
-  reabrir e não encerra um monitor já aberto. Entradas/units pessoais são
+  reabrir; a implementação atual para a unit própria imediatamente, sem encerrar
+  a central aberta. Entradas/units pessoais são
   preservadas. Nenhum grant de reparo/recursos é ampliado pelo início automático.
 - **Leases:** limite de 32 considera participantes ativos; liberações validadas
   saem para recibos fechados. `accessibility lease-run` registra filhos antes

@@ -64,8 +64,8 @@ class OptionsTab(QWidget):
         self.retained_runs.currentIndexChanged.connect(
             lambda: self.recover_run_button.setEnabled(bool(self.retained_runs.currentData())))
         text = QLabel("A opção inicia a central e o monitor com seu login gráfico. "
-                      "Não amplia permissões de reparo ou limpeza. Desligar afeta o próximo login; "
-                      "o monitor já aberto pode continuar observando.")
+                      "Não amplia permissões de reparo ou limpeza. Desligar impede o próximo início "
+                      "e para a unit própria do monitor de entrada; a central aberta continua na tela.")
         text.setWordWrap(True)
         outer = QVBoxLayout(self)
         area = QScrollArea()

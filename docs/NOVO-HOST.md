@@ -111,7 +111,8 @@ continua verificando o destino no ato de lançar filhos.
 
 Na primeira abertura real, a GUI configura seu autostart XDG e a unit de observação
 de entrada do usuário. A aba **opções** e `./dev run startup disable --confirmar`
-persistem a escolha de desligar no próximo login, sem parar o monitor já aberto.
+persistem a escolha de desligar no próximo login e desativam imediatamente a
+unit própria do monitor de entrada; a janela da central já aberta não é encerrada.
 Units/entradas pessoais são preservadas. Isso não importa grants antigos, não
 ativa reparos numa instalação nova nem habilita o executor de recursos.
 
@@ -123,4 +124,5 @@ ativa reparos numa instalação nova nem habilita o executor de recursos.
 > respeite a preferência de início com a sessão e a política própria de entrada e
 > não toque em processos/dados de trabalho do host. Escolha a primeira pendência
 > verificável da passagem, faça um incremento integrado com teste de regressão
-> e atualize o estado com evidências reais, sem declarar o soak de duas horas aprovado.
+> e atualize o estado com evidências reais; o soak de duas horas de 30/10 aprova
+> apenas a fonte congelada daquele ensaio, não a fonte atual.

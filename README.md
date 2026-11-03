@@ -122,7 +122,8 @@ cd Folego
 Na primeira abertura, o Fôlego configura o **início automático com a sessão**,
 ligado por padrão. A aba **opções** permite desligar e mantém sua escolha nas
 próximas aberturas. O controle cobre a central e a habilitação do monitor de
-entrada no login; desligar não encerra um monitor já aberto. Arquivos pessoais
+entrada no login; desligar desativa a unit própria de entrada imediatamente,
+sem encerrar a janela da central já aberta. Arquivos pessoais
 de autostart e units sem a marca do Fôlego são preservados.
 
 Iniciar o aplicativo não concede permissões de limpeza ou reparo. A política
@@ -299,9 +300,11 @@ Um ensaio contínuo de **duas horas reais** foi aprovado no perfil controlado:
 GUI Wayland com coletor sintético, workers e cancelamentos próprios, arquivo
 restaurado e diário verificado. [Resultados e limites](docs/handoff/validation/session-resilience-2026-10-30/soak/README.md).
 
-Continuam pendentes a política integral de retenção dos temporários administrados,
-a conclusão do fluxo “Dar fôlego” e partes da matriz física de acessibilidade e
-desktop. O ensaio controlado não certifica essas condições.
+O inventário e a recuperação dos temporários administrados e o fluxo “Dar fôlego”
+estão integrados à GUI e à CLI. A retenção real neste host ainda depende de
+comprovar a ausência de consumidores que hoje não podem ser inspecionados. A
+matriz física de acessibilidade e desktop e um soak da fonte atual permanecem
+pendentes. O ensaio controlado acima vale somente para a fonte congelada nele.
 
 O estado técnico vigente, os comandos verificados e as próximas tarefas ficam em
 [HANDOFF](docs/HANDOFF.md). O [diagnóstico consolidado](docs/DIAGNOSTICO-2026-10-24.md)
