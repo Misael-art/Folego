@@ -1,5 +1,22 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Codex Web pelo Limits e renovação do Claude — 03/11/2026
+
+Correção do usuário: Codex Web é túnel da cota ChatGPT Web da conta Principal
+(Pro), não a cota Codex da conta logada na raiz (MHMAIL). A leitura Codex da
+raiz Web foi removida. Fonte agora: `launcher-data/limits.json` do próprio
+aplicativo (mesma tabela oficial: GPT-6 Pro 200/7 d, GPT-5.6 Pro 170/24 h,
+combinado 200/24 h; Pro 5x 50/7 d), janelas móveis contadas como no app.
+No host o arquivo está `unsupported`, sem eventos desde 19/10: **?** até o usuário
+refazer a verificação em Limits no aplicativo com a conta Pro.
+Claude: token vencido com renovação válida pede ao cliente oficial
+`claude doctor` (sem inferência, cwd temporário, variáveis `CLAUDE_CODE_*` do host
+removidas), no máximo uma vez a cada 10 min por raiz; falha mantém **?**. Só no
+coletor nativo; testes nunca executam o cliente. Host: Claude 70%, Grok 0%.
+Testes com HOME novo: headless **1182 passed, 2 skipped**; Qt **1498 passed,
+2 skipped**. Falha de `test_ui_capture_alerts` vista antes era resíduo de QSettings
+de HOME reaproveitado pelo agente, não do código.
+
 ## Leitura de cota Codex Web, Claude e Grok — 02/11/2026
 
 Sobre `51e3fed8ea5c728163f094feef9ca8288f6a954f`, mesma raiz/branch/PR #1.

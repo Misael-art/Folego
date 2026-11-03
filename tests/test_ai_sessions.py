@@ -373,16 +373,38 @@ def test_claude_context_change_keeps_retry_after_for_the_same_token(tmp_path):
     assert len(calls) == 1 and next(iter(cache.values()))['retry_at'] == NOW + 7200
 
 
-def test_web_root_reads_its_account_quota_with_explicit_source(tmp_path):
-    root, _ = codex_auth(tmp_path)
-    def fetch(url, headers):
-        if url.endswith('/usage'):
-            return dict(account_id='account-fixture', rate_limit=dict(
-                primary_window=dict(used_percent=81, reset_at=NOW + 3600, limit_window_seconds=18000)))
-        raise OSError('optional detail unavailable')
-    item = ai.codex(root, NOW, provider='web', fetch=fetch)
-    assert item['provider'] == 'web' and item['remaining'] == 19
-    assert 'ChatGPT Web' in item['source'] and item['reason'] == ''
+def web_root(home, plan='pro_200', events=()):
+    root = home / 'chatgpt-web/codex-home'
+    root.mkdir(parents=True)
+    key = 'a' * 64
+    account = dict(plan=plan, initializedAt=None if plan == 'unsupported' else 0, checkedAt=0,
+                   events=[dict(id=str(i), model=m, at=int(at * 1000)) for i, (m, at) in enumerate(events)])
+    (home / 'chatgpt-web/launcher-data').mkdir()
+    (home / 'chatgpt-web/launcher-data/limits.json').write_text(
+        json.dumps(dict(version=1, activeAccountKey=key, accounts={key: account})))
+    return root
+
+
+def test_web_reads_launcher_pro_limits_not_the_root_codex_quota(tmp_path):
+    root = web_root(tmp_path, events=[('gpt-5.6-pro', NOW - 3600)] * 85 + [('gpt-6-pro', NOW - 3 * 86400), ('other', NOW - 10)])
+    codex_auth(tmp_path)  # a Codex login in the root must not be used
+    item = ai.codex(root, NOW, provider='web', fetch=lambda *a: pytest.fail('Codex quota used for Web'))
+    names = {w['name']: w for w in item['windows']}
+    assert names['GPT-5.6 Pro (24 h)']['remaining'] == 50 and names['GPT-5.6 Pro (24 h)']['messages'] == '85/170'
+    assert names['GPT-6 Pro (7 dias)']['messages'] == '1/200' and names['Pro combinado (24 h)']['messages'] == '85/200'
+    assert item['remaining'] == 50 and item['plan'] == 'Pro 20x' and 'Limits' in item['source']
+
+
+@pytest.mark.parametrize('plan', ['unsupported', 'unknown'])
+def test_web_without_confirmed_pro_tracker_is_unknown(tmp_path, plan):
+    item = ai.codex(web_root(tmp_path, plan=plan), NOW, provider='web')
+    assert item['remaining'] is None and 'Limits' in item['reason']
+
+
+def test_web_missing_tracker_is_unknown(tmp_path):
+    root = tmp_path / 'codex-home'
+    root.mkdir()
+    assert 'Limits' in ai.codex(root, NOW, provider='web')['reason']
 
 
 def test_claude_stale_access_token_is_not_reported_as_expired_login(tmp_path):
@@ -446,3 +468,39 @@ def test_collect_uses_injected_grok_query(tmp_path):
     grok_home(tmp_path)
     items = ai.collect(env(tmp_path), now=NOW, grok_query=lambda home: billing(100))
     assert next(i for i in items if i['provider'] == 'grok')['remaining'] == 0
+
+
+def stale_claude(home):
+    config, path = credentials(home)
+    value = json.loads(path.read_text())
+    value['claudeAiOauth'].update(expiresAt=(NOW - 1) * 1000, refreshTokenExpiresAt=(NOW + 86400) * 1000)
+    path.write_text(json.dumps(value))
+    return config, path, value
+
+
+def test_stale_claude_asks_client_once_then_reads_renewed_quota(tmp_path):
+    config, path, value = stale_claude(tmp_path)
+    calls, attempts = [], {}
+    def renew(target):
+        calls.append(target)
+        value['claudeAiOauth']['expiresAt'] = (NOW + 3600) * 1000
+        path.write_text(json.dumps(value))
+    fetch = lambda url, headers: dict(five_hour=dict(utilization=26, resets_at=NOW + 1000)) if url.endswith('/usage') else {}
+    item = ai.claude_with_renewal(config, NOW, fetch, renew, cache={}, attempts=attempts)
+    assert item['remaining'] == 74 and calls == [config]
+
+
+def test_failed_claude_renewal_is_rate_limited_and_stays_unknown(tmp_path):
+    config, _, _ = stale_claude(tmp_path)
+    calls, attempts = [], {}
+    fetch = lambda *a: pytest.fail('stale token used')
+    for offset in (0, 60, 601):
+        item = ai.claude_with_renewal(config, NOW + offset, fetch, calls.append, cache={}, attempts=attempts)
+        assert item['remaining'] is None and item['reason'] == ai.STALE_CLAUDE
+    assert len(calls) == 2
+
+
+def test_test_environment_never_runs_claude_client(tmp_path):
+    stale_claude(tmp_path)
+    item = next(i for i in ai.collect(env(tmp_path), now=NOW) if i['provider'] == 'claude')
+    assert item['reason'] == ai.STALE_CLAUDE

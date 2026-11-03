@@ -1,8 +1,9 @@
 """Read-only AI quota observations. No Qt, account manager or token renewal.
 
-Provider data is deliberately asymmetric: Codex (also the account of a Web
-root) reports rate limits, Claude has a first-party usage endpoint and Grok's
-own CLI answers its billing extension. ChatGPT Web turns carry no limit. A reset
+Provider data is deliberately asymmetric: Codex reports rate limits, Claude
+has a first-party usage endpoint, Grok's own CLI answers its billing extension
+and Codex Web tunnels ChatGPT Web, whose Pro allowance only its launcher's own
+Limits tracker counts. A Web root's Codex login is not that allowance. A reset
 in the past invalidates an observation; it never creates a full allowance.
 """
 from __future__ import annotations
@@ -31,7 +32,17 @@ MAX_TAIL = 64 * 1024
 NAMES = {"codex": "Codex", "web": "Codex Web", "claude": "Claude", "grok": "Grok"}
 _CLAUDE_CACHE = {}  # sanitized observations only; no tokens, no disk writes
 _GROK_CACHE = {}
-WEB_SOURCE = "cota Codex da conta desta raiz; mensagens do ChatGPT Web não informam limite"
+_CLAUDE_RENEWALS = {}  # config -> last request to the client, bounded attempts
+STALE_CLAUDE = "Token de acesso vencido; use o Claude Code para renová-lo e atualizar a cota"
+DAY = 86400
+# Same rolling allowance table as the Codex Web launcher's Limits (limits-policy.json).
+WEB_LIMITS = {
+    'pro_100': (('Pro combinado (7 dias)', 'shared', 7 * DAY, 50),),
+    'pro_200': (('GPT-6 Pro (7 dias)', 'gpt-6-pro', 7 * DAY, 200),
+                ('GPT-5.6 Pro (24 h)', 'gpt-5.6-pro', DAY, 170),
+                ('Pro combinado (24 h)', 'shared', DAY, 200)),
+}
+WEB_MODELS = {'gpt-6-pro', 'gpt-5.6-pro', 'pro-unknown', 'other'}
 
 
 def read_json(path):
@@ -257,10 +268,11 @@ def codex(home, now, *, provider="codex", label=None, fetch=None):
         auth_changed = (home / "auth.json").stat().st_mtime
     except FileNotFoundError:
         auth_changed = 0
+    if provider == "web":
+        return web_limits(home, result, now)
     if fetch is not None and auth is not None:
         try:
             remote = codex_remote(home, dict(result), now, fetch)
-            if provider == "web" and remote.get('observed_at'): remote['source'] = WEB_SOURCE
             if remote.get('observed_at') or remote.get('reason', '').startswith('Conta '): return remote
         except (OSError, ValueError, TypeError, AttributeError):
             result['source'] = 'último registro local; consulta atual indisponível'
@@ -295,13 +307,55 @@ def codex(home, now, *, provider="codex", label=None, fetch=None):
                     result["reason"] = "Janela de cota inválida"
                     result["windows"] = []
                     return result
-        if provider == "web": result["source"] = WEB_SOURCE + " (último registro local)"
         result["remaining"] = effective(result, now)
         result["reason"] = "" if result["remaining"] is not None else "Observação vencida/incompleta; aguardando o provedor"
         summary = limits.get('rate_limit_reset_credits')
         if isinstance(summary, dict): result['reset_credits'] = reset_credits(summary, seen)
     if auth is not None and read_json(home / "auth.json") != auth:
         return unknown(provider, "Conta alterada durante a leitura", label)
+    return result
+
+
+def web_limits(home, result, now):
+    """Read the launcher's own ChatGPT Web Limits tracker; never the root's Codex quota."""
+    result.update(windows=[], remaining=None, plan=None, paid_until=None,
+                  access='não verificado', renewal='não verificada')
+    path = Path(home).parent / 'launcher-data/limits.json'
+    try:
+        state = read_json(path)
+    except FileNotFoundError:
+        result['reason'] = 'Limits do Codex Web não encontrado; ative Limits no aplicativo'
+        return result
+    accounts, active = state.get('accounts'), state.get('activeAccountKey')
+    account = accounts.get(active) if state.get('version') == 1 and isinstance(accounts, dict) else None
+    if not isinstance(account, dict) or not isinstance(account.get('events'), list):
+        result['reason'] = 'Limits do Codex Web desconhecido ou sem conta ativa'
+        return result
+    plan = account.get('plan')
+    if plan not in WEB_LIMITS:
+        result['reason'] = 'Limits do Codex Web sem plano Pro confirmado; refaça a verificação em Limits no aplicativo'
+        return result
+    events = []
+    for event in account['events']:
+        at = event.get('at') if isinstance(event, dict) else None
+        if (type(at) is not int or at < 0 or event.get('model') not in WEB_MODELS):
+            result['reason'] = 'Limits do Codex Web com evento inválido'
+            return result
+        if now * 1000 - 7 * DAY * 1000 < at <= now * 1000 and event['model'] != 'other':
+            events.append((at / 1000, event['model']))
+    uncertain = False
+    for name, model, duration, limit in WEB_LIMITS[plan]:
+        counted = sorted(at for at, kind in events if at > now - duration and (model == 'shared' or kind == model))
+        uncertain |= model != 'shared' and any(kind == 'pro-unknown' and at > now - duration for at, kind in events)
+        used = min(100, 100 * len(counted) / limit)
+        window = quota_window(name, used, (counted[0] if counted else now) + duration, now)
+        window['messages'] = f'{len(counted)}/{limit}'
+        result['windows'].append(window)
+    result.update(observed_at=now, plan='Pro 20x' if plan == 'pro_200' else 'Pro 5x', reason='',
+                  source='Limits do Codex Web (contagem local de mensagens Pro, tabela oficial do aplicativo)')
+    if uncertain:
+        result['source'] += '; há mensagens Pro de modelo não identificado'
+    result['remaining'] = effective(result, now)
     return result
 
 
@@ -347,7 +401,7 @@ def claude(config, now, fetch, *, cache=None):
             # The session is alive; only the client may renew it (never Fôlego).
             result.update(plan=oauth.get("subscriptionType"),
                           renewal="renovação local até " + dt.datetime.fromtimestamp(renewal).astimezone().strftime("%d/%m %H:%M"),
-                          reason="Token de acesso vencido; use o Claude Code para renová-lo e atualizar a cota")
+                          reason=STALE_CLAUDE)
         else:
             result["reason"] = "Login expirado/sem validade comprovada; renove no Claude"
         return result
@@ -452,6 +506,30 @@ def claude(config, now, fetch, *, cache=None):
     return result
 
 
+def claude_renew(config, *, timeout=60):
+    """Let Claude's own CLI renew its stored session (`claude doctor`, no inference)."""
+    executable = shutil.which('claude')
+    if not executable:
+        raise FileNotFoundError('cliente Claude não encontrado')
+    env = {k: v for k, v in os.environ.items() if not k.startswith('CLAUDE_CODE_')}
+    if Path(config).resolve() != (Path(env.get('HOME') or Path.home()) / '.claude').resolve():
+        env['CLAUDE_CONFIG_DIR'] = str(config)
+    with tempfile.TemporaryDirectory(prefix='folego-claude-') as cwd:
+        subprocess.run([executable, 'doctor'], cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout, check=False)
+
+
+def claude_with_renewal(config, now, fetch, renew, *, cache=None, attempts=None):
+    item = claude(config, now, fetch, cache=cache)
+    attempts = _CLAUDE_RENEWALS if attempts is None else attempts
+    key = str(Path(config).resolve())
+    if item['reason'] != STALE_CLAUDE or renew is None or 0 <= now - attempts.get(key, -1e18) < 600:
+        return item
+    attempts[key] = now  # one request per 10 min; failure keeps the honest stale state
+    renew(config)
+    return claude(config, now, fetch, cache=cache)
+
+
 def grok_billing(home, *, timeout=20):
     """Ask Grok's own CLI over ACP stdio; no prompt, token read or refresh here."""
     executable = shutil.which('grok')
@@ -531,7 +609,7 @@ def grok(home, now, query, *, cache=None):
     return result
 
 
-def collect(env=None, *, now=None, fetch=http_json, discover=None, grok_query=None):
+def collect(env=None, *, now=None, fetch=http_json, discover=None, grok_query=None, claude_renewal=None):
     from .ai_accounts import inventory, settings
     native = env is None
     env = dict(os.environ if native else env)
@@ -551,7 +629,8 @@ def collect(env=None, *, now=None, fetch=http_json, discover=None, grok_query=No
             if provider in ('codex', 'web'):
                 item = codex(account['path'], now, provider=provider, fetch=fetch)
             elif provider == 'claude':
-                item = claude(account['path'], now, fetch, cache=_CLAUDE_CACHE)
+                renew = claude_renewal or (claude_renew if native else None)
+                item = claude_with_renewal(account['path'], now, fetch, renew, cache=_CLAUDE_CACHE)
             elif grok_query is None and not native:
                 item = unknown(provider, 'Percentual não disponibilizado nesta fonte')
             else:
