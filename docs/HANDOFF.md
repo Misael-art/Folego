@@ -1,5 +1,44 @@
 # Passagem para o próximo agente — atualizada em 03/11/2026
 
+## Instalação no host e aceites ainda pendentes — 03/11/2026
+
+Antes da instalação, a GUI e as units próprias estavam ativas no ambiente
+`0.2.0b2`; início com a sessão habilitado e Modo Desempenho automático sem
+pausa/disjuntor. A revisão pendente `accessibility.activate` foi preservada.
+Para evitar fechamento durante a troca, `performance auto-off --json` pausou o
+supervisor e o histórico continuou em nove registros após um ciclo. A GUI antiga
+foi encerrada pelo item **Sair do Fôlego** da sua própria bandeja DBusMenu,
+após conferir PID 8370, starttime 18115, owner e item habilitado. Sua saída foi
+acompanhada; nenhum sinal manual foi enviado. Somente
+`folego-performance.service` e `folego-accessibility.service` foram paradas.
+
+`./dev setup` sincronizou a GUI de b2 para **b3**; a consulta
+`./dev run startup status --json` sincronizou a CLI headless para b3. As duas units próprias foram
+reativadas, seguidas da unit gerada `app-folego@autostart.service`; os três
+serviços ficaram `active/running`, sem reinício automático e com novos PIDs
+811491, 809642 e 814766, respectivamente. A GUI nova registrou uma bandeja
+própria no Wayland e 11 superfícies consultáveis; `importlib.metadata` em ambos
+os ambientes confirma `0.2.0b3`. Não há diferença em `src`, `pyproject.toml`
+ou `uv.lock` entre a tag b3 e a branch instalada. `performance auto-on --json`
+restaurou `paused=false`; disjuntor vazio, histórico com nove registros.
+`startup status` confirma preferência/autostart ativos e unit de entrada
+`active/enabled`, sem novo grant de efeito. Nenhum outro app, agente ou serviço
+foi encerrado; a sessão gráfica não foi reiniciada.
+
+O host está pronto para testar a prévia instalada. A instalação e a inspeção
+da bandeja/superfícies não substituem os aceites seguintes:
+
+| Pendente | Estado observado e prova necessária |
+| --- | --- |
+| Retenção real de temporários | O inventário **atual** do host mostrou 3 runs `complete` e 0 retidos; os 192 runs e cinco leituras `/proc/environ` negadas pertencem à inspeção anterior. Revalidar identidade, término, consumidores e referências de cada candidato no ato. Sem essa prova, preservar origem e payload. |
+| Entrada física e acessibilidade | Supervisor atual em `waiting`, backend KWin, baseline 5, dois bloqueios, zero erro e zero operação ativa na consulta; uma revisão durável `accessibility.activate` segue pendente. Toque FTS3528 não estava disponível; reconciliar o ID, sem repetição cega, e testar toque/leitor de tela com hardware e sessão própria. |
+| Desktop e interação | Central/Desempenho/Opções foram vistas anteriormente em janelas próprias Wayland; a GUI b3 registra bandeja e superfícies agora. Faltam arraste e cliques físicos sobre o fluxo atual, login/SDDM, logout, suspend/resume, dock, Steam e Orca em janela de QA que não interrompa trabalho. |
+| Modo Desempenho | Regras automáticas e unit ficaram como antes da instalação. Os 225 s de observação anterior não provam horas reais; fazer soak contínuo da fonte b3 com orçamento, duração e alvos descartáveis próprios, incluindo foco, áudio, downloads, arquivos de projeto, agentes, carência e disjuntor. |
+| Gate local | A última suíte completa local verde antecede o texto/versão b3. A repetição de `test_backup.py::test_roundtrip_property` excedeu o deadline de 200 ms sob carga; falha e workspace foram preservados. Os 20 workspaces de QA bloqueiam novo `./dev check` sem revisão; CI do commit/tag da prévia b3 passou. Não elevar limites nem apagar evidência para obter verde. |
+
+Próximo: executar esses aceites no alvo apropriado, preservando o diário e as
+políticas atuais. A prévia publicada não é aceite físico ou produto estável.
+
 ## Prévia v0.2.0b3 publicada — 03/11/2026
 
 Pedido explícito de release: `pyproject.toml` e `uv.lock` avançaram juntos para
@@ -72,7 +111,7 @@ Uma janela própria de Opções foi mostrada no plugin Wayland da sessão KDE re
 com HOME/XDG privados; o novo texto ficou visível e a captura
 `run-b4jvfeyr/options-wayland.png` foi inspecionada. A captura do widget não
 certifica entrada física nem o login.
-O CI do próximo SHA deve ser consultado antes de concluir o gate publicado.
+O CI do incremento `b9aac10` passou nos seis jobs de produto.
 
 | Aceite | Evidência nesta fonte | Dependência ainda aberta |
 | --- | --- | --- |
@@ -87,7 +126,8 @@ O CI do próximo SHA deve ser consultado antes de concluir o gate publicado.
 Próximo passo executável em ambiente apropriado: resolver a leitura dos
 consumidores pelo owner sem ampliar permissões às cegas; depois testar retenção
 de runs próprios elegíveis. Agendar QA física de entrada/login e soak da fonte
-atual. Nenhum merge, release ou deploy foi feito.
+atual. A prévia b3 foi publicada com estes aceites ainda abertos; a instalação
+local no host está documentada acima.
 
 ## Dar fôlego: análise, revisão e resultado pelo mesmo ID — 03/11/2026
 
