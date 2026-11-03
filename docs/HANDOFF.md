@@ -22,7 +22,9 @@ Desempenho com sinal, sempre manual. CLI `performance bridges` e
 Finalizar por ponte e a mais antiga marcada como recomendada. Testes de efeito só
 com filhos do próprio teste. Host: inventário correto e dry-run; nenhuma ponte
 real foi finalizada. Testes: headless **1218 passed, 2 skipped**; Qt **1542
-passed, 2 skipped**. Pendente: o usuário finalizar a ponte 125124 pelo botão e
+passed, 2 skipped**. A pedido do usuário, a ponte 125124 (08:22) foi finalizada
+pela CLI (operação 0ec684ac…): `sucesso`, npm, node e wrapper saíram; a 143281
+ficou "única" e conectada, e o servidor :49374 continua escutando. Pendente:
 fixar a versão do `mcp-remote` no Desktop.
 
 ## Interruptor simples do automático — 03/11/2026
