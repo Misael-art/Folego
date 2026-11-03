@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QHea
 
 from .. import paths
 from ..actions.disk.planner import fmt_bytes
-from ..core import perf_auto, perf_model, perf_rules
+from ..core import mcp_bridges, perf_auto, perf_model, perf_rules
 from .theme import TOKENS
 
 COLUMNS = ("Estado", "App", "Memória", "CPU", "Processos", "Motivo")
@@ -33,13 +33,16 @@ CLOSE_TIMEOUT_MS = 60_000  # bounded follow-up of 20 s plus two observations
 
 SUBCOMMANDS = {"performance-close": "close", "performance-snooze": "snooze",
                "performance-protect": "protect", "performance-resume": "resume",
-               "performance-auto-off": "auto-off", "performance-auto-on": "auto-on"}
+               "performance-auto-off": "auto-off", "performance-auto-on": "auto-on",
+               "performance-bridge-stop": "bridge-stop"}
 
 
 def argv_for(acao: str, target: str = "", confirm: bool = False) -> list:
     rule, _, unit = target.partition("\t")
     argv = [sys.executable, "-m", "folego", "performance", SUBCOMMANDS[acao]]
-    if rule:
+    if acao == "performance-bridge-stop":
+        argv.extend(["--pid", rule])
+    elif rule:
         argv.extend([rule, "--unit", unit])
     argv.append("--json")
     if confirm:
@@ -54,6 +57,7 @@ class Observation:
     policy_error: str = ""
     auto: dict | None = None        # automatic state file, None when unreadable
     auto_error: str = ""
+    bridges: tuple = ()             # MCP bridges (mcp-remote) with owner and status
 
 
 def _auto_state():
@@ -79,8 +83,10 @@ def _observe_factory(rules_path=None):
         except perf_rules.PolicyError as exc:
             return Observation(view, (), str(exc))
         auto, auto_error = _auto_state()
+        bridges = mcp_bridges.scan(snapshot.procs, peers=mcp_bridges.socket_peers())
         return Observation(view, perf_rules.plan(view, snapshot.procs, modes, tracker,
-                                                 time.monotonic()), auto=auto, auto_error=auto_error)
+                                                 time.monotonic()), auto=auto, auto_error=auto_error,
+                           bridges=bridges)
     return observe
 
 
@@ -202,6 +208,14 @@ class PerformanceTab(QWidget):
         auto_row.addWidget(self.resume_button)
         layout.addLayout(auto_row)
         layout.addLayout(self.cards)
+        self.bridges_title = QLabel("Pontes MCP")
+        self.bridges_title.setObjectName("cardTitle")
+        self.bridge_rows = QVBoxLayout()
+        self.bridge_rows.setSpacing(4)
+        layout.addWidget(self.bridges_title)
+        layout.addLayout(self.bridge_rows)
+        self.bridges = ()
+        self.bridge_buttons = {}
         layout.addLayout(self.rules)
         layout.addWidget(self.table, 1)
 
@@ -267,6 +281,57 @@ class PerformanceTab(QWidget):
             self.notice.setText(self._idle_notice())
         self.show_auto(observation.auto, observation.auto_error)
         self.show_suggestions(observation.suggestions)
+        self.show_bridges(observation.bridges)
+
+    def show_bridges(self, bridges):
+        self.bridges = tuple(bridges)
+        self.bridge_buttons = {}
+        while self.bridge_rows.count():
+            row = self.bridge_rows.takeAt(0)
+            widget = row.widget()
+            if widget is not None:
+                widget.deleteLater()
+        if not bridges:
+            empty = QLabel("Nenhuma ponte MCP (mcp-remote) em execução.")
+            empty.setObjectName("why")
+            self.bridge_rows.addWidget(empty)
+            return
+        oldest = {}
+        for bridge in bridges:
+            if bridge.status == mcp_bridges.DUPLICATE:
+                oldest.setdefault(bridge.key, bridge.pid)
+        for bridge in bridges:
+            ok, why = mcp_bridges.stoppable(bridge, bridges)
+            row = QFrame()
+            row.setObjectName("card")
+            row.setProperty("level", "warning" if ok else "unknown")
+            line = QHBoxLayout(row)
+            hint = " · recomendada (mais antiga)" if oldest.get(bridge.key) == bridge.pid else ""
+            text = QLabel(f"{bridge.client} → {bridge.endpoint} · {bridge.status}{hint} · "
+                          f"{fmt_bytes(bridge.rss_kb * 1024)} · pid {bridge.pid}\n{why}")
+            text.setWordWrap(True)
+            line.addWidget(text, 1)
+            button = QPushButton("Finalizar")
+            button.setEnabled(ok and not self.closing and self._jobs is not None)
+            button.setToolTip(why)
+            button.setAccessibleName(f"Finalizar a ponte MCP {bridge.pid} de {bridge.client}")
+            button.clicked.connect(lambda _c=False, b=bridge: self.request_bridge_stop(b))
+            line.addWidget(button)
+            self.bridge_buttons[bridge.pid] = button
+            self.bridge_rows.addWidget(row)
+
+    def request_bridge_stop(self, bridge):
+        if self._jobs is None or self.closing:
+            return
+        ok, why = mcp_bridges.stoppable(bridge, self.bridges)
+        if not ok:
+            return
+        text = (f"Finalizar a ponte MCP {bridge.pid} de {bridge.client} ({bridge.endpoint})?\n\n{why}.\n"
+                "O servidor MCP não é tocado. Depois, o Fôlego confirma que o cliente ficou com uma "
+                "ponte conectada e que o servidor responde. Se as ferramentas do cliente falharem, "
+                "reinicie o servidor MCP no próprio cliente.")
+        if self._confirm("Finalizar ponte MCP?", text):
+            self._run("performance-bridge-stop", str(bridge.pid), f"a ponte {bridge.pid}", confirm=True)
 
     def _show_switch(self, on, enabled=True):
         self.auto_switch.blockSignals(True)
@@ -337,6 +402,7 @@ class PerformanceTab(QWidget):
         self.closing = label
         self.notice.setText(self._idle_notice())
         self.show_suggestions(self.suggestions)
+        self.show_bridges(self.bridges)
         self._jobs.run(acao, target, confirm=confirm, done=self._closed)
 
     def show_suggestions(self, items):
@@ -385,6 +451,7 @@ class PerformanceTab(QWidget):
         outcome = payload.get("outcome", "desconhecido")
         self.notice.setText(f"{label}: {outcome} — {payload.get('reason', 'sem resposta')}")
         self.show_suggestions(self.suggestions)
+        self.show_bridges(self.bridges)
         if self._poller is not None:
             self._poller.request()
 

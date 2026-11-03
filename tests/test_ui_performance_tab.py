@@ -123,3 +123,26 @@ def test_top_switch_turns_automatic_off_without_dialog_and_on_with_one(qapp, tmp
     assert jobs.calls[-1][0] == "performance-auto-on" and asked == ["Ligar automático?"]
     tab.show_auto(None, "ilegível")
     assert not tab.auto_switch.isEnabled()
+
+
+def test_bridges_section_offers_finalize_only_when_safe(qapp, tmp_path):
+    from folego.core import mcp_bridges as mb
+    from folego.core.snapshot import ProcInfo
+    jobs = Jobs()
+    tab = PerformanceTab(observe_factory=lambda _p: (lambda: Observation(view())),
+                         rules_path=tmp_path / "r.json", jobs=jobs, confirm_fn=lambda t, x: True)
+    member = ProcInfo(12, "npm", "S", 1, 12, 12, 0, 0, 5, 1, 0, 1000, ())
+    a = mb.Bridge(12, 5, (member,), "http://127.0.0.1:1/mcp", 10, "claude-desktop", True, 900, 0.0, mb.DUPLICATE)
+    b = mb.Bridge(22, 9, (member,), "http://127.0.0.1:1/mcp", 10, "claude-desktop", True, 900, 0.0, mb.DUPLICATE)
+    tab.show_observation(Observation(view(), bridges=(a, b)))
+    assert tab.bridge_buttons[12].isEnabled() and tab.bridge_buttons[22].isEnabled()
+    first = tab.bridge_rows.itemAt(0).widget().findChild(type(tab.summary))
+    assert "recomendada" in first.text()
+    tab.bridge_buttons[12].click()
+    assert jobs.calls[-1] == ("performance-bridge-stop", "12", True)
+    assert not tab.bridge_buttons[22].isEnabled()  # one action at a time
+    jobs.done({"outcome": "sucesso", "reason": "ponte finalizada; MCP OK: 1 ponte conectada ao cliente"})
+    assert "MCP OK" in tab.notice.text()
+    single = mb.Bridge(**{**b.__dict__, "status": mb.SINGLE})
+    tab.show_bridges((single,))
+    assert not tab.bridge_buttons[22].isEnabled()

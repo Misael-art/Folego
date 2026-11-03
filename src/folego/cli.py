@@ -242,13 +242,14 @@ def build_parser() -> argparse.ArgumentParser:
     perf = commands.add_parser("performance", help="modo desempenho: observação por app; somente leitura")
     perf.add_argument("sub", choices=["status", "plan", "rules", "set", "close", "auto", "watch",
                                       "resume", "snooze", "protect", "install", "uninstall",
-                                      "auto-off", "auto-on"])
+                                      "auto-off", "auto-on", "bridges", "bridge-stop"])
     perf.add_argument("rule", nargs="?", help="com set/close: id da regra")
     perf.add_argument("mode", nargs="?", choices=["off", "suggest", "assisted", "automatic"],
                       help="com set: modo")
     perf.add_argument("--intervalo", type=float, default=10.0, help="com watch: segundos por ciclo")
     perf.add_argument("--ciclos", type=int, default=None, help="com watch: para após N ciclos")
     perf.add_argument("--unit", help="com close: unit revisada do grupo")
+    perf.add_argument("--pid", type=int, help="com bridge-stop: pid do npm da ponte MCP")
     perf.add_argument("--confirmar", action="store_true", help="com close: pede o fechamento")
     perf.add_argument("--json", action="store_true")
 
@@ -969,6 +970,8 @@ def _cmd_performance(args) -> int:
         for rule in perf_rules.RULES:
             print(f"{modes[rule.id]:<8} {rule.id:<18} {rule.title} — {rule.closer}")
         return EXIT_OK
+    if args.sub in ("bridges", "bridge-stop"):
+        return _performance_bridges(args)
     if args.sub in ("auto", "watch", "resume", "snooze", "install", "uninstall", "auto-off", "auto-on"):
         return _performance_auto(args)
     collector = scan.collector_for()
@@ -1045,6 +1048,62 @@ def _cmd_performance(args) -> int:
               f"{g.label} — {g.reason}" + (f" · em uso: {using}" if using else ""))
     print(f"observado sem agente: {_rss(view.reclaimable_kb())} · nenhuma ação é executada")
     return EXIT_OK
+
+
+def _performance_bridges(args) -> int:
+    from .actions.orphans.reaper import Reaper
+    from .actions.performance import bridges as bridge_actions
+    from .core import mcp_bridges
+    from .core.sessions import read_boot_id
+    collector = scan.collector_for()
+
+    def current():
+        return mcp_bridges.scan(collector.collect().procs, peers=mcp_bridges.socket_peers())
+
+    items = current()
+    if args.sub == "bridges":
+        rows = []
+        for b in items:
+            ok, why = mcp_bridges.stoppable(b, items)
+            rows.append(dict(pid=b.pid, client=b.client, client_pid=b.client_pid, endpoint=b.endpoint,
+                             started=b.starttime, connected=b.connected, status=b.status,
+                             rss_kb=b.rss_kb, stoppable=ok, why=why,
+                             members=[m.pid for m in b.members]))
+        if args.json:
+            print(json.dumps(rows, indent=2, ensure_ascii=False))
+            return EXIT_OK
+        for row in rows:
+            print(f"pid {row['pid']} · {row['client']} ({row['client_pid']}) → {row['endpoint']} · "
+                  f"{row['status']} · {_rss(row['rss_kb'])} · "
+                  + ("pode finalizar: " if row["stoppable"] else "manter: ") + row["why"])
+        if not rows:
+            print("nenhuma ponte MCP (mcp-remote) em execução")
+        return EXIT_OK
+
+    def answer(outcome, reason, code, **extra):
+        payload = dict(acao="performance-bridge-stop", ok=outcome == "sucesso", outcome=outcome,
+                       reason=reason, exit=code, pid=args.pid, **extra)
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False))
+        else:
+            (sys.stdout if code == EXIT_OK else sys.stderr).write(f"{outcome}: {reason}\n")
+        return code
+
+    bridge = next((b for b in items if b.pid == args.pid), None)
+    if bridge is None:
+        return answer("recusa", "ponte não encontrada na observação atual", EXIT_REFUSED)
+    ok, why = mcp_bridges.stoppable(bridge, items)
+    if not ok:
+        return answer("recusa", why, EXIT_REFUSED)
+    if not args.confirmar:
+        return answer("recusa", f"dry-run: finalizaria a ponte {bridge.pid} de {bridge.client} "
+                      f"({why}); use --confirmar", EXIT_NEEDS_CONFIRM)
+    plan = bridge_actions.plan_for(bridge, boot_id=read_boot_id())
+    verdict = bridge_actions.execute(plan, scan=current, reaper=Reaper(follow_up_s=5.0), confirm=True)
+    code = {"sucesso": EXIT_OK, "parcial": EXIT_PARTIAL, "recusa": EXIT_REFUSED}.get(
+        str(verdict.outcome), EXIT_UNKNOWN)
+    return answer(str(verdict.outcome), verdict.reason or "", code, operation_id=verdict.operation_id,
+                  health=dict(verdict.effects.get("health", {})))
 
 
 def _performance_auto(args) -> int:

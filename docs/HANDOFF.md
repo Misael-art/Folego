@@ -1,5 +1,30 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Pontes MCP: inventário e finalização assistida — 03/11/2026
+
+Investigação: o servidor MCP real é o `ai-memory` (:49374). As duas
+"instâncias" eram pontes `mcp-remote` do próprio Claude Desktop (entrada
+`ai-memory` em `claude_desktop_config.json`, `npx -y mcp-remote@latest`),
+iniciadas às 08:22 e 08:28, ambas ainda conectadas ao Desktop e ociosas. As
+sessões do Claude Code e o `hermes` não usam essas pontes. Finalizar uma não
+afeta o servidor; no máximo o chat do Desktop perde as ferramentas até
+reiniciar o servidor nele.
+
+`core/mcp_bridges.py`: inventário (npm + node, cliente dono depois dos
+wrappers, endpoint, conexão stdio pelo `ss -xp`), status única/duplicada/órfã;
+sem leitura do `ss` nada vira órfã nem pode ser finalizado. `stoppable` só aceita
+órfã ou duplicada com outra ponte conectada do mesmo cliente.
+`actions/performance/bridges.py`: plano/diário, revalidação no ato, SIGTERM via
+`Reaper.terminate_group` (pidfd, filho antes do npm) e reverificação: 1 ponte
+conectada + servidor local respondendo = "MCP OK". É a única ação do Modo
+Desempenho com sinal, sempre manual. CLI `performance bridges` e
+`bridge-stop --pid N [--confirmar]`. A aba ganhou a seção **Pontes MCP**, com
+Finalizar por ponte e a mais antiga marcada como recomendada. Testes de efeito só
+com filhos do próprio teste. Host: inventário correto e dry-run; nenhuma ponte
+real foi finalizada. Testes: headless **1218 passed, 2 skipped**; Qt **1542
+passed, 2 skipped**. Pendente: o usuário finalizar a ponte 125124 pelo botão e
+fixar a versão do `mcp-remote` no Desktop.
+
 ## Interruptor simples do automático — 03/11/2026
 
 Pedido do usuário: desligar o automático de forma simples pela UI. Botão no topo

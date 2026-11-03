@@ -56,7 +56,8 @@ RULES = (
                 "app-pamac\\x2dtray\\x2dplasma@autostart.service"),
          closer="Parar a unit de usuário (volta no próximo início da sessão)", channel="unit"),
     Rule("mcp-duplicate", "Ponte MCP duplicada", ADVICE, idle_s=60.0,
-         closer="Fixar a versão do mcp-remote e reiniciar o cliente que duplicou"),
+         closer="Finalizar a ponte mais antiga em Pontes MCP (o cliente mantém a outra) e "
+                "fixar a versão do mcp-remote no lugar de @latest"),
     Rule("electron-bloat", "Processo de app acima de 1,5 GB", ADVICE, idle_s=1800.0,
          closer="Reiniciar o app quando for conveniente"),
 )
