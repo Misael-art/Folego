@@ -1,6 +1,6 @@
 [project]
 name = "folego"
-version = "0.2.0b2"
+version = "0.2.0b3"
 description = "Resource diagnostics and reversible manual actions for Linux and KDE Plasma"
 readme = "README.md"
 license = "MIT"
