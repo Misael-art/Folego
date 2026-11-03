@@ -239,6 +239,10 @@ def build_parser() -> argparse.ArgumentParser:
     ai.add_argument("sub", choices=["status"])
     ai.add_argument("--json", action="store_true")
 
+    perf = commands.add_parser("performance", help="modo desempenho: observação por app; somente leitura")
+    perf.add_argument("sub", choices=["status"])
+    perf.add_argument("--json", action="store_true")
+
     review = commands.add_parser("review", help="revisão durável, execução e reconciliação pelo mesmo ID")
     review_sub = review.add_subparsers(dest="sub", required=True)
     for name in ("plan", "execute", "pending", "reconcile", "cancel"):
@@ -956,6 +960,40 @@ def _session_ok(args, action: str, payload: dict, human: str) -> int:
 
 def _rss(rss_kb: int) -> str:
     return planner.fmt_bytes(rss_kb * 1024)
+
+
+def _cmd_performance(args) -> int:
+    import time
+    from .core import perf_model
+    collector = scan.collector_for()
+    collector.collect()
+    time.sleep(1.0)  # CPU fractions exist only across two samples
+    view = perf_model.observe(collector.collect())
+    act = view.activity
+    if args.json:
+        print(json.dumps({
+            "load": act.load, "agent_cpu": act.cpu_frac, "projects": sorted(act.projects),
+            "mem_available_kb": view.mem_available_kb, "mem_total_kb": view.mem_total_kb,
+            "psi_memory_some_avg60": view.pressure.some_avg60 if view.pressure else None,
+            "reclaimable_kb": view.reclaimable_kb(),
+            "groups": [dict(unit=g.unit, label=g.label, state=g.state, reason=g.reason,
+                            procs=g.procs, rss_kb=g.rss_kb, cpu_frac=g.cpu_frac)
+                       for g in view.groups]}, indent=2))
+        return EXIT_OK
+    psi = f"{view.pressure.some_avg60:.2f}%" if view.pressure else "indisponível"
+    avail = _rss(view.mem_available_kb) if view.mem_available_kb is not None else "?"
+    print(f"agentes: {act.load} · projetos: {len(act.projects)} · RAM disponível {avail}"
+          f" · PSI memória (60 s) {psi}")
+    names = {perf_model.AGENT: "agente", perf_model.PROTECTED: "protegido",
+             perf_model.OBSERVED: "observado"}
+    for g in view.groups:
+        if g.rss_kb < 20 * 1024:
+            continue
+        cpu = "?" if g.cpu_frac is None else f"{g.cpu_frac:.0f}%"
+        print(f"  {names[g.state]:<10} {_rss(g.rss_kb):>9} {cpu:>5} {g.procs:>3} proc · "
+              f"{g.label} — {g.reason}")
+    print(f"observado sem agente: {_rss(view.reclaimable_kb())} · nenhuma ação é executada")
+    return EXIT_OK
 
 
 def _session_run(args) -> int:
@@ -2333,6 +2371,8 @@ def _cmd_accessibility(args):
 
 def _dispatch(ns, argv) -> int:
     """Dispatch without importing Qt in CLI invocations."""
+    if ns.command == "performance":
+        return _cmd_performance(ns)
     if ns.command == "ai":
         from .core.ai_sessions import collect, describe
         items = collect()

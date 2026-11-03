@@ -1,10 +1,17 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
-## Modo Desempenho planejado — 03/11/2026
+## Modo Desempenho, incremento 1 (observação) — 03/11/2026
 
-Arquitetura e incrementos em `docs/MODO-DESEMPENHO.md`; exceção registrada em
-`AGENTS.md`. Nada implementado ainda. Próximo: incremento 1 (observação:
-`perf_model`, `agents`, PSI, aba e CLI somente leitura).
+`core/agents.py` protege árvores de agentes (Claude/Codex/Desktop/Web) e todo
+processo com cwd em work tree Git, com ancestrais; `core/perf_model.py` agrupa
+por unit/scope folha da sessão: só `app-*` sem agente fica **observado**; sessão,
+sistema, não identificado e classes fixas ficam protegidos. CLI
+`folego performance status [--json]` e aba **desempenho** somente leitura, com
+coleta própria em worker apenas enquanto visível. Host real: Edge 2,5 GB e Steam
+586 MB observados; Claude, Codex Web e Browser pane como agente. Testes:
+headless **1188 passed, 2 skipped**; Qt **1507 passed, 2 skipped**. GUI reaberta
+pela bandeja: 54 ticks/10 s. Pendente: conferir visualmente a aba no KDE real.
+Próximo: incremento 2 (schema de regras e cards de sugestão).
 
 ## CPU da GUI no pulso de entregas — 03/11/2026
 

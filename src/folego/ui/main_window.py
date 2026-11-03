@@ -24,6 +24,7 @@ from .compact import CompactWindow
 from .dashboard_tab import DashboardTab
 from .disk_tab import DiskTab, plan_argv
 from .orphans_panel import OrphansPanel
+from .performance_tab import PerformanceTab
 from .tmpfs_tab import TmpfsTab, argv_for
 from .tray import Tray
 from .tune_jobs import TuneJobs
@@ -44,7 +45,7 @@ from ..orchestration.history import HistoryReader
 
 # tab title -> the attribute the dashboard's "Ir para …" jumps to
 TABS = (("central", "dashboard"), ("ajustes", "tunings"),
-        ("órfãos", "orphans"), ("disco", "disk"), ("temporários", "tmpfs"), ("acessibilidade", "accessibility"),
+        ("desempenho", "performance"), ("órfãos", "orphans"), ("disco", "disk"), ("temporários", "tmpfs"), ("acessibilidade", "accessibility"),
         ("prompts", "custom_prompts"), ("opções", "options"))
 JUMPS = {"memoria": "dashboard", "ajustes": "tunings", "orfaos": "orphans",
          "disco": "disk", "tmpfs": "tmpfs", "accessibility": "accessibility"}
@@ -159,6 +160,7 @@ class MainWindow(QMainWindow):
                                     on_force=self._force,
                                     on_group=self._group)
         self.disk = DiskTab(jobs=self._disk_jobs, confirm_fn=confirm_fn)
+        self.performance = PerformanceTab()
         # a autenticação do polkit pode levar minutos; não herda o prazo de varredura
         self._runtime_jobs = TuneJobs(parent=self, argv_factory=argv_for, timeout_ms=RUNTIME_SIZE_TIMEOUT_MS)
         self.tmpfs = TmpfsTab(jobs=self._tmpfs_jobs, confirm_fn=confirm_fn, runtime_jobs=self._runtime_jobs)
@@ -660,6 +662,7 @@ class MainWindow(QMainWindow):
                 self._poller.stop()
             if self._history_poller is not None:
                 self._history_poller.stop()
+            self.performance.shutdown()
             self._jobs.shutdown()
             self._disk_jobs.shutdown()
             self._tmpfs_jobs.shutdown()
