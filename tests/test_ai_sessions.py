@@ -373,11 +373,11 @@ def test_claude_context_change_keeps_retry_after_for_the_same_token(tmp_path):
     assert len(calls) == 1 and next(iter(cache.values()))['retry_at'] == NOW + 7200
 
 
-def web_root(home, plan='pro_200', events=()):
+def web_root(home, plan='pro_200', events=(), since=1):
     root = home / 'chatgpt-web/codex-home'
     root.mkdir(parents=True)
     key = 'a' * 64
-    account = dict(plan=plan, initializedAt=None if plan == 'unsupported' else 0, checkedAt=0,
+    account = dict(plan=plan, initializedAt=None if plan == 'unsupported' else int(since * 1000), checkedAt=0,
                    events=[dict(id=str(i), model=m, at=int(at * 1000)) for i, (m, at) in enumerate(events)])
     (home / 'chatgpt-web/launcher-data').mkdir()
     (home / 'chatgpt-web/launcher-data/limits.json').write_text(
@@ -399,6 +399,23 @@ def test_web_reads_launcher_pro_limits_not_the_root_codex_quota(tmp_path):
 def test_web_without_confirmed_pro_tracker_is_unknown(tmp_path, plan):
     item = ai.codex(web_root(tmp_path, plan=plan), NOW, provider='web')
     assert item['remaining'] is None and 'Limits' in item['reason']
+
+
+def test_web_marks_windows_counted_since_tracking_began(tmp_path):
+    item = ai.codex(web_root(tmp_path, events=[('gpt-6-pro', NOW - 60)], since=NOW - 86400), NOW, provider='web')
+    names = {w['name']: w for w in item['windows']}
+    assert 'contagem iniciada' in names['GPT-6 Pro (7 dias)']['messages']
+    assert names['GPT-5.6 Pro (24 h)']['messages'] == '0/170' and 'piso' in item['source']
+
+
+def test_web_rejects_events_before_tracking_or_missing_start(tmp_path):
+    root = web_root(tmp_path, events=[('gpt-6-pro', NOW - 7200)], since=NOW - 3600)
+    assert ai.codex(root, NOW, provider='web')['remaining'] is None
+    path = tmp_path / 'chatgpt-web/launcher-data/limits.json'
+    state = json.loads(path.read_text())
+    state['accounts']['a' * 64].update(initializedAt=None, events=[])
+    path.write_text(json.dumps(state))
+    assert 'início de contagem' in ai.codex(root, NOW, provider='web')['reason']
 
 
 def test_web_missing_tracker_is_unknown(tmp_path):

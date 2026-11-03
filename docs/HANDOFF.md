@@ -1,5 +1,14 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Limits do Codex Web alinhado ao 6.1.17 — 03/11/2026
+
+- `web_limits` passou a exigir `initializedAt` válido e a recusar eventos anteriores a ele, como faz o store do app.
+- Janelas que começam antes do início da contagem mostram "contagem iniciada em …".
+- A fonte informa que o número é um piso: só conta mensagens Pro enviadas pelo app.
+- O motivo `unsupported` avisa que, se a verificação falhar, o app precisa de atualização. Hoje o seletor do composer no 6.1.17 está quebrado no ChatGPT, e a correção fica no upstream.
+- A tabela do 6.1.17 confere com `WEB_LIMITS` (gpt6Weekly 200, solDaily 170, combinedDaily 200, combinedWeekly 50).
+- Testes: headless 1185 passed/2 skipped; Qt offscreen 1502 passed/2 skipped.
+
 ## Atalho e data do Limits do Codex Web — 03/11/2026
 
 O launcher não tem deep link nem API externa para a verificação de plano do

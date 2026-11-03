@@ -316,6 +316,10 @@ def codex(home, now, *, provider="codex", label=None, fetch=None):
     return result
 
 
+def stamp(seconds):
+    return dt.datetime.fromtimestamp(seconds).astimezone().strftime('%d/%m/%Y %H:%M')
+
+
 def web_limits(home, result, now):
     """Read the launcher's own ChatGPT Web Limits tracker; never the root's Codex quota."""
     result.update(windows=[], remaining=None, plan=None, paid_until=None,
@@ -334,16 +338,22 @@ def web_limits(home, result, now):
     plan, checked = account.get('plan'), account.get('checkedAt')
     checked = checked / 1000 if type(checked) is int and checked > 0 else None
     result['limits_checked_at'] = checked
-    when = dt.datetime.fromtimestamp(checked).astimezone().strftime('%d/%m/%Y %H:%M') if checked else 'data desconhecida'
+    when = stamp(checked) if checked else 'data desconhecida'
     if plan not in WEB_LIMITS:
         result['limits_action'] = True
         result['reason'] = (f'Limits do Codex Web sem plano Pro confirmado (última verificação: {when}, '
-                            f'resultado "{plan}"); refaça a verificação em Limits no aplicativo')
+                            f'resultado "{plan}"); refaça a verificação em Limits no aplicativo; se ela falhar, '
+                            'o aplicativo precisa de atualização')
         return result
+    since = account.get('initializedAt')
+    if type(since) is not int or since <= 0:
+        result['reason'] = 'Limits do Codex Web sem início de contagem válido'
+        return result
+    since /= 1000
     events = []
     for event in account['events']:
         at = event.get('at') if isinstance(event, dict) else None
-        if (type(at) is not int or at < 0 or event.get('model') not in WEB_MODELS):
+        if (type(at) is not int or at < since * 1000 or event.get('model') not in WEB_MODELS):
             result['reason'] = 'Limits do Codex Web com evento inválido'
             return result
         if now * 1000 - 7 * DAY * 1000 < at <= now * 1000 and event['model'] != 'other':
@@ -355,9 +365,11 @@ def web_limits(home, result, now):
         used = min(100, 100 * len(counted) / limit)
         window = quota_window(name, used, (counted[0] if counted else now) + duration, now)
         window['messages'] = f'{len(counted)}/{limit}'
+        if since > now - duration:
+            window['messages'] += ' (contagem iniciada em ' + stamp(since) + ')'
         result['windows'].append(window)
     result.update(observed_at=now, plan='Pro 20x' if plan == 'pro_200' else 'Pro 5x', reason='',
-                  source='Limits do Codex Web (contagem local de mensagens Pro, tabela oficial do aplicativo)')
+                  source='Limits do Codex Web (piso: só mensagens Pro enviadas pelo aplicativo, tabela oficial dele)')
     result['source'] += '; plano verificado em ' + when
     if uncertain:
         result['source'] += '; há mensagens Pro de modelo não identificado'
