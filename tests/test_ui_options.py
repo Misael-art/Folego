@@ -83,6 +83,26 @@ def test_options_cannot_verify_an_answer_for_another_operation(qapp):
     assert verified[0]["operation_id"] == "expected"
 
 
+def test_options_locates_only_certified_retained_content(qapp):
+    class Jobs:
+        calls = []
+        def run(self, action, target, **kwargs): self.calls.append((action, target))
+        def shutdown(self): pass
+    jobs = Jobs()
+    tab = OptionsTab(jobs=jobs)
+    tab.show_retention({"runs": 2, "limit": 256, "retained_count": 2,
+                        "retained_runs": [{"name": "run-unknown1", "state": "unknown"},
+                                          {"name": "run-safe000", "state": "complete"}]})
+    assert "2 retidos" in tab.retention.text()
+    assert not tab.recover_run_button.isEnabled()
+    tab.retained_runs.setCurrentIndex(1)
+    assert tab.recover_run_button.isEnabled()
+    tab.recover_run_button.click()
+    assert jobs.calls == [("jobs-recover", "run-safe000")]
+    tab.retained({"outcome": "sucesso", "path": "/fixture/.retained/run-safe000"})
+    assert "/fixture/.retained/run-safe000" in tab.operation_status.text()
+
+
 def test_late_option_responses_cannot_touch_deleted_widgets(qapp):
     from PySide6.QtCore import QCoreApplication, QEvent
     from shiboken6 import isValid

@@ -1,5 +1,36 @@
 # Passagem para o próximo agente — atualizada em 03/11/2026
 
+## Temporários próprios: inventário e localização de recuperação — 03/11/2026
+
+Reprodução descartável: após arquivar uma execução concluída, `jobs status`
+não listava o diretório retido, e o manifesto do item movido não podia ser
+validado em `.retained` porque a leitura tomava essa pasta como a raiz original.
+Agora o inventário lista IDs e estados dos itens retidos, preservando entradas
+desconhecidas; `jobs recover <run-id>` e o seletor em Opções localizam o payload
+certificado pelo mesmo ID e mostram seu caminho persistente. A recuperação é
+somente leitura: não recoloca o item no limite de 256 execuções, não sobrescreve
+conteúdo e pode ser consultada repetidamente. Manifesto, UID, inode da raiz e
+do run, sessão/filho encerrados e persistência são verificados antes de indicar
+o caminho. `jobs retain` informa recusa ou parcialidade se alguma prova faltar.
+Inventário incompleto não inicia movimento; a varredura de tamanho agora propaga
+erros, e o rename recusa destino já existente mesmo se vazio.
+
+No host, `jobs status --json` mostrou 192 runs ativos: 108 `complete`, 84
+`unknown`, zero retidos. Cinco processos do mesmo UID negam leitura de
+`/proc/environ`; a ausência de consumidores e referências não é comprovável.
+Nenhum run vivo foi movido ou apagado para produzir aceite. Testes de árvore
+descartável: ciclo arquivo → inventário → CLI/GUI de localização → conteúdo
+preservado; consumidor ilegível produz recusa e nenhum movimento. Focados
+`test_session_resilience.py` **23 passed** e `test_ui_options.py` **9 passed**;
+suíte `./dev test-headless` **1238 passed, 2 skipped**; `./dev test` **1564
+passed, 2 skipped**. Aba Opções aberta em janela própria no KDE/Wayland real:
+seletor, contagem, estado desconhecido e botão de localização visíveis; captura
+inspecionada com HOME/XDG privados, sem entrada física ou retenção real.
+Python 3.14.7 gerenciado, HOME/XDG privados, sem fixtures pytest adotadas.
+Próximo: integrar a revisão do mesmo plano/ID no caminho Dar fôlego e encerrar
+aceites físicos disponíveis. Retenção real segue bloqueada pela leitura dos
+cinco processos; não há autorização para mudar permissões ou ignorá-los.
+
 ## Modo Desempenho: uso desconhecido protege o alvo — 03/11/2026
 
 Reconfirmação viva, somente leitura: `folego-performance.service` está enabled e
@@ -34,6 +65,7 @@ leitor de tela ou a unit real por alternância forçada.
 Host: `./dev test-headless` **1237 passed, 2 skipped**; `./dev test` **1562
 passed, 2 skipped** após o ajuste final de parsing. Python 3.14.7 gerenciado, HOME/XDG privados e
 suítes sequenciais; nenhuma unit, app ou estado automático real foi alterado.
+CI de `e5dfb5c` passou nos dois jobs Qt, dois headless e dois de contratos CLI.
 Próximo: retenção de temporários administrados e fluxo Dar fôlego. A retenção
 viva segue bloqueada por cinco processos do mesmo UID com `/proc/environ`
 inacessível: não interpretar a ausência de referência como comprovada.

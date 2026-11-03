@@ -133,7 +133,7 @@ def test_pending_index_is_bounded_reuses_validated_state_and_detects_rewrite(tmp
     assert reader.bytes_read - before <= READ_BUDGET
 
 
-def test_closed_temporaries_archive_without_payload_deletion_and_unknown_is_preserved(tmp_path, monkeypatch):
+def test_closed_temporaries_archive_without_payload_deletion_and_unknown_is_preserved(tmp_path, monkeypatch, capsys):
     env = jobtemp.prepare_job_environment({}, root=tmp_path / "jobs", mounts=(("/", "ext4"),))
     run = Path(env["TMPDIR"]).parent
     payload = run / "general/useful.txt"
@@ -146,9 +146,40 @@ def test_closed_temporaries_archive_without_payload_deletion_and_unknown_is_pres
     assert result["archived"] == 1
     assert not run.exists()
     assert (run.parent / ".retained" / run.name / "general/useful.txt").read_text() == "preserve me"
+    inventory = jobtemp.retention_status(run.parent)
+    assert inventory["retained_count"] == 1
+    assert inventory["retained_runs"] == [{"name": run.name, "state": "complete"}]
+    restored = jobtemp.recover_retained(run.parent, run.name, mounts=(("/", "ext4"),))
+    assert restored["state"] == "retained"
+    assert (Path(restored["path"]) / "general/useful.txt").read_text() == "preserve me"
+    assert jobtemp.recover_retained(run.parent, run.name, mounts=(("/", "ext4"),)) == restored
+    from folego import cli
+    monkeypatch.setattr(jobtemp, "read_mounts_checked", lambda: ((("/", "ext4"),), None))
+    assert cli.main(["jobs", "recover", run.name, "--root", str(run.parent), "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["path"] == restored["path"]
+    assert cli.main(["jobs", "status", "--root", str(run.parent), "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["retained_count"] == 1
     second = jobtemp.prepare_job_environment({}, root=run.parent, mounts=(("/", "ext4"),))
     assert jobtemp._archive_completed(run.parent)["archived"] == 0
     assert Path(second["TMPDIR"]).exists()
+
+
+def test_retention_reports_unreadable_consumers_as_refusal_without_moving(tmp_path, monkeypatch, capsys):
+    from folego import cli
+    env = jobtemp.prepare_job_environment({}, root=tmp_path / "jobs", mounts=(("/", "ext4"),))
+    run = Path(env["TMPDIR"]).parent
+    manifest = json.loads((run / "run.json").read_text())
+    manifest.update(state="complete", child={"pid":1234567,"start_ticks":10,
+                                             "boot_id":access.read_boot_id()}, session=1234567)
+    access.save_object(run / "run.json", manifest)
+    monkeypatch.setattr(jobtemp, "read_mounts_checked", lambda: ((("/", "ext4"),), None))
+    def unavailable():
+        raise OSError("consumidor inacessível")
+    monkeypatch.setattr(jobtemp, "_consumers", unavailable)
+    assert cli.main(["jobs", "retain", "--root", str(run.parent), "--confirmar", "--json"]) != 0
+    reply = json.loads(capsys.readouterr().out)
+    assert reply["outcome"] == "recusa" and reply["blocked"] is True
+    assert run.exists() and not (run.parent / ".retained" / run.name).exists()
 
 
 def test_tuning_review_binds_content_and_stable_id_and_replays_without_effect(fake_home, monkeypatch):

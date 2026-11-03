@@ -266,11 +266,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     jobs = commands.add_parser("jobs", help="retenção de temporários próprios; nunca adota diretórios legados")
     jobs_sub = jobs.add_subparsers(dest="sub", required=True)
-    for name in ("status", "retain"):
+    for name in ("status", "retain", "recover"):
         command = jobs_sub.add_parser(name)
         command.add_argument("--root", default=None)
         command.add_argument("--json", action="store_true")
         command.add_argument("--confirmar", action="store_true")
+        if name == "recover": command.add_argument("run_id")
 
     startup = commands.add_parser("startup", help="início automático com a sessão, ligado por padrão")
     startup_sub = startup.add_subparsers(dest="sub", required=True)
@@ -2642,13 +2643,21 @@ def _dispatch(ns, argv) -> int:
         print(json.dumps(result, ensure_ascii=False))
         return EXIT_BY_OUTCOME.get(result.get("outcome"), EXIT_REFUSED)
     if ns.command == "jobs":
-        from .safely.jobtemp import retention_status, retain_completed
+        from .safely.jobtemp import retention_status, retain_completed, recover_retained
         root = ns.root or os.environ.get("FOLEGO_JOB_ROOT") or str(Path(os.environ.get("TMPDIR", "/tmp")) / "folego-jobs")
         if ns.sub == "retain" and not ns.confirmar:
             return _emit_gate_refusal(ns, "jobs", "operação exige --confirmar", EXIT_NEEDS_CONFIRM)
-        result = retention_status(root) if ns.sub == "status" else retain_completed(root)
-        print(json.dumps({"ok": True, "outcome": "sucesso", **result}, ensure_ascii=False))
-        return EXIT_OK
+        try:
+            result = (retention_status(root) if ns.sub == "status" else
+                      retain_completed(root) if ns.sub == "retain" else
+                      recover_retained(root, ns.run_id))
+        except (OSError, ValueError) as exc:
+            print(json.dumps({"ok": False, "outcome": "recusa", "reason": str(exc)}, ensure_ascii=False))
+            return EXIT_REFUSED
+        blocked = bool(result.get("blocked"))
+        outcome = ("parcial" if result.get("archived", 0) else "recusa") if blocked else "sucesso"
+        print(json.dumps({"ok": not blocked, "outcome": outcome, **result}, ensure_ascii=False))
+        return EXIT_REFUSED if blocked else EXIT_OK
     if ns.command == "startup":
         from . import startup
         if ns.sub == "status":

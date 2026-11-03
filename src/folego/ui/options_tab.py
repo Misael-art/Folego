@@ -11,6 +11,7 @@ from .theme import TOKENS, THEMES, choose_theme, on_theme_change, choose_transpa
 def options_argv(action, target, confirm):
     if action.startswith("jobs-"):
         argv = [sys.executable, "-m", "folego", "jobs", action.removeprefix("jobs-"), "--json"]
+        if action == "jobs-recover": argv.append(target)
         if confirm: argv.append("--confirmar")
         return argv
     argv = [sys.executable, "-m", "folego", "startup", action.removeprefix("startup-"), "--json"]
@@ -55,6 +56,13 @@ class OptionsTab(QWidget):
         self.retention.setTextFormat(Qt.TextFormat.PlainText)
         self.retain = QPushButton("Reter temporários concluídos preservando conteúdo")
         self.retain.clicked.connect(lambda: self.jobs.run("jobs-retain", "", confirm=True, done=self.retained))
+        self.retained_runs = QComboBox()
+        self.retained_runs.setAccessibleName("Temporário retido a recuperar")
+        self.recover_run_button = QPushButton("Localizar conteúdo retido para recuperação")
+        self.recover_run_button.setEnabled(False)
+        self.recover_run_button.clicked.connect(self.recover_run)
+        self.retained_runs.currentIndexChanged.connect(
+            lambda: self.recover_run_button.setEnabled(bool(self.retained_runs.currentData())))
         text = QLabel("A opção inicia a central e o monitor com seu login gráfico. "
                       "Não amplia permissões de reparo ou limpeza. Desligar afeta o próximo login; "
                       "o monitor já aberto pode continuar observando.")
@@ -67,7 +75,7 @@ class OptionsTab(QWidget):
         box.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         self.settings_box = box
         self.build_theme_options()
-        for widget in (self.choice, text, self.status, self.verify, self.pending, self.operation_id, self.reconcile, self.cancel, self.operation_status, self.retention, self.retain):
+        for widget in (self.choice, text, self.status, self.verify, self.pending, self.operation_id, self.reconcile, self.cancel, self.operation_status, self.retention, self.retain, self.retained_runs, self.recover_run_button):
             box.addWidget(widget)
         box.addStretch(1)
         area.setWidget(content)
@@ -244,15 +252,27 @@ class OptionsTab(QWidget):
     def show_retention(self, payload):
         if self._stopped: return
         value = payload or {}
+        self.retained_runs.clear()
+        for row in value.get("retained_runs", []):
+            self.retained_runs.addItem(row["name"] + " · " + row["state"],
+                                      row["name"] if row["state"] == "complete" else None)
+        self.recover_run_button.setEnabled(bool(self.retained_runs.currentData()))
         if "runs" in value:
-            self.retention.setText(f"Temporários próprios: {value['runs']}/{value['limit']} · " + str(value.get("archive", "")))
+            self.retention.setText(f"Temporários próprios: {value['runs']}/{value['limit']} ativos · "
+                                   f"{value.get('retained_count', 0)} retidos · " + str(value.get("archive", "")))
         else:
             self.retention.setText("Retenção desconhecida: " + str(value.get("reason", "resposta ausente")))
+
+    def recover_run(self):
+        run_id = self.retained_runs.currentData()
+        if run_id:
+            self.jobs.run("jobs-recover", run_id, done=self.retained)
 
     def retained(self, payload):
         if self._stopped: return
         self.operation_status.setText(str((payload or {}).get("outcome", "")) + " · " +
-                                     str((payload or {}).get("reason", "resultado desconhecido; verificar novamente")))
+                                     str((payload or {}).get("path") or
+                                         (payload or {}).get("reason", "resultado desconhecido; verificar novamente")))
         if (payload or {}).get("operation_id"):
             if payload.get("outcome") in ("sucesso", "recusa", "cancelamento"):
                 self.operation_verified.emit(payload)

@@ -11,6 +11,9 @@ import shlex
 import fcntl
 import time
 import hashlib
+import ctypes
+import errno
+import re
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -130,7 +133,7 @@ def _root_lock(root):
         os.close(fd)
 
 
-def _manifest(path):
+def _manifest(path, *, root=None):
     from ..actions.accessibility import private_path
     private_path(path)
     info = path.stat()
@@ -140,8 +143,9 @@ def _manifest(path):
     if (type(value.get("schema")) is not int or value["schema"] != 2
             or value.get("uid") != os.getuid() or value.get("run_id") != path.parent.name):
         raise OSError("manifesto legado/desconhecido; preservado")
-    run, root = path.parent.stat(), path.parent.parent.stat()
-    if (value.get("root_identity") != [root.st_dev, root.st_ino]
+    run = path.parent.stat()
+    root_info = (Path(root) if root is not None else path.parent.parent).stat()
+    if (value.get("root_identity") != [root_info.st_dev, root_info.st_ino]
             or value.get("run_identity") != [run.st_dev, run.st_ino]
             or run.st_uid != os.getuid() or stat.S_IMODE(run.st_mode) != 0o700):
         raise OSError("identidade do temporário/raiz mudou; preservado")
@@ -227,7 +231,7 @@ def _archive_completed(root, *, mounts=None):
     with os.scandir(root) as entries:
         for index, entry in enumerate(entries):
             if index >= 258:
-                break
+                raise OSError("inventário de temporários excede orçamento; preservar")
             if not entry.name.startswith("run-") or not entry.is_dir(follow_symlinks=False):
                 continue
             try:
@@ -239,26 +243,26 @@ def _archive_completed(root, *, mounts=None):
             except (OSError, ValueError):
                 continue
     if not candidates:
-        return {"archived": 0, "reason": "nenhum encerramento certificado"}
+        return {"archived": 0, "blocked": False, "reason": "nenhum encerramento certificado"}
     try:
         sessions, consumers, pids = _consumers()
     except OSError as exc:
-        return {"archived": 0, "reason": str(exc)}
+        return {"archived": 0, "blocked": True, "reason": str(exc)}
     holders = holder_index(proc_root="/proc", pids=pids, prefixes=(str(root),),
                            include_process_refs=True, deadline_s=1, max_fds=16384)
     if holders.state != "complete":
-        return {"archived": 0, "reason": "referências incompletas; temporários preservados"}
+        return {"archived": 0, "blocked": True, "reason": "referências incompletas; temporários preservados"}
     archive = root / ".retained"
     archive.mkdir(mode=0o700, exist_ok=True)
     if archive.is_symlink() or archive.stat().st_uid != os.getuid() or archive.stat().st_mode & 0o077:
         raise OSError("arquivo de temporários não é privado")
     # Bounded retention without deleting evidence or raising the live-run cap.
     retained_bytes, retained_items = 0, 0
-    for parent, directories, files in os.walk(archive, followlinks=False):
+    for parent, directories, files in os.walk(archive, followlinks=False, onerror=_walk_error):
         for name in (*directories, *files):
             retained_items += 1
             if retained_items > 16384:
-                return {"archived": 0, "reason": "retenção exige revisão; inventário excedeu orçamento"}
+                return {"archived": 0, "blocked": True, "reason": "retenção exige revisão; inventário excedeu orçamento"}
             retained_bytes += (Path(parent) / name).lstat().st_size
     count = 0
     for run, value in candidates[:16]:
@@ -271,7 +275,7 @@ def _archive_completed(root, *, mounts=None):
             continue
         size = 0
         protected = False
-        for parent, directories, files in os.walk(run, followlinks=False):
+        for parent, directories, files in os.walk(run, followlinks=False, onerror=_walk_error):
             for name in (*directories, *files):
                 path = Path(parent) / name
                 info = path.lstat()
@@ -295,15 +299,41 @@ def _archive_completed(root, *, mounts=None):
             if identity(run, max_entries=1024, timeout_s=.25) != before: continue
         except (OSError, ValueError):
             continue
-        os.rename(run, target)
+        try:
+            _rename_noreplace(run, target)
+        except FileExistsError:
+            continue
         for directory in (root, archive):
             fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
             try: os.fsync(fd)
             finally: os.close(fd)
         retained_bytes += size
         count += 1
-    return {"archived": count, "retained_bytes": retained_bytes,
-            "archive": str(archive), "reason": "conteúdo preservado em destino persistente; nada apagado"}
+    blocked = count < len(candidates)
+    return {"archived": count, "blocked": blocked, "retained_bytes": retained_bytes,
+            "archive": str(archive),
+            "reason": ("candidatos restantes sem prova completa; preservados" if blocked else
+                       "conteúdo preservado em destino persistente; nada apagado")}
+
+
+def _walk_error(error):
+    raise error
+
+
+def _rename_noreplace(source, target):
+    """Linux renameat2 refuses an unexpected destination, including an empty dir."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    try:
+        renameat2 = libc.renameat2
+    except AttributeError as exc:
+        raise OSError("renameat2 indisponível; temporários preservados") from exc
+    renameat2.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
+    renameat2.restype = ctypes.c_int
+    if renameat2(-100, os.fsencode(source), -100, os.fsencode(target), 1):
+        code = ctypes.get_errno()
+        if code == errno.EEXIST:
+            raise FileExistsError(code, os.strerror(code), str(target))
+        raise OSError(code, os.strerror(code), str(target))
 
 
 def retention_status(root):
@@ -311,7 +341,8 @@ def retention_status(root):
     try:
         root.lstat()
     except FileNotFoundError:
-        return {"root": str(root), "runs": 0, "limit": 256, "state": "not-observed"}
+        return {"root": str(root), "runs": 0, "limit": 256, "state": "not-observed",
+                "retained_count": 0, "retained_runs": []}
     from ..actions.accessibility import private_path
     private_path(root / "run.json")
     rows = []
@@ -327,8 +358,56 @@ def retention_status(root):
             except (OSError, ValueError):
                 state = "unknown"
             rows.append({"name": entry.name, "state": state})
+    archive = root / ".retained"
+    retained = []
+    if archive.is_symlink():
+        raise OSError("arquivo de temporários simbólico; preservar")
+    try:
+        archive_info = archive.stat()
+        if archive_info.st_uid != os.getuid() or stat.S_IMODE(archive_info.st_mode) != 0o700:
+            raise OSError("arquivo de temporários não é privado")
+        with os.scandir(archive) as entries:
+            for entry in entries:
+                if len(retained) >= 1024:
+                    raise OSError("inventário retido excede orçamento")
+                try:
+                    value = _manifest(archive / entry.name / "run.json", root=root)
+                    state = value.get("state", "unknown")
+                except (OSError, ValueError):
+                    state = "unknown"
+                retained.append({"name": entry.name, "state": state})
+    except FileNotFoundError:
+        pass
     return {"root": str(root), "runs": len(rows), "limit": 256, "entries": rows,
+            "retained_count": len(retained), "retained_runs": sorted(retained, key=lambda row: row["name"]),
             "archive": str(root / ".retained"), "state": "review" if len(rows) >= 240 else "observed"}
+
+
+def recover_retained(root, run_id, *, mounts=None):
+    """Locate certified retained payload by stable ID without moving it back."""
+    from ..actions.accessibility import _alive, private_path
+    root = Path(root)
+    if not isinstance(run_id, str) or not re.fullmatch(r"run-[A-Za-z0-9_]{8,64}", run_id):
+        raise ValueError("ID de temporário inválido")
+    if mounts is None:
+        mounts, error = read_mounts_checked()
+    else:
+        error = None
+    if error or not destination_verdict(root, mounts=mounts).ok:
+        raise OSError("destino persistente não comprovado")
+    private_path(root / "run.json")
+    archive = root / ".retained"
+    if (archive.is_symlink() or archive.stat().st_uid != os.getuid()
+            or stat.S_IMODE(archive.stat().st_mode) != 0o700):
+        raise OSError("arquivo de temporários não é privado")
+    source = archive / run_id
+    value = _manifest(source / "run.json", root=root)
+    child = value.get("child")
+    if (value.get("state") != "complete" or not isinstance(child, dict)
+            or _alive(child) is not False or value.get("session") != child.get("pid")):
+        raise OSError("encerramento do temporário não certificado; preservar")
+    return {"state": "retained", "run_id": run_id, "path": str(source),
+            "run_identity": value["run_identity"]}
 
 
 def retain_completed(root):
