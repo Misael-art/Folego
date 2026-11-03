@@ -69,6 +69,8 @@ def cycle(*, collector, tracker, store, rules_path, protected_fn=None, notify_fn
 
     def observe():
         time.sleep(1.0)
+        if store.read().paused:  # the switch wins even between decision and effect
+            raise perf_auto.AutoStateError("automático desligado pelo usuário")
         fresh = collector.collect()
         return (perf_model.observe(fresh, protected_fn=protected_fn() if protected_fn else None),
                 fresh.procs, perf_rules.load_modes(rules_path))
@@ -78,8 +80,12 @@ def cycle(*, collector, tracker, store, rules_path, protected_fn=None, notify_fn
     outcome = str(verdict.outcome)
     try:
         with store.update() as state:
-            state.record(ts=now(), boot=boot, rule=item.rule, unit=item.unit, label=item.label,
-                         outcome=outcome)
+            if state.paused and outcome == "recusa":
+                # Switched off between decision and effect: not a failure of the app.
+                state.announced.pop(perf_auto.key_of(item.rule, item.unit), None)
+            else:
+                state.record(ts=now(), boot=boot, rule=item.rule, unit=item.unit, label=item.label,
+                             outcome=outcome)
     except perf_auto.AutoStateError as exc:
         report["record_error"] = str(exc)
     report.update(closed=item.label, outcome=outcome, reason=verdict.reason,

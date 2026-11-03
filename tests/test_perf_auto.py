@@ -123,3 +123,41 @@ def test_unit_text_runs_watch_and_install_needs_confirmation():
     assert text.startswith(auto.MARKER) and '"/x/python" -m folego performance watch' in text
     with pytest.raises(ValueError):
         auto.install()
+
+
+def test_master_switch_stops_announcing_and_closing(tmp_path):
+    state = perf_auto.AutoState(announced={perf_auto.key_of("steam-idle", UNIT): 0}, paused=True)
+    d = perf_auto.decide([item()], view(psi=9.0), state, now=500, boot="b")
+    assert d.close is None and d.announce == () and "desligado" in why(d)[0]
+    assert state.announced == {}
+    store = perf_auto.AutoStore(tmp_path / "auto.json")
+    store.write(state)
+    assert store.read().paused is True
+    store.path.write_text('{"version": 1, "history": [], "announced": {}, "snoozed": {}, '
+                          '"failures": 0, "breaker": "", "paused": "sim"}')
+    with pytest.raises(perf_auto.AutoStateError):
+        store.read()
+
+
+def test_switch_off_during_grace_is_not_counted_as_failure(tmp_path, monkeypatch):
+    monkeypatch.setattr(perf_model, "observe", lambda snap, protected_fn=None: view(psi=9.0))
+    monkeypatch.setattr(perf_rules, "plan", lambda *a, **k: (item(),))
+    rules = tmp_path / "rules.json"
+    store = perf_auto.AutoStore(tmp_path / "auto.json")
+    store.write(perf_auto.AutoState(announced={perf_auto.key_of("steam-idle", UNIT): 0}))
+
+    def execute(plan, *, observe, **kw):
+        with store.update() as state:
+            state.paused = True  # user flips the switch while the close is in flight
+        try:
+            observe()
+        except perf_auto.AutoStateError as exc:
+            return ActionResult(plan.action, Outcome.REFUSED, plan.operation_id, str(exc), plan.target.key)
+        pytest.fail("observe must refuse once paused")
+    monkeypatch.setattr(auto.time, "sleep", lambda s: None)
+    report = auto.cycle(collector=Collector(), tracker=perf_rules.ConditionTracker(), store=store,
+                        rules_path=rules, notify_fn=lambda i: None, execute=execute,
+                        boot_id_fn=lambda: "b", now=lambda: 100)
+    assert report["outcome"] == "recusa"
+    after = store.read()
+    assert after.history == [] and after.failures == 0 and not after.breaker

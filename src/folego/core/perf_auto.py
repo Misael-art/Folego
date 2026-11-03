@@ -49,11 +49,13 @@ class AutoState:
     failures: int = 0
     breaker: str = ""                                # non-empty reason = open
     last: dict = field(default_factory=dict)         # latest cycle, for display only
+    paused: bool = False                             # user's master switch: nothing closes
 
     def to_dict(self):
         return {"version": SCHEMA_VERSION, "history": self.history[-HISTORY_KEEP:],
                 "announced": self.announced, "snoozed": self.snoozed,
-                "failures": self.failures, "breaker": self.breaker, "last": self.last}
+                "failures": self.failures, "breaker": self.breaker, "last": self.last,
+                "paused": self.paused}
 
     @classmethod
     def from_dict(cls, raw):
@@ -61,9 +63,12 @@ class AutoState:
             raise AutoStateError("estado automático com versão não suportada")
         try:
             state = cls(list(raw["history"]), dict(raw["announced"]), dict(raw["snoozed"]),
-                        int(raw["failures"]), str(raw["breaker"]), dict(raw.get("last", {})))
+                        int(raw["failures"]), str(raw["breaker"]), dict(raw.get("last", {})),
+                        raw.get("paused", False))
         except (KeyError, TypeError, ValueError) as exc:
             raise AutoStateError(f"estado automático inválido: {exc}") from exc
+        if not isinstance(state.paused, bool):
+            raise AutoStateError("chave do automático inválida")
         if any(not isinstance(h, dict) for h in state.history):
             raise AutoStateError("histórico automático inválido")
         return state
@@ -150,6 +155,8 @@ def decide(suggestions, view: PerfView, state: AutoState, *, now: float, boot: s
         del state.announced[key]
     for key in [k for k, until in state.snoozed.items() if until <= now]:
         del state.snoozed[key]
+    if state.paused:
+        state.announced.clear()
     trigger = pressure(view)
     recent = [h for h in state.history if now - float(h.get("ts", 0)) < BUDGET_WINDOW_S]
     announce, waiting, chosen = [], [], None
@@ -157,6 +164,9 @@ def decide(suggestions, view: PerfView, state: AutoState, *, now: float, boot: s
         key = key_of(item.rule, item.unit)
         if not item.ready:
             waiting.append((item, f"observando {item.waited_s:.0f}/{item.need_s:.0f} s"))
+            continue
+        if state.paused:
+            waiting.append((item, "automático desligado pelo usuário; só sugerido"))
             continue
         if state.breaker:
             waiting.append((item, "disjuntor aberto: " + state.breaker))

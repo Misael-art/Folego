@@ -241,7 +241,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     perf = commands.add_parser("performance", help="modo desempenho: observação por app; somente leitura")
     perf.add_argument("sub", choices=["status", "plan", "rules", "set", "close", "auto", "watch",
-                                      "resume", "snooze", "protect", "install", "uninstall"])
+                                      "resume", "snooze", "protect", "install", "uninstall",
+                                      "auto-off", "auto-on"])
     perf.add_argument("rule", nargs="?", help="com set/close: id da regra")
     perf.add_argument("mode", nargs="?", choices=["off", "suggest", "assisted", "automatic"],
                       help="com set: modo")
@@ -968,7 +969,7 @@ def _cmd_performance(args) -> int:
         for rule in perf_rules.RULES:
             print(f"{modes[rule.id]:<8} {rule.id:<18} {rule.title} — {rule.closer}")
         return EXIT_OK
-    if args.sub in ("auto", "watch", "resume", "snooze", "install", "uninstall"):
+    if args.sub in ("auto", "watch", "resume", "snooze", "install", "uninstall", "auto-off", "auto-on"):
         return _performance_auto(args)
     collector = scan.collector_for()
     collector.collect()
@@ -1069,6 +1070,15 @@ def _performance_auto(args) -> int:
         return EXIT_OK
     store = auto.state_store()
     try:
+        if args.sub in ("auto-off", "auto-on"):
+            with store.update() as state:
+                state.paused = args.sub == "auto-off"
+                state.announced.clear()
+            text = ("automático desligado: nada será fechado sozinho" if args.sub == "auto-off"
+                    else "automático ligado: volta a avaliar no próximo ciclo")
+            print(json.dumps({"ok": True, "outcome": "sucesso", "reason": text}, ensure_ascii=False)
+                  if args.json else text)
+            return EXIT_OK
         if args.sub == "resume":
             with store.update() as state:
                 state.breaker, state.failures = "", 0
@@ -1095,6 +1105,7 @@ def _performance_auto(args) -> int:
     if args.json:
         print(json.dumps(state.to_dict(), indent=2, ensure_ascii=False))
         return EXIT_OK
+    print("automático: " + ("desligado pelo usuário" if state.paused else "ligado"))
     print("disjuntor: " + (state.breaker or "fechado"))
     last = state.last
     if last:
@@ -1505,6 +1516,15 @@ def _cmd_automation(args) -> int:
                 {"outcome": "sucesso", **_automation_payload(
                     config, GrantStore().list())},
                 "automação pausada; modo e grants preservados")
+        if args.sub in ("auto-off", "auto-on"):
+            with store.update() as state:
+                state.paused = args.sub == "auto-off"
+                state.announced.clear()
+            text = ("automático desligado: nada será fechado sozinho" if args.sub == "auto-off"
+                    else "automático ligado: volta a avaliar no próximo ciclo")
+            print(json.dumps({"ok": True, "outcome": "sucesso", "reason": text}, ensure_ascii=False)
+                  if args.json else text)
+            return EXIT_OK
         if args.sub == "resume":
             config = store.set_paused(False)
             return _session_ok(

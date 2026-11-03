@@ -104,3 +104,22 @@ def test_automatic_card_offers_snooze_protect_and_breaker_resume(qapp, tmp_path)
     assert jobs.calls[-1][0] == "performance-resume"
     tab.show_auto(None, "versão")
     assert "desligado" in tab.auto_status.text() and tab.resume_button.isHidden()
+
+
+def test_top_switch_turns_automatic_off_without_dialog_and_on_with_one(qapp, tmp_path):
+    jobs = Jobs()
+    asked = []
+    tab = PerformanceTab(observe_factory=lambda _p: (lambda: Observation(view())),
+                         rules_path=tmp_path / "r.json", jobs=jobs,
+                         confirm_fn=lambda t, x: asked.append(t) or True)
+    assert not tab.auto_switch.isEnabled()
+    tab.show_observation(Observation(view(), auto={"paused": False, "history": [], "last": {}}))
+    assert tab.auto_switch.isChecked() and "ligado" in tab.auto_switch.text()
+    tab.auto_switch.click()
+    assert jobs.calls[-1][0] == "performance-auto-off" and asked == []
+    jobs.done({"outcome": "sucesso", "reason": "automático desligado: nada será fechado sozinho"})
+    assert not tab.auto_switch.isChecked() and "desligado pelo usuário" in tab.auto_status.text()
+    tab.auto_switch.click()
+    assert jobs.calls[-1][0] == "performance-auto-on" and asked == ["Ligar automático?"]
+    tab.show_auto(None, "ilegível")
+    assert not tab.auto_switch.isEnabled()

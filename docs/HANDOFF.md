@@ -1,5 +1,17 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Interruptor simples do automático — 03/11/2026
+
+Pedido do usuário: desligar o automático de forma simples pela UI. Botão no topo
+da aba desempenho ("Automático: ligado — clique para desligar"); desligar não
+pede confirmação, ligar pede. A chave `paused` fica no estado automático
+(schema 1, campo opcional validado). Desligado: nada é anunciado nem fechado;
+sugestões e **Fechar** manual continuam. A chave também é relida no ato do
+fechamento; desligar durante a carência gera recusa sem contar no disjuntor.
+CLI `performance auto-off|auto-on`. Host: serviço reiniciado com o código novo,
+chave alternada para desligado e de volta para ligado. Testes: headless **1214
+passed, 2 skipped**; Qt **1537 passed, 2 skipped**. Pendente: conferência visual.
+
 ## Modo Desempenho ativado no host — 03/11/2026
 
 A pedido do usuário, `steam-idle`, `edge-after-login` e `autostart-extras` foram

@@ -32,7 +32,8 @@ CLOSE_TIMEOUT_MS = 60_000  # bounded follow-up of 20 s plus two observations
 
 
 SUBCOMMANDS = {"performance-close": "close", "performance-snooze": "snooze",
-               "performance-protect": "protect", "performance-resume": "resume"}
+               "performance-protect": "protect", "performance-resume": "resume",
+               "performance-auto-off": "auto-off", "performance-auto-on": "auto-on"}
 
 
 def argv_for(acao: str, target: str = "", confirm: bool = False) -> list:
@@ -180,6 +181,14 @@ class PerformanceTab(QWidget):
         header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(len(COLUMNS) - 1, QHeaderView.ResizeMode.Stretch)
         layout = QVBoxLayout(self)
+        # One obvious switch for the whole automatic mode, above everything else.
+        self.auto_switch = QPushButton("Automático: …")
+        self.auto_switch.setCheckable(True)
+        self.auto_switch.setEnabled(False)
+        self.auto_switch.setMinimumHeight(36)
+        self.auto_switch.setAccessibleName("Ligar ou desligar o fechamento automático do Modo Desempenho")
+        self.auto_switch.clicked.connect(self._switch_clicked)
+        layout.addWidget(self.auto_switch)
         layout.addWidget(self.summary)
         layout.addWidget(self.notice)
         self.auto_status = QLabel("")
@@ -259,19 +268,43 @@ class PerformanceTab(QWidget):
         self.show_auto(observation.auto, observation.auto_error)
         self.show_suggestions(observation.suggestions)
 
+    def _show_switch(self, on, enabled=True):
+        self.auto_switch.blockSignals(True)
+        self.auto_switch.setChecked(on)
+        self.auto_switch.blockSignals(False)
+        self.auto_switch.setEnabled(enabled and not self.closing and self._jobs is not None)
+        self.auto_switch.setText("Automático: ligado — clique para desligar" if on
+                                 else "Automático: desligado — clique para ligar")
+        self.auto_switch.setToolTip("Desligado, nada é fechado sozinho; sugestões e o botão "
+                                    "Fechar continuam disponíveis.")
+
+    def _switch_clicked(self):
+        turn_on = self.auto_switch.isChecked()
+        self._show_switch(not turn_on)  # the file decides; the next observation shows it
+        if self._jobs is None or self.closing:
+            return
+        if turn_on and not self._confirm("Ligar automático?", "Voltar a fechar sozinho, sob pressão, "
+                                         "com aviso e carência, as regras em Automático?"):
+            return
+        self._run("performance-auto-on" if turn_on else "performance-auto-off", "", "o automático")
+
     def show_auto(self, auto, error=""):
         self.auto = auto
         self._waiting = {}
         if auto is None:
             self.auto_status.setText("Automático desligado: " + (error or "estado indisponível"))
             self.resume_button.hide()
+            self._show_switch(False, enabled=False)
             return
+        self._show_switch(not auto.get("paused", False))
         last = auto.get("last") or {}
         self._waiting = {(w["rule"], w["unit"]): w["why"] for w in last.get("waiting", [])}
         breaker = auto.get("breaker", "")
         history = auto.get("history", [])
         done = f" · último: {history[-1]['label']} ({history[-1]['outcome']})" if history else ""
-        if breaker:
+        if auto.get("paused"):
+            self.auto_status.setText("Automático desligado pelo usuário: nada é fechado sozinho" + done)
+        elif breaker:
             self.auto_status.setText("Automático pausado pelo disjuntor: " + breaker + done)
         elif last:
             trigger = last.get("trigger") or "sem pressão no host"
@@ -346,6 +379,9 @@ class PerformanceTab(QWidget):
 
     def _closed(self, payload):
         label, self.closing = self.closing, ""
+        if self.auto is not None and label == "o automático" and payload.get("outcome") == "sucesso":
+            self.auto["paused"] = "desligado" in payload.get("reason", "")
+            self.show_auto(self.auto)
         outcome = payload.get("outcome", "desconhecido")
         self.notice.setText(f"{label}: {outcome} — {payload.get('reason', 'sem resposta')}")
         self.show_suggestions(self.suggestions)
