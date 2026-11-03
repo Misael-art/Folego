@@ -6,12 +6,13 @@ the whole wait. Collection (cgroups, cwd, Git lookups, rule tracking) runs on it
 own worker and only while the tab is visible, because a hidden view must not
 cost CPU. An unreadable rules file disables every suggestion and says why.
 """
+import sys
 import time
 from dataclasses import dataclass
 
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QComboBox, QFrame, QGridLayout, QHeaderView, QLabel,
-                               QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+                               QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from .. import paths
 from ..actions.disk.planner import fmt_bytes
@@ -25,7 +26,17 @@ LOADS = {"idle": "ociosos", "interactive": "em uso", "busy": "em build/teste"}
 MIN_RSS_KB = 20 * 1024
 
 
-MODE_NAMES = {perf_rules.OFF: "Desligada", perf_rules.SUGGEST: "Sugerir"}
+MODE_NAMES = {perf_rules.OFF: "Desligada", perf_rules.SUGGEST: "Sugerir",
+              perf_rules.ASSISTED: "Assistido"}
+CLOSE_TIMEOUT_MS = 60_000  # bounded follow-up of 20 s plus two observations
+
+
+def argv_for(acao: str, target: str = "", confirm: bool = False) -> list:
+    rule, _, unit = target.partition("\t")
+    argv = [sys.executable, "-m", "folego", "performance", "close", rule, "--unit", unit, "--json"]
+    if confirm:
+        argv.append("--confirmar")
+    return argv
 
 
 @dataclass(frozen=True)
@@ -57,9 +68,10 @@ def _observe_factory(rules_path=None):
 class SuggestionCard(QFrame):
     """One suggestion: what, why, how long it has held and the lever (never applied here)."""
 
-    def __init__(self, item, parent=None):
+    def __init__(self, item, on_close=None, parent=None):
         super().__init__(parent)
         self.setObjectName("card")
+        self.item = item
         self.title = QLabel(f"{item.title} · {item.label}")
         self.title.setObjectName("cardTitle")
         if item.kind == perf_rules.ADVICE:
@@ -80,12 +92,21 @@ class SuggestionCard(QFrame):
         layout.setSpacing(4)
         for widget in (self.title, self.detail, self.action):
             layout.addWidget(widget)
+        self.close_button = None
+        if item.closable and on_close is not None:
+            self.close_button = QPushButton("Fechar " + item.label)
+            self.close_button.setAccessibleName(f"Fechar {item.label}: {item.action}")
+            self.close_button.clicked.connect(lambda: on_close(item))
+            layout.addWidget(self.close_button)
 
 
 class PerformanceTab(QWidget):
     def __init__(self, *, observe_factory=_observe_factory, interval_s=5.0, rules_path=None,
-                 parent=None):
+                 jobs=None, confirm_fn=None, parent=None):
         super().__init__(parent)
+        self._jobs = jobs
+        self._confirm = confirm_fn or self._ask
+        self.closing = ""
         self._observe_factory = observe_factory
         self._interval_s = interval_s
         self._rules_path = rules_path
@@ -94,7 +115,7 @@ class PerformanceTab(QWidget):
         self.suggestions = ()
         self.summary = QLabel("Aguardando a primeira observação…")
         self.summary.setWordWrap(True)
-        self.notice = QLabel("Somente sugestões: nada é fechado nesta versão.")
+        self.notice = QLabel("")
         self.notice.setWordWrap(True)
         self.cards = QVBoxLayout()
         self.cards.setSpacing(6)
@@ -186,7 +207,7 @@ class PerformanceTab(QWidget):
         if observation.policy_error:
             self.notice.setText(f"Modo Desempenho desligado: {observation.policy_error}")
         else:
-            self.notice.setText("Somente sugestões: nada é fechado nesta versão.")
+            self.notice.setText(self._idle_notice())
         self.show_suggestions(observation.suggestions)
 
     def show_suggestions(self, items):
@@ -200,7 +221,40 @@ class PerformanceTab(QWidget):
             empty.setObjectName("why")
             self.cards.addWidget(empty)
         for item in items:
-            self.cards.addWidget(SuggestionCard(item))
+            card = SuggestionCard(item, on_close=None if self.closing else self.request_close)
+            self.cards.addWidget(card)
+
+    def _idle_notice(self):
+        if self.closing:
+            return f"Fechando {self.closing}…"
+        return ("Nada é fechado sem o seu clique: só regras em Assistido oferecem Fechar, "
+                "depois da espera completa.")
+
+    @staticmethod
+    def _ask(title, text):
+        from .confirmation import confirm_text
+        return confirm_text("Fôlego — " + title, text)
+
+    def request_close(self, item):
+        if self._jobs is None or self.closing:
+            return
+        text = (f"{item.action}.\n\n{item.label} · {fmt_bytes(item.rss_kb * 1024)} · {item.reason}.\n"
+                "O Fôlego revalida agentes, exclusões e a condição antes de pedir, e confere a saída.")
+        if not self._confirm("Fechar " + item.label + "?", text):
+            return
+        self.closing = item.label
+        self.notice.setText(self._idle_notice())
+        self.show_suggestions(self.suggestions)
+        self._jobs.run("performance-close", item.rule + "\t" + item.unit, confirm=True,
+                       done=self._closed)
+
+    def _closed(self, payload):
+        label, self.closing = self.closing, ""
+        outcome = payload.get("outcome", "desconhecido")
+        self.notice.setText(f"{label}: {outcome} — {payload.get('reason', 'sem resposta')}")
+        self.show_suggestions(self.suggestions)
+        if self._poller is not None:
+            self._poller.request()
 
     def show_view(self, view):
         self.view = view

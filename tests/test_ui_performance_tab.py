@@ -23,7 +23,7 @@ def test_tab_polls_only_while_visible_and_never_acts(qapp, tmp_path):
     assert tab.table.rowCount() == 1 and tab.table.item(0, 1).text() == "edge"
     assert "indisponível" in tab.summary.text()
     tab.show_observation(Observation(view()))
-    assert "nada é fechado" in tab.notice.text()
+    assert "sem o seu clique" in tab.notice.text()
     tab.hide(); qapp.processEvents()
     assert not tab._poller._timer.isActive()
     tab.shutdown()
@@ -49,3 +49,33 @@ def test_cards_and_modes_persist_and_bad_file_disables(qapp, tmp_path):
     path.write_text("{")
     bad = PerformanceTab(observe_factory=lambda _p: (lambda: Observation(view())), rules_path=path)
     assert not bad.mode_choices["steam-idle"].isEnabled() and "desligado" in bad.notice.text()
+
+
+class Jobs:
+    def __init__(self):
+        self.calls = []
+
+    def run(self, acao, target, *, confirm, done):
+        self.calls.append((acao, target, confirm))
+        self.done = done
+
+
+def test_assisted_ready_card_closes_only_after_confirmation(qapp, tmp_path):
+    jobs = Jobs()
+    answers = []
+    tab = PerformanceTab(observe_factory=lambda _p: (lambda: Observation(view())),
+                         rules_path=tmp_path / "r.json", jobs=jobs,
+                         confirm_fn=lambda title, text: answers.pop(0))
+    item = perf_rules.Suggestion("steam-idle", "Steam", perf_rules.CLOSE, "app-steam.service", "steam",
+                                 500_000, "CPU 0%", "Sair", True, 600.0, 600.0, perf_rules.ASSISTED,
+                                 "tray", (5,))
+    tab.show_suggestions((item, suggestion(True)))
+    card = tab.cards.itemAt(0).widget()
+    assert card.close_button is not None and tab.cards.itemAt(1).widget().close_button is None
+    answers.append(False); card.close_button.click()
+    assert jobs.calls == []
+    answers.append(True); card.close_button.click()
+    assert jobs.calls == [("performance-close", "steam-idle\tapp-steam.service", True)]
+    assert tab.closing == "steam" and tab.cards.itemAt(0).widget().close_button is None
+    jobs.done({"outcome": "sucesso", "reason": "todos saíram"})
+    assert tab.closing == "" and "sucesso" in tab.notice.text()

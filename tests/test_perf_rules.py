@@ -24,7 +24,7 @@ DEFAULTS = {r.id: r.default for r in perf_rules.RULES}
 
 
 def test_modes_default_without_file_and_fail_closed_on_bad_schema(tmp_path):
-    path = tmp_path / "rules.json"
+    path = tmp_path / "state" / "folego" / "rules.json"  # fresh host: no state dir yet
     assert perf_rules.load_modes(path) == DEFAULTS
     perf_rules.save_modes(path, {**DEFAULTS, "steam-idle": "off"})
     assert perf_rules.load_modes(path)["steam-idle"] == "off"

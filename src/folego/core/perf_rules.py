@@ -4,7 +4,8 @@ Rules are built in and allow-list only: a group becomes a suggestion only when
 an explicit rule names it and its objective condition held for the whole wait.
 The user file only chooses a mode per rule. A missing file means the defaults;
 an unreadable file or an unknown schema disables every rule (fail closed).
-Assisted and automatic modes do not exist yet and are refused as values.
+Assisted mode closes one ready suggestion per explicit confirmation; automatic
+mode does not exist yet and is refused as a value.
 """
 from __future__ import annotations
 
@@ -18,7 +19,8 @@ from .snapshot import ProcInfo
 SCHEMA_VERSION = 1
 OFF = "off"
 SUGGEST = "suggest"
-MODES = (OFF, SUGGEST)
+ASSISTED = "assisted"
+MODES = (OFF, SUGGEST, ASSISTED)
 CLOSE = "close"
 ADVICE = "advice"
 
@@ -34,21 +36,23 @@ class Rule:
     idle_s: float = 600.0
     busy_markers: tuple[str, ...] = ()  # any member cmdline fragment means "in use"
     closer: str = ""
+    channel: str = ""                 # closer key in actions.performance.closers
     default: str = SUGGEST
 
 
 RULES = (
     Rule("steam-idle", "Steam aberto sem jogo", CLOSE, labels=("steam",), idle_cpu=15.0,
          idle_s=600.0, busy_markers=("SteamLaunch", "proton", "wine", "reaper"),
-         closer="Sair pela bandeja do Steam"),
+         closer="Sair pela bandeja do Steam", channel="tray"),
     Rule("edge-after-login", "Edge ocioso, sem agente", CLOSE,
          labels=("microsoft-edge", "com.microsoft.Edge"), idle_cpu=10.0, idle_s=900.0,
-         closer="Fechar as janelas do Edge (as abas são preservadas)"),
+         closer="Encerrar a unit do Edge (encerramento limpo; abas restauráveis)",
+         channel="unit"),
     Rule("autostart-extras", "Inicialização dispensável", CLOSE, idle_cpu=5.0, idle_s=120.0,
          units=("biglinux-welcome.service", "appimagelauncherd.service",
                 "app-geoclue\\x2ddemo\\x2dagent@autostart.service",
                 "app-pamac\\x2dtray\\x2dplasma@autostart.service"),
-         closer="Parar a unit de usuário e tirar do início da sessão"),
+         closer="Parar a unit de usuário (volta no próximo início da sessão)", channel="unit"),
     Rule("mcp-duplicate", "Ponte MCP duplicada", ADVICE, idle_s=60.0,
          closer="Fixar a versão do mcp-remote e reiniciar o cliente que duplicou"),
     Rule("electron-bloat", "Processo de app acima de 1,5 GB", ADVICE, idle_s=1800.0,
@@ -93,6 +97,7 @@ def save_modes(path: Path, modes: dict[str, str]) -> None:
             raise PolicyError(f"modo inválido: {rule_id}={mode!r}")
     payload = json.dumps({"version": SCHEMA_VERSION, "modes": modes},
                          ensure_ascii=False, sort_keys=True).encode("utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     write_atomic(path, payload, mode=0o600)
 
 
@@ -109,6 +114,13 @@ class Suggestion:
     ready: bool
     waited_s: float
     need_s: float
+    mode: str = SUGGEST
+    channel: str = ""
+    pids: tuple[int, ...] = ()
+
+    @property
+    def closable(self) -> bool:
+        return self.kind == CLOSE and self.ready and self.mode == ASSISTED and bool(self.channel)
 
 
 class ConditionTracker:
@@ -143,11 +155,12 @@ def plan(view: PerfView, procs: tuple[ProcInfo, ...], modes: dict[str, str],
     seen: set = set()
     out: list[Suggestion] = []
 
-    def add(rule, group_unit, label, rss, reason, key, ok):
+    def add(rule, group_unit, label, rss, reason, key, ok, pids=()):
         waited = tracker.held(key, ok, now, seen)
         if ok:
             out.append(Suggestion(rule.id, rule.title, rule.kind, group_unit, label, rss, reason,
-                                  rule.closer, waited >= rule.idle_s, waited, rule.idle_s))
+                                  rule.closer, waited >= rule.idle_s, waited, rule.idle_s,
+                                  modes.get(rule.id, rule.default), rule.channel, tuple(pids)))
 
     for group in view.groups:
         members = [by_pid[pid] for pid in group.pids if pid in by_pid]
@@ -162,7 +175,8 @@ def plan(view: PerfView, procs: tuple[ProcInfo, ...], modes: dict[str, str],
                       f"CPU {group.cpu_frac:.0f}% < {rule.idle_cpu:.0f}%" if quiet else
                       "CPU sem medida" if group.cpu_frac is None else "ativo")
             ok = quiet and not busy
-            add(rule, group.unit, group.label, group.rss_kb, reason, (rule.id, group.unit, identity), ok)
+            add(rule, group.unit, group.label, group.rss_kb, reason, (rule.id, group.unit, identity),
+                ok, group.pids)
 
     if modes.get("mcp-duplicate") != OFF:
         rule = BY_ID["mcp-duplicate"]
@@ -188,3 +202,18 @@ def plan(view: PerfView, procs: tuple[ProcInfo, ...], modes: dict[str, str],
     tracker.forget_unseen(seen)
     out.sort(key=lambda s: (not s.ready, -s.rss_kb))
     return tuple(out)
+
+
+def condition(rule: Rule, group, procs: tuple[ProcInfo, ...]) -> tuple[bool, str]:
+    """The same objective test as `plan`, for revalidation at effect time."""
+    if rule.kind != CLOSE or not _matches(rule, group):
+        return False, f"grupo {group.label} não é mais alvo de {rule.id} ({group.reason})"
+    by_pid = {p.pid: p for p in procs}
+    members = [by_pid[pid] for pid in group.pids if pid in by_pid]
+    busy = next((m for m in rule.busy_markers
+                 if any(m in " ".join(p.cmdline) for p in members)), None)
+    if busy:
+        return False, f"em uso ({busy})"
+    if group.cpu_frac is None or group.cpu_frac >= rule.idle_cpu:
+        return False, "CPU sem medida" if group.cpu_frac is None else f"ativo: CPU {group.cpu_frac:.0f}%"
+    return True, f"CPU {group.cpu_frac:.0f}% < {rule.idle_cpu:.0f}%"

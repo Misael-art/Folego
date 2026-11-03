@@ -1,5 +1,24 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Modo Desempenho, incremento 3 (Assistido) — 03/11/2026
+
+Modo `assisted` por regra. `actions/performance/closers.py`: `tray_quit` aciona
+o item de saída do menu dbusmenu do próprio app, só em ícones cujo dono no
+barramento é membro do grupo (ensaio a seco no host achou "Exit Steam");
+`unit_stop` pede `systemctl --user stop --no-block` (Edge e autostarts).
+`executor.py` usa `perform`/Coordinator: intenção no diário antes do pedido,
+revalidação no ato (boot, identidade raiz, regra em assistido, agente/exclusão,
+condição atual), acompanhamento de 20 s; app que fica é `parcial` sem repetição.
+CLI `performance close <regra> --unit U [--confirmar] [--json]`; aba mostra
+**Fechar** só em card pronto de regra assistida, com confirmação e `TuneJobs`.
+Corrigido: gravar modos em HOME novo criava o diretório de estado. Testes de
+efeito só com filho Python do próprio teste. Host real: ensaio sem
+`--confirmar` contra o Steam respondeu dry-run; nada foi fechado. Testes:
+headless **1198 passed, 2 skipped**; Qt **1519 passed, 2 skipped**. GUI
+reaberta pela bandeja: 57 ticks/10 s. Pendente: primeiro fechamento real
+confirmado pelo usuário e conferência visual da aba. Próximo: incremento 4
+(Automático: gatilho por pressão, orçamento, disjuntor, carência e aviso).
+
 ## Modo Desempenho, incremento 2 (regras e sugestões) — 03/11/2026
 
 `core/perf_rules.py`: regras embutidas e só de permissão (`steam-idle` com

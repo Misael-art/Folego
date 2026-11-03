@@ -240,9 +240,11 @@ def build_parser() -> argparse.ArgumentParser:
     ai.add_argument("--json", action="store_true")
 
     perf = commands.add_parser("performance", help="modo desempenho: observação por app; somente leitura")
-    perf.add_argument("sub", choices=["status", "plan", "rules", "set"])
-    perf.add_argument("rule", nargs="?", help="com set: id da regra")
-    perf.add_argument("mode", nargs="?", choices=["off", "suggest"], help="com set: modo")
+    perf.add_argument("sub", choices=["status", "plan", "rules", "set", "close"])
+    perf.add_argument("rule", nargs="?", help="com set/close: id da regra")
+    perf.add_argument("mode", nargs="?", choices=["off", "suggest", "assisted"], help="com set: modo")
+    perf.add_argument("--unit", help="com close: unit revisada do grupo")
+    perf.add_argument("--confirmar", action="store_true", help="com close: pede o fechamento")
     perf.add_argument("--json", action="store_true")
 
     review = commands.add_parser("review", help="revisão durável, execução e reconciliação pelo mesmo ID")
@@ -952,7 +954,7 @@ def _cmd_performance(args) -> int:
             modes = perf_rules.load_modes(rules_path)
             if args.sub == "set":
                 if args.rule not in perf_rules.BY_ID or args.mode is None:
-                    sys.stderr.write("uso: folego performance set <regra> off|suggest\n")
+                    sys.stderr.write("uso: folego performance set <regra> off|suggest|assisted\n")
                     return EXIT_REFUSED
                 modes[args.rule] = args.mode
                 perf_rules.save_modes(rules_path, modes)
@@ -968,6 +970,8 @@ def _cmd_performance(args) -> int:
     snapshot = collector.collect()
     view = perf_model.observe(snapshot, protected_fn=_protection_checker())
     act = view.activity
+    if args.sub == "close":
+        return _performance_close(args, collector, snapshot, view, rules_path)
     if args.sub == "plan":
         try:
             modes = perf_rules.load_modes(rules_path)
@@ -1011,6 +1015,60 @@ def _cmd_performance(args) -> int:
               f"{g.label} — {g.reason}")
     print(f"observado sem agente: {_rss(view.reclaimable_kb())} · nenhuma ação é executada")
     return EXIT_OK
+
+
+def _performance_close(args, collector, snapshot, view, rules_path) -> int:
+    import time
+    from pathlib import Path
+    from . import paths
+    from .actions.performance import executor
+    from .core import perf_model, perf_rules, procfs
+    from .core.process_protection import snapshot_checker
+    from .core.sessions import read_boot_id
+
+    def answer(outcome, reason, code, **extra):
+        payload = dict(acao="performance-close", ok=outcome == "sucesso", outcome=outcome,
+                       reason=reason, exit=code, rule=args.rule, unit=args.unit, **extra)
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False))
+        else:
+            (sys.stdout if code == EXIT_OK else sys.stderr).write(f"{outcome}: {reason}\n")
+        return code
+
+    try:
+        modes = perf_rules.load_modes(rules_path)
+    except perf_rules.PolicyError as exc:
+        return answer("recusa", f"Modo Desempenho desligado: {exc}", EXIT_REFUSED)
+    rule = perf_rules.BY_ID.get(args.rule)
+    group = next((g for g in view.groups if g.unit == args.unit), None)
+    if rule is None or group is None:
+        return answer("recusa", "regra ou unit não encontrada na observação atual", EXIT_REFUSED)
+    if modes[rule.id] != perf_rules.ASSISTED:
+        return answer("recusa", f"regra {rule.id} não está em modo assistido", EXIT_REFUSED)
+    ok, why = perf_rules.condition(rule, group, snapshot.procs)
+    if not ok:
+        return answer("recusa", f"condição não vale: {why}", EXIT_REFUSED)
+    suggestion = perf_rules.Suggestion(rule.id, rule.title, rule.kind, group.unit, group.label,
+                                       group.rss_kb, why, rule.closer, True, 0.0, rule.idle_s,
+                                       modes[rule.id], rule.channel, group.pids)
+    plan = executor.plan_for(suggestion, snapshot.procs, boot_id=read_boot_id())
+    if not args.confirmar:
+        return answer("recusa", f"dry-run: {rule.closer} em {group.label} "
+                      f"({_rss(group.rss_kb)}); use --confirmar", EXIT_NEEDS_CONFIRM)
+
+    def observe():
+        time.sleep(1.0)
+        fresh = collector.collect()
+        return (perf_model.observe(fresh, protected_fn=snapshot_checker()), fresh.procs,
+                perf_rules.load_modes(rules_path))
+
+    root = Path(paths.proc_root())
+    verdict = executor.execute(plan, observe=observe, read_proc=lambda pid: procfs.read_proc(root, pid),
+                               confirm=True)
+    code = {"sucesso": EXIT_OK, "parcial": EXIT_PARTIAL, "recusa": EXIT_REFUSED}.get(
+        str(verdict.outcome), EXIT_UNKNOWN)
+    return answer(str(verdict.outcome), verdict.reason or "", code,
+                  operation_id=verdict.operation_id, effects=dict(verdict.effects))
 
 
 def _session_run(args) -> int:
