@@ -1,5 +1,39 @@
 # Passagem para o próximo agente — atualizada em 03/11/2026
 
+## Prévia v0.2.0b3 publicada — 03/11/2026
+
+Pedido explícito de release: `pyproject.toml` e `uv.lock` avançaram juntos para
+`0.2.0b3`; commit/tag `172bbc1f5837fbcd3c7e00ec614738e52dda7397`.
+[Release v0.2.0b3](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b3)
+publicada em 03/11/2026 19:37:39 UTC como **prerelease**, com o PR #1 ainda
+draft e sem merge. A versão b2 e sua tag permanecem imutáveis. O CI do commit
+teve seis jobs de produto aprovados. Na referência da tag, nove checks success
+(incluindo os do PR e os três novos do tag), dois revisores skipped e nenhum
+check ativo ou falho na consulta final.
+
+`uv lock --offline` alterou apenas a versão do pacote; `uv build --offline`
+gerou sdist e wheel com Python gerenciado. Os 156 arquivos `folego/` do wheel
+correspondem byte a byte aos fontes. Wheel instalado em venv descartável sem
+Qt: versão `0.2.0b3` e `python -I -m folego --help` aprovados. A fonte completa
+foi criada por `git archive` do commit exato, inclui `dev` e `uv.lock` e não
+inclui `.dev`, `.scratch` nem dados de sessão. Os quatro assets públicos foram
+baixados sem autenticação e conferidos por tamanho e SHA-256:
+
+| Asset | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `Folego-0.2.0b3-source.tar.gz` | 17.949.442 | `cbf0944fa3bedfb5716ba1e4382f960bd246987b5985d3581db06819c100c73c` |
+| `folego-0.2.0b3-py3-none-any.whl` | 438.941 | `0b2d62d2d403ae71129d27ef33c936d553c7a32162aaa1cfd1c2f5fb81386669` |
+| `folego-0.2.0b3.tar.gz` | 619.726 | `212c21f593714f31ebb4b7986f92a052f9488e077c1e33c2efdfb7bbd06b9240` |
+| `SHA256SUMS` | 281 | `f43451ecfbac2742e65e4e0c3036beb293cf65124683d452cd9b9766e9691dc8` |
+
+O gate local headless falho por prazo e seus dados em
+`.scratch/dev-tests/run-b4jvfeyr` continuam preservados; não houve novo gate
+local completo após a versão porque os 20 workspaces de QA já estão ocupados.
+Os aceites físicos e de retenção abaixo seguem pendentes nesta prévia. Nenhum
+app real, grant, unit de trabalho ou sessão física foi alterado para publicar.
+Próximo: concluir a matriz em sessão própria e o soak desta fonte; não promover
+esta prévia a estável por inferência.
+
 ## Estado vigente e matriz de aceite — 03/11/2026
 
 Na branch `codex/portable-handoff-20261024`, os incrementos publicados
