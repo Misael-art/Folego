@@ -242,6 +242,12 @@ class HealthEngine:
             reasons.append(Reason(
                 "zram_missing", "info", "zram0 não observado",
                 source="zram"))
+        if not snapshot.swap_known:
+            quality = snapshot.source("swaps")
+            reasons.append(Reason(
+                "swaps_unknown", "medio",
+                f"inventário swap não comprovado ({quality.status}): {quality.detail}",
+                source="swaps"))
         level = GREEN
         for reason in reasons:
             if reason.severity == _SEVERITY[RED]:
@@ -249,6 +255,8 @@ class HealthEngine:
                 break
             if reason.severity == _SEVERITY[YELLOW]:
                 level = YELLOW
+        if not snapshot.swap_known and level == GREEN:
+            level = UNKNOWN
         return level, reasons, False, age
 
     def _stabilize(self, raw: str) -> str:

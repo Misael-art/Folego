@@ -184,6 +184,11 @@ class Snapshot:
     def usable(self, name: str) -> bool:
         return self.source(name).usable
 
+    @property
+    def swap_known(self) -> bool:
+        """Only a complete inventory can prove zero swap or its usage ratio."""
+        return not self.sources or self.source("swaps").status == OK
+
     def age_s(self, now_mono: float | None = None) -> float:
         if self.mono <= 0:
             return 0.0

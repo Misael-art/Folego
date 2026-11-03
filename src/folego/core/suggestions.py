@@ -81,7 +81,8 @@ def suggest(snapshot: Snapshot, *, orphan_count: int = 0,
                 "começa a custar frames.",
                 "memoria"))
 
-    if snapshot.swap_total_kb and snapshot.swap_used_kb / snapshot.swap_total_kb > thresholds.zram_frac:
+    if (snapshot.swap_known and snapshot.swap_total_kb and
+            snapshot.swap_used_kb / snapshot.swap_total_kb > thresholds.zram_frac):
         pct = snapshot.swap_used_kb * 100 // snapshot.swap_total_kb
         out.append(Suggestion(
             "zram", ALTO,

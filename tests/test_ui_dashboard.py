@@ -131,6 +131,19 @@ def test_pressure_and_zram_get_their_own_numbers(panel):
     assert "zram" in text.lower() and "6,0 GB" in text
 
 
+def test_incomplete_swap_inventory_is_unknown_in_card_and_overview(panel):
+    from folego.core.snapshot import SourceQuality
+    view, _ = panel
+    view.show_snapshot(snap(swap_total_kb=0,
+                            sources=(SourceQuality("swaps", "partial", "linha 2 inválida"),)))
+    card = view.cards["swap"]
+    assert card.value.text() == "—"
+    assert card.property("level") == "unknown"
+    assert "inventário desconhecido" in card.detail.text()
+    assert "sem swap/zram" not in card.detail.text()
+    assert "inventário desconhecido" in view.details.text()
+
+
 def test_the_details_name_the_heaviest_apps(panel):
     """M1's body text listed them; the dashboard must not lose that."""
     view, _ = panel

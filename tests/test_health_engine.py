@@ -73,6 +73,14 @@ def test_missing_meminfo_is_unknown_and_has_a_structured_reason():
     assert reason.source == "meminfo" and reason.severity == "critico"
 
 
+@pytest.mark.parametrize("quality", ["missing", "partial", "error"])
+def test_swap_inventory_failure_never_gets_a_green_health_report(quality):
+    report = judge(snap(sources=(SourceQuality("swaps", quality, "prova incompleta"),
+                                 SourceQuality("processes", OK))))
+    assert report.level == UNKNOWN
+    assert "swaps_unknown" in report.codes()
+
+
 def test_a_stale_sample_is_unknown_even_if_its_numbers_look_green():
     report = judge(snap(), now=116.0)  # 16 s desde a coleta, limite 15
     assert report.level == UNKNOWN and report.stale
@@ -173,6 +181,7 @@ def test_quality_problems_are_reasons_but_only_red_escalates():
     sources = (
         SourceQuality("meminfo", OK, mono=100.0),
         SourceQuality("processes", "partial", "1 entrada ilegível", mono=100.0),
+        SourceQuality("swaps", OK, mono=100.0),
     )
     report = judge(snap(sources=sources))
     assert report.level == GREEN

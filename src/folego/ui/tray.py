@@ -109,7 +109,9 @@ class Tray:
                          f"{snapshot.cpu_count} cpu(s)")
         if snapshot.zram is not None:
             lines.append(f"zram usado {title_signal.fmt1(snapshot.zram.mem_used_total_kb / title_signal.KB)} MB")
-        if snapshot.swap_total_kb:
+        if not snapshot.swap_known:
+            lines.append("zram/swap: inventário desconhecido")
+        elif snapshot.swap_total_kb:
             lines.append(
                 f"zram/swap {title_signal.fmt1(snapshot.swap_used_kb / title_signal.MB)} GB de "
                 f"{title_signal.fmt1(snapshot.swap_total_kb / title_signal.MB)} GB")

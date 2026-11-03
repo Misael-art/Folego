@@ -355,8 +355,8 @@ class CompactWindow(QWidget):
             free = snapshot.mem.mem_available_kb / title_signal.MB
             self.free_label.setText(f"{title_signal.fmt1(free)} GB livres")
         cpu = "CPU —" if snapshot.cpu_busy_frac is None else f"CPU {snapshot.cpu_busy_frac * 100:.0f}%"
-        swap = "Swap —"
-        if snapshot.swap_total_kb and (not snapshot.sources or snapshot.source("swaps").status == "ok"):
+        swap = "Swap ?" if not snapshot.swap_known else "Swap —"
+        if snapshot.swap_known and snapshot.swap_total_kb:
             swap = f"Swap {snapshot.swap_used_kb * 100 // snapshot.swap_total_kb}%"
         measured = [v for v in snapshot.tmpfs if v.quality == "ok" and v.total_bytes]
         temp = f"Tmp {max(v.used_frac for v in measured) * 100:.0f}%" if measured else "Tmp —"

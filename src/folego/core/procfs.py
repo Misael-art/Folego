@@ -4,7 +4,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .. import paths
-from .snapshot import CpuTimes, LoadAvg, MemInfo, Pressure, ProcInfo, SwapInfo
+from .snapshot import (CpuTimes, ERROR, LoadAvg, MISSING, MemInfo, OK, PARTIAL,
+                       Pressure, ProcInfo, SwapInfo)
+
+
+@dataclass(frozen=True)
+class SwapRead:
+    entries: tuple[SwapInfo, ...]
+    status: str
+    detail: str = ""
 
 
 def _read(root: Path, name: str) -> str | None:
@@ -96,19 +104,38 @@ def read_cpu_times(root: Path | None = None) -> CpuTimes | None:
     return None
 
 
-def read_swaps(root: Path | None = None) -> list[SwapInfo]:
-    raw = _read(root or Path(paths.proc_root()), "swaps")
-    if raw is None:
-        return []
+def read_swaps(root: Path | None = None) -> SwapRead:
+    path = (root or Path(paths.proc_root())) / "swaps"
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return SwapRead((), MISSING, "swaps ausente")
+    except (OSError, UnicodeError) as exc:
+        return SwapRead((), ERROR, f"swaps ilegível: {exc}")
+    lines = raw.splitlines(keepends=True)
+    if not lines or lines[0].split() != ["Filename", "Type", "Size", "Used", "Priority"]:
+        return SwapRead((), ERROR, "cabeçalho de swaps ausente ou malformado")
     out = []
-    for line in raw.splitlines()[1:]:
+    problems = []
+    if not raw.endswith("\n"):
+        problems.append("sem terminador de linha")
+    seen = set()
+    for number, line in enumerate(lines[1:], start=2):
         p = line.split()
-        if len(p) >= 5:
-            try:
-                out.append(SwapInfo(p[0], p[1], int(p[2]), int(p[3]), int(p[4])))
-            except ValueError:
-                continue
-    return out
+        if len(p) != 5:
+            problems.append(f"linha {number} malformada")
+            continue
+        try:
+            size, used, priority = map(int, p[2:])
+        except ValueError:
+            problems.append(f"linha {number} com número inválido")
+            continue
+        if size < 0 or used < 0 or used > size or p[0] in seen:
+            problems.append(f"linha {number} com tamanho/uso ou identidade inválida")
+            continue
+        seen.add(p[0])
+        out.append(SwapInfo(p[0], p[1], size, used, priority))
+    return SwapRead(tuple(out), PARTIAL if problems else OK, "; ".join(problems))
 
 
 def _parse_stat(content: str) -> tuple | None:

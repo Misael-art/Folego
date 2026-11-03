@@ -61,3 +61,13 @@ def test_doctor_cli_json_is_one_object(fake_home, capsys):
     assert payload["healthy"] is True
     assert payload["errors"] == 0
     assert any(check["name"] == "python" for check in payload["checks"])
+
+
+def test_doctor_cli_reports_incomplete_swap_as_unhealthy(fake_home, capsys, monkeypatch):
+    from folego.core.procfs import SwapRead
+    monkeypatch.setattr(doctor, "read_swaps", lambda: SwapRead((), "partial", "linha 2 inválida"))
+    assert cli.main(["doctor", "--json"]) == cli.EXIT_OK
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["healthy"] is False
+    assert any(check["name"] == "inventário swap" and check["status"] == "error"
+               and "partial" in check["detail"] for check in payload["checks"])

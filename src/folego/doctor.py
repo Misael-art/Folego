@@ -18,6 +18,7 @@ from pathlib import Path
 
 from . import paths
 from .core.exclusions import ExclusionError, ExclusionList
+from .core.procfs import read_swaps
 from .core.sessions import SessionError, SessionRegistry
 from .orchestration.config import ConfigError, ConfigStore
 from .orchestration.grants import GrantError, GrantStore
@@ -205,6 +206,7 @@ def collect() -> DoctorReport:
     from .safely.jobtemp import prevention_status
     runtime = discover_runtime()
     prevention = prevention_status()
+    swaps = read_swaps()
     checks = [
         Check("runtime da sessão", OK if runtime.valid else UNKNOWN,
               runtime.path if runtime.valid else runtime.reason),
@@ -212,6 +214,9 @@ def collect() -> DoctorReport:
               prevention["message"]),
         Check("python", OK, f"{platform.python_version()} ({sys.executable})"),
         Check("plataforma", OK, platform.platform()),
+        Check("inventário swap", OK if swaps.status == OK else ERROR,
+              (f"{len(swaps.entries)} entrada(s) completa(s)" if swaps.status == OK
+               else f"{swaps.status}: {swaps.detail}")),
         _qt_check(),
         _permission_check(paths.state_dir()),
         _permission_check(paths.data_dir()),

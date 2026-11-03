@@ -33,10 +33,12 @@ VERDICT = {health.GREEN: ("Saudável", 'ok'), health.YELLOW: ("Atenção", 'warn
 
 def headroom_pct(snapshot) -> int | None:
     """Smallest free share among memory, swap and the fullest watched tmpfs; None without data."""
+    if not snapshot.swap_known:
+        return None
     shares = []
     if snapshot.mem is not None and snapshot.mem.mem_total_kb:
         shares.append(snapshot.mem.mem_available_kb / snapshot.mem.mem_total_kb)
-    if snapshot.swap_total_kb:
+    if snapshot.swap_known and snapshot.swap_total_kb:
         shares.append(1 - snapshot.swap_used_kb / snapshot.swap_total_kb)
     measured = [v for v in snapshot.tmpfs if v.quality == "ok" and v.total_bytes]
     if measured:
@@ -342,7 +344,7 @@ class DashboardTab(QWidget):
         for quality in snapshot.sources:
             if quality.status in (ERROR, PARTIAL):
                 notes.append(f"{quality.name} {quality.status}: {quality.detail}")
-            elif quality.status == MISSING and quality.name in ("meminfo", "processes"):
+            elif quality.status == MISSING and quality.name in ("meminfo", "processes", "swaps"):
                 notes.append(f"{quality.name} missing: {quality.detail}")
         if signal.report is not None:
             for reason in signal.report.reasons:
@@ -395,7 +397,11 @@ class DashboardTab(QWidget):
         else:
             level = usage_level(snapshot.cpu_busy_frac, warning=.75, critical=.95)
             cards["cpu"].set_value(snapshot.cpu_busy_frac, level, f"{level} · {snapshot.cpu_count} cpu(s)")
-        if snapshot.swap_total_kb:
+        if not snapshot.swap_known:
+            quality = snapshot.source("swaps")
+            cards["swap"].set_value(None, "unknown",
+                                    f"inventário desconhecido: {quality.status} · {quality.detail}")
+        elif snapshot.swap_total_kb:
             used = snapshot.swap_used_kb / snapshot.swap_total_kb
             level = usage_level(used, warning=.6, critical=.9)
             cards["swap"].set_value(used, level, f"{level} · {title_signal.fmt1(snapshot.swap_used_kb / title_signal.MB)} GB "
@@ -450,7 +456,7 @@ class DashboardTab(QWidget):
             else:
                 level = "ok"
             parts.append(f"memória: {level} ({avail_frac * 100:.0f}% livre)")
-        if snapshot.swap_total_kb:
+        if snapshot.swap_known and snapshot.swap_total_kb:
             used = snapshot.swap_used_kb / max(1, snapshot.swap_total_kb)
             parts.append(f"swap/zram: {used * 100:.0f}% usado")
         if snapshot.tmpfs:
@@ -515,7 +521,9 @@ class DashboardTab(QWidget):
                          f"{title_signal.fmt1(snapshot.zram.mem_used_total_kb / title_signal.KB)} MB"
                          f" · comprimido "
                          f"{title_signal.fmt1(snapshot.zram.compr_data_kb / title_signal.KB)} MB")
-        if snapshot.swap_total_kb:
+        if not snapshot.swap_known:
+            parts.append("zram/swap: inventário desconhecido")
+        elif snapshot.swap_total_kb:
             pct = snapshot.swap_used_kb * 100 // snapshot.swap_total_kb
             parts.append(f"zram/swap {title_signal.fmt1(snapshot.swap_used_kb / title_signal.MB)} GB "
                          f"({pct}%)")

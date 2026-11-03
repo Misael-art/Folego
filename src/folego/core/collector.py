@@ -96,10 +96,7 @@ class MetricsCollector:
         load = read_optional("loadavg", root / "loadavg",
                              procfs.read_loadavg(root), missing="loadavg ausente")
         swaps = procfs.read_swaps(root)
-        if (root / "swaps").exists():
-            add("swaps", OK)
-        else:
-            add("swaps", MISSING, "swaps ausente")
+        add("swaps", swaps.status, swaps.detail)
         cpu = read_optional("cpu", root / "stat", procfs.read_cpu_times(root),
                             missing="stat de CPU ausente")
 
@@ -162,8 +159,8 @@ class MetricsCollector:
             boot_id=boot_id,
             ts=self.wall_clock(),
             mem=mem,
-            swap_used_kb=sum(s.used_kb for s in swaps),
-            swap_total_kb=sum(s.size_kb for s in swaps),
+            swap_used_kb=sum(s.used_kb for s in swaps.entries),
+            swap_total_kb=sum(s.size_kb for s in swaps.entries),
             pressure_memory=pressure_mem,
             pressure_io=pressure_io,
             pressure_cpu=pressure_cpu,

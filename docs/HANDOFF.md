@@ -1,4 +1,24 @@
-# Passagem para o próximo agente — atualizada em 02/11/2026
+# Passagem para o próximo agente — atualizada em 03/11/2026
+
+## Swap: inventário parcial ou ausente — 03/11/2026
+
+No coletor anterior, qualquer arquivo `/proc/swaps` existente marcava a fonte
+`ok`, mesmo quando `read_swaps` descartava a única linha inválida e devolvia
+total/uso zero. `procfs.SwapRead` agora distingue `ok` (inclusive cabeçalho
+válido sem entradas), `missing`, `partial` e `error`, com motivo. O coletor
+propaga a qualidade; snapshot, saúde, card, detalhes, compacto, bandeja,
+sugestões e `doctor --json` não inferem “sem swap/zram” de inventário
+incompleto. `doctor` marca a falha como erro e `healthy=false`; a saúde fica
+desconhecida quando os demais sinais não indicam condição pior. Entradas
+legíveis de um inventário parcial permanecem nos dados diagnósticos, sem
+autorizar percentual ou veredito de folga.
+
+Fixtures descartáveis cobrem vazio válido, ausente, ilegível, cabeçalho
+inválido, linha malformada e cauda sem terminador. Host: focados headless
+**60 passed**, UI Qt **52 passed**; suíte `./dev test-headless` **1232 passed,
+2 skipped** e `./dev test` **1557 passed, 2 skipped**. Python 3.14.7 gerenciado,
+HOME/XDG privados; nenhum efeito em swap real. Próximo: corrida da preferência
+de início com a sessão.
 
 ## Oráculo de texto Qt no runner Ubuntu — 03/11/2026
 
@@ -17,7 +37,8 @@ isoladamente, usando a cobertura da própria fonte, e verifica separadamente
 cor de texto e opacidade da janela. Mantém a prova de ausência de caixa de
 fundo na linha. Host: `./dev test tests/test_ui_transparency.py` **15 passed**;
 `./dev test` **1544 passed, 2 skipped**, Qt offscreen, HOME/XDG privados,
-Python 3.14.7. CI do novo SHA ainda requer confirmação. Offscreen não prova
+Python 3.14.7. CI de `e199e24` passou nos dois jobs Qt offscreen, além de
+headless e contratos CLI. Offscreen não prova
 compositor, leitor de tela ou entrada física. Próximo: swap parcial.
 
 ## Diário: cauda JSON sem terminador — 03/11/2026

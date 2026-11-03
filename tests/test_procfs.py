@@ -40,8 +40,41 @@ def test_loadavg(proc):
 
 def test_swaps_lists_devices(proc):
     swaps = procfs.read_swaps(proc)
-    assert swaps[0].name == "/dev/zram1"
-    assert swaps[0].used_kb == 3984256
+    assert swaps.status == "ok"
+    assert swaps.entries[0].name == "/dev/zram1"
+    assert swaps.entries[0].used_kb == 3984256
+
+
+@pytest.mark.parametrize("content,status,count", [
+    ("Filename\tType\tSize\tUsed\tPriority\n", "ok", 0),
+    ("Filename\tType\tSize\tUsed\tPriority\n/dev/zram0 partition broken 0 5\n", "partial", 0),
+    ("Filename\tType\tSize\tUsed\tPriority\n/dev/zram0 partition 100 0 5", "partial", 1),
+    ("not a swap header\n", "error", 0),
+    ("", "error", 0),
+])
+def test_swaps_distinguishes_empty_from_incomplete_or_malformed(fake_proc, content, status, count):
+    (fake_proc / "swaps").write_text(content)
+    result = procfs.read_swaps(fake_proc)
+    assert result.status == status
+    assert len(result.entries) == count
+    assert (result.detail == "") is (status == "ok")
+
+
+def test_swaps_missing_and_unreadable_are_not_empty(fake_proc):
+    assert procfs.read_swaps(fake_proc).status == "missing"
+    (fake_proc / "swaps").mkdir()
+    result = procfs.read_swaps(fake_proc)
+    assert result.status == "error" and "ilegível" in result.detail
+
+
+def test_swaps_preserves_valid_rows_but_marks_malformed_inventory_partial(fake_proc):
+    (fake_proc / "swaps").write_text(
+        "Filename Type Size Used Priority\n"
+        "/dev/zram0 partition 100 25 5\n"
+        "/dev/zram1 partition INVALID 0 5\n")
+    result = procfs.read_swaps(fake_proc)
+    assert result.status == "partial"
+    assert [(entry.name, entry.used_kb) for entry in result.entries] == [('/dev/zram0', 25)]
 
 
 def test_stat_uses_the_real_proc_field_layout():

@@ -45,6 +45,17 @@ def test_snapshot_aggregates_memory_and_swap(env):
     assert snap.errors == ()
 
 
+def test_malformed_swap_inventory_is_partial_and_cannot_prove_zero(env):
+    proc_root, sys_root = env
+    (proc_root / "swaps").write_text(
+        "Filename Type Size Used Priority\n/dev/zram1 partition INVALID 0 5\n")
+    snap = collector.MetricsCollector(proc_root=proc_root, sys_root=sys_root).collect()
+    assert snap.source("swaps").status == "partial"
+    assert "linha 2" in snap.source("swaps").detail
+    assert not snap.swap_known
+    assert snap.swap_total_kb == 0  # número parcial não comprova inventário vazio
+
+
 def test_app_groups_merge_browser_renderer_processes(env):
     proc_root, sys_root = env
     snap = collector.MetricsCollector(proc_root=proc_root, sys_root=sys_root).collect()
