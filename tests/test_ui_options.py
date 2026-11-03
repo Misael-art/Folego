@@ -18,6 +18,9 @@ def test_options_defaults_on_and_can_disable_without_changing_effect_policy(qapp
     assert jobs.calls == ["startup-disable"]
     tab.done({"enabled":False,"outcome":"sucesso","reason":"saved"})
     assert not tab.choice.isChecked()
+    tab.done({"enabled":True,"outcome":"desconhecido","reason":"unit não comprovada"})
+    assert tab.choice.isChecked() and tab.choice.isEnabled()
+    assert "desconhecido" in tab.status.text() and "unit não comprovada" in tab.status.text()
 
 
 def test_real_review_queue_confirms_exact_id_then_applies_once(qapp, sandbox):

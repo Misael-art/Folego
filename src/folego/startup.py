@@ -1,8 +1,11 @@
 """One default-on preference for session startup, independent of effect grants."""
+import fcntl
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
+from contextlib import contextmanager
 
 from . import paths, shortcuts
 from .actions.accessibility import read_object, save_object, private_path
@@ -62,9 +65,30 @@ def status():
             "effects_authorized": False}
 
 
+@contextmanager
+def _startup_lock():
+    """Keep the saved choice and its unit effect in one serial order."""
+    path = paths.state_dir() / "startup.lock"
+    private_path(path, create=True)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        info = os.fstat(fd)
+        if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
+            raise ValueError("trava de inicialização não é privada do usuário")
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
 def configure(enabled=None, *, confirmed=False, manage_service=True):
     if enabled is not None and (not confirmed or type(enabled) is not bool):
         raise ValueError("alteração de início automático exige confirmação e booleano")
+    with _startup_lock():
+        return _configure_serialized(enabled, manage_service)
+
+
+def _configure_serialized(enabled, manage_service):
     from .orchestration import Coordinator
     with Coordinator().lock(wait=.2):
         policy = preference()
@@ -84,10 +108,15 @@ def configure(enabled=None, *, confirmed=False, manage_service=True):
         from .safely.atomicfile import write_atomic
         write_atomic(path, text.encode(), mode=0o600)
     errors = []
+    service_attempted = False
     if manage_service:
         try:
             if policy["enabled"]:
+                service_attempted = True
                 install(confirmed=True)
+                current = service_status()
+                if current.get("state") != "active" or current.get("enabled") is not True:
+                    raise RuntimeError("ativação da unit não comprovada; consulte o serviço")
             else:
                 unit = paths.xdg_config_home() / "systemd/user" / UNIT
                 private_path(unit)
@@ -97,11 +126,15 @@ def configure(enabled=None, *, confirmed=False, manage_service=True):
                     current = service_status()
                     if current.get("path") != str(unit):
                         raise ValueError("unit carregada de outro destino; preservada")
-                    result = bounded_command([shutil.which("systemctl"), "--user", "disable", UNIT], timeout=3)
+                    service_attempted = True
+                    result = bounded_command([shutil.which("systemctl"), "--user", "disable", "--now", UNIT], timeout=3)
                     if result.returncode:
                         raise ValueError("desativação do serviço no próximo login não comprovada")
+                    current = service_status()
+                    if current.get("state") != "inactive" or current.get("enabled") is not False:
+                        raise RuntimeError("desativação da unit não comprovada; consulte o serviço")
         except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
             errors.append(str(exc))
     return {"ok": not errors, "enabled": policy["enabled"], "errors": errors,
-            "outcome": "parcial" if errors else "sucesso",
+            "outcome": ("desconhecido" if service_attempted else "parcial") if errors else "sucesso",
             "reason": "; ".join(errors) or "início com a sessão atualizado; permissões de reparo preservadas"}

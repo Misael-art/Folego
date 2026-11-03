@@ -1,5 +1,25 @@
 # Passagem para o próximo agente — atualizada em 03/11/2026
 
+## Início com a sessão: escolha e unit em ordem única — 03/11/2026
+
+Reprodução descartável antes da correção: habilitação A pausada em `install`,
+desabilitação B gravou preferência/autostart e terminou, A ligou a unit por
+último; teste falhou com preferência falsa e unit ligada. `startup.configure`
+agora mantém uma trava própria, entre processos, durante a escolha durável e o
+efeito da unit. O lock global do Coordinator continua restrito às escritas de
+preferência/autostart; a GUI permanece em worker. Desabilitar usa
+`systemctl --user disable --now` para encerrar também o monitor atual. Após
+cada efeito, o estado da unit é consultado; timeout, falha ou estado não
+comprovado devolvem `desconhecido`, preservando a escolha gravada e exibindo o
+motivo na CLI/GUI. Unit pessoal e destino inesperado continuam protegidos.
+
+Teste concorrente e teste de timeout usam apenas mocks e HOME privado. Host:
+focados `test_session_resilience.py` + `test_cli_operations.py` **24 passed**;
+`./dev test-headless` **1234 passed, 2 skipped** e `./dev test` **1559 passed,
+2 skipped**. Nenhuma unit real foi alterada; confirmar o comportamento na
+sessão KDE apenas por escolha normal do usuário, sem reinício de sessão como
+QA. Próximo: recibo de revisão reconciliada.
+
 ## Swap: inventário parcial ou ausente — 03/11/2026
 
 No coletor anterior, qualquer arquivo `/proc/swaps` existente marcava a fonte
@@ -16,7 +36,8 @@ autorizar percentual ou veredito de folga.
 Fixtures descartáveis cobrem vazio válido, ausente, ilegível, cabeçalho
 inválido, linha malformada e cauda sem terminador. Host: focados headless
 **60 passed**, UI Qt **52 passed**; suíte `./dev test-headless` **1232 passed,
-2 skipped** e `./dev test` **1557 passed, 2 skipped**. Python 3.14.7 gerenciado,
+2 skipped** e `./dev test` **1557 passed, 2 skipped**. CI de `a7edb43`
+passou nos dois jobs Qt, nos dois headless e nos contratos CLI. Python 3.14.7 gerenciado,
 HOME/XDG privados; nenhum efeito em swap real. Próximo: corrida da preferência
 de início com a sessão.
 

@@ -41,6 +41,70 @@ def test_personal_and_symlink_autostart_are_preserved(fake_home, monkeypatch):
     with pytest.raises(ValueError): startup.configure(True, confirmed=True, manage_service=False)
 
 
+def test_concurrent_startup_choices_leave_unit_at_the_latest_preference(fake_home, monkeypatch):
+    import subprocess
+    import threading
+
+    monkeypatch.setattr(startup.shortcuts, "launcher_executable", lambda: Path("/bin/true"))
+    unit = startup.paths.xdg_config_home() / "systemd/user" / startup.UNIT
+    unit.parent.mkdir(parents=True)
+    unit.write_text(startup.MARKER + "\n[Unit]\n")
+    current = {"enabled": False}
+    installing, release, disabled = threading.Event(), threading.Event(), threading.Event()
+
+    def install(*, confirmed):
+        assert confirmed
+        installing.set()
+        assert release.wait(3)
+        current["enabled"] = True
+
+    def service_status():
+        return {"path": str(unit), "enabled": current["enabled"],
+                "state": "active" if current["enabled"] else "inactive"}
+
+    def command(argv, *, timeout):
+        assert argv[-1] == startup.UNIT and "disable" in argv and "--now" in argv
+        current["enabled"] = False
+        disabled.set()
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(startup, "install", install)
+    monkeypatch.setattr(startup, "service_status", service_status)
+    monkeypatch.setattr(startup, "bounded_command", command)
+    monkeypatch.setattr(startup.shutil, "which", lambda name: "/usr/bin/systemctl")
+    results = []
+    first = threading.Thread(target=lambda: results.append(startup.configure(True, confirmed=True)))
+    second = threading.Thread(target=lambda: results.append(startup.configure(False, confirmed=True)))
+    first.start()
+    assert installing.wait(2)
+    second.start()
+    # Before the fix, the disable could finish while the old enable was paused.
+    disabled.wait(.3)
+    release.set()
+    first.join(3); second.join(3)
+    assert not first.is_alive() and not second.is_alive()
+    assert len(results) == 2 and all(result["ok"] for result in results)
+    assert startup.preference()["enabled"] is False
+    assert "Hidden=true" in startup.paths.autostart_path().read_text()
+    assert current["enabled"] is False
+
+
+def test_startup_unit_timeout_keeps_choice_and_reports_unknown(fake_home, monkeypatch):
+    import subprocess
+
+    monkeypatch.setattr(startup.shortcuts, "launcher_executable", lambda: Path("/bin/true"))
+
+    def timeout(*, confirmed):
+        raise subprocess.TimeoutExpired(["systemctl", "--user", "enable"], 8)
+
+    monkeypatch.setattr(startup, "install", timeout)
+    result = startup.configure(True, confirmed=True)
+    assert result["outcome"] == "desconhecido" and not result["ok"]
+    assert result["errors"]
+    assert startup.preference()["enabled"] is True
+    assert "Hidden=false" in startup.paths.autostart_path().read_text()
+
+
 def test_more_than_32_released_leases_do_not_block_and_closed_receipts_survive(tmp_path, monkeypatch):
     owner = {"pid": os.getpid(), "start_ticks": int(Path('/proc/self/stat').read_text().rsplit(')',1)[1].split()[19]),
              "boot_id": access.read_boot_id()}
