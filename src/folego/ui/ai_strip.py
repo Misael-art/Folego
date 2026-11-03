@@ -157,6 +157,11 @@ class AIStrip(QWidget):
             badge.graphicsEffect().setOpacity(1.0 if self._reset_bright else .5)
 
     def _pulse_deliveries(self, value):
+        # The animation ticks at the display rate; repainting the ring icon on
+        # every tick kept the GUI thread busy, so redraw only on 1/8 steps and
+        # not at all while the window is minimized.
+        if value and self.window().isMinimized(): return
+        value = round(value * 8) / 8
         for provider, button in self.buttons.items():
             count = next((r.get('count') for r in self.delivery_items if r['provider'] == provider), None)
             button.set_halo(value if count else 0.0)

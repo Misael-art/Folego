@@ -1,5 +1,16 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## CPU da GUI no pulso de entregas — 03/11/2026
+
+A thread da GUI consumia ~35% de CPU: o pulso infinito de entregas redesenhava o
+anel a cada quadro, inclusive minimizado. `_pulse_deliveries` agora redesenha em
+passos de 1/8 e pausa com a janela minimizada. Host real (KDE/Wayland), GUI
+reaberta pela bandeja e `./dev gui`: 353 → 55–57 ticks/10 s (inferência causal,
+sem A/B). Removidos, com aprovação, 9 runs anônimos `passed` de QA. Testes:
+headless **1185 passed, 2 skipped**; Qt **1503 passed, 2 skipped**. Próximo:
+oportunidades levantadas no host (agrupar árvores Electron/navegador, MCP
+duplicado, units falhadas, PSI, inventário de cache).
+
 ## Limits do Codex Web alinhado ao 6.1.17 — 03/11/2026
 
 - `web_limits` passou a exigir `initializedAt` válido e a recusar eventos anteriores a ele, como faz o store do app.

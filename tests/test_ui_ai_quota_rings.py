@@ -89,6 +89,18 @@ def test_pulse_only_for_confirmed_deliveries_while_visible(qapp):
     strip.shutdown()
 
 
+def test_pulse_redraws_in_coarse_steps(qapp):
+    strip = make(qapp)
+    strip.set_deliveries([dict(provider='claude', count=1, pending=[])])
+    button = strip.buttons['claude']
+    draws = []
+    button._draw_icon = lambda: draws.append(button.halo)
+    for step in range(101):
+        strip._pulse_deliveries(step / 100)
+    assert set(draws) <= {i / 8 for i in range(9)} and len(draws) <= 9
+    strip.shutdown()
+
+
 def test_four_columns_fit_with_gifts_in_light_dark_and_transparent_themes(qapp):
     strip = make(qapp)
     items = [observation(p, 31) for p in ai.NAMES]
