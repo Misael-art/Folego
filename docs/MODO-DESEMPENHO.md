@@ -163,6 +163,26 @@ Promover uma regra para Automático é decisão do usuário, regra a regra.
 Cada incremento roda `./dev test-headless` e `./dev test`, faz QA no KDE/Wayland
 real e registra o resultado no HANDOFF.
 
+### Estado em 03/11/2026
+
+Os incrementos 1–4 estão integrados. O 5 entregou os sinais de uso em
+`core/usage.py`, que protegem o grupo no plano e na revalidação:
+- janela em foco, lida por `kdotool`;
+- áudio tocando, lido por `pactl`;
+- download em andamento;
+- arquivo de projeto aberto para escrita.
+
+Foco ou áudio desconhecido também protegem. Navegadores com CDP ou Marionette
+contam como agente. O 5 incluiu ainda um soak a seco com agentes rodando.
+
+Decisões do 5:
+- **`WindowClose` e `GroupTerm` ficaram de fora.** `unit_stop` já encerra o Edge
+  de forma limpa pelo systemd do usuário, e nenhuma regra precisa enviar sinal
+  direto. Reabrir essa questão exige uma regra concreta que não tenha bandeja nem
+  unit.
+- **A detecção de portas ficou de fora.** A ponte MCP é só conselho, então não
+  precisa dessa prova.
+
 ## 9. Riscos e mitigação
 
 - **Fechar algo em uso**: mitigado por lista de permissão, proteção no ato, foco,

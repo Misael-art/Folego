@@ -1025,7 +1025,8 @@ def _cmd_performance(args) -> int:
             "psi_memory_some_avg60": view.pressure.some_avg60 if view.pressure else None,
             "reclaimable_kb": view.reclaimable_kb(),
             "groups": [dict(unit=g.unit, label=g.label, state=g.state, reason=g.reason,
-                            procs=g.procs, rss_kb=g.rss_kb, cpu_frac=g.cpu_frac)
+                            procs=g.procs, rss_kb=g.rss_kb, cpu_frac=g.cpu_frac,
+                            in_use=view.in_use.get(g.unit))
                        for g in view.groups]}, indent=2))
         return EXIT_OK
     psi = f"{view.pressure.some_avg60:.2f}%" if view.pressure else "indisponível"
@@ -1038,8 +1039,9 @@ def _cmd_performance(args) -> int:
         if g.rss_kb < 20 * 1024:
             continue
         cpu = "?" if g.cpu_frac is None else f"{g.cpu_frac:.0f}%"
+        using = view.in_use.get(g.unit)
         print(f"  {names[g.state]:<10} {_rss(g.rss_kb):>9} {cpu:>5} {g.procs:>3} proc · "
-              f"{g.label} — {g.reason}")
+              f"{g.label} — {g.reason}" + (f" · em uso: {using}" if using else ""))
     print(f"observado sem agente: {_rss(view.reclaimable_kb())} · nenhuma ação é executada")
     return EXIT_OK
 
@@ -1132,7 +1134,7 @@ def _performance_close(args, collector, snapshot, view, rules_path) -> int:
         return answer("recusa", "regra ou unit não encontrada na observação atual", EXIT_REFUSED)
     if modes[rule.id] not in perf_rules.CLOSING_MODES:
         return answer("recusa", f"regra {rule.id} não está em modo assistido", EXIT_REFUSED)
-    ok, why = perf_rules.condition(rule, group, snapshot.procs)
+    ok, why = perf_rules.condition(rule, group, snapshot.procs, view.in_use)
     if not ok:
         return answer("recusa", f"condição não vale: {why}", EXIT_REFUSED)
     suggestion = perf_rules.Suggestion(rule.id, rule.title, rule.kind, group.unit, group.label,

@@ -366,8 +366,9 @@ class PerformanceTab(QWidget):
         for row, group in enumerate(rows):
             label, token = STATES[group.state]
             cpu = "?" if group.cpu_frac is None else f"{group.cpu_frac:.0f}%"
+            using = view.in_use.get(group.unit)
             values = (label, group.label, fmt_bytes(group.rss_kb * 1024), cpu,
-                      str(group.procs), group.reason)
+                      str(group.procs), f"{group.reason} · em uso: {using}" if using else group.reason)
             for col, text in enumerate(values):
                 item = self.table.item(row, col)
                 if item is None:

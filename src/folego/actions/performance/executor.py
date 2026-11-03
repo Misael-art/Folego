@@ -87,7 +87,7 @@ def execute(plan: ActionPlan, *, observe: Callable, read_proc: Callable, confirm
         current = by_pid.get(root["pid"])
         if current is None or current.starttime != root["start_ticks"] or root["pid"] not in group.pids:
             return _refuse(plan, "identidade do app mudou desde a revisão; preservar")
-        ok, why = perf_rules.condition(rule, group, procs)
+        ok, why = perf_rules.condition(rule, group, procs, view.in_use)
         if not ok:
             return _refuse(plan, f"condição não vale mais: {why}")
         reviewed = [m for m in members if m["pid"] in group.pids]

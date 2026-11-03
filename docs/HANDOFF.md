@@ -1,5 +1,26 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Modo Desempenho, incremento 5 (endurecimento) — 03/11/2026
+
+`core/usage.py`: janela em foco (`kdotool`), áudio por PID (`pactl`), download em
+andamento e arquivo de projeto aberto para escrita (`/proc/<pid>/fd`); foco ou
+áudio desconhecido protege. `PerfView.in_use` é sondado só para grupos
+candidatos e bloqueia plano e revalidação. Navegador real com CDP/Marionette
+conta como agente. `WindowClose`/`GroupTerm` e portas ficaram fora por decisão
+registrada em `docs/MODO-DESEMPENHO.md`.
+
+Soak a seco no host (executor trocado por registrador, regras de fechamento em
+automático, suítes completas como carga de agente): 36 ciclos/6 min, 4,4 s de
+CPU, 24 MB, ciclo máx. 200 ms, sem erro; gatilho "agentes em build/teste"
+observado, aviso e carência funcionaram e um fechamento foi planejado a seco.
+**Achado e corrigido:** o `steamwebhelper` usa CDP interno e tornava o Steam
+"agente"; a regra de CDP agora vale só para navegadores. Segundo soak (18
+ciclos/3 min): Steam observado, sem erro. Nada foi fechado no host. Nota: uma
+recusa na revalidação conta para o disjuntor (conservador). Testes: headless
+**1212 passed, 2 skipped**; Qt **1534 passed, 2 skipped**. Pendente: ativação
+pelo usuário (regras em automático e `performance install --confirmar`),
+primeiro fechamento real e soak real de horas com efeito.
+
 ## Modo Desempenho, incremento 4 (Automático) — 03/11/2026
 
 Modo `automatic` por regra. `core/perf_auto.py` (puro) decide: disjuntor

@@ -9,7 +9,7 @@ group hosting agent work (see `core.agents`).
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Iterable
 
 from .agents import AgentActivity
@@ -61,6 +61,9 @@ class PerfView:
     pressure: Pressure | None
     mem_available_kb: int | None
     mem_total_kb: int | None
+    # unit -> why someone is using it now (focus, audio, download, project file);
+    # only probed for groups that could become candidates.
+    in_use: dict = field(default_factory=dict)
 
     def reclaimable_kb(self) -> int:
         return sum(g.rss_kb for g in self.groups if g.state == OBSERVED)
@@ -139,12 +142,26 @@ def cwd_of(pid: int, proc_root: str | None = None) -> str | None:
 
 
 def observe(snapshot: Snapshot, *, proc_root: str | None = None, uid: int | None = None,
-            git_cache: dict | None = None, protected_fn=None) -> PerfView:
+            git_cache: dict | None = None, protected_fn=None, probe_fn=None) -> PerfView:
     """Host observation over an already collected snapshot (CPU needs a prior sample)."""
     import os
-    from . import agents
+    from dataclasses import replace
+    from . import agents, usage
+    from .. import paths
     from .sessions import read_cgroup
     activity = agents.detect(snapshot.procs, cwd_fn=lambda pid: cwd_of(pid, proc_root),
                              git_cache=git_cache)
-    return build(snapshot, activity, cgroup_fn=lambda pid: read_cgroup(pid, proc_root),
+    view = build(snapshot, activity, cgroup_fn=lambda pid: read_cgroup(pid, proc_root),
                  uid=os.getuid() if uid is None else uid, protected_fn=protected_fn)
+    candidates = [g for g in view.groups
+                  if g.state == OBSERVED or (g.state == PROTECTED and g.class_only)]
+    if not candidates:
+        return view
+    probes = (probe_fn or usage.probe)()
+    root = proc_root or paths.proc_root()
+    in_use = {}
+    for group in candidates:
+        reason = usage.in_use(group.pids, probes=probes, projects=activity.projects, proc_root=root)
+        if reason:
+            in_use[group.unit] = reason
+    return replace(view, in_use=in_use)

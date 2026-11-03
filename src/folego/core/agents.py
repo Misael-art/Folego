@@ -16,6 +16,11 @@ from .snapshot import ProcInfo
 # Agent roots by kernel comm; desktop clients by a stable fragment of their exe path.
 AGENT_COMMS = frozenset({"claude", "codex", "codex-web-gpt-l", "claude-desktop"})
 AGENT_PATH_MARKERS = ("/claude-desktop/", "/chatgpt-web/", "/claude-code/", "/codex/")
+# A browser opened for automation (CDP or Marionette) is driven by some agent.
+# Only real browsers count: apps such as Steam embed Chromium with CDP for themselves.
+AUTOMATION_FLAGS = ("--remote-debugging-port", "--remote-debugging-pipe", "--marionette")
+BROWSER_COMMS = frozenset({"msedge", "chrome", "chromium", "google-chrome", "brave", "firefox",
+                           "firefox-bin", "vivaldi-bin", "opera"})
 
 IDLE = "idle"
 INTERACTIVE = "interactive"
@@ -41,7 +46,10 @@ def is_agent_root(proc: ProcInfo) -> bool:
     if proc.comm in AGENT_COMMS:
         return True
     exe = proc.cmdline[0] if proc.cmdline else ""
-    return any(marker in exe for marker in AGENT_PATH_MARKERS)
+    if any(marker in exe for marker in AGENT_PATH_MARKERS):
+        return True
+    return proc.comm in BROWSER_COMMS and any(arg.startswith(AUTOMATION_FLAGS)
+                                               for arg in proc.cmdline[1:])
 
 
 def git_root(path: str | None, cache: dict[str, str | None]) -> str | None:

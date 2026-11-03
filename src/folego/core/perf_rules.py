@@ -172,6 +172,7 @@ def plan(view: PerfView, procs: tuple[ProcInfo, ...], modes: dict[str, str],
                 continue
             busy = next((m for m in rule.busy_markers
                          if any(m in " ".join(p.cmdline) for p in members)), None)
+            busy = busy or view.in_use.get(group.unit)
             quiet = group.cpu_frac is not None and group.cpu_frac < rule.idle_cpu
             reason = (f"em uso ({busy})" if busy else
                       f"CPU {group.cpu_frac:.0f}% < {rule.idle_cpu:.0f}%" if quiet else
@@ -206,7 +207,7 @@ def plan(view: PerfView, procs: tuple[ProcInfo, ...], modes: dict[str, str],
     return tuple(out)
 
 
-def condition(rule: Rule, group, procs: tuple[ProcInfo, ...]) -> tuple[bool, str]:
+def condition(rule: Rule, group, procs: tuple[ProcInfo, ...], in_use: dict | None = None) -> tuple[bool, str]:
     """The same objective test as `plan`, for revalidation at effect time."""
     if rule.kind != CLOSE or not _matches(rule, group):
         return False, f"grupo {group.label} não é mais alvo de {rule.id} ({group.reason})"
@@ -214,6 +215,7 @@ def condition(rule: Rule, group, procs: tuple[ProcInfo, ...]) -> tuple[bool, str
     members = [by_pid[pid] for pid in group.pids if pid in by_pid]
     busy = next((m for m in rule.busy_markers
                  if any(m in " ".join(p.cmdline) for p in members)), None)
+    busy = busy or (in_use or {}).get(group.unit)
     if busy:
         return False, f"em uso ({busy})"
     if group.cpu_frac is None or group.cpu_frac >= rule.idle_cpu:
