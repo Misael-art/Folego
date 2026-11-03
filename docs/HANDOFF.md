@@ -34,6 +34,16 @@ app real, grant, unit de trabalho ou sessão física foi alterado para publicar.
 Próximo: concluir a matriz em sessão própria e o soak desta fonte; não promover
 esta prévia a estável por inferência.
 
+Ferramenta Rust solicitada depois do release: `rustup 1.29.3`, `rustc 1.99.1`
+e `cargo 1.99.1` instalados exclusivamente em `.dev/rustup` e `.dev/cargo`,
+perfil mínimo e `--no-modify-path`. O `rustup-init` oficial de 21.347.088 bytes
+foi conferido pelo SHA-256 publicado
+`b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55`.
+`rustup show active-toolchain` apontou para `1.99.1-x86_64-unknown-linux-gnu`;
+um programa mínimo compilou e executou (`rust-ok`). `.dev` ficou em 3,6 GiB,
+abaixo do limite de revisão de 10 GiB. Nenhum perfil de shell foi alterado.
+O Fôlego permanece um projeto Python/Qt e não ganhou dependência Rust.
+
 ## Estado vigente e matriz de aceite — 03/11/2026
 
 Na branch `codex/portable-handoff-20261024`, os incrementos publicados
