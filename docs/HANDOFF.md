@@ -1,5 +1,15 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Atalho e data do Limits do Codex Web — 03/11/2026
+
+O launcher não tem deep link nem API externa para a verificação de plano do
+Limits; ela continua um clique do usuário no aplicativo (modo Automatic exigido,
+conferido como `automatic` no host). Hover agora mostra data e resultado da
+última verificação; botão direito do Codex Web ganhou **Abrir Limits no Codex Web**,
+pelo mesmo abridor existente (`agent-open`). Menu separado em `options_menu`
+para teste sem `exec`. Testes HOME novo: headless **1183 passed, 2 skipped**;
+Qt **1500 passed, 2 skipped**. GUI reaberta pela bandeja, compacta.
+
 ## Codex Web pelo Limits e renovação do Claude — 03/11/2026
 
 Correção do usuário: Codex Web é túnel da cota ChatGPT Web da conta Principal

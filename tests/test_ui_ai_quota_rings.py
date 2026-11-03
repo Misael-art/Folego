@@ -111,3 +111,12 @@ def test_four_columns_fit_with_gifts_in_light_dark_and_transparent_themes(qapp):
     finally:
         apply_theme(qapp, previous[0], transparency=previous[1])
         strip.shutdown()
+
+
+def test_web_menu_offers_limits_shortcut_through_the_existing_opener(qapp):
+    strip, opened = make(qapp), []
+    strip.open_agent = lambda provider, account=None: opened.append(provider)
+    web = {a.text(): a for a in strip.options_menu('web').actions()}
+    assert 'Abrir Limits no Codex Web' not in [a.text() for a in strip.options_menu('codex').actions()]
+    web['Abrir Limits no Codex Web'].trigger()
+    assert opened == ['web']

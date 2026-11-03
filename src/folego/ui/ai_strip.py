@@ -175,7 +175,12 @@ class AIStrip(QWidget):
 
     def options(self, provider, point):
         button = self.buttons[provider]
-        menu = QMenu(button)
+        menu = self.options_menu(provider)
+        menu.exec(button.mapToGlobal(point))
+        menu.deleteLater()
+
+    def options_menu(self, provider):
+        menu = QMenu(self.buttons[provider])
         menu.addAction('Atualizar dados', self.refresh)
         menu.addAction('Contas, uso e renovação…', lambda: QTimer.singleShot(0, lambda: self.details(provider)))
         menu.addAction('Definir dia da renovação mensal…', lambda: self.billing(provider))
@@ -183,8 +188,10 @@ class AIStrip(QWidget):
                 'web': 'https://chatgpt.com/#settings/Account',
                 'claude': 'https://claude.ai/settings/usage', 'grok': 'https://grok.com/usage'}
         menu.addAction('Consultar no site do provedor', lambda: QDesktopServices.openUrl(QUrl(urls[provider])))
-        menu.exec(button.mapToGlobal(point))
-        menu.deleteLater()
+        if provider == 'web':
+            # The launcher has no deep link or external API; the plan check stays a user click there.
+            menu.addAction('Abrir Limits no Codex Web', lambda: self.open_agent('web'))
+        return menu
 
     def details(self, provider):
         if self.account_menu is not None:

@@ -324,16 +324,21 @@ def web_limits(home, result, now):
     try:
         state = read_json(path)
     except FileNotFoundError:
-        result['reason'] = 'Limits do Codex Web não encontrado; ative Limits no aplicativo'
+        result.update(limits_action=True, reason='Limits do Codex Web não encontrado; ative Limits no aplicativo')
         return result
     accounts, active = state.get('accounts'), state.get('activeAccountKey')
     account = accounts.get(active) if state.get('version') == 1 and isinstance(accounts, dict) else None
     if not isinstance(account, dict) or not isinstance(account.get('events'), list):
         result['reason'] = 'Limits do Codex Web desconhecido ou sem conta ativa'
         return result
-    plan = account.get('plan')
+    plan, checked = account.get('plan'), account.get('checkedAt')
+    checked = checked / 1000 if type(checked) is int and checked > 0 else None
+    result['limits_checked_at'] = checked
+    when = dt.datetime.fromtimestamp(checked).astimezone().strftime('%d/%m/%Y %H:%M') if checked else 'data desconhecida'
     if plan not in WEB_LIMITS:
-        result['reason'] = 'Limits do Codex Web sem plano Pro confirmado; refaça a verificação em Limits no aplicativo'
+        result['limits_action'] = True
+        result['reason'] = (f'Limits do Codex Web sem plano Pro confirmado (última verificação: {when}, '
+                            f'resultado "{plan}"); refaça a verificação em Limits no aplicativo')
         return result
     events = []
     for event in account['events']:
@@ -353,6 +358,7 @@ def web_limits(home, result, now):
         result['windows'].append(window)
     result.update(observed_at=now, plan='Pro 20x' if plan == 'pro_200' else 'Pro 5x', reason='',
                   source='Limits do Codex Web (contagem local de mensagens Pro, tabela oficial do aplicativo)')
+    result['source'] += '; plano verificado em ' + when
     if uncertain:
         result['source'] += '; há mensagens Pro de modelo não identificado'
     result['remaining'] = effective(result, now)

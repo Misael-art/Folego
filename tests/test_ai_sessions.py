@@ -504,3 +504,10 @@ def test_test_environment_never_runs_claude_client(tmp_path):
     stale_claude(tmp_path)
     item = next(i for i in ai.collect(env(tmp_path), now=NOW) if i['provider'] == 'claude')
     assert item['reason'] == ai.STALE_CLAUDE
+
+
+def test_web_unsupported_check_shows_its_date_in_hover(tmp_path):
+    root = web_root(tmp_path, plan='unsupported')
+    item = ai.codex(root, NOW, provider='web')
+    text = ai.describe(item, NOW)
+    assert item['limits_action'] and 'última verificação' in text and '"unsupported"' in text
