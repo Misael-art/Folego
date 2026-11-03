@@ -23,13 +23,17 @@ FOLLOW_S = 20.0
 MAX_MEMBERS = 256
 
 
-def plan_for(suggestion, procs, *, boot_id: str) -> ActionPlan:
+MANUAL = "manual"
+AUTO = "auto"
+
+
+def plan_for(suggestion, procs, *, boot_id: str, trigger: str = MANUAL) -> ActionPlan:
     by_pid = {p.pid: p for p in procs}
     members = sorted(({"pid": pid, "start_ticks": by_pid[pid].starttime}
                       for pid in suggestion.pids if pid in by_pid), key=lambda m: m["pid"])
     return ActionPlan(ACTION, ResourceIdentity("group", suggestion.unit, {
         "boot_id": boot_id, "rule": suggestion.rule, "members": members}),
-        {"rule": suggestion.rule, "channel": suggestion.channel})
+        {"rule": suggestion.rule, "channel": suggestion.channel, "trigger": trigger})
 
 
 def _refuse(plan, reason):
@@ -53,10 +57,12 @@ def execute(plan: ActionPlan, *, observe: Callable, read_proc: Callable, confirm
     detail = plan.target.to_dict()["detail"]
     members = list(detail.get("members", ()))
     rule = perf_rules.BY_ID.get(plan.params.get("rule"))
+    trigger = plan.params.get("trigger")
     if not confirm:
-        return _refuse(plan, "fechamento assistido exige confirmação explícita")
+        return _refuse(plan, "fechamento exige confirmação explícita ou o gatilho automático")
     if (plan.action != ACTION or plan.target.kind != "group" or rule is None
-            or set(plan.params) != {"rule", "channel"} or plan.params["channel"] != rule.channel
+            or set(plan.params) != {"rule", "channel", "trigger"} or trigger not in (MANUAL, AUTO)
+            or plan.params["channel"] != rule.channel
             or plan.params["channel"] not in closers or detail.get("rule") != rule.id
             or not 0 < len(members) <= MAX_MEMBERS):
         return _refuse(plan, "plano de desempenho inválido")
@@ -69,8 +75,10 @@ def execute(plan: ActionPlan, *, observe: Callable, read_proc: Callable, confirm
             view, procs, modes = observe()
         except Exception as exc:  # unreadable evidence protects the target
             return _refuse(plan, f"observação atual indisponível: {exc}")
-        if modes.get(rule.id) != perf_rules.ASSISTED:
-            return _refuse(plan, f"regra {rule.id} não está em modo assistido")
+        allowed = (perf_rules.AUTOMATIC,) if trigger == AUTO else perf_rules.CLOSING_MODES
+        if modes.get(rule.id) not in allowed:
+            return _refuse(plan, f"regra {rule.id} não está em modo "
+                                 + ("automático" if trigger == AUTO else "assistido"))
         group = next((g for g in view.groups if g.unit == plan.target.key), None)
         if group is None:
             return _refuse(plan, "grupo não encontrado agora; nada a fechar")

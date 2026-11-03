@@ -11,12 +11,12 @@ import time
 from dataclasses import dataclass
 
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QComboBox, QFrame, QGridLayout, QHeaderView, QLabel,
+from PySide6.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel,
                                QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from .. import paths
 from ..actions.disk.planner import fmt_bytes
-from ..core import perf_model, perf_rules
+from ..core import perf_auto, perf_model, perf_rules
 from .theme import TOKENS
 
 COLUMNS = ("Estado", "App", "Memória", "CPU", "Processos", "Motivo")
@@ -27,13 +27,20 @@ MIN_RSS_KB = 20 * 1024
 
 
 MODE_NAMES = {perf_rules.OFF: "Desligada", perf_rules.SUGGEST: "Sugerir",
-              perf_rules.ASSISTED: "Assistido"}
+              perf_rules.ASSISTED: "Assistido", perf_rules.AUTOMATIC: "Automático"}
 CLOSE_TIMEOUT_MS = 60_000  # bounded follow-up of 20 s plus two observations
+
+
+SUBCOMMANDS = {"performance-close": "close", "performance-snooze": "snooze",
+               "performance-protect": "protect", "performance-resume": "resume"}
 
 
 def argv_for(acao: str, target: str = "", confirm: bool = False) -> list:
     rule, _, unit = target.partition("\t")
-    argv = [sys.executable, "-m", "folego", "performance", "close", rule, "--unit", unit, "--json"]
+    argv = [sys.executable, "-m", "folego", "performance", SUBCOMMANDS[acao]]
+    if rule:
+        argv.extend([rule, "--unit", unit])
+    argv.append("--json")
     if confirm:
         argv.append("--confirmar")
     return argv
@@ -44,6 +51,16 @@ class Observation:
     view: perf_model.PerfView
     suggestions: tuple = ()
     policy_error: str = ""
+    auto: dict | None = None        # automatic state file, None when unreadable
+    auto_error: str = ""
+
+
+def _auto_state():
+    from ..actions.performance.auto import state_store
+    try:
+        return state_store().read().to_dict(), ""
+    except perf_auto.AutoStateError as exc:
+        return None, str(exc)
 
 
 def _observe_factory(rules_path=None):
@@ -60,15 +77,16 @@ def _observe_factory(rules_path=None):
             modes = perf_rules.load_modes(rules_path or paths.performance_rules_path())
         except perf_rules.PolicyError as exc:
             return Observation(view, (), str(exc))
+        auto, auto_error = _auto_state()
         return Observation(view, perf_rules.plan(view, snapshot.procs, modes, tracker,
-                                                 time.monotonic()))
+                                                 time.monotonic()), auto=auto, auto_error=auto_error)
     return observe
 
 
 class SuggestionCard(QFrame):
     """One suggestion: what, why, how long it has held and the lever (never applied here)."""
 
-    def __init__(self, item, on_close=None, parent=None):
+    def __init__(self, item, on_close=None, on_snooze=None, on_protect=None, waiting="", parent=None):
         super().__init__(parent)
         self.setObjectName("card")
         self.item = item
@@ -92,12 +110,30 @@ class SuggestionCard(QFrame):
         layout.setSpacing(4)
         for widget in (self.title, self.detail, self.action):
             layout.addWidget(widget)
-        self.close_button = None
+        if waiting:
+            self.waiting = QLabel("Automático: " + waiting)
+            self.waiting.setObjectName("why")
+            self.waiting.setWordWrap(True)
+            layout.addWidget(self.waiting)
+        self.close_button = self.snooze_button = self.protect_button = None
+        buttons = QHBoxLayout()
         if item.closable and on_close is not None:
             self.close_button = QPushButton("Fechar " + item.label)
             self.close_button.setAccessibleName(f"Fechar {item.label}: {item.action}")
             self.close_button.clicked.connect(lambda: on_close(item))
-            layout.addWidget(self.close_button)
+            buttons.addWidget(self.close_button)
+        if item.mode == perf_rules.AUTOMATIC and item.kind == perf_rules.CLOSE and on_snooze is not None:
+            self.snooze_button = QPushButton("Adiar 30 min")
+            self.snooze_button.setAccessibleName(f"Adiar o fechamento automático de {item.label}")
+            self.snooze_button.clicked.connect(lambda: on_snooze(item))
+            self.protect_button = QPushButton("Proteger sempre")
+            self.protect_button.setAccessibleName(f"Nunca fechar {item.label}")
+            self.protect_button.clicked.connect(lambda: on_protect(item))
+            buttons.addWidget(self.snooze_button)
+            buttons.addWidget(self.protect_button)
+        if buttons.count():
+            buttons.addStretch(1)
+            layout.addLayout(buttons)
 
 
 class PerformanceTab(QWidget):
@@ -113,6 +149,8 @@ class PerformanceTab(QWidget):
         self._poller = None
         self.view = None
         self.suggestions = ()
+        self.auto = None
+        self._waiting = {}
         self.summary = QLabel("Aguardando a primeira observação…")
         self.summary.setWordWrap(True)
         self.notice = QLabel("")
@@ -144,6 +182,16 @@ class PerformanceTab(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self.summary)
         layout.addWidget(self.notice)
+        self.auto_status = QLabel("")
+        self.auto_status.setWordWrap(True)
+        self.resume_button = QPushButton("Retomar automático")
+        self.resume_button.setAccessibleName("Fechar o disjuntor do Modo Desempenho automático")
+        self.resume_button.clicked.connect(self.request_resume)
+        self.resume_button.hide()
+        auto_row = QHBoxLayout()
+        auto_row.addWidget(self.auto_status, 1)
+        auto_row.addWidget(self.resume_button)
+        layout.addLayout(auto_row)
         layout.addLayout(self.cards)
         layout.addLayout(self.rules)
         layout.addWidget(self.table, 1)
@@ -208,7 +256,55 @@ class PerformanceTab(QWidget):
             self.notice.setText(f"Modo Desempenho desligado: {observation.policy_error}")
         else:
             self.notice.setText(self._idle_notice())
+        self.show_auto(observation.auto, observation.auto_error)
         self.show_suggestions(observation.suggestions)
+
+    def show_auto(self, auto, error=""):
+        self.auto = auto
+        self._waiting = {}
+        if auto is None:
+            self.auto_status.setText("Automático desligado: " + (error or "estado indisponível"))
+            self.resume_button.hide()
+            return
+        last = auto.get("last") or {}
+        self._waiting = {(w["rule"], w["unit"]): w["why"] for w in last.get("waiting", [])}
+        breaker = auto.get("breaker", "")
+        history = auto.get("history", [])
+        done = f" · último: {history[-1]['label']} ({history[-1]['outcome']})" if history else ""
+        if breaker:
+            self.auto_status.setText("Automático pausado pelo disjuntor: " + breaker + done)
+        elif last:
+            trigger = last.get("trigger") or "sem pressão no host"
+            self.auto_status.setText(f"Automático ativo · gatilho: {trigger}{done}")
+        else:
+            self.auto_status.setText("Automático sem executor: instale com folego performance install --confirmar"
+                                     + done)
+        self.resume_button.setVisible(bool(breaker))
+
+    def request_resume(self):
+        if self._jobs is None or self.closing:
+            return
+        if self._confirm("Retomar automático?", "Fechar o disjuntor e voltar a avaliar fechamentos "
+                                                "automáticos no próximo ciclo?"):
+            self._run("performance-resume", "", "o disjuntor")
+
+    def request_snooze(self, item):
+        if self._jobs is not None and not self.closing:
+            self._run("performance-snooze", item.rule + "\t" + item.unit, item.label)
+
+    def request_protect(self, item):
+        if self._jobs is None or self.closing:
+            return
+        if self._confirm("Proteger " + item.label + " sempre?",
+                         f"Criar uma exclusão permanente para {item.label}. O Modo Desempenho nunca "
+                         "mais o sugerirá nem fechará; desfaça em órfãos › proteções."):
+            self._run("performance-protect", item.rule + "\t" + item.unit, item.label, confirm=True)
+
+    def _run(self, acao, target, label, confirm=False):
+        self.closing = label
+        self.notice.setText(self._idle_notice())
+        self.show_suggestions(self.suggestions)
+        self._jobs.run(acao, target, confirm=confirm, done=self._closed)
 
     def show_suggestions(self, items):
         self.suggestions = tuple(items)
@@ -221,14 +317,18 @@ class PerformanceTab(QWidget):
             empty.setObjectName("why")
             self.cards.addWidget(empty)
         for item in items:
-            card = SuggestionCard(item, on_close=None if self.closing else self.request_close)
+            busy = bool(self.closing)
+            card = SuggestionCard(item, on_close=None if busy else self.request_close,
+                                  on_snooze=None if busy else self.request_snooze,
+                                  on_protect=self.request_protect,
+                                  waiting=self._waiting.get((item.rule, item.unit), ""))
             self.cards.addWidget(card)
 
     def _idle_notice(self):
         if self.closing:
-            return f"Fechando {self.closing}…"
-        return ("Nada é fechado sem o seu clique: só regras em Assistido oferecem Fechar, "
-                "depois da espera completa.")
+            return f"Aplicando em {self.closing}…"
+        return ("Fechar exige espera completa: Assistido pede o seu clique; Automático só age "
+                "sob pressão, após aviso e carência, dentro do orçamento.")
 
     @staticmethod
     def _ask(title, text):
@@ -242,11 +342,7 @@ class PerformanceTab(QWidget):
                 "O Fôlego revalida agentes, exclusões e a condição antes de pedir, e confere a saída.")
         if not self._confirm("Fechar " + item.label + "?", text):
             return
-        self.closing = item.label
-        self.notice.setText(self._idle_notice())
-        self.show_suggestions(self.suggestions)
-        self._jobs.run("performance-close", item.rule + "\t" + item.unit, confirm=True,
-                       done=self._closed)
+        self._run("performance-close", item.rule + "\t" + item.unit, item.label, confirm=True)
 
     def _closed(self, payload):
         label, self.closing = self.closing, ""

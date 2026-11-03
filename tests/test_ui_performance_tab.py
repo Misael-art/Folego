@@ -23,7 +23,7 @@ def test_tab_polls_only_while_visible_and_never_acts(qapp, tmp_path):
     assert tab.table.rowCount() == 1 and tab.table.item(0, 1).text() == "edge"
     assert "indisponível" in tab.summary.text()
     tab.show_observation(Observation(view()))
-    assert "sem o seu clique" in tab.notice.text()
+    assert "Assistido pede o seu clique" in tab.notice.text()
     tab.hide(); qapp.processEvents()
     assert not tab._poller._timer.isActive()
     tab.shutdown()
@@ -79,3 +79,28 @@ def test_assisted_ready_card_closes_only_after_confirmation(qapp, tmp_path):
     assert tab.closing == "steam" and tab.cards.itemAt(0).widget().close_button is None
     jobs.done({"outcome": "sucesso", "reason": "todos saíram"})
     assert tab.closing == "" and "sucesso" in tab.notice.text()
+
+
+def test_automatic_card_offers_snooze_protect_and_breaker_resume(qapp, tmp_path):
+    jobs = Jobs()
+    tab = PerformanceTab(observe_factory=lambda _p: (lambda: Observation(view())),
+                         rules_path=tmp_path / "r.json", jobs=jobs, confirm_fn=lambda t, x: True)
+    item = perf_rules.Suggestion("steam-idle", "Steam", perf_rules.CLOSE, "app-steam.service", "steam",
+                                 500_000, "CPU 0%", "Sair", True, 600.0, 600.0, perf_rules.AUTOMATIC,
+                                 "tray", (5,))
+    state = {"breaker": "2 falhas", "history": [], "last": {"trigger": "", "waiting": [
+        {"rule": "steam-idle", "unit": "app-steam.service", "label": "steam", "why": "carência: 30 s"}]}}
+    tab.show_observation(Observation(view(), (item,), auto=state))
+    card = tab.cards.itemAt(0).widget()
+    assert "carência" in card.waiting.text() and not tab.resume_button.isHidden()
+    assert "disjuntor" in tab.auto_status.text()
+    card.snooze_button.click()
+    assert jobs.calls[-1] == ("performance-snooze", "steam-idle\tapp-steam.service", False)
+    jobs.done({"outcome": "sucesso", "reason": "adiado"})
+    tab.cards.itemAt(0).widget().protect_button.click()
+    assert jobs.calls[-1] == ("performance-protect", "steam-idle\tapp-steam.service", True)
+    jobs.done({"outcome": "sucesso"})
+    tab.resume_button.click()
+    assert jobs.calls[-1][0] == "performance-resume"
+    tab.show_auto(None, "versão")
+    assert "desligado" in tab.auto_status.text() and tab.resume_button.isHidden()

@@ -5,7 +5,7 @@ an explicit rule names it and its objective condition held for the whole wait.
 The user file only chooses a mode per rule. A missing file means the defaults;
 an unreadable file or an unknown schema disables every rule (fail closed).
 Assisted mode closes one ready suggestion per explicit confirmation; automatic
-mode does not exist yet and is refused as a value.
+mode closes only through the gates of `core.perf_auto`.
 """
 from __future__ import annotations
 
@@ -20,7 +20,9 @@ SCHEMA_VERSION = 1
 OFF = "off"
 SUGGEST = "suggest"
 ASSISTED = "assisted"
-MODES = (OFF, SUGGEST, ASSISTED)
+AUTOMATIC = "automatic"
+MODES = (OFF, SUGGEST, ASSISTED, AUTOMATIC)
+CLOSING_MODES = (ASSISTED, AUTOMATIC)
 CLOSE = "close"
 ADVICE = "advice"
 
@@ -120,7 +122,7 @@ class Suggestion:
 
     @property
     def closable(self) -> bool:
-        return self.kind == CLOSE and self.ready and self.mode == ASSISTED and bool(self.channel)
+        return self.kind == CLOSE and self.ready and self.mode in CLOSING_MODES and bool(self.channel)
 
 
 class ConditionTracker:

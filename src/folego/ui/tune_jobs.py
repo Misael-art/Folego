@@ -25,7 +25,8 @@ MUTATING = ("apply", "revert", "release", "restore", "expire", "recover",
             "startup-enable", "startup-disable", "startup-sync")
 MUTATING = (*MUTATING, "review-execute", "review-cancel", "review-reconcile", "jobs-retain")
 MUTATING = (*MUTATING, "accessibility-activate", "accessibility-save-profile")
-MUTATING = (*MUTATING, "performance-close")
+MUTATING = (*MUTATING, "performance-close", "performance-snooze", "performance-protect",
+            "performance-resume")
 # .../src — where folego lives for this process. A child started from a
 # .desktop file has no PYTHONPATH, and "-m folego.*" then dies on import.
 PACKAGE_ROOT = str(Path(__file__).resolve().parents[2])

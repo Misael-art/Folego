@@ -120,3 +120,15 @@ def test_revalidation_refuses_without_touching_the_app(tmp_path):
         assert proc.poll() is None
     finally:
         proc.kill()
+
+
+def test_automatic_trigger_requires_automatic_mode(tmp_path):
+    proc = child()
+    try:
+        plan, coordinator, _j, observe, read = harness(tmp_path, proc)
+        auto_plan = executor.ActionPlan(plan.action, plan.target, {**plan.params, "trigger": executor.AUTO})
+        never = lambda pids: (_ for _ in ()).throw(AssertionError("closer must not run"))
+        verdict = run(auto_plan, coordinator, observe, read, never)
+        assert verdict.outcome is Outcome.REFUSED and "automático" in verdict.reason
+    finally:
+        proc.kill()

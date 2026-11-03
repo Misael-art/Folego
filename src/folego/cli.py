@@ -240,9 +240,13 @@ def build_parser() -> argparse.ArgumentParser:
     ai.add_argument("--json", action="store_true")
 
     perf = commands.add_parser("performance", help="modo desempenho: observação por app; somente leitura")
-    perf.add_argument("sub", choices=["status", "plan", "rules", "set", "close"])
+    perf.add_argument("sub", choices=["status", "plan", "rules", "set", "close", "auto", "watch",
+                                      "resume", "snooze", "protect", "install", "uninstall"])
     perf.add_argument("rule", nargs="?", help="com set/close: id da regra")
-    perf.add_argument("mode", nargs="?", choices=["off", "suggest", "assisted"], help="com set: modo")
+    perf.add_argument("mode", nargs="?", choices=["off", "suggest", "assisted", "automatic"],
+                      help="com set: modo")
+    perf.add_argument("--intervalo", type=float, default=10.0, help="com watch: segundos por ciclo")
+    perf.add_argument("--ciclos", type=int, default=None, help="com watch: para após N ciclos")
     perf.add_argument("--unit", help="com close: unit revisada do grupo")
     perf.add_argument("--confirmar", action="store_true", help="com close: pede o fechamento")
     perf.add_argument("--json", action="store_true")
@@ -954,7 +958,7 @@ def _cmd_performance(args) -> int:
             modes = perf_rules.load_modes(rules_path)
             if args.sub == "set":
                 if args.rule not in perf_rules.BY_ID or args.mode is None:
-                    sys.stderr.write("uso: folego performance set <regra> off|suggest|assisted\n")
+                    sys.stderr.write("uso: folego performance set <regra> off|suggest|assisted|automatic\n")
                     return EXIT_REFUSED
                 modes[args.rule] = args.mode
                 perf_rules.save_modes(rules_path, modes)
@@ -964,12 +968,35 @@ def _cmd_performance(args) -> int:
         for rule in perf_rules.RULES:
             print(f"{modes[rule.id]:<8} {rule.id:<18} {rule.title} — {rule.closer}")
         return EXIT_OK
+    if args.sub in ("auto", "watch", "resume", "snooze", "install", "uninstall"):
+        return _performance_auto(args)
     collector = scan.collector_for()
     collector.collect()
     time.sleep(1.0)  # CPU fractions exist only across two samples
     snapshot = collector.collect()
     view = perf_model.observe(snapshot, protected_fn=_protection_checker())
     act = view.activity
+    if args.sub == "protect":
+        group = next((g for g in view.groups if g.unit == args.unit), None)
+        by_pid = {p.pid: p for p in snapshot.procs}
+        members = [by_pid[pid] for pid in group.pids if pid in by_pid] if group else []
+        if not members:
+            sys.stderr.write("unit não encontrada na observação atual\n")
+            return EXIT_REFUSED
+        root = min(members, key=lambda p: p.starttime)
+        if not args.confirmar:
+            sys.stderr.write(f"dry-run: protegeria o app {root.comm!r} sempre; use --confirmar\n")
+            return EXIT_NEEDS_CONFIRM
+        try:
+            item = ExclusionList().add("app", root.comm)
+        except ExclusionError as exc:
+            sys.stderr.write(f"exclusão não gravada: {exc}\n")
+            return EXIT_REFUSED
+        print(json.dumps({"ok": True, "outcome": "sucesso", "exclusion_id": item.exclusion_id,
+                          "app": root.comm, "reason": f"{root.comm} protegido sempre"},
+                         ensure_ascii=False)
+              if args.json else f"{root.comm} protegido sempre (exclusão {item.exclusion_id})")
+        return EXIT_OK
     if args.sub == "close":
         return _performance_close(args, collector, snapshot, view, rules_path)
     if args.sub == "plan":
@@ -1017,6 +1044,66 @@ def _cmd_performance(args) -> int:
     return EXIT_OK
 
 
+def _performance_auto(args) -> int:
+    import time
+    from .actions.performance import auto
+    from .core import perf_auto
+    if args.sub == "watch":
+        result = auto.watch(interval=max(2.0, args.intervalo), cycles=args.ciclos)
+        if not result["ok"]:
+            sys.stderr.write(result["reason"] + "\n")
+            return EXIT_REFUSED
+        return EXIT_OK
+    if args.sub in ("install", "uninstall"):
+        if not args.confirmar:
+            sys.stderr.write(f"dry-run: {args.sub} {auto.UNIT}; use --confirmar\n")
+            return EXIT_NEEDS_CONFIRM
+        try:
+            result = (auto.install if args.sub == "install" else auto.uninstall)(confirmed=True)
+        except ValueError as exc:
+            sys.stderr.write(f"{exc}\n")
+            return EXIT_REFUSED
+        print(json.dumps(result) if args.json else f"{args.sub}: {result['unit']}")
+        return EXIT_OK
+    store = auto.state_store()
+    try:
+        if args.sub == "resume":
+            with store.update() as state:
+                state.breaker, state.failures = "", 0
+            text = "disjuntor fechado: o automático volta a avaliar no próximo ciclo"
+            print(json.dumps({"ok": True, "outcome": "sucesso", "reason": text}, ensure_ascii=False)
+                  if args.json else text)
+            return EXIT_OK
+        if args.sub == "snooze":
+            if not args.rule or not args.unit:
+                sys.stderr.write("uso: folego performance snooze <regra> --unit U\n")
+                return EXIT_REFUSED
+            with store.update() as state:
+                state.snoozed[perf_auto.key_of(args.rule, args.unit)] = time.time() + perf_auto.SNOOZE_S
+                state.announced.pop(perf_auto.key_of(args.rule, args.unit), None)
+            print(json.dumps({"ok": True, "outcome": "sucesso", "snoozed_s": perf_auto.SNOOZE_S,
+                              "reason": f"adiado por {perf_auto.SNOOZE_S / 60:.0f} min"},
+                             ensure_ascii=False) if args.json
+                  else f"adiado por {perf_auto.SNOOZE_S / 60:.0f} min")
+            return EXIT_OK
+        state = store.read()
+    except perf_auto.AutoStateError as exc:
+        sys.stderr.write(f"automático desligado: {exc}\n")
+        return EXIT_REFUSED
+    if args.json:
+        print(json.dumps(state.to_dict(), indent=2, ensure_ascii=False))
+        return EXIT_OK
+    print("disjuntor: " + (state.breaker or "fechado"))
+    last = state.last
+    if last:
+        print(f"último ciclo: gatilho {last.get('trigger') or 'nenhum'}")
+        for item in last.get("waiting", []):
+            print(f"  {item['label']} ({item['rule']}): {item['why']}")
+    for item in state.history[-5:]:
+        print(f"  {time.strftime('%d/%m %H:%M', time.localtime(item['ts']))} {item['label']}: {item['outcome']}")
+    return EXIT_OK
+
+
 def _performance_close(args, collector, snapshot, view, rules_path) -> int:
     import time
     from pathlib import Path
@@ -1043,7 +1130,7 @@ def _performance_close(args, collector, snapshot, view, rules_path) -> int:
     group = next((g for g in view.groups if g.unit == args.unit), None)
     if rule is None or group is None:
         return answer("recusa", "regra ou unit não encontrada na observação atual", EXIT_REFUSED)
-    if modes[rule.id] != perf_rules.ASSISTED:
+    if modes[rule.id] not in perf_rules.CLOSING_MODES:
         return answer("recusa", f"regra {rule.id} não está em modo assistido", EXIT_REFUSED)
     ok, why = perf_rules.condition(rule, group, snapshot.procs)
     if not ok:

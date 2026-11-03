@@ -1,5 +1,27 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Modo Desempenho, incremento 4 (Automático) — 03/11/2026
+
+Modo `automatic` por regra. `core/perf_auto.py` (puro) decide: disjuntor
+fechado; pressão (PSI memória ≥ 5% em 60 s, RAM disponível < 15% ou agentes em
+build/teste); sem adiamento; app não fechado com sucesso neste boot (reabertura =
+repouso até o próximo boot); orçamento 3/h no total e 1/h por regra; aviso e
+carência de 60 s; no máximo um fechamento por ciclo. Duas falhas seguidas abrem o
+disjuntor; só `resume` fecha. Estado versionado com trava em
+`performance-auto.json`; ilegível desliga o automático.
+`actions/performance/auto.py`: ciclo (mesmo executor, gatilho `auto`, que exige
+regra em automático na revalidação), `notify-send` no aviso, `watch` com trava
+de instância única e unit opcional `folego-performance.service`
+(`install|uninstall --confirmar`; **não instalada no host**). CLI `auto`,
+`watch`, `resume`, `snooze`, `protect` (exclusão `app` do processo raiz). Aba:
+estado do automático, motivo de espera por card, **Adiar 30 min**, **Proteger
+sempre** e **Retomar automático**. Host real com estado privado e regras no
+padrão: `watch` 3 ciclos sem efeito; segundo executor recusado. Testes:
+headless **1208 passed, 2 skipped**; Qt **1530 passed, 2 skipped**. GUI
+reaberta pela bandeja: 50 ticks/10 s. Pendente: o usuário escolher regras em
+Automático e instalar a unit; primeiro fechamento real; conferência visual.
+Próximo: incremento 5 (WindowClose/foco, downloads e CDP, soak com agentes).
+
 ## Modo Desempenho, incremento 3 (Assistido) — 03/11/2026
 
 Modo `assisted` por regra. `actions/performance/closers.py`: `tray_quit` aciona

@@ -28,7 +28,7 @@ def test_modes_default_without_file_and_fail_closed_on_bad_schema(tmp_path):
     assert perf_rules.load_modes(path) == DEFAULTS
     perf_rules.save_modes(path, {**DEFAULTS, "steam-idle": "off"})
     assert perf_rules.load_modes(path)["steam-idle"] == "off"
-    for bad in ({"version": 2}, {"version": 1, "modes": {"steam-idle": "automatic"}},
+    for bad in ({"version": 2}, {"version": 1, "modes": {"steam-idle": "kill"}},
                 {"version": 1, "modes": {"nova": "suggest"}}):
         path.write_text(json.dumps(bad))
         with pytest.raises(perf_rules.PolicyError):
