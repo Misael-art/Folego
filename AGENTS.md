@@ -66,6 +66,15 @@ resultado por capacidade; desconhecido bloqueia repetição. Não autoriza fecha
 Steam, reset USB, alterar perfis às cegas ou reiniciar a sessão como teste.
 A supervisão automática continua restrita ao contrato anterior de entrada.
 
+### Modo Desempenho autorizado em 03/11
+
+Pedido do usuário: Modo Desempenho opcional que monitora e **fecha
+automaticamente** apps fora do desenvolvimento com agentes, conforme
+`docs/MODO-DESEMPENHO.md`. Desligado por padrão; somente regras de alvo
+explícitas ativadas pelo usuário; fechamento pelo canal do app (bandeja, unit,
+janela) com intenção/ID, revalidação no ato, orçamento e disjuntor. Agentes,
+projetos e classes protegidas nunca são alvo. SIGKILL continua manual.
+
 ## Organização do desenvolvimento
 
 1. Escolha uma pendência de `docs/HANDOFF.md`; reproduza o contrato que falha.

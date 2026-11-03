@@ -1,5 +1,11 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Modo Desempenho planejado — 03/11/2026
+
+Arquitetura e incrementos em `docs/MODO-DESEMPENHO.md`; exceção registrada em
+`AGENTS.md`. Nada implementado ainda. Próximo: incremento 1 (observação:
+`perf_model`, `agents`, PSI, aba e CLI somente leitura).
+
 ## CPU da GUI no pulso de entregas — 03/11/2026
 
 A thread da GUI consumia ~35% de CPU: o pulso infinito de entregas redesenhava o
