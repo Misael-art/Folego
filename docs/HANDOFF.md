@@ -1,5 +1,20 @@
 # Passagem para o próximo agente — atualizada em 02/11/2026
 
+## Diário: cauda JSON sem terminador — 03/11/2026
+
+Em `395cfd6`, `Journal.load()` usava `splitlines()` e aceitava uma última linha
+JSON válida sem `\n`. O próximo append poderia colar registros e o Coordinator
+atingir o executor antes de descobrir a corrupção. A leitura agora exige o
+terminador em toda linha; não altera nem trunca o diário. Teste descartável pelo
+Coordinator: duas tentativas com o mesmo ID recusadas antes do efeito, bytes
+preservados e consulta explicitamente bloqueada. Após completar manualmente a
+linha **somente na fixture**, o mesmo ID permanece intenção pendente; registrar
+resultado permite consulta sem reaplicar. Testes no host: `./dev test-headless`
+**1220 passed, 2 skipped**; `./dev test` (Qt offscreen) **1544 passed, 2 skipped**.
+Linux/Python 3.14.7, HOME/XDG privados, suítes sequenciais; nenhum efeito real.
+O runner Ubuntu ainda tinha duas falhas Qt no SHA anterior; verificar no novo
+SHA. Próximo: investigar o oráculo de transparência Qt no CI.
+
 ## Pontes MCP: inventário e finalização assistida — 03/11/2026
 
 Investigação: o servidor MCP real é o `ai-memory` (:49374). As duas

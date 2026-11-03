@@ -80,11 +80,14 @@ class Journal:
         if not self.path.exists():
             return [], []
         text = self.path.read_text(encoding="utf-8", errors="replace")
-        lines = text.splitlines()
+        lines = text.splitlines(keepends=True)
         records: list[JournalRecord] = []
         problems: list[str] = []
         expected = 1
         for number, raw in enumerate(lines, start=1):
+            if not raw.endswith("\n"):
+                problems.append(f"linha {number}: sem terminador (escrita interrompida?)")
+                continue
             if not raw.strip():
                 problems.append(f"linha {number}: vazia")
                 continue

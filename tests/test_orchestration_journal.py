@@ -113,6 +113,18 @@ def test_a_torn_tail_is_a_problem_and_blocks_state_by_default(book):
     assert book.state_of("op-1", allow_problems=True).status is OperationStatus.COMPLETED
 
 
+def test_valid_json_without_line_terminator_is_not_a_complete_record(book):
+    book.append_intent(a_plan())
+    original = book.path.read_bytes()[:-1]
+    book.path.write_bytes(original)
+    records, problems = book.load()
+    assert records == []
+    assert problems == ["linha 1: sem terminador (escrita interrompida?)"]
+    with pytest.raises(CorruptJournal, match="sem terminador"):
+        book.append_intent(a_plan("op-2"))
+    assert book.path.read_bytes() == original
+
+
 def test_an_interior_garbage_line_is_a_problem(book):
     book.append_intent(a_plan("op-1"))
     book.append_intent(a_plan("op-2"))

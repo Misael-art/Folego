@@ -77,6 +77,32 @@ def test_a_repeated_operation_is_consulted_not_reapplied(coord):
     assert second.to_dict() == first.to_dict()
 
 
+def test_unterminated_valid_intent_blocks_effect_and_same_id_until_recovery(coord):
+    calls = []
+    plan = a_plan()
+    coord.journal.append_intent(plan)
+    original = coord.journal.path.read_bytes()[:-1]
+    coord.journal.path.write_bytes(original)
+
+    first = coord.run(plan, counting_executor(calls))
+    again = coord.run(plan, counting_executor(calls))
+    assert first.outcome is Outcome.REFUSED
+    assert again.outcome is Outcome.REFUSED
+    assert "sem terminador" in first.reason
+    assert calls == [] and coord.journal.path.read_bytes() == original
+    with pytest.raises(CorruptJournal, match="sem terminador"):
+        coord.journal.state_of(plan.operation_id)
+
+    # A prova é descartável: concluir a linha restaura a intenção existente,
+    # sem criar uma segunda operação nem executar o efeito ao consultar o ID.
+    coord.journal.path.write_bytes(original + b"\n")
+    pending = coord.run(plan, counting_executor(calls))
+    assert pending.outcome is Outcome.UNKNOWN and calls == []
+    coord.journal.append_result(ok_result(plan))
+    recovered = coord.run(plan, counting_executor(calls))
+    assert recovered.outcome is Outcome.OK and calls == []
+
+
 @pytest.mark.parametrize("error", [OSError(28, "disk full"),
                                   PermissionError(13, "denied"),
                                   CorruptJournal("truncated result")])
