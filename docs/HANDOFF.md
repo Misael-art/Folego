@@ -19,7 +19,10 @@ Grok remanescente. Testes: headless **1176 passed, 2 skipped**; Qt offscreen
 **1492 passed, 2 skipped**, sequenciais, HOME/XDG/TMP privados no scratchpad
 do agente — `./dev test` recusou por 20 workspaces retidos em `.scratch/dev-tests`
 (nada apagado; inspecionar antes de liberar). GUI em execução ainda carrega o
-código anterior até ser reaberta pela bandeja.
+código anterior até ser reaberta pela bandeja. Reaberta depois: "Sair do Fôlego"
+via DBusMenu (PID 1827618, starttime conferido) e uma chamada `./dev gui`; novo
+PID **2275351**, starttime **10748131**, compacto restaurado pela bandeja.
+Anéis na GUI real: Codex 30, Codex Web 11, Claude ?, Grok 0.
 
 ## Medidores circulares animados de IA — 02/11/2026
 
