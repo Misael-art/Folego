@@ -23,10 +23,15 @@ bandeja revelou que `QAction.triggered` enviava um booleano ao novo argumento
 de posição; o valor passou a ser ignorado, e um teste específico cobre a
 abertura pelo menu. A regra do KWin também posicionou o flutuante parcialmente
 fora da tela quando sua altura aumentou; agora a posição é conferida e limitada
-à área útil. Duas tentativas nativas intermediárias detectaram conflitos entre
+à área útil. Tentativas nativas intermediárias detectaram conflitos entre
 a conferência e cliques de encaixe ou mudanças tardias do KWin. Elas estão
 preservadas em `.scratch/dev-tests-reviewed` e não contam como aceite; a prova
 final é o [recibo atual](result.json). A prova física cobre apenas a área
 948 × 593 e a transição
 da janela própria, sem certificar HD, widescreen ou
 outras escalas do compositor.
+
+Na instalação final do host, o item da bandeja abriu o widget flutuante em
+`(604,331)`, com 280 × 256,3 dentro da área 948 × 593. A Central foi ocultada;
+o serviço `app-folego@autostart.service` ficou ativo no PID 1674038. Os cliques
+de encaixe foram validados na janela de QA própria.

@@ -1,5 +1,66 @@
 # Passagem para o próximo agente — atualizada em 04/11/2026
 
+## Barra fora da tela ao voltar da Central — 04/11/2026
+
+Incidente reportado pelo usuário na instância residente: a barra superior
+948 × 132 reaparecia em `(604, 368)` na área útil `(0, 0, 948, 593)`, fora do
+topo e com a alça de retorno fora da tela. A regra própria `folego-widget` do
+KWin ainda tinha `position=604,368`, `positionrule=3`; ao remapear a mesma
+janela após visitar a Central, o compositor reaplicava essa posição inicial.
+O código anterior conferia apenas se o alvo calculado tinha mudado, então não
+reposicionava a barra. Owner: checkout canônico na branch
+`codex/compact-header-quota-20261103`. Dependências: controlador de posição
+KWin já usado pelo produto e geometria da área útil Qt. Aceite: reabrir o topo
+em `(0,0,948,132)`, poder escolher laterais e flutuante pela Central, não perder
+clique durante conferência de posição, e deixar o flutuante inteiro na tela.
+
+Commits locais: `b2d189f` reconcilia o encaixe ao exibir a janela e acrescenta
+o menu **Posição do widget** na Central e no widget; **Voltar** na Central abre
+o flutuante. `7645b26` corrige o booleano enviado por `QAction.triggered` ao
+abrir o widget pela bandeja, detectado na primeira instalação do host.
+`8f7a42e` confere a posição flutuante com o KWin, limita a janela à área útil
+quando sua altura muda e, após remapear uma barra, verifica mudanças tardias
+do compositor antes de considerar a posição estável. As correções tardias são
+limitadas e ocorrem somente após uma leitura confirmada de divergência. A
+escolha de lateral feita durante a conferência é preservada.
+
+Teste focado final `./dev test tests/test_ui_compact.py
+tests/test_ui_main_window_tabs.py tests/test_ui_hover_actions.py -q` passou;
+após o último ajuste de limpeza de estado, `./dev test tests/test_ui_compact.py
+-q` passou. `./dev check` com Python 3.14.7 gerenciado, HOME/XDG privados e
+suítes sequenciais: **1247 passed, 2 skipped** headless;
+**1602 passed, 2 skipped** Qt offscreen. `git diff --check` limpo.
+[Recibo e capturas KDE/Wayland](handoff/validation/dock-remap-2026-11-04/README.md)
+confirmam topo 948 × 132 ao voltar da Central, laterais 112 × 593, menu da
+Central para esquerda e retorno flutuante. Tentativas nativas intermediárias
+encontraram corrida com a conferência de geometria e reposicionamento tardio;
+foram preservadas em `.scratch/dev-tests-reviewed`, não somadas ao aceite.
+
+Host: a GUI original PID 1163759 era a unit transitória do launcher. Ela foi
+encerrada pelo item **Sair do Fôlego** da sua própria bandeja, sem sinal manual.
+Uma abertura por `gtk-launch` caiu no escopo do Codex; essa instância temporária
+foi encerrada pelo mesmo item, e a aplicação passou a ser iniciada pela unit
+existente `app-folego@autostart.service`. A primeira tentativa nessa unit
+exibiu a falha do booleano da bandeja; depois da correção, o PID 1591351 foi
+encerrado pelo próprio menu. `./dev setup` sincronizou a revisão final e a
+unit foi iniciada novamente: PID **1674038**, `active/running`, `Result=success`.
+O item da bandeja abriu o widget flutuante; KWin confirmou `(604,331)`,
+280 × 256,3, inteiro na área útil 948 × 593. A Central foi ocultada pelo menu
+da própria aplicação e o widget ficou visível. Os monitores de entrada e
+desempenho permaneceram ativos nos PIDs 6593/6597. Nenhum outro processo ou
+serviço foi interrompido.
+
+Limites: a instância residente final teve a abertura flutuante conferida no
+KWin; os cliques de encaixe/retorno da revisão final foram exercitados na
+janela de QA própria, não na instância residente. HD, widescreen e outras
+escalas no compositor físico seguem sem aceite. O remoto não contém esta
+branch nem PR. O push normal de `8f7a42e` foi recusado pelo guard local:
+“criação, exclusão ou destino de branch fora da continuidade registrada”. Não
+contornar o guard. Próximo owner: criar a branch remota pelo fluxo oficial,
+conferir base/SHA, enviar por push normal, abrir/reutilizar PR e aguardar os
+checks. Release depende dos gates e artefatos do SHA elegível; pacotes b4
+locais são de revisão anterior.
+
 ## Monitoramento de bateria — 04/11/2026
 
 Pedido autorizado: percentual por cor (verde, amarelo, laranja, vermelho),
