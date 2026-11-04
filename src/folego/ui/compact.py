@@ -304,6 +304,8 @@ class CompactWindow(QWidget):
         self._dock_mode = 'compact'
         self._dock_pending = None
         self._dock_target = None
+        self._needs_show_reconcile = False
+        self._requested_mode = None
         self._compact_geometry = None
         self._capture_waiting = False
         self._capture_restore = False
@@ -341,12 +343,18 @@ class CompactWindow(QWidget):
         self.top_controls_layout.setSpacing(2)
         self.accounts_menu = self.control_menu.addMenu('Contas e cotas de IA')
         self.accounts_menu.aboutToShow.connect(self._refresh_accounts_menu)
+        self.layout_menu = self.control_menu.addMenu('Posição do widget')
+        for label, mode in (('Widget flutuante', 'compact'), ('Lateral esquerda', 'left'),
+                            ('Lateral direita', 'right'), ('Barra superior', 'top')):
+            self.layout_menu.addAction(label, lambda checked=False, target=mode: self.set_dock_mode(target))
         self.shortcut_tabs.customize_requested.connect(self._customize_prompts)
         self.shortcut_tabs.controller.feedback.connect(self._shortcut_result)
         self.shortcut_tabs.controller.payload.connect(self._capture_result)
         self.shortcut_tabs.controller.failed.connect(self._capture_failed)
         self.shortcut_tabs.controller.busy_changed.connect(
             lambda busy: self._screen_changed() if not busy and self._dock_mode != 'compact' else None)
+        self.shortcut_tabs.controller.busy_changed.connect(
+            lambda busy: self._reconcile_after_show() if not busy else None)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -665,6 +673,8 @@ class CompactWindow(QWidget):
                 lambda: self.card.setGraphicsEffect(None)
                 if self.card.graphicsEffect() is effect else None)
             self.dock_fade.start()
+        if self._needs_show_reconcile:
+            QTimer.singleShot(0, self._reconcile_after_show)
 
     def _refresh_accounts_menu(self):
         from ..core import ai_sessions
@@ -1007,10 +1017,40 @@ class CompactWindow(QWidget):
         if sync is not None:
             sync()
 
-    def show_compact(self):
+    def show_compact(self, desired_mode=None):
+        if desired_mode is not None and desired_mode not in DOCK_MODES:
+            raise ValueError('Modo de widget desconhecido')
         self._restore_position()
         self.show()
         self.raise_()
+        if desired_mode is not None:
+            self._requested_mode = desired_mode
+        if self._dock_mode != 'compact' or self._requested_mode is not None:
+            self._needs_show_reconcile = True
+            QTimer.singleShot(0, self._reconcile_after_show)
+
+    def _reconcile_after_show(self):
+        """KWin may reapply the floating position rule when a dock is remapped."""
+        if (not self._needs_show_reconcile or not self.isVisible() or self._force_close
+                or self._dock_pending or self.shortcut_tabs.controller.future is not None):
+            return
+        self._needs_show_reconcile = False
+        requested, self._requested_mode = self._requested_mode, None
+        if requested is not None and requested != self._dock_mode:
+            self.set_dock_mode(requested)
+            return
+        if self._dock_mode == 'compact':
+            return
+        target = dock_geometry(self._dock_mode, self._screen_area())
+        self._dock_target = QRect(target)
+        if self._caps.session_type != 'wayland':
+            self.setGeometry(target)
+            return
+        self._dock_pending = self._dock_mode
+        if not self.shortcut_tabs.controller.request('widget-place',
+                (target.x(), target.y(), target.width(), target.height())):
+            self._dock_pending = None
+            self._shortcut_result('Não foi possível restaurar a posição da barra')
 
     def _watch_screen(self, screen):
         screen.availableGeometryChanged.connect(self._screen_changed)

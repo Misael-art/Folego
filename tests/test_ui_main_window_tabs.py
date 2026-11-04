@@ -373,9 +373,30 @@ def test_back_returns_to_widget_without_tray_or_losing_current_tab(window,qapp):
     assert window.tabs.currentWidget() is window.options
     window.back_button.click();qapp.processEvents()
     assert window._compact.isVisible() and not window.isVisible() and not poller.stopped
-    assert [a.text() for a in window.control_menu.actions()]==['Sair do Fôlego']
+    assert [a.text() for a in window.control_menu.actions()]==[
+        'Sair do Fôlego', 'Posição do widget']
     window.control_menu.actions()[0].trigger()
     assert poller.stopped
+
+
+def test_back_from_docked_widget_restores_floating_mode(window, qapp):
+    from PySide6.QtCore import QRect
+    from PySide6.QtTest import QTest
+    from folego.ui.desktop_caps import detect
+    window._compact_factory = lambda owner, _: CompactWindow(
+        owner, caps=detect(session_type='x11', platform='xcb', tray=True))
+    window.show()
+    window.show_compact()
+    compact = window._compact
+    compact._screen_area = lambda: QRect(0, 0, 948, 593)
+    compact.set_dock_mode('top')
+    QTest.qWait(350)
+    compact.open_button.click()
+    window.back_button.click()
+    QTest.qWait(350)
+    assert compact.isVisible() and compact._dock_mode == 'compact'
+    assert compact.width() == 280
+    window.quit()
 
 
 def test_the_window_never_detects_tunings_by_itself(window):

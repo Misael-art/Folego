@@ -207,6 +207,11 @@ class MainWindow(QMainWindow):
         self.control_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.control_menu = QMenu(self.control_button)
         self.control_menu.addAction('Sair do Fôlego', self.quit)
+        self.widget_position_menu = self.control_menu.addMenu('Posição do widget')
+        for label, mode in (('Widget flutuante', 'compact'), ('Lateral esquerda', 'left'),
+                            ('Lateral direita', 'right'), ('Barra superior', 'top')):
+            self.widget_position_menu.addAction(
+                label, lambda checked=False, target=mode: self._show_widget_position(target))
         self.control_button.setMenu(self.control_menu)
         header.addWidget(self.control_button)
         self.setMenuWidget(self.navigation_header)
@@ -470,7 +475,7 @@ class MainWindow(QMainWindow):
         self.raise_()
         self.activateWindow()
 
-    def show_compact(self):
+    def show_compact(self, mode=None):
         self._request_history()
         if self._compact is None:
             caps = self._caps or desktop_caps.detect(
@@ -488,16 +493,20 @@ class MainWindow(QMainWindow):
         if self._last_snapshot is not None:
             self._compact.show_snapshot(self._last_snapshot,
                                         signal=self._last_signal)
-        self._compact.show_compact()
+        self._compact.show_compact(desired_mode=mode)
+
+    def _show_widget_position(self, mode):
+        self.show_compact(mode=mode)
+        self.hide_window()
 
     def enter_widget_mode(self) -> bool:
         """Modo widget: abre o widget flutuante e recolhe a janela central para a bandeja."""
-        self.show_compact()
+        self.show_compact(mode='compact')
         self._offer_kwin_rule()
         return self.hide_window()
 
     def return_to_compact(self):
-        self.show_compact()
+        self.show_compact(mode='compact')
         self.hide_window()
 
     def _offer_kwin_rule(self) -> None:

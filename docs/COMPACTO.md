@@ -42,6 +42,11 @@ O encaixe usa a área disponível da tela informada pelo Qt para excluir os
 painéis conhecidos. Em X11, a geometria muda em 260 ms. Em KDE/Wayland, o
 Fôlego pede ao KWin para posicionar **somente sua própria janela** e verifica
 a posição antes de concluir; o conteúdo reaparece suavemente após a confirmação.
+Ao reabrir uma barra depois de visitar a Central, o Fôlego confirma novamente
+o encaixe: a regra inicial do KWin para o widget flutuante pode ter reposicionado
+a mesma janela. **Voltar** na Central abre o widget flutuante. O menu **Posição
+do widget** na Central e no widget oferece também as duas laterais e o topo,
+sem depender da alça de borda estar visível.
 Se o compositor não confirmar, a interface informa a incerteza e não repete o
 pedido por conta própria. O modo de encaixe vale para a janela atual; uma nova
 abertura inicia no compacto.

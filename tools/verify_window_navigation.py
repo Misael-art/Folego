@@ -280,6 +280,15 @@ def main():
                     wait(lambda:compact.action_drawer.maximumHeight()==0 and
                                  compact.drawer_animation.state()==compact.drawer_animation.State.Stopped)
                     records.append(dict(case='dock actions retract',mode=mode,collapsed=True))
+                    if mode=='top':
+                        QTest.mouseClick(compact.open_button,Qt.MouseButton.LeftButton)
+                        wait(lambda:window.isVisible() and not compact.isVisible())
+                        window.show_compact()  # same dock, remapped after the floating KWin position rule
+                        window.hide_window()
+                        wait(lambda:compact.isVisible() and compact._dock_pending is None and
+                                     all(abs(a-b)<=1 for a,b in zip(compositor_rect(),
+                                         (dock_target.x(),dock_target.y(),dock_target.width(),dock_target.height()))))
+                        records.append(dict(case='top restored after full window',geometry=compositor_rect()))
                     back=compact._handles['back']
                     assert back.geometry().bottom()<compact.action_drawer.y(),(mode,back.geometry().getRect(),compact.action_drawer.y())
                     back.hovered=True;back.update();app.processEvents()
@@ -292,6 +301,21 @@ def main():
                     assert returned[3]>=compact.card.sizeHint().height() and compact.action_drawer.maximumHeight()==0,(mode,returned,compact.card.sizeHint().height())
                 compact.grab().save(str(root/'dock-return.png'))
                 records.append(dict(case='native dock return',geometry=compositor_rect()))
+                compact.set_dock_mode('top')
+                wait(lambda:compact._dock_mode=='top' and compact._dock_pending is None)
+                QTest.mouseClick(compact.open_button,Qt.MouseButton.LeftButton)
+                wait(lambda:window.isVisible() and not compact.isVisible())
+                window.widget_position_menu.actions()[1].trigger()
+                wait(lambda:compact.isVisible() and compact._dock_mode=='left' and compact._dock_pending is None)
+                left_target=dock_geometry('left',compact.screen().availableGeometry())
+                assert all(abs(a-b)<=1 for a,b in zip(compositor_rect(),
+                           (left_target.x(),left_target.y(),left_target.width(),left_target.height())))
+                QTest.mouseClick(compact.open_button,Qt.MouseButton.LeftButton)
+                wait(lambda:window.isVisible() and not compact.isVisible())
+                QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)
+                wait(lambda:compact.isVisible() and compact._dock_mode=='compact' and compact._dock_pending is None)
+                assert compact.width()==280
+                records.append(dict(case='full window position menu and floating return',geometry=compositor_rect()))
                 apply_theme(app,'snes-us')
             if args.ai_quota_rings:
                 from folego.core import ai_sessions as ai

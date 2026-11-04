@@ -166,6 +166,43 @@ def test_wayland_dock_waits_for_confirmed_placement(qapp, monkeypatch):
     view.force_close()
 
 
+def test_docked_widget_reapplies_edge_after_remapping(qapp):
+    from PySide6.QtCore import QRect
+    from PySide6.QtTest import QTest
+    view, _ = make(qapp, caps=x11())
+    area = QRect(0, 0, 948, 593)
+    view._screen_area = lambda: area
+    view.show_compact()
+    view.set_dock_mode('top')
+    QTest.qWait(300)
+    view.hide()
+    view.move(604, 368)  # KWin's floating position rule on remap
+    view.show_compact()
+    qapp.processEvents()
+    assert view.geometry() == dock_geometry('top', area)
+    view.force_close()
+
+
+def test_widget_position_menu_switches_docks_and_floating(qapp):
+    from PySide6.QtCore import QRect
+    from PySide6.QtTest import QTest
+    view, _ = make(qapp, caps=x11())
+    view._screen_area = lambda: QRect(0, 0, 948, 593)
+    view.show_compact()
+    view.set_dock_mode('top')
+    QTest.qWait(300)
+    assert [action.text() for action in view.layout_menu.actions()] == [
+        'Widget flutuante', 'Lateral esquerda', 'Lateral direita', 'Barra superior']
+    view.layout_menu.actions()[1].trigger()
+    QTest.qWait(300)
+    assert view._dock_mode == 'left'
+    assert view.geometry() == dock_geometry('left', view._screen_area())
+    view.layout_menu.actions()[0].trigger()
+    QTest.qWait(300)
+    assert view._dock_mode == 'compact' and view.width() == 280
+    view.force_close()
+
+
 def _four_quotas(view):
     from folego.core import ai_sessions as ai
     from PySide6.QtWidgets import QApplication
@@ -444,7 +481,7 @@ def test_widget_header_uses_navigation_and_control_menu_instead_of_window_button
     assert view.open_button.accessibleName()=='Abrir a central do Fôlego'
     assert not hasattr(view,'hide_button') and not hasattr(view,'quit_button')
     assert [a.text() for a in view.control_menu.actions()]==[
-        'Ocultar widget','Sair do Fôlego','Contas e cotas de IA']
+        'Ocultar widget','Sair do Fôlego','Contas e cotas de IA','Posição do widget']
     view._refresh_accounts_menu()
     assert len(view.accounts_menu.actions())==4
     assert all('sem confirmação' in action.text() for action in view.accounts_menu.actions())
