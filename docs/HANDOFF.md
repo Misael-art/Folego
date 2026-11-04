@@ -34,9 +34,28 @@ confere o pixel renderizado. Essa tentativa não é gate aprovado.
 Limites: HD e widescreen foram simulados no Qt offscreen, sem compositor real
 nessas resoluções. A rolagem foi posicionada por código, sem gesto físico;
 não há novo aceite de leitor de tela, áudio, outros fatores de escala ou uso
-prolongado. Próximo passo: registrar a revisão e o estado da instalação no
-host; publicação da branch, PR e release dependem do guard remoto descrito
-abaixo, sem autorização de merge.
+prolongado. Código, documentação e evidência: commit local `4e7be98`.
+
+Instalação no host: `./dev setup` reutilizou o ambiente GUI e o entrypoint
+continua apontando para `src/folego/ui/compact.py` deste checkout. Antes da
+troca, a única janela própria mapeada era o widget à direita, sob
+`app-folego@autostart.service`, PID 84943, UID 1000 e starttime 149690.
+`performance auto-off --json` pausou temporariamente o fechamento automático.
+Após revalidar unit, PID e comando, o item **Sair do Fôlego** da bandeja desse
+processo foi acionado; a unit ficou `inactive/dead`, `Result=success` e o PID
+saiu. A unit própria foi iniciada novamente como PID 270899, `active/running`.
+Pelo menu da bandeja do novo PID, o widget foi exibido e seu controle esquerdo
+foi acionado após validar janela, owner e alvo do ponteiro. O KWin confirmou a
+barra direita em `(836, 0, 112, 593)` (valores lógicos arredondados), como
+antes da troca. Os monitores de entrada/desempenho permaneceram ativos com os
+mesmos PIDs 6593/6597. `performance auto-on --json` restaurou `paused=false`,
+disjuntor vazio, zero falhas e histórico de 17 eventos. Nenhum outro app,
+serviço ou sessão foi parado. A revisão carregada pelo processo é inferida do
+entrypoint e do reinício posterior ao setup; não foi consultada dentro dele.
+
+Próximo passo: publicação da branch, PR e release dependem do guard remoto
+descrito abaixo, sem autorização de merge. O comportamento visual em outros
+monitores e fatores de escala ainda precisa de verificação nativa.
 
 ## Refinamento das barras adaptativas — 04/11/2026
 
