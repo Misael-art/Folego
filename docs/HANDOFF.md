@@ -1,4 +1,50 @@
-# Passagem para o próximo agente — atualizada em 03/11/2026
+# Passagem para o próximo agente — atualizada em 04/11/2026
+
+## Prévia b4 instalada no host — 04/11/2026
+
+Pedido explícito: atualizar a aplicação neste host. O checkout estava limpo em
+`221e7ca819f653fa8cd52ee16beb285b334e91e6`; a instalação local já tinha
+metadados `0.2.0b4` nos ambientes GUI/headless, mas os processos residentes
+tinham sido iniciados antes da atualização. Antes da troca, início com a sessão
+estava ativo, `folego-performance.service` tinha `paused=false`, sem disjuntor,
+e histórico com 16 resultados; a revisão `accessibility.activate` para toque
+(`58176bdf86c94e759e43f661630c5ce8`) seguia pendente. GUI e monitores
+próprios tinham PIDs 5889, 5936 e 5944. Carga e espaço foram conferidos; não
+houve instalação global nem alteração de grant.
+
+`performance auto-off --json` confirmou a pausa temporária. O item habilitado
+**Sair do Fôlego** da bandeja DBusMenu foi acionado depois de confirmar que o
+owner da bandeja, PID 5889 e starttime 6295 pertenciam à GUI própria. A unit
+da janela ficou `inactive/dead`, `Result=success`, e o PID desapareceu sem
+sinal manual. Apenas `folego-performance.service` e
+`folego-accessibility.service` foram parados; ambos ficaram inativos e seus
+PIDs antigos saíram. A revisão pendente manteve o mesmo ID.
+
+`./dev setup` sincronizou o ambiente GUI b4 usando o lockfile existente. As
+duas units próprias e depois a unit gerada `app-folego@autostart.service`
+foram iniciadas, sem habilitar nova automação. No fechamento desta verificação,
+as três estavam `active/running`, `Result=success`, com PIDs novos 747308
+(entrada), 747571 (desempenho) e 747850 (GUI). Os entrypoints apontam para o
+ambiente gerenciado b4; isto sustenta a inferência de que os processos novos
+carregaram b4, sem uma consulta de versão dentro de cada processo. A bandeja
+registrada pertencia ao PID 747850 e mostrava telemetria atual. Pelo item
+próprio **Mostrar controle compacto**, abriu-se uma superfície KWin
+`Fôlego — widget` de 280 px, sem tocar em outras janelas. `performance auto-on`
+restaurou `paused=false`; disjuntor vazio e histórico ainda com 16 resultados.
+`startup status` permaneceu ativo, unit de entrada active/enabled e
+`effects_authorized=false`. O monitor de entrada ficou em observação, com
+baseline 5 e política de efeito desligada; a revisão durável de toque continua
+pendente. Nenhum outro app, agente ou serviço foi encerrado e a sessão gráfica
+não foi reiniciada.
+
+Validação: estados do systemd, owner da bandeja, título/geometria nativos da
+janela, metadados b4 nos dois ambientes, preferência de inicialização,
+automação restaurada e ID da revisão foram conferidos no host. O `./dev check`
+de b4 aprovado no lote anterior cobre 1242 testes headless e 1574 Qt, com 2
+skips em cada perfil; não foi repetido para esta troca sem alteração de código.
+Não há novo aceite de clique físico, múltiplas saídas/escalas, áudio real,
+leitor de tela ou soak. A branch remota continua ausente; PR e release b4
+continuam pendentes conforme a seção seguinte.
 
 ## Widget encaixável e prévia b4 local — 03/11/2026
 
