@@ -162,6 +162,19 @@ def main():
                 settle=time.monotonic()+.35;wait(lambda:time.monotonic()>=settle)
             if args.dock_modes:
                 from folego.ui.compact import dock_geometry
+                from folego.core import ai_sessions as ai
+                window.ai_monitor.pause()
+                wait(lambda: not window.ai_monitor.poller._inflight)
+                now=time.time()
+                items=[]
+                for provider,remaining in (('codex',90),('web',None),('claude',69),('grok',None)):
+                    item=ai.unknown(provider,label='Conta QA')
+                    item.update(account_id=provider+'-dock-qa',default=True)
+                    if remaining is not None:
+                        item.update(observed_at=now,windows=[ai.quota_window('Sessão QA',100-remaining,now+3600,now)])
+                    items.append(item)
+                compact.ai_strip.set_items(items)
+                compact.adjustSize();app.processEvents()
                 def compositor_rect():
                     own=native('^Fôlego — widget$');assert len(own)==1
                     raw=call('kdotool','getwindowgeometry',own[0])
@@ -177,7 +190,35 @@ def main():
                     dock_target=dock_geometry(mode,compact.screen().availableGeometry())
                     actual=compositor_rect()
                     assert all(abs(a-b)<=1 for a,b in zip(actual,(dock_target.x(),dock_target.y(),dock_target.width(),dock_target.height()))),(mode,actual,dock_target)
+                    compact.ai_strip.set_items(items)
+                    assert compact.ai_strip.visible_providers == {'codex','claude'},(mode,compact.ai_strip.visible_providers)
+                    wait(lambda: all(compact.ai_strip.arrival_animations[p].state()==
+                                     compact.ai_strip.arrival_animations[p].State.Stopped
+                                     for p in ('codex','claude')))
+                    quota_positions=[(provider,compact.ai_strip.columns[provider].isVisible(),
+                                      compact.ai_strip.columns[provider].mapTo(compact,QPoint(0,0)).y(),
+                                      compact.ai_strip.columns[provider].height()) for provider in ('codex','claude')]
+                    assert all(visible and 0<=y<compact.height() for _,visible,y,_ in quota_positions),(mode,quota_positions,compact.ai_strip.geometry().getRect(),compact.card.sizeHint().height())
+                    if mode in ('left','right'):
+                        assert all(y+height<=compact.dock_scroll.viewport().height()
+                                   for _,_,y,height in quota_positions),(mode,quota_positions,compact.dock_scroll.viewport().height())
+                        assert not compact.dock_scroll.verticalScrollBar().isVisible()
+                    records.append(dict(case='quota positions',mode=mode,positions=quota_positions,
+                                        strip=compact.ai_strip.mapTo(compact,QPoint(0,0)).y(),
+                                        strip_size=[compact.ai_strip.width(),compact.ai_strip.height()],
+                                        viewport_height=compact.dock_scroll.viewport().height()))
+                    actions=[compact.shortcut_tabs.buttons[key] for key in ('select_all','delete_all','prompts','copy','paste','print')]
+                    centers=[button.mapTo(compact,button.rect().center()) for button in actions]
+                    assert all(button.isVisible() and 0<=center.x()<compact.width() and 0<=center.y()<compact.height()
+                               for button,center in zip(actions,centers)),(mode,[(p.x(),p.y()) for p in centers])
+                    if mode in ('left','right'):
+                        assert compact.width()<=128 and all(centers[i].y()<centers[i+1].y() for i in range(5))
+                        assert all(abs(center.x()-compact.width()/2)<17 for center in centers)
+                        assert compact.gauge.width()>compact.ai_strip.buttons['codex'].iconSize().width()
+                    else:
+                        assert all(abs(centers[i].y()-centers[0].y())<3 for i in range(1,6))
                     compact.grab().save(str(root/('dock-'+mode+'.png')))
+                    compact.ai_strip.grab().save(str(root/('dock-'+mode+'-quotas.png')))
                     records.append(dict(case='native dock placement',mode=mode,geometry=actual,
                                         available=list((compact.screen().availableGeometry().x(),compact.screen().availableGeometry().y(),
                                                         compact.screen().availableGeometry().width(),compact.screen().availableGeometry().height()))))
@@ -186,7 +227,8 @@ def main():
                     wait(lambda:compact._dock_mode=='compact' and compact._dock_pending is None)
                     assert compact.width()==280
                     returned=compositor_rect()
-                    assert all(abs(a-b)<=1 for a,b in zip(returned,compact_origin)),(mode,returned,compact_origin)
+                    assert all(abs(a-b)<=1 for a,b in zip(returned[:3],compact_origin[:3])),(mode,returned,compact_origin)
+                    assert returned[3]>=compact.card.sizeHint().height() and compact.action_drawer.maximumHeight()==0,(mode,returned,compact.card.sizeHint().height())
                 compact.grab().save(str(root/'dock-return.png'))
                 records.append(dict(case='native dock return',geometry=compositor_rect()))
                 apply_theme(app,'snes-us')

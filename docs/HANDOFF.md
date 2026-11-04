@@ -1,5 +1,38 @@
 # Passagem para o próximo agente — atualizada em 04/11/2026
 
+## Refinamento das barras adaptativas — 04/11/2026
+
+Pedido mais recente: a barra encaixada continuava larga e apenas transportava
+o layout compacto. Owner: o checkout canônico, branch
+`codex/compact-header-quota-20261103`. Dependências: layout Qt existente,
+observações de cota já confirmadas e posicionamento do próprio widget via
+KWin; sem novo grant ou efeito sobre recursos. Aceite nesta saída: laterais
+estreitas com indicador principal centralizado, estado/métricas/espaço livre
+em coluna, pausa abaixo da coleta, cotas positivas ordenadas e menores que o
+indicador principal, seis ações individuais na base, cantos arredondados;
+topo organizado na largura útil, retorno funcional e dados sem recorte.
+
+As laterais passaram de 180–220 para 112–128 unidades lógicas conforme a tela.
+O cabeçalho e as métricas se rearranjam para a largura disponível; o indicador
+de saúde mantém 68 unidades e os anéis de cota passam a 42 nas laterais. Ações
+ficam em coluna visível no rodapé, ou numa linha no topo. Espaçamentos,
+tipografia e aviso de espaço livre foram ajustados para caberem junto das
+duas cotas de demonstração na saída menor. A barra de rolagem só aparece se
+o conteúdo exceder a altura. Badges sem entregas ou resgates confirmados não
+reservam altura. O efeito de chegada da cota é removido após a animação, o que
+também permite que a composição aninhada apareça na captura do widget.
+
+Validação: teste focado **38 passed**; `./dev check` final, com Python 3.14.7
+gerenciado e HOME/XDG privados, **1242 passed, 2 skipped** headless e **1574
+passed, 2 skipped** Qt offscreen. [Recibo e capturas KDE/Wayland](handoff/validation/dock-adaptive-2026-11-04/README.md)
+confirmam direita/esquerda 112 × 593, topo 948 × 142, duas cotas inteiras,
+seis ações acessíveis e retorno à posição anterior. Uma tentativa do gate
+combinado foi interrompida após a suíte headless; ela não foi contada como
+aprovada. O primeiro ensaio nativo desta revisão falhou no alvo do ponteiro;
+a repetição integral passou. Outras escalas/saídas, leitor de tela, som real e
+soak permanecem sem aceite. O remoto ainda não contém esta branch nem PR;
+publicação continua sujeita ao guard local descrito abaixo.
+
 ## Prévia b4 instalada no host — 04/11/2026
 
 Pedido explícito: atualizar a aplicação neste host. O checkout estava limpo em

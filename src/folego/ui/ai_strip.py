@@ -1,7 +1,7 @@
 """Quota indicators, new completed sessions and verified application opening."""
 import time
 
-from PySide6.QtCore import Qt, QTimer, QUrl, QEvent, QPoint, QSize, QRectF, QVariantAnimation, QEasingCurve, QPropertyAnimation
+from PySide6.QtCore import Qt, QTimer, QUrl, QEvent, QPoint, QSize, QRectF, QVariantAnimation, QEasingCurve
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap, QDesktopServices, QPen
 from PySide6.QtWidgets import (QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QWidget,
                               QMenu, QInputDialog, QWidgetAction, QGraphicsOpacityEffect, QStyle)
@@ -56,6 +56,7 @@ class AIStrip(QWidget):
         self.visible_providers = set()
         self.arrival_animations = {}
         self.badges = {}
+        self.badge_rows = {}
         self.reset_badges = {}
         self._reset_bright = True
         self.reset_blink = QTimer(self)
@@ -95,6 +96,7 @@ class AIStrip(QWidget):
             badge_row = QWidget()
             badge_row.setFixedHeight(14)
             badge_row.setStyleSheet('background:transparent;')
+            self.badge_rows[provider] = badge_row
             badge_layout = QHBoxLayout(badge_row)
             badge_layout.setContentsMargins(0, 0, 0, 0)
             badge_layout.setSpacing(2)
@@ -120,12 +122,13 @@ class AIStrip(QWidget):
             self.reset_badges[provider] = reset_badge
             column.addWidget(button)
             column.addWidget(badge_row, 0, Qt.AlignmentFlag.AlignHCenter)
-            effect = QGraphicsOpacityEffect(column_widget)
-            effect.setOpacity(1.0)
-            column_widget.setGraphicsEffect(effect)
-            arrival = QPropertyAnimation(effect, b'opacity', self)
+            arrival = QVariantAnimation(self)
             arrival.setDuration(220)
             arrival.setEasingCurve(QEasingCurve.Type.OutCubic)
+            arrival.setStartValue(0.0)
+            arrival.setEndValue(1.0)
+            arrival.valueChanged.connect(lambda value, p=provider: self._arrival_frame(p, value))
+            arrival.finished.connect(lambda p=provider: self._finish_arrival(p))
             self.arrival_animations[provider] = arrival
             self.columns[provider] = column_widget
             layout.addWidget(column_widget, 1)
@@ -140,6 +143,16 @@ class AIStrip(QWidget):
         self.freshness.timeout.connect(self.render)
         on_theme_change(self, self.render)
         self.render()
+
+    def _arrival_frame(self, provider, value):
+        effect = self.columns[provider].graphicsEffect()
+        if effect is not None:
+            effect.setOpacity(value)
+
+    def _finish_arrival(self, provider):
+        column = self.columns[provider]
+        if column.graphicsEffect() is not None:
+            column.setGraphicsEffect(None)
 
     @property
     def poller(self): return self.monitor.poller
@@ -317,6 +330,7 @@ class AIStrip(QWidget):
             reset_badge = self.reset_badges[provider]
             reset_badge.setIcon(gift_icon())
             reset_badge.setVisible(total > 0)
+            self.badge_rows[provider].setVisible(bool(count) or total > 0)
             reset_badge.setText(str(total) if total <= 9 else '9+')
             resets = f'{total} redefinições disponíveis confirmadas'
             reset_badge.setAccessibleName(ai_sessions.NAMES[provider] + ': ' + resets)
@@ -343,15 +357,15 @@ class AIStrip(QWidget):
                     animation = self.arrival_animations[provider]
                     animation.stop()
                     animation.setDuration(min(220, duration))
-                    column.graphicsEffect().setOpacity(0.0)
-                    animation.setStartValue(0.0)
-                    animation.setEndValue(1.0)
+                    effect = QGraphicsOpacityEffect(column)
+                    effect.setOpacity(0.0)
+                    column.setGraphicsEffect(effect)
                     animation.start()
         visible = {p for p, _ in available}
         for provider in self.buttons:
             if provider not in visible:
                 self.arrival_animations[provider].stop()
-                self.columns[provider].graphicsEffect().setOpacity(1.0)
+                self._finish_arrival(provider)
                 self.columns[provider].hide()
         self.visible_providers = visible
         if has_deliveries and self.isVisible():
@@ -393,7 +407,7 @@ class AIStrip(QWidget):
         self.delivery_pulse.stop()
         for provider, animation in self.arrival_animations.items():
             animation.stop()
-            self.columns[provider].graphicsEffect().setOpacity(1.0)
+            self._finish_arrival(provider)
         super().hideEvent(event)
 
     def shutdown(self):

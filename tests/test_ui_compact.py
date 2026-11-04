@@ -64,15 +64,16 @@ def make(qapp, *, caps=None, store=None):
 def test_dock_geometry_respects_available_screen_and_panels():
     from PySide6.QtCore import QRect
     area = QRect(24, 38, 1500, 812)
-    assert dock_geometry('right', area) == QRect(1304, 38, 220, 812)
-    assert dock_geometry('left', area) == QRect(24, 38, 220, 812)
-    assert dock_geometry('top', area) == QRect(24, 38, 1500, 118)
-    assert dock_geometry('top', QRect(0, 0, 700, 500)) == QRect(0, 0, 700, 190)
+    assert dock_geometry('right', area) == QRect(1399, 38, 125, 812)
+    assert dock_geometry('left', area) == QRect(24, 38, 125, 812)
+    assert dock_geometry('top', area) == QRect(24, 38, 1500, 142)
+    assert dock_geometry('top', QRect(0, 0, 700, 500)) == QRect(0, 0, 700, 218)
     with pytest.raises(ValueError):
         dock_geometry('bottom', area)
 
 
 def test_dock_reflows_existing_controls_and_returns_to_compact(qapp):
+    from PySide6.QtCore import QPoint
     from PySide6.QtWidgets import QBoxLayout
     from PySide6.QtTest import QTest
     view, _ = make(qapp)
@@ -88,6 +89,17 @@ def test_dock_reflows_existing_controls_and_returns_to_compact(qapp):
         assert view.open_button.parent() is not None
         assert view.pause_button.parent() is not None
         assert view._handles['back'].isVisible()
+        actions = [view.shortcut_tabs.buttons[key] for key in
+                   ('select_all', 'delete_all', 'prompts', 'copy', 'paste', 'print')]
+        positions = [button.mapTo(view, QPoint(0, 0)) for button in actions]
+        if mode in ('right', 'left'):
+            assert view.width() <= 128
+            assert all(positions[i].y() < positions[i + 1].y() for i in range(5))
+            assert view.pause_button.parent() is view.notice_widget
+            assert view.free_label.parent() is view.readings_widget
+            assert view.action_drawer.maximumHeight() >= view.shortcut_tabs.sizeHint().height()
+        else:
+            assert all(abs(point.y() - positions[0].y()) <= 1 for point in positions)
         view.set_dock_mode('compact')
         QTest.qWait(450)
         assert view.width() == original.width()

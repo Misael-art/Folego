@@ -26,9 +26,9 @@ def dock_geometry(mode: str, area: QRect) -> QRect:
     if mode not in DOCK_MODES[1:] or not area.isValid():
         raise ValueError('Borda ou tela indisponível')
     if mode == 'top':
-        height = min(area.height(), 118 if area.width() >= 900 else 190)
+        height = min(area.height(), 142 if area.width() >= 900 else 218)
         return QRect(area.left(), area.top(), area.width(), height)
-    width = min(220, max(180, area.width() // 4))
+    width = min(128, max(112, area.width() // 12))
     width = min(width, area.width())
     x = area.left() if mode == 'left' else area.right() + 1 - width
     return QRect(x, area.top(), width, area.height())
@@ -218,15 +218,17 @@ class CompactWindow(QWidget):
         gauge_column.setSpacing(0)
         gauge_column.addWidget(self.gauge)
         self.header_widget = QWidget()
-        header = QHBoxLayout(self.header_widget)
+        header = QGridLayout(self.header_widget)
         header.setContentsMargins(0, 0, 0, 0)
-        header.setSpacing(8)
+        header.setSpacing(2)
+        self.header_layout = header
         self.brand = QLabel("Fôlego")
         font = QFont('Noto Sans', 11)
         font.setWeight(QFont.Weight.DemiBold)
         font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, -0.2)
         self.brand.setFont(font)
-        header.addWidget(self.brand, 1)
+        header.addWidget(self.brand, 0, 0)
+        header.setColumnStretch(0, 1)
         self.body_widget = QWidget()
         self.body_layout = QBoxLayout(QBoxLayout.Direction.LeftToRight, self.body_widget)
         body = self.body_layout
@@ -235,16 +237,20 @@ class CompactWindow(QWidget):
         gauge_widget = QWidget()
         gauge_widget.setLayout(gauge_column)
         body.addWidget(gauge_widget)
+        self.gauge_widget = gauge_widget
         readings = QVBoxLayout()
+        self.readings_layout = readings
         readings.setSpacing(3)
         readings.addWidget(self.status_label)
         readings.addWidget(self.detail_label)
         readings_widget = QWidget()
         readings_widget.setLayout(readings)
         body.addWidget(readings_widget, 1)
+        self.readings_widget = readings_widget
         self.ai_strip = AIStrip(self, monitor=getattr(window, 'ai_monitor', None))
         self.footer_widget = QWidget()
         footer = QHBoxLayout(self.footer_widget)
+        self.footer_layout = footer
         footer.setContentsMargins(0, 0, 0, 0)
         footer.addWidget(self.pause_button)
         footer.addStretch(1)
@@ -256,6 +262,7 @@ class CompactWindow(QWidget):
         self.inner.setSpacing(4)
         self.notice_widget = QWidget()
         notices = QVBoxLayout(self.notice_widget)
+        self.notices_layout = notices
         notices.setContentsMargins(0, 0, 0, 0)
         notices.setSpacing(2)
         notices.addWidget(self.alert_label)
@@ -273,7 +280,6 @@ class CompactWindow(QWidget):
         self._dock_pending = None
         self._dock_target = None
         self._compact_geometry = None
-        self._arrange_sections('compact')
         self._capture_waiting = False
         self._capture_restore = False
         self._keyboard_restore = False
@@ -298,7 +304,12 @@ class CompactWindow(QWidget):
                 row.addWidget(control)
             themed_style(group, lambda target=name: f'QFrame#{target}{{background:transparent;'
                          f'border:1px solid {TOKENS.border};border-radius:7px;}}')
-            header.addWidget(group)
+            if name == 'keyboardGroup':
+                self.keyboard_group = group
+                header.addWidget(group, 0, 1)
+            else:
+                self.navigation_group = group
+                header.addWidget(group, 0, 2)
         self.accounts_menu = self.control_menu.addMenu('Contas e cotas de IA')
         self.accounts_menu.aboutToShow.connect(self._refresh_accounts_menu)
         self.shortcut_tabs.customize_requested.connect(self._customize_prompts)
@@ -315,6 +326,11 @@ class CompactWindow(QWidget):
         self.dock_scroll.setWidgetResizable(True)
         self.dock_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.dock_scroll.setStyleSheet('QScrollArea {background:transparent;border:0;}')
+        themed_style(self.dock_scroll.verticalScrollBar(), lambda:
+            'QScrollBar:vertical{background:transparent;width:5px;margin:3px 0;border:0;}'
+            f'QScrollBar::handle:vertical{{background:{TOKENS.border};border-radius:2px;min-height:24px;}}'
+            'QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}'
+            'QScrollBar::add-page:vertical,QScrollBar::sub-page:vertical{background:transparent;}')
         self.dock_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.dock_scroll.hide()
         self.action_drawer = QWidget(self)
@@ -324,6 +340,7 @@ class CompactWindow(QWidget):
         drawer.addWidget(self.shortcut_tabs)
         self.action_drawer.setMaximumHeight(0)
         layout.addWidget(self.action_drawer)
+        self._arrange_sections('compact')
         self.drawer_animation = QPropertyAnimation(self.action_drawer, b'maximumHeight', self)
         self.drawer_animation.setDuration(140)
         self.drawer_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
@@ -352,27 +369,75 @@ class CompactWindow(QWidget):
             self._watch_screen(screen)
 
     def _arrange_sections(self, mode, target_width=None):
+        side = mode in ('left', 'right')
         for section in self._sections:
             self.inner.removeWidget(section)
         for row in range(6):
             self.inner.setRowStretch(row, 0)
         for column in range(4):
             self.inner.setColumnStretch(column, 0)
-        self.body_layout.setDirection(QBoxLayout.Direction.TopToBottom if mode in ('left', 'right')
+        self.body_layout.setDirection(QBoxLayout.Direction.TopToBottom if side
                                       else QBoxLayout.Direction.LeftToRight)
-        self.body_layout.setStretch(1, 0 if mode in ('left', 'right') else 1)
-        self.ai_strip.layout().setDirection(QBoxLayout.Direction.TopToBottom if mode in ('left', 'right')
+        self.body_layout.setStretch(1, 0 if side else 1)
+        self.ai_strip.layout().setDirection(QBoxLayout.Direction.TopToBottom if side
                                              else QBoxLayout.Direction.LeftToRight)
+        self.shortcut_tabs.set_orientation(mode)
+        for column in self.ai_strip.columns.values():
+            self.ai_strip.layout().setAlignment(column, Qt.AlignmentFlag.AlignHCenter if side else Qt.AlignmentFlag(0))
+            self.ai_strip.layout().setStretchFactor(column, 0 if side else 1)
+        for button in self.ai_strip.buttons.values():
+            button.set_presentation(side)
+        self.header_layout.removeWidget(self.brand)
+        self.header_layout.removeWidget(self.keyboard_group)
+        self.header_layout.removeWidget(self.navigation_group)
+        keyboard_button = self.shortcut_tabs.buttons['keyboard']
+        for button, width in ((keyboard_button, 24 if side else 30),
+                              (self.shortcut_tabs.top_button, 16 if side else 20),
+                              (self.open_button, 24 if side else 30),
+                              (self.control_button, 16 if side else 20)):
+            button.setFixedSize(width, 25 if side else 28)
+        self.header_layout.setColumnStretch(0, 1)
+        self.header_layout.setColumnStretch(1, 1 if side else 0)
+        if side:
+            self.header_layout.addWidget(self.brand, 0, 0, 1, 2, Qt.AlignmentFlag.AlignHCenter)
+            self.header_layout.addWidget(self.keyboard_group, 1, 0, Qt.AlignmentFlag.AlignHCenter)
+            self.header_layout.addWidget(self.navigation_group, 1, 1, Qt.AlignmentFlag.AlignHCenter)
+        else:
+            self.header_layout.addWidget(self.brand, 0, 0)
+            self.header_layout.addWidget(self.keyboard_group, 0, 1)
+            self.header_layout.addWidget(self.navigation_group, 0, 2)
+        self.readings_layout.removeWidget(self.free_label)
+        self.footer_layout.removeWidget(self.free_label)
+        self.notices_layout.removeWidget(self.pause_button)
+        self.footer_layout.removeWidget(self.pause_button)
+        if side:
+            self.readings_layout.addWidget(self.free_label)
+            self.notices_layout.addWidget(self.pause_button)
+        else:
+            self.footer_layout.insertWidget(0, self.pause_button)
+            self.footer_layout.addWidget(self.free_label)
+        self.footer_widget.setVisible(not side)
+        self.body_layout.setAlignment(self.gauge_widget, Qt.AlignmentFlag.AlignHCenter if side else Qt.AlignmentFlag(0))
+        for label in (self.status_label, self.detail_label, self.free_label, self.alert_label, self.feedback_label):
+            label.setAlignment(Qt.AlignmentFlag.AlignHCenter if side else Qt.AlignmentFlag.AlignLeft)
+        for label in (self.detail_label, self.free_label, self.alert_label):
+            font = QFont(label.font())
+            font.setPointSize(8 if side else 9)
+            label.setFont(font)
+        self.free_label.setWordWrap(not side)
+        self.pause_button.setSizePolicy(QSizePolicy.Policy.Expanding if side else QSizePolicy.Policy.Preferred,
+                                        QSizePolicy.Policy.Preferred)
+        self._render_details()
         self.ai_strip.empty_label.setWordWrap(True)
         self.ai_strip.empty_label.setText('Sem cotas confirmadas' if mode in ('left', 'right')
                                           else 'Sem cotas disponíveis confirmadas')
-        self.inner.setContentsMargins(22 if mode == 'right' else 10, 6,
-                                      22 if mode == 'left' else 10, 6)
+        self.inner.setContentsMargins(16 if mode == 'right' else 6, 6,
+                                      16 if mode == 'left' else 6, 2 if side else 6)
+        self.inner.setSpacing(2 if side else 4)
         header, body, notices, ai, footer = self._sections
-        if mode in ('left', 'right'):
+        if side:
             for row, section in enumerate((header, body, notices, ai)):
                 self.inner.addWidget(section, row, 0, Qt.AlignmentFlag.AlignTop)
-            self.inner.addWidget(footer, 5, 0)
             self.inner.setRowStretch(4, 1)
         elif mode == 'top' and (target_width or self.width()) >= 900:
             for column, section in enumerate((header, body, ai, footer)):
@@ -456,19 +521,21 @@ class CompactWindow(QWidget):
     def _apply_dock_mode(self, mode):
         controller = self.shortcut_tabs.controller
         if self._dock_mode == 'compact' and self._caps.session_type != 'wayland':
-            self._compact_geometry = QRect(self.geometry())
+            self._compact_geometry = QRect(self.x(), self.y(), 280, self.card.sizeHint().height())
         origin = QRect(self.geometry())
         target = (self._compact_geometry if mode == 'compact' else
                   dock_geometry(mode, self._screen_area()))
         self.drawer_animation.stop()
         self.action_drawer.setMaximumHeight(0)
         self._dock_mode = mode
-        self._set_card_scroll(mode != 'compact')
+        self._set_card_scroll(mode in ('left', 'right'))
         self._arrange_sections(mode, target.width())
+        self.action_drawer.setMaximumHeight(0 if mode == 'compact' else self.shortcut_tabs.sizeHint().height())
         self.setMinimumSize(0, 0)
         self.setMaximumSize(16777215, 16777215)
         if mode == 'compact':
-            target = QRect(target.x(), target.y(), 280, self.sizeHint().height())
+            target = QRect(target.x(), target.y(), 280,
+                           max(target.height(), self.card.sizeHint().height()))
         if self._caps.session_type == 'wayland':
             self.setFixedSize(target.size())
         else:
@@ -537,6 +604,8 @@ class CompactWindow(QWidget):
                 0, lambda: self.ai_strip.details(p, anchor=self.control_button)))
 
     def _animate_actions(self, expanded):
+        if self._dock_mode != 'compact':
+            return
         self.drawer_animation.stop()
         self.drawer_animation.setStartValue(self.action_drawer.maximumHeight())
         self.drawer_animation.setEndValue(self.shortcut_tabs.sizeHint().height() if expanded else 0)
@@ -620,7 +689,8 @@ class CompactWindow(QWidget):
             geometry = value.get('geometry')
             if isinstance(geometry, tuple) and len(geometry) == 4:
                 mode, self._dock_pending = self._dock_pending, None
-                self._compact_geometry = QRect(*geometry)
+                self._compact_geometry = QRect(geometry[0], geometry[1], 280,
+                                               self.card.sizeHint().height())
                 self._apply_dock_mode(mode)
             else:
                 self._dock_pending = None
@@ -696,9 +766,8 @@ class CompactWindow(QWidget):
         measured = [v for v in snapshot.tmpfs if v.quality == "ok" and v.total_bytes]
         temp = f"Tmp {max(v.used_frac for v in measured) * 100:.0f}%" if measured else "Tmp —"
         thermal = '— °C' if snapshot.temperature_c is None else f'{snapshot.temperature_c:.0f} °C'
-        self.detail_label.setText('<table width="100%" cellspacing="0"><tr>'
-            f'<td>{memory}</td><td align="right">{cpu}</td><td align="right">{thermal}</td></tr>'
-            f'<tr><td>{swap}</td><td align="right">{temp}</td><td></td></tr></table>')
+        self._detail_values = memory, cpu, thermal, swap, temp
+        self._render_details()
         self.detail_label.setToolTip('Temperatura do host · ' + (snapshot.temperature_sensor or 'sensor não disponível')
                                      + '\nTmp = ocupação dos temporários em memória')
         alerts = []
@@ -719,6 +788,19 @@ class CompactWindow(QWidget):
         if self._dock_mode == 'compact':
             self.adjustSize()
         self._screen_changed()
+
+    def _render_details(self):
+        if not hasattr(self, '_detail_values'):
+            return
+        memory, cpu, thermal, swap, temp = self._detail_values
+        if self._dock_mode in ('left', 'right'):
+            self.detail_label.setTextFormat(Qt.TextFormat.PlainText)
+            self.detail_label.setText('\n'.join((memory, cpu, thermal, swap, temp)))
+        else:
+            self.detail_label.setTextFormat(Qt.TextFormat.RichText)
+            self.detail_label.setText('<table width="100%" cellspacing="0"><tr>'
+                f'<td>{memory}</td><td align="right">{cpu}</td><td align="right">{thermal}</td></tr>'
+                f'<tr><td>{swap}</td><td align="right">{temp}</td><td></td></tr></table>')
 
     def _sync_tooltip(self):
         self.setToolTip("\n".join(text for text in (
