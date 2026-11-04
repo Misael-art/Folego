@@ -1,5 +1,59 @@
 # Passagem para o próximo agente — atualizada em 04/11/2026
 
+## Prévia v0.2.0b4 publicada — 04/11/2026
+
+Pedido explícito desta rodada: resolver a continuidade e publicar a versão mais
+atual. Owner: checkout canônico `codex/compact-header-quota-20261103`. O GitHub
+não tinha essa branch; ela foi criada pelo fluxo de referência do GitHub a
+partir do `main` integrado `3eabb6b`, conferida e avançada por push normal.
+O guard de conteúdo aprovou todos os objetos enviados. O [PR #2](https://github.com/Misael-art/Folego/pull/2)
+está aberto como draft, com base `main`; não houve merge.
+
+O guard administrativo de tag em `.workspace/workspace.py` exigia apenas
+`version.json`, ausente neste projeto. Ele agora lê `pyproject.toml` quando
+`version.json` não existe; continua exigindo tag anotada, versão correspondente,
+SHA aprovado no registro e commit já publicado na branch registrada. Os 19
+testes descartáveis de `.workspace/test_workspace.py` passaram. O registro
+central fixou `refs/tags/v0.2.0b4` em
+`cc0f8133f66bc437ff839780c3d13207d70110d0` antes do push da tag.
+
+O primeiro CI do PR falhou no Qt offscreen: no Ubuntu, as seis ações coloridas
+mediam de 88 a 91 px apesar das colunas iguais. `cc0f813` deixa a grade
+distribuir a largura, independente da dica de tamanho de cada botão. O teste
+focado passou. Depois da correção, `./dev check` no código final passou:
+**1247 passed, 2 skipped** headless e **1602 passed, 2 skipped** Qt offscreen,
+com Python 3.14.7 gerenciado e HOME/XDG privados. O ensaio KDE/Wayland final,
+em janela própria, aprovou topo `(0,0,948,132)`, laterais `112 × 593`, ações
+recolhíveis, retorno flutuante e retorno da Central ao topo; recibo em
+`.scratch/dev-tests-reviewed/release-b4-native-20261104/result.json`. As duas
+execuções CI do PR no SHA final passaram com seis jobs de produto; o CI da tag
+passou com três jobs. As falhas anteriores seguem registradas no GitHub e não
+contam como aprovação do SHA final.
+
+A tag anotada remota `v0.2.0b4` aponta para `cc0f813`; o campo de destino da
+[release b4](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b4) também
+foi fixado nesse SHA. Ela é uma **prerelease**. Os pacotes de
+`.scratch/release-b4-current` foram regenerados do SHA da tag: 916 blobs do
+arquivo fonte conferidos contra o Git, 157 arquivos de `folego/` no wheel
+idênticos aos fontes, metadados b4 em wheel/sdist e CLI do wheel aprovado em
+venv isolada. Os quatro downloads públicos foram conferidos por tamanho e
+SHA-256; `SHA256SUMS` público é idêntico ao local:
+
+| Asset | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `Folego-0.2.0b4-source.tar.gz` | 18.924.007 | `c547f11db1a75d806531804a702a59a20cb9072fbbee4f92feec4eb88ec56916` |
+| `folego-0.2.0b4-py3-none-any.whl` | 451.029 | `12b97d5d23a84a0fcc22116a21ff174d7b7a1725f5a9ab9600632eac15f9fb4b` |
+| `folego-0.2.0b4.tar.gz` | 634.228 | `cb78d63e665fc040d72e795d95016eb14c1809f828d8ba00064839c3a1173197` |
+| `SHA256SUMS` | 281 | `9463998dfa242c4150aa544d414f77b9e5637eb9d2f9a21269bb3e4799d984ef` |
+
+A GUI residente do host permaneceu ativa no PID 1674038; não foi reiniciada
+por este lote de publicação. Limites: HD/widescreen e outras escalas físicas,
+leitor de tela, cruzamento e áudio real de limiares da bateria e observação
+longa ainda não têm aceite. O PR permanece draft; revisão e eventual merge são
+passos separados. Próximo incremento: validar essas experiências no alvo real
+sem perturbar trabalhos em execução. A versão b4 publicada é prévia, não
+declaração de estabilidade.
+
 ## Barra fora da tela ao voltar da Central — 04/11/2026
 
 Incidente reportado pelo usuário na instância residente: a barra superior
