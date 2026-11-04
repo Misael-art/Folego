@@ -22,7 +22,7 @@ PIDs antigos saíram. A revisão pendente manteve o mesmo ID.
 
 `./dev setup` sincronizou o ambiente GUI b4 usando o lockfile existente. As
 duas units próprias e depois a unit gerada `app-folego@autostart.service`
-foram iniciadas, sem habilitar nova automação. No fechamento desta verificação,
+foram iniciadas, sem habilitar nova automação. Na verificação inicial após a troca,
 as três estavam `active/running`, `Result=success`, com PIDs novos 747308
 (entrada), 747571 (desempenho) e 747850 (GUI). Os entrypoints apontam para o
 ambiente gerenciado b4; isto sustenta a inferência de que os processos novos
@@ -36,6 +36,18 @@ restaurou `paused=false`; disjuntor vazio e histórico ainda com 16 resultados.
 baseline 5 e política de efeito desligada; a revisão durável de toque continua
 pendente. Nenhum outro app, agente ou serviço foi encerrado e a sessão gráfica
 não foi reiniciada.
+
+Observação posterior, que substitui o estado da GUI no parágrafo anterior:
+`app-folego@autostart.service` encerrou às 05:10:14 com código 0 e sem erro no
+jornal; a causa do encerramento não foi observada. Às 05:10:22, o lançador
+`~/.local/share/applications/folego.desktop` iniciou outra instância própria,
+PID 761910, sob a unit transitória
+`app-folego@6e32f6b0ccac441d959b5ba76aabf7bc.service`, que ficou
+`active/running`. Bandeja e superfície `Fôlego — widget` pertencem a esse PID.
+Uma única tentativa de iniciar a unit de autostart depois disso saiu com código
+0 e informou que a instância 761910 já controlava o aplicativo; nenhuma janela
+duplicada foi criada. Os monitores continuam ativos com PIDs 747308/747571.
+Não atribuir a primeira saída a crash ou ação do usuário sem evidência.
 
 Validação: estados do systemd, owner da bandeja, título/geometria nativos da
 janela, metadados b4 nos dois ambientes, preferência de inicialização,
