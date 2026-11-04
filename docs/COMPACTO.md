@@ -20,13 +20,19 @@ auxiliar de entrada; um som em andamento conclui a restauração do volume.
 Ao passar o mouse pela borda esquerda do widget, uma faixa em dois tons mais
 escuros revela a seta para a barra direita. A borda direita abre a barra
 esquerda; a borda superior abre a barra horizontal no topo. A seta da borda
-interna da barra retorna aos 280 px do compacto. Os controles, leitura de
+externa de cada lateral, ou da base da barra superior, retorna aos 280 px do
+compacto. Os controles, leitura de
 recursos e cotas são os mesmos componentes nas quatro formas. As laterais têm
 112–128 unidades lógicas de largura: o indicador principal fica centralizado,
 seguido do estado, métricas, espaço livre, pausa e cotas confirmadas em coluna.
+As métricas se alinham à borda correspondente; os cantos da janela são
+recortados de forma arredondada.
 As seis ações coloridas ficam sempre acessíveis na base, uma por linha. A
-rolagem aparece quando as cotas e avisos excedem a altura disponível. No topo,
-os indicadores e controles ocupam a largura útil e as ações formam uma linha.
+rolagem da área de leitura aparece quando as cotas e avisos excedem a altura
+disponível; as ações ficam fixas abaixo dela. Em tela curta, como a área útil
+948 × 593 do Steam Deck nesta sessão, o topo usa duas linhas. Em larguras de
+monitor HD e widescreen, os indicadores e controles ocupam uma linha, e as
+ações formam outra na base.
 
 O encaixe usa a área disponível da tela informada pelo Qt para excluir os
 painéis conhecidos. Em X11, a geometria muda em 260 ms. Em KDE/Wayland, o

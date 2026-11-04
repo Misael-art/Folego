@@ -173,6 +173,12 @@ def main():
                     if remaining is not None:
                         item.update(observed_at=now,windows=[ai.quota_window('Sessão QA',100-remaining,now+3600,now)])
                     items.append(item)
+                full_items=[]
+                for provider,remaining in (('codex',90),('web',70),('claude',50),('grok',30)):
+                    item=ai.unknown(provider,label='Conta QA')
+                    item.update(account_id=provider+'-dock-full-qa',default=True,observed_at=now,
+                                windows=[ai.quota_window('Sessão QA',100-remaining,now+3600,now)])
+                    full_items.append(item)
                 compact.ai_strip.set_items(items)
                 compact.adjustSize();app.processEvents()
                 def compositor_rect():
@@ -215,14 +221,39 @@ def main():
                         assert compact.width()<=128 and all(centers[i].y()<centers[i+1].y() for i in range(5))
                         assert all(abs(center.x()-compact.width()/2)<17 for center in centers)
                         assert compact.gauge.width()>compact.ai_strip.buttons['codex'].iconSize().width()
+                        assert compact._handles['back'].x()==(0 if mode=='left' else compact.width()-16)
                     else:
                         assert all(abs(centers[i].y()-centers[0].y())<3 for i in range(1,6))
-                    compact.grab().save(str(root/('dock-'+mode+'.png')))
+                    image=compact.grab().toImage()
+                    assert all(image.pixelColor(x,y).alpha()<32 for x,y in
+                               ((0,0),(image.width()-1,0),(0,image.height()-1),
+                                (image.width()-1,image.height()-1))),(mode,'square image corners')
+                    image.save(str(root/('dock-'+mode+'.png')))
                     compact.ai_strip.grab().save(str(root/('dock-'+mode+'-quotas.png')))
                     records.append(dict(case='native dock placement',mode=mode,geometry=actual,
                                         available=list((compact.screen().availableGeometry().x(),compact.screen().availableGeometry().y(),
                                                         compact.screen().availableGeometry().width(),compact.screen().availableGeometry().height()))))
+                    compact.ai_strip.set_deliveries([dict(provider=p,count=1,pending=[]) for p in ai.NAMES])
+                    compact.ai_strip.set_items(full_items)
+                    wait(lambda:compact.ai_strip.visible_providers==set(ai.NAMES))
+                    wait(lambda:all(animation.state()==animation.State.Stopped for animation in
+                                    compact.ai_strip.arrival_animations.values()))
+                    scroll=compact.dock_scroll.verticalScrollBar()
+                    scroll.setValue(scroll.maximum());app.processEvents()
+                    last=compact.ai_strip.columns['grok']
+                    last_y=last.mapTo(compact.dock_scroll.viewport(),QPoint(0,0)).y()
+                    assert 0<=last_y and last_y+last.height()<=compact.dock_scroll.viewport().height(),(mode,last_y,last.height(),compact.dock_scroll.viewport().height(),scroll.maximum())
+                    assert compact.dock_scroll.geometry().bottom()<compact.action_drawer.geometry().top()
+                    compact.grab().save(str(root/('dock-'+mode+'-scrolled.png')))
+                    records.append(dict(case='all quotas reachable',mode=mode,scroll_max=scroll.maximum(),
+                                        last_quota_y=last_y,actions_top=compact.action_drawer.y()))
+                    compact.ai_strip.set_deliveries([])
+                    compact.ai_strip.set_items(items)
+                    scroll.setValue(0);app.processEvents()
                     back=compact._handles['back']
+                    assert back.geometry().bottom()<compact.action_drawer.y(),(mode,back.geometry().getRect(),compact.action_drawer.y())
+                    back.hovered=True;back.update();app.processEvents()
+                    compact.grab().save(str(root/('dock-'+mode+'-grip.png')))
                     pointer_click(back.mapToGlobal(back.rect().center()),backend,compact)
                     wait(lambda:compact._dock_mode=='compact' and compact._dock_pending is None)
                     assert compact.width()==280

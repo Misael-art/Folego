@@ -1,5 +1,43 @@
 # Passagem para o próximo agente — atualizada em 04/11/2026
 
+## Alinhamento, cantos e cotas nas barras — 04/11/2026
+
+Owner: checkout canônico, branch `codex/compact-header-quota-20261103`.
+Dependências: componentes Qt existentes, cotas confirmadas e geometria da
+área útil informada pelo compositor. Aceite do incremento: grip de retorno na
+borda externa de cada lateral, cantos realmente recortados, métricas alinhadas
+na direção da barra, quatro cotas alcançáveis sem serem cobertas pelas ações e
+recomposição do topo para Steam Deck, HD e widescreen.
+
+O grip esquerdo agora fica em `x=0`, o direito em `largura-16`, e ambos terminam
+antes das seis ações fixas. As leituras de RAM, CPU, temperatura, swap, tmpfs e
+espaço livre se alinham à esquerda ou à direita conforme o lado; o scroll fica
+na borda interna. A superfície é pintada dentro de um caminho arredondado e a
+janela recebe máscara com o mesmo raio. O topo usa duas linhas na área útil
+de 948 × 593 e uma linha de informação em larguras a partir de 1200; a área
+de leitura pode rolar, com ações fixas abaixo. Altura do topo curto: 190.
+
+Validação: `./dev test tests/test_ui_compact.py tests/test_ui_ai_quota_rings.py
+tests/test_ui_hover_actions.py tests/test_ui_desktop_shortcuts.py -q`:
+**47 passed**. `./dev check`, Python 3.14.7, HOME/XDG privados, perfis
+sequenciais: **1242 passed, 2 skipped** headless e **1583 passed, 2 skipped**
+Qt offscreen; `git diff --check` limpo. Os testes Qt cobrem as áreas úteis
+948 × 593, 1920 × 1080 e 2560 × 1080 com quatro cotas. [Recibo e capturas
+KDE/Wayland](handoff/validation/dock-adaptive-2026-11-04/README.md) confirmam
+na área real 948 × 593 ambas as laterais 112 × 593, topo 948 × 190, grip na
+borda externa, alfa transparente nos quatro cantos, última cota após rolagem,
+ações sem sobreposição e retorno/saída pelo próprio controle. Uma tentativa
+anterior de `./dev check` falhou porque o teste de tema procurava a cor na
+folha de estilos após a pintura ter passado para o widget; o teste corrigido
+confere o pixel renderizado. Essa tentativa não é gate aprovado.
+
+Limites: HD e widescreen foram simulados no Qt offscreen, sem compositor real
+nessas resoluções. A rolagem foi posicionada por código, sem gesto físico;
+não há novo aceite de leitor de tela, áudio, outros fatores de escala ou uso
+prolongado. Próximo passo: registrar a revisão e o estado da instalação no
+host; publicação da branch, PR e release dependem do guard remoto descrito
+abaixo, sem autorização de merge.
+
 ## Refinamento das barras adaptativas — 04/11/2026
 
 Pedido mais recente: a barra encaixada continuava larga e apenas transportava

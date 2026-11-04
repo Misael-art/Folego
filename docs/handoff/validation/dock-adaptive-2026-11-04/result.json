@@ -44,19 +44,19 @@
         [
           "codex",
           true,
-          328,
+          327,
           61
         ],
         [
           "claude",
           true,
-          391,
+          390,
           61
         ]
       ],
-      "strip": 328,
+      "strip": 327,
       "strip_size": [
-        88,
+        90,
         124
       ],
       "viewport_height": 456
@@ -78,25 +78,32 @@
       ]
     },
     {
+      "case": "all quotas reachable",
+      "mode": "right",
+      "scroll_max": 179,
+      "last_quota_y": 379,
+      "actions_top": 456
+    },
+    {
       "case": "quota positions",
       "mode": "left",
       "positions": [
         [
           "codex",
           true,
-          328,
+          327,
           61
         ],
         [
           "claude",
           true,
-          391,
+          390,
           61
         ]
       ],
-      "strip": 328,
+      "strip": 327,
       "strip_size": [
-        88,
+        90,
         124
       ],
       "viewport_height": 456
@@ -118,28 +125,35 @@
       ]
     },
     {
+      "case": "all quotas reachable",
+      "mode": "left",
+      "scroll_max": 179,
+      "last_quota_y": 379,
+      "actions_top": 456
+    },
+    {
       "case": "quota positions",
       "mode": "top",
       "positions": [
         [
           "codex",
           true,
-          25,
+          96,
           49
         ],
         [
           "claude",
           true,
-          25,
+          96,
           49
         ]
       ],
-      "strip": 25,
+      "strip": 96,
       "strip_size": [
-        315,
+        89,
         49
       ],
-      "viewport_height": 120
+      "viewport_height": 168
     },
     {
       "case": "native dock placement",
@@ -148,7 +162,7 @@
         0,
         0,
         948,
-        142
+        190
       ],
       "available": [
         0,
@@ -158,12 +172,19 @@
       ]
     },
     {
+      "case": "all quotas reachable",
+      "mode": "top",
+      "scroll_max": 0,
+      "last_quota_y": 96,
+      "actions_top": 168
+    },
+    {
       "case": "native dock return",
       "geometry": [
         20,
         120,
         280,
-        225
+        223
       ]
     },
     {
