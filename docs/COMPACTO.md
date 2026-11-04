@@ -15,6 +15,25 @@ e continua enquanto o Fôlego está aberto, inclusive com o widget oculto ou a
 central em primeiro plano. Fechar o aplicativo encerra seus workers e seu próprio
 auxiliar de entrada; um som em andamento conclui a restauração do volume.
 
+## Encaixe nas bordas
+
+Ao passar o mouse pela borda esquerda do widget, uma faixa em dois tons mais
+escuros revela a seta para a barra direita. A borda direita abre a barra
+esquerda; a borda superior abre a barra horizontal no topo. A seta da borda
+interna da barra retorna aos 280 px do compacto. Os controles, leitura de
+recursos, cotas e rodapé são os mesmos componentes nas quatro formas. Nas
+laterais, as cotas ficam em coluna e o rodapé vai à base; em telas baixas, o
+conteúdo pode ser rolado. No topo, o conteúdo ocupa uma ou duas linhas conforme
+a largura.
+
+O encaixe usa a área disponível da tela informada pelo Qt para excluir os
+painéis conhecidos. Em X11, a geometria muda em 260 ms. Em KDE/Wayland, o
+Fôlego pede ao KWin para posicionar **somente sua própria janela** e verifica
+a posição antes de concluir; o conteúdo reaparece suavemente após a confirmação.
+Se o compositor não confirmar, a interface informa a incerteza e não repete o
+pedido por conta própria. O modo de encaixe vale para a janela atual; uma nova
+abertura inicia no compacto.
+
 ## Sessões de IA
 
 O widget mostra somente provedores com cota positiva confirmada, do maior para o

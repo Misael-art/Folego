@@ -18,6 +18,7 @@ def main():
     parser.add_argument('--background-transparency',action='store_true',help='Verify alpha at 0/50/100 percent in light/dark themes')
     parser.add_argument('--transparency-theme',choices=('snes-us','ps2'),help='Run one transparency palette within the existing QA time budget')
     parser.add_argument('--ai-quota-rings',action='store_true',help='Verify quota rings, animations and account gestures with synthetic observations')
+    parser.add_argument('--dock-modes',action='store_true',help='Verify owned widget placement at both sides and top')
     args=parser.parse_args()
     root=args.state.resolve();root.mkdir(mode=0o700,parents=True,exist_ok=False)
     for key,folder in (('HOME','home'),('XDG_CONFIG_HOME','config'),('XDG_DATA_HOME','data'),
@@ -150,7 +151,7 @@ def main():
                 swap_used_kb=1024,swap_total_kb=8192,pressure_memory=None,pressure_io=None,pressure_cpu=None,
                 load=None,apps=(),self_rss_kb=0,cpu_busy_frac=.52,temperature_c=61,temperature_sensor='demonstração',
                 tmpfs=(TmpfsVolume('/qa/runtime','tmpfs',100,81,19,is_runtime=True),)))
-            if args.prompt_key or args.standard_shortcuts or args.console_themes or args.background_transparency or args.ai_quota_rings:
+            if args.prompt_key or args.standard_shortcuts or args.console_themes or args.background_transparency or args.ai_quota_rings or args.dock_modes:
                 script=root/'place-owned-widget.js'
                 script.write_text('const w=workspace.windowList().find(w=>w.pid==='+str(os.getpid())+
                     ' && w.caption==="Fôlego — widget");if(w){const g=w.frameGeometry;w.frameGeometry={x:20,y:120,width:g.width,height:g.height};}')
@@ -159,6 +160,36 @@ def main():
                 try:call('qdbus6','org.kde.KWin','/Scripting/Script'+sid,'org.kde.kwin.Script.run')
                 finally:call('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript',name)
                 settle=time.monotonic()+.35;wait(lambda:time.monotonic()>=settle)
+            if args.dock_modes:
+                from folego.ui.compact import dock_geometry
+                def compositor_rect():
+                    own=native('^Fôlego — widget$');assert len(own)==1
+                    raw=call('kdotool','getwindowgeometry',own[0])
+                    match=re.search(r'Position:\s*([-0-9.]+),([-0-9.]+)\s+Geometry:\s*([-0-9.]+)x([-0-9.]+)',raw)
+                    assert match,raw
+                    return tuple(round(float(value)) for value in match.groups())
+                compact_origin=compositor_rect()
+                for mode in ('right','left','top'):
+                    if mode == 'left':apply_theme(app,'ps2')
+                    handle=compact._handles[mode]
+                    pointer_click(handle.mapToGlobal(handle.rect().center()),backend,compact)
+                    wait(lambda:compact._dock_mode==mode and compact._dock_pending is None)
+                    dock_target=dock_geometry(mode,compact.screen().availableGeometry())
+                    actual=compositor_rect()
+                    assert all(abs(a-b)<=1 for a,b in zip(actual,(dock_target.x(),dock_target.y(),dock_target.width(),dock_target.height()))),(mode,actual,dock_target)
+                    compact.grab().save(str(root/('dock-'+mode+'.png')))
+                    records.append(dict(case='native dock placement',mode=mode,geometry=actual,
+                                        available=list((compact.screen().availableGeometry().x(),compact.screen().availableGeometry().y(),
+                                                        compact.screen().availableGeometry().width(),compact.screen().availableGeometry().height()))))
+                    back=compact._handles['back']
+                    pointer_click(back.mapToGlobal(back.rect().center()),backend,compact)
+                    wait(lambda:compact._dock_mode=='compact' and compact._dock_pending is None)
+                    assert compact.width()==280
+                    returned=compositor_rect()
+                    assert all(abs(a-b)<=1 for a,b in zip(returned,compact_origin)),(mode,returned,compact_origin)
+                compact.grab().save(str(root/'dock-return.png'))
+                records.append(dict(case='native dock return',geometry=compositor_rect()))
+                apply_theme(app,'snes-us')
             if args.ai_quota_rings:
                 from folego.core import ai_sessions as ai
                 from folego.ui.theme import TOKENS

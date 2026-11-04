@@ -2,7 +2,7 @@
 import pytest
 
 from folego.core.snapshot import MemInfo, Pressure, Snapshot
-from folego.ui.compact import CompactWindow, clamp_position
+from folego.ui.compact import CompactWindow, clamp_position, dock_geometry
 from folego.ui.desktop_caps import detect
 
 pytest.importorskip("PySide6")
@@ -59,6 +59,59 @@ def make(qapp, *, caps=None, store=None):
     host = Host()
     view = CompactWindow(host, caps=caps or x11(), store=store or Store("100,100"))
     return view, host
+
+
+def test_dock_geometry_respects_available_screen_and_panels():
+    from PySide6.QtCore import QRect
+    area = QRect(24, 38, 1500, 812)
+    assert dock_geometry('right', area) == QRect(1304, 38, 220, 812)
+    assert dock_geometry('left', area) == QRect(24, 38, 220, 812)
+    assert dock_geometry('top', area) == QRect(24, 38, 1500, 118)
+    assert dock_geometry('top', QRect(0, 0, 700, 500)) == QRect(0, 0, 700, 190)
+    with pytest.raises(ValueError):
+        dock_geometry('bottom', area)
+
+
+def test_dock_reflows_existing_controls_and_returns_to_compact(qapp):
+    from PySide6.QtWidgets import QBoxLayout
+    from PySide6.QtTest import QTest
+    view, _ = make(qapp)
+    view.show_compact()
+    original = view.geometry()
+    for mode in ('right', 'left', 'top'):
+        view.set_dock_mode(mode)
+        QTest.qWait(450)
+        assert view._dock_mode == mode
+        assert view.geometry() == dock_geometry(mode, view._screen_area())
+        assert view.ai_strip.layout().direction() == (QBoxLayout.Direction.TopToBottom
+            if mode in ('right', 'left') else QBoxLayout.Direction.LeftToRight)
+        assert view.open_button.parent() is not None
+        assert view.pause_button.parent() is not None
+        assert view._handles['back'].isVisible()
+        view.set_dock_mode('compact')
+        QTest.qWait(450)
+        assert view.width() == original.width()
+        assert view._dock_mode == 'compact'
+    view.force_close()
+
+
+def test_wayland_dock_waits_for_confirmed_placement(qapp, monkeypatch):
+    view, _ = make(qapp, caps=wayland())
+    requested = []
+    controller = view.shortcut_tabs.controller
+    monkeypatch.setattr(controller, 'request', lambda action, value=None: requested.append((action, value)) or True)
+    view.show_compact()
+    view.set_dock_mode('right')
+    assert view._dock_pending == 'right'
+    assert requested[-1][0] == 'widget-geometry'
+    view.set_dock_mode('left')
+    assert len(requested) == 1
+    view._capture_result({'operation': 'widget-geometry', 'geometry': (20, 120, 280, 185)})
+    assert requested[-1][0] == 'widget-place'
+    assert view._compact_geometry.topLeft().x() == 20
+    view._capture_result({'operation': 'widget-place', 'geometry': requested[-1][1]})
+    assert view._dock_pending is None
+    view.force_close()
 
 
 # --------------------------------------------------------------------- capabilities

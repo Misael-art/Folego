@@ -53,6 +53,11 @@ grade abre a **Central**; a seta ao lado reúne **Ocultar widget**, **Sair do
 Fôlego** e **Contas e cotas de IA**. **Voltar** retorna ao widget mantendo a aba e o
 monitoramento. A saída também fica na bandeja. As duas interfaces dispensam
 botões de minimizar, maximizar e fechar.
+Passe o mouse pela borda esquerda, direita ou superior do widget para revelar a
+faixa de encaixe. A seta leva, respectivamente, à barra lateral direita,
+lateral esquerda ou horizontal superior. A seta na borda da barra retorna ao
+compacto. As barras ocupam a área útil informada pelo desktop, respeitando
+painéis conhecidos; o conteúdo lateral tem rolagem quando necessário.
 A faixa de IAs mostra somente provedores com cota positiva e confirmada,
 ordenados pelo percentual disponível. Contas sem cota ou sem confirmação
 continuam acessíveis em **Contas e cotas de IA**; passe o mouse sobre um medidor
