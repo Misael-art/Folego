@@ -21,10 +21,12 @@ Ao passar o mouse pela borda esquerda do widget, uma faixa em dois tons mais
 escuros revela a seta para a barra direita. A borda direita abre a barra
 esquerda; a borda superior abre a barra horizontal no topo. A seta da borda
 interna da barra retorna aos 280 px do compacto. Os controles, leitura de
-recursos, cotas e rodapé são os mesmos componentes nas quatro formas. Nas
-laterais, as cotas ficam em coluna e o rodapé vai à base; em telas baixas, o
-conteúdo pode ser rolado. No topo, o conteúdo ocupa uma ou duas linhas conforme
-a largura.
+recursos e cotas são os mesmos componentes nas quatro formas. As laterais têm
+112–128 unidades lógicas de largura: o indicador principal fica centralizado,
+seguido do estado, métricas, espaço livre, pausa e cotas confirmadas em coluna.
+As seis ações coloridas ficam sempre acessíveis na base, uma por linha. A
+rolagem aparece quando as cotas e avisos excedem a altura disponível. No topo,
+os indicadores e controles ocupam a largura útil e as ações formam uma linha.
 
 O encaixe usa a área disponível da tela informada pelo Qt para excluir os
 painéis conhecidos. Em X11, a geometria muda em 260 ms. Em KDE/Wayland, o

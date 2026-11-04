@@ -33,6 +33,25 @@ a repetição integral passou. Outras escalas/saídas, leitor de tela, som real 
 soak permanecem sem aceite. O remoto ainda não contém esta branch nem PR;
 publicação continua sujeita ao guard local descrito abaixo.
 
+Commit de código e evidência: `34ed8d4` (local). A GUI do host estava na unit
+`app-folego@autostart.service`, PID 6531, com apenas o widget próprio mapeado;
+o Modo Desempenho tinha `paused=false`, disjuntor vazio e 17 eventos no histórico.
+`performance auto-off` confirmou a pausa temporária. Após conferir unit, PID,
+UID, comando e starttime 8362, o item **Sair do Fôlego** da bandeja pertencente
+à mesma GUI foi acionado. O PID saiu e a unit ficou `inactive/dead`, com
+`Result=success`; nenhum sinal manual foi enviado. `./dev setup` reutilizou o
+ambiente GUI sem alterar dependências. A unit própria foi reiniciada: PID
+84943, `active/running`, nova bandeja do mesmo PID e widget compacto visível.
+O código instalado no ambiente gerenciado aponta para a fonte desta branch;
+como não houve consulta de revisão dentro do processo, a revisão carregada é
+inferida do início posterior ao setup e do entrypoint, não medida diretamente.
+Os monitores de entrada e desempenho permaneceram ativos nos mesmos PIDs
+6593/6597. `performance auto-on` restaurou `paused=false`, disjuntor vazio e
+17 eventos. O encaixe da borda não persiste entre reinícios, logo o widget
+residente reabriu no modo compacto; a nova barra encaixada foi exercitada na
+janela própria da validação, sem mover o ponteiro da sessão de trabalho para
+reencaixar a instância residente. Nenhum outro serviço, app ou sessão foi parado.
+
 ## Prévia b4 instalada no host — 04/11/2026
 
 Pedido explícito: atualizar a aplicação neste host. O checkout estava limpo em
