@@ -56,6 +56,10 @@ entrypoint e do reinício posterior ao setup; não foi consultada dentro dele.
 Próximo passo: publicação da branch, PR e release dependem do guard remoto
 descrito abaixo, sem autorização de merge. O comportamento visual em outros
 monitores e fatores de escala ainda precisa de verificação nativa.
+Após o commit de passagem `28385cb`, `git ls-remote --heads` continuou sem
+essa branch, `gh pr list --head` retornou vazio e o push normal foi recusado
+pelo guard local por criar branch fora da continuidade registrada. Nenhum
+push, PR, tag ou release b4 foi criado; não contornar o guard.
 
 ## Refinamento das barras adaptativas — 04/11/2026
 
