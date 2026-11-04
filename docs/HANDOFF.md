@@ -39,10 +39,25 @@ superior de quatro cotas.
 
 Limites: a sessão física só cobre 948 × 593, sem QA de gesto real de scroll
 lateral, outras escalas/monitores, áudio, leitor de tela ou soak. HD/widescreen
-seguem simulados no Qt offscreen. Próximos passos: instalar a revisão no
-processo residente, confirmar o estado dos monitores e publicar branch/PR
-somente pelo fluxo permitido pelo guard; release b4 requer SHA/CI/artefatos
-elegíveis. Não houve merge autorizado.
+seguem simulados no Qt offscreen. Código, testes, documentação e capturas:
+commit local `a2b2d53`. `./dev setup` sincronizou o ambiente GUI; o entrypoint
+importa `src/folego/ui/compact.py` deste checkout e calcula topo 948 × 132.
+A GUI residente já estava encerrada às 08:33, antes da instalação; não foi
+reiniciada para preservar esse estado. `app-folego@autostart.service` continuou
+`inactive/dead`, `Result=success`, sem outra GUI própria mapeada. Os monitores
+de entrada/desempenho permaneceram ativos nos PIDs 6593/6597; Modo Desempenho
+seguia `paused=false`, sem disjuntor ou falhas, com 21 eventos. A nova GUI foi
+exercitada somente na janela de QA isolada; não há prova visual da instância
+residente desta revisão.
+
+O remoto continua sem a branch `codex/compact-header-quota-20261103` e sem PR.
+O push normal de `a2b2d53` foi recusado pelo guard local por criar branch fora
+da continuidade registrada. Nenhum push, PR, tag, release ou merge ocorreu;
+não contornar o guard. Próximo passo: owner criar a branch remota pelo fluxo
+oficial, conferir base/SHA, push normal, PR/CI; só então avaliar nova versão,
+artefatos/notas e elegibilidade de release. Os pacotes locais b4 anteriores
+não representam esta revisão. Depois validar a barra superior na GUI
+residente e em outras resoluções/fatores de escala físicos.
 
 ## Alinhamento, cantos e cotas nas barras — 04/11/2026
 
