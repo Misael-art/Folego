@@ -45,12 +45,17 @@ Os **156** arquivos de `folego/` no wheel correspondem byte a byte aos fontes.
 O wheel foi instalado sem dependências numa venv descartável própria, e
 `python -I -m folego --help` e metadados `0.2.0b4` passaram. Os artefatos
 ficam em `.scratch/release-b4`, fora do Git. O arquivo fonte completo de um
-commit exato, a tag e a conferência remota serão feitos somente quando a
-branch puder ser publicada; nenhuma tag foi criada agora.
+commit exato foi gerado por `git archive`, com 989 entradas e sem `.dev` ou
+`.scratch`; `SHA256SUMS` passou para os três pacotes. O arquivo fonte e os
+hashes precisam ser regenerados do SHA desta passagem antes da publicação.
+A tag e a conferência remota dependem da branch publicada; nenhuma tag foi
+criada agora.
 
 Publicação pendente: em 03/11 a branch remota ainda não existia. O guard
 `/home/misael/Projects/.workspace/workspace.py prepush` recusa criar branch
-remota por push. O owner precisa criar no GitHub a branch
+remota por push. `git push -u origin codex/compact-header-quota-20261103`
+foi recusado novamente após os commits locais, sem publicar dados. O owner
+precisa criar no GitHub a branch
 `codex/compact-header-quota-20261103` a partir do `main` integrado; então
 confirmar base/SHA, fazer push normal, abrir PR, conferir CI, criar tag da
 revisão elegível e publicar a prerelease b4 com os artefatos e notas preparados.
