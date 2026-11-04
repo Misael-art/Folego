@@ -1,5 +1,56 @@
 # Passagem para o próximo agente — atualizada em 03/11/2026
 
+## Cabeçalho compacto e cotas disponíveis — 03/11/2026
+
+O PR #1 foi integrado antes deste lote: `main` local/remoto estava limpo em
+`3eabb6bb8d783a458fa1694bb911c71ab95dbd9f`. O novo incremento está na
+mesma raiz canônica, branch `codex/compact-header-quota-20261103`, commit de
+código `c3274fec9950d450a93abfd954637b515ea94426`. A GUI b3 residente no
+host não foi reiniciada nem substituída; a mudança foi exercitada numa janela
+própria com dados sintéticos, sem interromper supervisores ou agentes.
+
+O cabeçalho do widget de 280 px tem marca em Noto Sans, teclado e seta unidos,
+e ícone da Central com seta para ocultar, sair e consultar todas as contas.
+A faixa mostra somente cotas positivas confirmadas, da maior porcentagem
+disponível para a menor; empate tem ordem estável. A conta padrão é usada quando
+elegível, senão aparece uma conta verificada do provedor, com clique e painel
+coerentes. Zero e desconhecido ficam fora da faixa, mas continuam distintos no
+menu. Expiração retira o indicador imediatamente; uma nova cota entra com
+animação curta quando o estilo Qt permite. Reabrir o widget não repete a
+descoberta. O som existente de reposição só toca numa transição confirmada pelo
+monitor; primeira leitura, falha e data de reset vencida não o disparam.
+
+Validação final do código: `./dev check` com Python 3.14.7 gerenciado, perfis
+separados e HOME/XDG privados: **1241 passed, 2 skipped** headless e **1570
+passed, 2 skipped** Qt offscreen. Teste focado de ordenação, conta alternativa,
+retorno e animação: **7 passed** após a última revisão do teste. QA em
+KDE/Wayland real, janela e HOME/XDG/áudio próprios: oito casos aprovados,
+incluindo Central/Voltar, três combinações de tema/transparência, ocultação e
+retorno de cota, hover e clique nativos no indicador, e saída pelo menu.
+[Captura e recibo](handoff/validation/compact-header-quota-2026-11-03/README.md).
+O cliente de IA foi interceptado em memória; nenhum som real nem conta pessoal
+foi usado como fixture.
+
+A primeira tentativa visual falhou no clique do menu após o widget crescer sob
+o ponteiro; registro em `.scratch/dev-tests/run-header-quota-20261103`. A
+segunda passou após estabilizar o drawer antes desse clique. A execução final
+após a última revisão do código também passou, com captura/recibo publicados no
+link acima. Uma execução de
+`./dev check` foi interrompida antes de registrar o resultado Qt quando houve
+uma nova mensagem do usuário; seu workspace `run-2iu_gd3o` permanece preservado
+e não conta como gate. O headless dessa tentativa tinha recibo verde; a suíte
+Qt foi repetida e aprovada. Workspaces concluídos com recibo e runner ausente
+foram movidos integralmente a `.scratch/dev-tests-reviewed` para respeitar o
+teto de 20, sem apagar payloads nem alterar limites.
+
+Limites: a captura e o Qt offscreen não certificam leitor de tela, clique físico
+em todos os monitores/escalas, áudio real nem uso prolongado. Os aceites de
+entrada, retenção de temporários e Modo Desempenho abaixo seguem abertos.
+Próximo passo deste incremento: revisar o PR e, quando integrado, reiniciar o
+Fôlego pelo fluxo do próprio aplicativo para testar a nova faixa com contas
+reais, sem usar credenciais como fixtures nem presumir que uma data de reset
+confirma cota. Não gerar release por este ajuste visual isolado.
+
 ## Instalação no host e aceites ainda pendentes — 03/11/2026
 
 Antes da instalação, a GUI e as units próprias estavam ativas no ambiente
@@ -34,7 +85,7 @@ da bandeja/superfícies não substituem os aceites seguintes:
 | Entrada física e acessibilidade | Supervisor atual em `waiting`, backend KWin, baseline 5, dois bloqueios, zero erro e zero operação ativa na consulta; uma revisão durável `accessibility.activate` segue pendente. Toque FTS3528 não estava disponível; reconciliar o ID, sem repetição cega, e testar toque/leitor de tela com hardware e sessão própria. |
 | Desktop e interação | Central/Desempenho/Opções foram vistas anteriormente em janelas próprias Wayland; a GUI b3 registra bandeja e superfícies agora. Faltam arraste e cliques físicos sobre o fluxo atual, login/SDDM, logout, suspend/resume, dock, Steam e Orca em janela de QA que não interrompa trabalho. |
 | Modo Desempenho | Regras automáticas e unit ficaram como antes da instalação. Os 225 s de observação anterior não provam horas reais; fazer soak contínuo da fonte b3 com orçamento, duração e alvos descartáveis próprios, incluindo foco, áudio, downloads, arquivos de projeto, agentes, carência e disjuntor. |
-| Gate local | A última suíte completa local verde antecede o texto/versão b3. A repetição de `test_backup.py::test_roundtrip_property` excedeu o deadline de 200 ms sob carga; falha e workspace foram preservados. Os 20 workspaces de QA bloqueiam novo `./dev check` sem revisão; CI do commit/tag da prévia b3 passou. Não elevar limites nem apagar evidência para obter verde. |
+| Gate local | O gate histórico da b3 teve uma falha de deadline preservada; o novo incremento passou `./dev check` com 1241/1570 testes aprovados (2 skips por perfil) após revisão manual e preservação integral dos workspaces concluídos. O CI deste novo SHA ainda precisa ser observado após push. |
 
 Próximo: executar esses aceites no alvo apropriado, preservando o diário e as
 políticas atuais. A prévia publicada não é aceite físico ou produto estável.
@@ -45,7 +96,8 @@ Pedido explícito de release: `pyproject.toml` e `uv.lock` avançaram juntos par
 `0.2.0b3`; commit/tag `172bbc1f5837fbcd3c7e00ec614738e52dda7397`.
 [Release v0.2.0b3](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b3)
 publicada em 03/11/2026 19:37:39 UTC como **prerelease**, com o PR #1 ainda
-draft e sem merge. A versão b2 e sua tag permanecem imutáveis. O CI do commit
+draft e sem merge **naquele momento**; o PR foi integrado posteriormente em
+`main` no SHA `3eabb6b`. A versão b2 e sua tag permanecem imutáveis. O CI do commit
 teve seis jobs de produto aprovados. Na referência da tag, nove checks success
 (incluindo os do PR e os três novos do tag), dois revisores skipped e nenhum
 check ativo ou falho na consulta final.
