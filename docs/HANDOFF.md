@@ -1,5 +1,64 @@
 # Passagem para o próximo agente — atualizada em 03/11/2026
 
+## Widget encaixável e prévia b4 local — 03/11/2026
+
+Pedido explícito: bordas escuras com seta ao passar o mouse, barra vertical
+direita/esquerda, barra horizontal superior, reorganização dos controles,
+transição suave, testes, commit, PR e release. Owner da implementação: este
+checkout único, branch `codex/compact-header-quota-20261103`, commit
+`18da024` sobre `93906da`. A versão em `pyproject.toml` e `uv.lock` é
+`0.2.0b4`. O commit inclui código, testes, documentação, capturas sintéticas e
+notas da prévia. A GUI residente instalada no host não foi reiniciada.
+
+O widget usa as mesmas seções nas quatro formas. As bordas esquerda/direita e
+superior mostram faixa de dois tons e seta no hover. As laterais ocupam a altura
+útil, ordenam as cotas em coluna, põem o rodapé na base e permitem rolagem; o
+topo ocupa a largura útil em uma ou duas linhas. O cálculo usa
+`availableGeometry()` para respeitar painéis informados pelo desktop. Em X11,
+a geometria anima por 260 ms. No KDE/Wayland, o worker consulta a posição real
+da própria janela pelo KWin, solicita a geometria final uma vez, confirma a
+posição e faz o conteúdo reaparecer suavemente. Falha ou unicidade desconhecida
+bloqueia o encaixe; resultado incerto não dispara repetição automática.
+Retornar restaura a posição original confirmada. O modo não persiste ao reiniciar.
+
+Validação final da fonte b4: `./dev test tests/test_ui_compact.py
+tests/test_desktop_tools.py -q` **30 passed**; `./dev check` com Python 3.14.7,
+HOME/XDG privados e perfis separados: **1242 passed, 2 skipped** headless e
+**1574 passed, 2 skipped** Qt offscreen, diff check aprovado. QA na sessão
+KDE/Wayland real, janela/dados/áudio próprios: direita `(728, 0, 220, 593)`,
+esquerda `(0, 0, 220, 593)`, topo `(0, 0, 948, 118)`, retorno exato a
+`(20, 120, 280, 185)`, temas claro e escuro, saída explícita. [Recibo e
+capturas](handoff/validation/dock-widget-2026-11-03/README.md). A primeira
+tentativa nativa de retorno revelou que o Qt informava `(0, 0)` no Wayland;
+a consulta ao KWin corrigiu o erro, e uma rodada posterior passou. Duas
+tentativas anteriores de `./dev check` falharam em testes sem interface fora do
+incremento (prazo variável do backup e resultado intermitente da supervisão de
+entrada); seus workspaces `run-aep92j_i` e `run-f5v8r38f` foram preservados e
+não contam como gates verdes. O teste de entrada passou isolado, as duas suítes
+passaram completas separadamente e o `./dev check` final passou sem mudar
+limites. Workspaces concluídos e revisados foram movidos integralmente para
+`.scratch/dev-tests-reviewed` para respeitar o teto; nenhum payload foi apagado.
+
+Prévia local: `.dev/bin/uv lock --offline` avançou só a versão do pacote;
+`.dev/bin/uv build --offline --out-dir .scratch/release-b4` gerou wheel e sdist.
+Os **156** arquivos de `folego/` no wheel correspondem byte a byte aos fontes.
+O wheel foi instalado sem dependências numa venv descartável própria, e
+`python -I -m folego --help` e metadados `0.2.0b4` passaram. Os artefatos
+ficam em `.scratch/release-b4`, fora do Git. O arquivo fonte completo de um
+commit exato, a tag e a conferência remota serão feitos somente quando a
+branch puder ser publicada; nenhuma tag foi criada agora.
+
+Publicação pendente: em 03/11 a branch remota ainda não existia. O guard
+`/home/misael/Projects/.workspace/workspace.py prepush` recusa criar branch
+remota por push. O owner precisa criar no GitHub a branch
+`codex/compact-header-quota-20261103` a partir do `main` integrado; então
+confirmar base/SHA, fazer push normal, abrir PR, conferir CI, criar tag da
+revisão elegível e publicar a prerelease b4 com os artefatos e notas preparados.
+Não contornar o guard nem presumir PR/CI/release publicados. A release foi
+autorizada pelo usuário neste lote, mas ainda não aconteceu. Sem merge
+autorizado. Aceites físicos, outras escalas/saídas e soak continuam abertos;
+o Qt offscreen e a sessão de QA não os substituem.
+
 ## Cabeçalho compacto e cotas disponíveis — 03/11/2026
 
 O PR #1 foi integrado antes deste lote: `main` local/remoto estava limpo em
