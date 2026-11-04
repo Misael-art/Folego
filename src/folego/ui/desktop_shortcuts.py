@@ -349,7 +349,8 @@ class ShortcutTabs(QWidget):
             button = self.buttons[key]
             button.setText(('Selecionar', 'Apagar')[index] if columns == 1 and index < 2
                            else labels[index])
-            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            # The grid owns the width; native button hints vary with desktop fonts.
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
             self.actions_layout.addWidget(button, index // columns, index % columns)
         for column in range(6):
             self.actions_layout.setColumnStretch(column, 1 if column < columns else 0)
