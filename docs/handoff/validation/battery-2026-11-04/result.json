@@ -1,0 +1,212 @@
+{
+  "passed": true,
+  "platform": "wayland",
+  "cases": [
+    {
+      "case": "frameless central",
+      "native_frame_equals_client": true,
+      "compositor_geometry": {
+        "frame": [
+          24,
+          0,
+          900,
+          593.3333333333333
+        ],
+        "client": [
+          24,
+          0,
+          900,
+          593.3333333333333
+        ]
+      },
+      "client_size": [
+        900,
+        593
+      ],
+      "available": [
+        948,
+        593
+      ]
+    },
+    {
+      "case": "back to widget without tray",
+      "workers_active": true
+    },
+    {
+      "case": "return to previous central tab",
+      "tab": "op\u00e7\u00f5es",
+      "workers_active": true
+    },
+    {
+      "case": "quota positions",
+      "mode": "right",
+      "positions": [
+        [
+          "codex",
+          true,
+          372,
+          61
+        ],
+        [
+          "claude",
+          true,
+          435,
+          61
+        ]
+      ],
+      "strip": 372,
+      "strip_size": [
+        92,
+        124
+      ],
+      "viewport_height": 593
+    },
+    {
+      "case": "native dock placement",
+      "mode": "right",
+      "geometry": [
+        836,
+        0,
+        112,
+        593
+      ],
+      "available": [
+        0,
+        0,
+        948,
+        593
+      ]
+    },
+    {
+      "case": "all quotas reachable",
+      "mode": "right",
+      "scroll_max": 224,
+      "last_quota_y": 379,
+      "actions_top": 456
+    },
+    {
+      "case": "dock actions retract",
+      "mode": "right",
+      "collapsed": true
+    },
+    {
+      "case": "quota positions",
+      "mode": "left",
+      "positions": [
+        [
+          "codex",
+          true,
+          372,
+          61
+        ],
+        [
+          "claude",
+          true,
+          435,
+          61
+        ]
+      ],
+      "strip": 372,
+      "strip_size": [
+        92,
+        124
+      ],
+      "viewport_height": 593
+    },
+    {
+      "case": "native dock placement",
+      "mode": "left",
+      "geometry": [
+        0,
+        0,
+        112,
+        593
+      ],
+      "available": [
+        0,
+        0,
+        948,
+        593
+      ]
+    },
+    {
+      "case": "all quotas reachable",
+      "mode": "left",
+      "scroll_max": 224,
+      "last_quota_y": 379,
+      "actions_top": 456
+    },
+    {
+      "case": "dock actions retract",
+      "mode": "left",
+      "collapsed": true
+    },
+    {
+      "case": "quota positions",
+      "mode": "top",
+      "positions": [
+        [
+          "codex",
+          true,
+          43,
+          49
+        ],
+        [
+          "claude",
+          true,
+          43,
+          49
+        ]
+      ],
+      "strip": 43,
+      "strip_size": [
+        89,
+        49
+      ],
+      "viewport_height": 132
+    },
+    {
+      "case": "native dock placement",
+      "mode": "top",
+      "geometry": [
+        0,
+        0,
+        948,
+        132
+      ],
+      "available": [
+        0,
+        0,
+        948,
+        593
+      ]
+    },
+    {
+      "case": "all quotas reachable",
+      "mode": "top",
+      "scroll_max": 0,
+      "last_quota_y": 32,
+      "actions_top": 110
+    },
+    {
+      "case": "dock actions retract",
+      "mode": "top",
+      "collapsed": true
+    },
+    {
+      "case": "native dock return",
+      "geometry": [
+        20,
+        120,
+        280,
+        233
+      ]
+    },
+    {
+      "case": "explicit exit in controls",
+      "workers_stopped": true
+    }
+  ],
+  "errors": [],
+  "scope": "owned Qt windows and compositor metadata; private HOME/XDG/Pulse; no user text or resource effects"
+}

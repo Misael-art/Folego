@@ -145,11 +145,12 @@ def main():
             QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)
             wait(lambda:compact.isVisible() and compact.windowHandle().isExposed() and not window.isVisible())
             backend=compact.shortcut_tabs.controller.backend
-            from folego.core.snapshot import Snapshot,MemInfo
+            from folego.core.snapshot import Snapshot,MemInfo,BatteryInfo,SourceQuality
             from folego.core.tmpfs import TmpfsVolume
             compact.show_snapshot(Snapshot(ts=time.time(),mono=time.monotonic(),mem=MemInfo(16*1024**2,6*1024**2),
                 swap_used_kb=1024,swap_total_kb=8192,pressure_memory=None,pressure_io=None,pressure_cpu=None,
                 load=None,apps=(),self_rss_kb=0,cpu_busy_frac=.52,temperature_c=61,temperature_sensor='demonstração',
+                battery=BatteryInfo(25,'Discharging',3600),sources=(SourceQuality('battery','ok'),),
                 tmpfs=(TmpfsVolume('/qa/runtime','tmpfs',100,81,19,is_runtime=True),)))
             if args.prompt_key or args.standard_shortcuts or args.console_themes or args.background_transparency or args.ai_quota_rings or args.dock_modes:
                 script=root/'place-owned-widget.js'
@@ -197,6 +198,10 @@ def main():
                     actual=compositor_rect()
                     assert all(abs(a-b)<=1 for a,b in zip(actual,(dock_target.x(),dock_target.y(),dock_target.width(),dock_target.height()))),(mode,actual,dock_target)
                     assert compact.action_drawer.maximumHeight()==0,(mode,'actions did not start collapsed')
+                    if mode == 'top':
+                        assert not compact.battery_label.isVisible() and '25%' in compact.detail_label.text()
+                    else:
+                        assert compact.battery_label.isVisible() and '25%' in compact.battery_label.text()
                     compact.ai_strip.set_items(items)
                     assert compact.ai_strip.visible_providers == {'codex','claude'},(mode,compact.ai_strip.visible_providers)
                     wait(lambda: all(compact.ai_strip.arrival_animations[p].state()==

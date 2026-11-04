@@ -248,7 +248,27 @@ primeira sessão legível daquele provedor. Eventos
 repetidos, abrir uma conta e falhas de leitura não repetem os sons. Desligar os
 avisos continua atualizando a referência; religar não reproduz o histórico mudo.
 Conclusões simultâneas do mesmo provedor são agrupadas enquanto aguardam som.
-A fila é limitada às sete identidades sonoras, reproduzidas em sequência.
+A fila mantém no máximo uma instância pendente por identidade sonora, incluindo
+os quatro sons de bateria, e reproduz os avisos em sequência.
+
+## Bateria
+
+O widget e a Central mostram o percentual quando a leitura da bateria é válida.
+No widget, ele fica verde acima de 50%, amarelo de 26% a 50%, laranja de 11% a
+25% e vermelho em 10% ou menos. Em 75%, ainda verde, toca o primeiro aviso de
+queda. Ao cruzar 50% e 25% durante a descarga, os toques ficam mais acentuados.
+Em 10% ou menos, o toque crítico começa na primeira leitura e se repete a cada
+60 segundos de monitoramento válido. Um salto que atravessa várias faixas toca
+apenas o aviso mais urgente. Carregar, pausar ou perder a leitura interrompe a
+repetição. O primeiro valor conhecido acima de 10% estabelece referência sem
+reproduzir avisos antigos.
+
+O tempo restante vem de `time_to_empty_avg`/`time_to_empty_now` do Linux ou é
+estimado com energia e potência (ou carga e corrente) da mesma bateria. Não é
+mostrado quando esses dados faltam, a leitura é antiga ou o estado não é de
+descarga. Equipamentos sem bateria não recebem um percentual fictício; leituras
+inválidas ficam sem valor. Os quatro sons estão na lista **Testar som**, e a
+preferência de sons existente governa também os avisos automáticos de bateria.
 
 **Elevar o volume a pelo menos 85% durante o som e restaurar depois** também vem
 ligado. Se a saída já estiver acima disso, não a reduz. O Fôlego guarda os valores

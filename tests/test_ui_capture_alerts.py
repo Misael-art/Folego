@@ -81,7 +81,7 @@ def test_desktop_options_persist_and_preview_only_on_explicit_click(qapp,tmp_pat
     tab.capture_choice.click();tab.sound_choice.click();tab.volume_choice.click()
     assert not enabled(SHOW_IN_CAPTURE) and not enabled(SOUNDS) and not enabled(RAISE_VOLUME)
     played=[];tab.sound_preview.connect(played.append)
-    assert tab.sound_kind.count()==7 and not played
+    assert tab.sound_kind.count()==11 and not played
     tab.sound_kind.setCurrentIndex(4);tab.test_sound.click();assert played==['low']
     tab.stop();tab.close()
 
@@ -127,4 +127,22 @@ def test_completion_to_audio_pipeline_respects_mute_and_does_not_replay(qapp,tmp
     assert len(backend.calls)==1
     sounds.observe('deliveries',rows('three'))
     wait(qapp,lambda:controller.future is None and len(backend.calls)==2)
+    sounds.shutdown()
+
+
+def test_battery_cue_uses_existing_audio_worker_and_sound_preference(qapp, monkeypatch):
+    from folego.ui.alert_sounds import AlertSounds
+    from folego.ui.desktop_shortcuts import DesktopController
+    monkeypatch.setattr('folego.ui.alert_sounds.enabled', lambda key: key == SOUNDS)
+    class Backend:
+        calls = []
+        def perform(self, action, value=None):
+            self.calls.append((action, value))
+            return ''
+        def close(self): return True
+    backend = Backend()
+    sounds = AlertSounds(controller=DesktopController(backend=backend))
+    sounds.battery_cue('battery-25')
+    wait(qapp, lambda: sounds.controller.future is None and len(backend.calls) == 1)
+    assert backend.calls == [('alert-play', {'tone': 'battery-25', 'raise_volume': False})]
     sounds.shutdown()

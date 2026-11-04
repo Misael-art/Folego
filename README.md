@@ -38,7 +38,7 @@ estão descritos abaixo.
 
 | Recurso | Para que serve |
 |---|---|
-| **Visão geral** | Acompanhar RAM, CPU, swap/zram e tmpfs, com alertas de pressão e indicação de dados ausentes ou antigos. |
+| **Visão geral** | Acompanhar RAM, CPU, swap/zram, tmpfs e bateria, com alertas de pressão e indicação de dados ausentes ou antigos. |
 | **Diagnóstico de temporários** | Identificar os maiores consumidores, processos que mantêm arquivos abertos e caminhos oficiais de encerramento quando conhecidos. |
 | **Quarentena e recuperação** | Revisar ações de disco e tmpfs, com cópia verificada e recuperação nos fluxos suportados. |
 | **Proteção de sessões** | Registrar trabalhos que devem continuar ativos e revisar candidatos sem tratar nome, idade ou CPU baixa como autorização. |
@@ -80,6 +80,13 @@ com a temperatura do host em °C à direita da CPU (sensor indisponível: **— 
 **Tmp** indica a ocupação dos temporários em memória. A altura
 pode crescer para preservar alertas e mensagens. [Uso, configuração de contas,
 dependências e limites](docs/COMPACTO.md).
+
+Quando o Linux fornece uma bateria válida, o widget mostra o percentual em
+verde, amarelo, laranja ou vermelho conforme a faixa. Ao descarregar, avisa
+com sons nas passagens de 75%, 50% e 25%; em 10% ou menos, repete o aviso a
+cada minuto. A estimativa restante aparece quando o sistema informa tempo ou
+energia e consumo compatíveis. Ela varia conforme o uso. Os avisos seguem a
+preferência de sons em **opções**.
 
 A biblioteca oferece 12 prompts de desenvolvimento: escolha um título para copiar e cole no
 agente desejado. O teclado virtual preserva o foco do campo de destino no KWin.

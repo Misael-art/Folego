@@ -35,6 +35,7 @@ from .custom_prompts_tab import CustomPromptsTab
 from .ai_monitor import AIMonitor
 from .theme import set_control_icon, prepare_surface, paint_surface
 from ..core import health
+from ..core.battery_alerts import BatteryAlertTracker
 from ..core.exclusions import ExclusionError, ExclusionList
 from ..core.orphans import OrphanTracker, active_investigation, group_targets
 from ..core.sessions import SessionError, SessionRegistry
@@ -141,6 +142,7 @@ class MainWindow(QMainWindow):
         self._last_signal = None
         self._collection_error = ""
         self.ai_monitor = AIMonitor(self)
+        self._battery_alerts = BatteryAlertTracker()
         self._jobs = jobs if jobs is not None else TuneJobs(parent=self)
         self._disk_jobs = disk_jobs if disk_jobs is not None else TuneJobs(
             parent=self, argv_factory=plan_argv, timeout_ms=DISK_TIMEOUT_MS)
@@ -338,6 +340,11 @@ class MainWindow(QMainWindow):
     def apply_snapshot(self, snapshot):
         self._request_history()
         self._collection_error = ""
+        cue = self._battery_alerts.observe(
+            snapshot.battery if not snapshot.is_stale(self._thresholds.stale_after_s)
+            and snapshot.source('battery').status == 'ok' else None)
+        if cue:
+            self.ai_monitor.alerts.battery_cue(cue)
         signal = title_signal.compute(snapshot, self._thresholds,
                                       engine=self._health)
         self._last_snapshot = snapshot

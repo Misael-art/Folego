@@ -49,9 +49,9 @@ def test_delivery_identity_survives_acknowledgment_and_partial_reads():
         assert tracker.delivery_changes(rows(provider, 'new')) == [provider]
 
 
-def test_seven_original_cues_are_distinct_short_and_faded():
+def test_original_cues_are_distinct_short_and_faded():
     tracks = [pcm(key) for key in SCORES]
-    assert len(set(tracks)) == 7
+    assert len(set(tracks)) == len(SCORES)
     assert all(0 < len(t) < 48000*2 for t in tracks)
     assert all(t[:2] == b'\0\0' for t in tracks)
 

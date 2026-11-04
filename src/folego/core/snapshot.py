@@ -140,6 +140,13 @@ class AppRSS:
 
 
 @dataclass(frozen=True)
+class BatteryInfo:
+    percent: int
+    status: str
+    remaining_s: int | None = None
+
+
+@dataclass(frozen=True)
 class Snapshot:
     ts: float
     mem: MemInfo | None
@@ -167,6 +174,7 @@ class Snapshot:
     boot_id: str = ""
     temperature_c: float | None = None
     temperature_sensor: str = ""
+    battery: BatteryInfo | None = None
 
     @property
     def ts_iso(self) -> str:

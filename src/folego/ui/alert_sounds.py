@@ -33,9 +33,12 @@ class AlertSounds(QObject):
     def preview(self, tone):
         if tone in TONES: self._enqueue(tone, preview=True)
 
+    def battery_cue(self, tone):
+        if tone in TONES and enabled(SOUNDS): self._enqueue(tone)
+
     def _enqueue(self, tone, preview=False):
         if self.closed or any(t == tone for t, _ in self.pending): return
-        # At most seven distinct cues. Coincident accounts of the same kind
+        # At most one pending instance per known cue. Coincident accounts
         # coalesce while pending, without losing quota/completion identities.
         self.pending.append((tone, preview))
         self._next()

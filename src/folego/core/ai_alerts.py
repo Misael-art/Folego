@@ -2,7 +2,8 @@
 from . import ai_sessions
 import time
 
-TONES = ('codex', 'web', 'claude', 'grok', 'low', 'empty', 'restored')
+TONES = ('codex', 'web', 'claude', 'grok', 'low', 'empty', 'restored',
+         'battery-75', 'battery-50', 'battery-25', 'battery-10')
 
 
 class AlertTracker:

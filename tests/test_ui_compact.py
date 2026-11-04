@@ -2,7 +2,7 @@
 import pytest
 import time
 
-from folego.core.snapshot import MemInfo, Pressure, Snapshot
+from folego.core.snapshot import BatteryInfo, MemInfo, Pressure, Snapshot, SourceQuality
 from folego.ui.compact import CompactWindow, clamp_position, dock_geometry
 from folego.ui.desktop_caps import detect
 
@@ -72,6 +72,35 @@ def test_dock_geometry_respects_available_screen_and_panels():
     assert dock_geometry('top', QRect(0, 0, 700, 500)) == QRect(0, 0, 700, 190)
     with pytest.raises(ValueError):
         dock_geometry('bottom', area)
+
+
+def test_battery_adapts_to_all_widget_positions(qapp):
+    from dataclasses import replace
+    view, _ = make(qapp)
+    sample = replace(snap(), mono=time.monotonic(),
+                     battery=BatteryInfo(25, 'Discharging', 3600),
+                     sources=(SourceQuality('battery', 'ok'),))
+    view.show_compact()
+    for mode in ('compact', 'left', 'right', 'top'):
+        if mode != 'compact':
+            view.set_dock_mode(mode)
+            qapp.processEvents()
+        view.show_snapshot(sample)
+        if mode == 'top':
+            assert not view.battery_label.isVisible()
+            assert '25%' in view.detail_label.text()
+            assert '1h00' in view.detail_label.text()
+        else:
+            assert view.battery_label.isVisible()
+            assert '25%' in view.battery_label.text()
+            assert '1h00' in view.battery_label.text()
+        assert view._battery_band == 'orange'
+    view.show_snapshot(replace(sample, battery=None,
+                               sources=(SourceQuality('battery', 'error'),)))
+    assert not view.battery_label.isVisible()
+    view.show_snapshot(replace(sample, mono=time.monotonic() - 30))
+    assert not view.battery_label.isVisible()
+    view.force_close()
 
 
 def test_dock_reflows_existing_controls_and_returns_to_compact(qapp):

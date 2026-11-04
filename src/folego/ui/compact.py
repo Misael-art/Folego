@@ -15,6 +15,8 @@ from PySide6.QtWidgets import (QBoxLayout, QFrame, QGridLayout, QHBoxLayout, QLa
 from . import title_signal
 from .desktop_caps import detect
 from .theme import _background_color, background, themed_style, TOKENS, set_control_icon, on_theme_change
+from .palettes import readable
+from ..core.battery_alerts import battery_band, remaining_text
 
 POSITION_KEY = "compact/position"
 WIDGET_TITLE = "Fôlego — widget"
@@ -186,6 +188,11 @@ class CompactWindow(QWidget):
         self.detail_label.setWordWrap(True)
         self.detail_label.setObjectName("quality")
         themed_style(self.detail_label, lambda: f"color:{TOKENS.text};font-weight:500;")
+        self.battery_label = QLabel()
+        self.battery_label.hide()
+        self._battery_band = 'green'
+        self._battery_text = ''
+        themed_style(self.battery_label, self._battery_style)
         self._automation_text = "automação manual · preset equilibrado · nenhum grant ativo"
         self.mode_label = QLabel()
         self.operation_label = QLabel("operação: nenhuma nesta sessão")
@@ -258,6 +265,7 @@ class CompactWindow(QWidget):
         readings.setSpacing(3)
         readings.addWidget(self.status_label)
         readings.addWidget(self.detail_label)
+        readings.addWidget(self.battery_label)
         readings_widget = QWidget()
         readings_widget.setLayout(readings)
         self._readings_margins = readings.contentsMargins()
@@ -475,11 +483,13 @@ class CompactWindow(QWidget):
                              Qt.AlignmentFlag.AlignLeft)
         self.detail_label.setAlignment(reading_alignment)
         self.free_label.setAlignment(reading_alignment)
-        for label in (self.detail_label, self.free_label, self.alert_label):
+        for label in (self.detail_label, self.battery_label, self.free_label, self.alert_label):
             font = QFont(label.font())
             font.setPointSize(8 if short_side or slim_top else 9)
             label.setFont(font)
         self.free_label.setWordWrap(not side and not slim_top)
+        self.battery_label.setWordWrap(side)
+        self.battery_label.setAlignment(reading_alignment)
         self.pause_button.setMinimumWidth(0)
         self.pause_button.setMaximumWidth(16777215)
         if slim_top:
@@ -490,6 +500,7 @@ class CompactWindow(QWidget):
             self.readings_widget.setMaximumWidth(16777215)
         self.pause_button.setSizePolicy(QSizePolicy.Policy.Expanding if side else QSizePolicy.Policy.Preferred,
                                         QSizePolicy.Policy.Preferred)
+        self.battery_label.setVisible(bool(self._battery_text) and mode != 'top')
         self._render_details()
         self.ai_strip.empty_label.setWordWrap(True)
         self.ai_strip.empty_label.setText('Sem cotas confirmadas' if mode in ('left', 'right')
@@ -839,6 +850,7 @@ class CompactWindow(QWidget):
         thermal = '— °C' if snapshot.temperature_c is None else f'{snapshot.temperature_c:.0f} °C'
         self._detail_values = memory, cpu, thermal, swap, temp
         self._render_details()
+        self._show_battery(snapshot)
         self.detail_label.setToolTip('Temperatura do host · ' + (snapshot.temperature_sensor or 'sensor não disponível')
                                      + '\nTmp = ocupação dos temporários em memória')
         alerts = []
@@ -848,7 +860,8 @@ class CompactWindow(QWidget):
             elif volume.is_runtime and (volume.used_frac >= .9 or
                     (volume.inodes_total > 0 and volume.inodes_avail == 0)):
                 alerts.append("Runtime crítico — aplicativos podem não abrir")
-        degraded = [item.name for item in snapshot.sources if item.status != "ok"]
+        degraded = [item.name for item in snapshot.sources
+                    if item.status != "ok" and not (item.name == 'battery' and item.status == 'missing')]
         if degraded:
             alerts.append("Coleta parcial: " + ", ".join(degraded[:3]))
         if signal.level == "unknown":
@@ -868,10 +881,43 @@ class CompactWindow(QWidget):
             self.detail_label.setTextFormat(Qt.TextFormat.PlainText)
             self.detail_label.setText('\n'.join((memory, cpu, thermal, swap, temp)))
         else:
+            battery = (f'<span style="color:{self._battery_color()};font-weight:700">{self._battery_text}</span>'
+                       if self._dock_mode == 'top' else '')
             self.detail_label.setTextFormat(Qt.TextFormat.RichText)
             self.detail_label.setText('<table width="100%" cellspacing="0"><tr>'
                 f'<td>{memory}</td><td align="right">{cpu}</td><td align="right">{thermal}</td></tr>'
-                f'<tr><td>{swap}</td><td align="right">{temp}</td><td></td></tr></table>')
+                f'<tr><td>{swap}</td><td align="right">{temp}</td><td align="right">{battery}</td></tr></table>')
+
+    def _battery_color(self):
+        colors = {'green': TOKENS.ok, 'yellow': readable('#e8bd18', (TOKENS.surface, TOKENS.surface_alt)),
+                  'orange': readable('#ef8625', (TOKENS.surface, TOKENS.surface_alt)),
+                  'red': TOKENS.danger}
+        return colors[self._battery_band]
+
+    def _battery_style(self):
+        return f'color:{self._battery_color()};font-weight:700;'
+
+    def _show_battery(self, snapshot):
+        battery = (snapshot.battery if snapshot.source('battery').status == 'ok'
+                   and not snapshot.is_stale(15.0) else None)
+        if battery is None:
+            self._battery_text = ''
+            self.battery_label.hide()
+            if self._dock_mode == 'top':
+                self._render_details()
+            return
+        self._battery_band = battery_band(battery.percent)
+        self.battery_label.setStyleSheet(self._battery_style())
+        suffix = {'Charging': ' · carregando', 'Full': ' · cheia',
+                  'Not charging': ' · conectada'}.get(battery.status, '')
+        estimate = remaining_text(battery.remaining_s) if battery.status == 'Discharging' else ''
+        self._battery_text = f'Bat {battery.percent}%{suffix}' + (f' · ~{estimate}' if estimate else '')
+        self.battery_label.setText(self._battery_text)
+        self.battery_label.setToolTip('Bateria · estimativa variável com o consumo' if estimate
+                                     else 'Bateria · tempo restante não disponível')
+        self.battery_label.setVisible(self._dock_mode != 'top')
+        if self._dock_mode == 'top':
+            self._render_details()
 
     def _sync_tooltip(self):
         self.setToolTip("\n".join(text for text in (

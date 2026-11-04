@@ -174,7 +174,7 @@ class OptionsTab(QWidget):
         layout = QVBoxLayout(group)
         layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         self.capture_choice = QCheckBox('Incluir widget flutuante no print')
-        self.sound_choice = QCheckBox('Sons de conclusão dos agentes e de franquia')
+        self.sound_choice = QCheckBox('Sons de agentes, franquia e bateria')
         self.volume_choice = QCheckBox('Elevar o volume a pelo menos 85% durante o som e restaurar depois')
         self.sound_status = QLabel(self._sound_message)
         self.sound_status.setTextFormat(Qt.TextFormat.PlainText)
@@ -196,7 +196,9 @@ class OptionsTab(QWidget):
         self.sound_kind = QComboBox()
         for key, text in (('codex', 'Codex · entrega concluída'), ('web', 'Codex Web · entrega concluída'),
                           ('claude', 'Claude · entrega concluída'), ('grok', 'Grok · entrega concluída'),
-                          ('low', 'Atenção · 20% restantes'), ('empty', 'Franquia esgotada'), ('restored', 'Franquia disponível novamente')):
+                          ('low', 'Atenção · 20% restantes'), ('empty', 'Franquia esgotada'), ('restored', 'Franquia disponível novamente'),
+                          ('battery-75', 'Bateria · 75%'), ('battery-50', 'Bateria · 50%'),
+                          ('battery-25', 'Bateria · 25%'), ('battery-10', 'Bateria · 10%')):
             self.sound_kind.addItem(text, key)
         self.sound_kind.setAccessibleName('Som para testar')
         self.test_sound = QPushButton('Testar som')
