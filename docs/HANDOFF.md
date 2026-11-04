@@ -1,5 +1,62 @@
 # Passagem para o próximo agente — atualizada em 04/11/2026
 
+## Monitoramento de bateria — 04/11/2026
+
+Pedido autorizado: percentual por cor (verde, amarelo, laranja, vermelho),
+toques nas passagens de 75%, 50% e 25%, aviso recorrente a cada minuto em 10%
+ou menos e estimativa de tempo restante quando comprovável. Owner: checkout
+canônico, branch `codex/compact-header-quota-20261103`. Dependências: leitura
+somente de `/sys/class/power_supply`, coletor existente, worker de avisos e
+componentes do widget/Central. Critérios de aceite: leitura inválida/antiga
+não mostra percentual nem produz aviso; descarregamento cruza uma faixa de
+cada vez, sem repetição acidental; barra superior conserva 132 unidades com
+quatro cotas e laterais conservam rolagem/ações acessíveis.
+
+Código nos commits locais `ca93ef3` e `e00b86a`: `BatteryInfo` no snapshot,
+leitura da ABI do kernel com qualidade de fonte, estimativa nativa ou por
+energia/potência (ou carga/corrente), estado puro de limiares e quatro melodias
+curtas no worker de áudio existente. O percentual do widget fica verde de
+51–100 (inclusive 75), amarelo de 26–50, laranja de 11–25, vermelho até 10.
+O primeiro valor de descarga acima de 10 estabelece referência silenciosa;
+em 10 ou menos há aviso inicial e depois a cada 60 s de observação válida.
+Carregamento, leitura perdida ou pausa não emitem sons de descarga. A Central
+mostra o valor em texto e a estimativa quando há dados. As opções permitem
+testar os quatro toques e o interruptor de som existente também os governa.
+Fonte da semântica de `capacity`, `status`, energia/carga e tempo:
+[documentação da classe power_supply do Linux](https://cdn.kernel.org/doc/html/latest/power/power_supply_class.html).
+
+Validação focada final: `./dev test tests/test_ui_main_window_tabs.py
+tests/test_ui_compact.py tests/test_battery.py -q` passou. `./dev check`
+final, Python 3.14.7 gerenciado, HOME/XDG privados e suítes sequenciais:
+**1247 passed, 2 skipped** headless; **1594 passed, 2 skipped** Qt offscreen.
+`git diff --check` limpo. A primeira tentativa do gate falhou porque o teste
+antigo esperava exatamente sete melodias; a asserção foi atualizada para exigir
+que todas as 11 sejam distintas, curtas e suavizadas. Essa tentativa não conta
+como aprovada. [Recibo e capturas KDE/Wayland](handoff/validation/battery-2026-11-04/README.md)
+confirmam laterais 112 × 593 e topo 948 × 132 com percentual/estimativa
+sintéticos, quatro cotas e ações recolhíveis. A primeira tentativa nativa
+detectou 17 unidades excedentes no topo; após colocar a bateria junto das
+métricas, a repetição integral passou com `scroll_max=0`. A falha foi preservada.
+
+O leitor real deste host retornou `ok`, estado `Not charging` e sem estimativa;
+portanto os cruzamentos de limiares e a acústica não foram observados numa
+descarga real. Não há prova nativa de HD/widescreen, outras escalas, leitor de
+tela ou horas de monitoramento. Múltiplas baterias ficam em estado desconhecido
+até haver uma regra de agregação comprovada. `./dev setup` sincronizou o
+ambiente GUI; a GUI residente já estava `inactive/dead` e assim permaneceu.
+Os monitores de entrada/desempenho permaneceram ativos nos PIDs 6593/6597;
+nenhum recurso do usuário foi alterado para criar uma descarga de teste.
+
+O remoto segue sem a branch e sem PR desta linha. O push normal de `ca93ef3`
+foi recusado pelo guard local: “criação, exclusão ou destino de branch fora da
+continuidade registrada”. Não contornar o guard. Próximo owner: resolver a
+criação da branch remota pelo fluxo oficial, conferir base/SHA, enviar os commits
+por push normal, abrir/reutilizar PR e aguardar gates remotos. Release depende
+de versão, artefatos e notas do SHA elegível e autorização vigente; os pacotes
+b4 locais são de SHA anterior e não representam esta revisão. A GUI residente
+pode ser aberta pelo usuário para verificar o monitoramento real; não foi
+reiniciada durante a QA para preservar o estado encontrado.
+
 ## Barra superior fina e ações recolhíveis — 04/11/2026
 
 Pedido aprovado após mockup: folga primeiro à esquerda, depois cotas de IA/CLI,
