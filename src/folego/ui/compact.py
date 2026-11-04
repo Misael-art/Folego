@@ -897,9 +897,9 @@ class CompactWindow(QWidget):
     def _battery_style(self):
         return f'color:{self._battery_color()};font-weight:700;'
 
-    def _show_battery(self, snapshot):
+    def _show_battery(self, snapshot, *, now_mono=None):
         battery = (snapshot.battery if snapshot.source('battery').status == 'ok'
-                   and not snapshot.is_stale(15.0) else None)
+                   and not snapshot.is_stale(15.0, now_mono) else None)
         if battery is None:
             self._battery_text = ''
             self.battery_label.hide()

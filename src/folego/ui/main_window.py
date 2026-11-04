@@ -324,6 +324,11 @@ class MainWindow(QMainWindow):
             signal = title_signal.compute(snapshot, self._thresholds, now_mono=now)
         else:
             return
+        if (self._compact is not None and snapshot is not None
+                and snapshot.is_stale(self._thresholds.stale_after_s, now)):
+            refresh_battery = getattr(self._compact, '_show_battery', None)
+            if refresh_battery is not None:
+                refresh_battery(snapshot, now_mono=now)
         if self._last_signal is not None and signal.text == self._last_signal.text:
             return
         self._last_signal = signal

@@ -11,7 +11,7 @@ import pytest
 
 from folego.core.exclusions import ExclusionError
 from folego.core.sessions import ACTIVE, Session, SessionError
-from folego.core.snapshot import AppRSS, MemInfo, Pressure, Snapshot
+from folego.core.snapshot import AppRSS, BatteryInfo, MemInfo, Pressure, Snapshot, SourceQuality
 from folego.orchestration.config import ConfigError
 from folego.ui.compact import CompactWindow
 from folego.ui.main_window import MainWindow
@@ -46,6 +46,20 @@ def test_health_expires_without_another_snapshot_or_journal_read(window, monkeyp
     assert "antiga" in view.windowTitle()
     assert "não comprovada" in view.dashboard.resources.text()
     assert view.dashboard.rows == []
+
+
+def test_paused_widget_hides_stale_battery_without_new_sample(window):
+    import time
+    sampled_at = time.monotonic()
+    window.show_compact()
+    window.apply_snapshot(snap(mono=sampled_at,
+                               battery=BatteryInfo(25, 'Discharging', 3600),
+                               sources=(SourceQuality('battery', 'ok'),)))
+    assert window._compact.battery_label.isVisible()
+    window.pause_watching()
+    window._refresh_freshness(now_mono=sampled_at + 16)
+    assert not window._compact.battery_label.isVisible()
+    window.quit()
 
 
 def test_collection_failure_and_monitoring_pause_remove_old_green_health(window):
