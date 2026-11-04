@@ -7,7 +7,7 @@ Wayland placement is compositor-owned; X11 positions are clamped to live screens
 import os
 
 from PySide6.QtCore import QPoint, Qt, QTimer, QPropertyAnimation, QEasingCurve, QEvent
-from PySide6.QtGui import QGuiApplication, QWindow
+from PySide6.QtGui import QGuiApplication, QWindow, QFont
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
                                QWidget, QSizePolicy, QApplication)
 
@@ -116,13 +116,14 @@ class CompactWindow(QWidget):
         self.free_label = QLabel("RAM sem leitura")
         self.free_label.setObjectName("quality")
         self.free_label.setWordWrap(True)
-        self.open_button = QPushButton('Central')
+        self.open_button = QPushButton()
+        set_control_icon(self.open_button, 'view-grid', QStyle.StandardPixmap.SP_FileDialogContentsView)
         self.open_button.setAccessibleName('Abrir a central do Fôlego')
         self.open_button.setToolTip('Abrir ajustes, prompts e opções do Fôlego')
         self.open_button.clicked.connect(self._open_central)
         from PySide6.QtWidgets import QMenu
         self.control_button = QPushButton()
-        set_control_icon(self.control_button, 'application-menu', QStyle.StandardPixmap.SP_TitleBarMenuButton)
+        set_control_icon(self.control_button, 'go-down', QStyle.StandardPixmap.SP_ArrowDown)
         self.control_button.setAccessibleName('Controles do widget do Fôlego')
         self.control_button.setToolTip('Controles do Fôlego')
         self.control_menu = QMenu(self.control_button)
@@ -135,8 +136,8 @@ class CompactWindow(QWidget):
         self.pause_button.setAccessibleName("Pausar ou retomar a coleta de telemetria")
         self.pause_button.setToolTip("Pausar monitoramento")
         self.pause_button.clicked.connect(self._toggle_pause)
-        self.control_button.setFixedSize(26, 26)
-        self.open_button.setMinimumHeight(26)
+        self.control_button.setFixedSize(20, 28)
+        self.open_button.setFixedSize(30, 28)
         for button in (self.open_button, self.control_button, self.pause_button):
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.gauge = HealthGauge(compact=True)
@@ -145,12 +146,13 @@ class CompactWindow(QWidget):
         gauge_column.setSpacing(0)
         gauge_column.addWidget(self.gauge)
         header = QHBoxLayout()
-        header.setSpacing(4)
-        brand = QLabel("Fôlego")
-        brand.setStyleSheet("font-size:10pt;font-weight:600;")
-        header.addWidget(brand, 1)
-        for button in (self.open_button, self.control_button):
-            header.addWidget(button)
+        header.setSpacing(8)
+        self.brand = QLabel("Fôlego")
+        font = QFont('Noto Sans', 11)
+        font.setWeight(QFont.Weight.DemiBold)
+        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, -0.2)
+        self.brand.setFont(font)
+        header.addWidget(self.brand, 1)
         body = QHBoxLayout()
         body.setSpacing(10)
         body.addLayout(gauge_column)
@@ -189,8 +191,26 @@ class CompactWindow(QWidget):
         self.capture_timer.setInterval(350)
         self.capture_timer.timeout.connect(self._capture_status)
         self.shortcut_tabs = ShortcutTabs(self, capture_handler=self._print)
-        header.insertWidget(1, self.shortcut_tabs.buttons['keyboard'])
-        header.insertWidget(2, self.shortcut_tabs.top_button)
+        keyboard_button = self.shortcut_tabs.buttons['keyboard']
+        keyboard_button.setFixedSize(30, 28)
+        self.shortcut_tabs.top_button.setFixedSize(20, 28)
+        for name, controls in (('keyboardGroup', (keyboard_button, self.shortcut_tabs.top_button)),
+                               ('navigationGroup', (self.open_button, self.control_button))):
+            group = QFrame(self)
+            group.setObjectName(name)
+            row = QHBoxLayout(group)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(0)
+            for control in controls:
+                themed_style(control, lambda: f'QPushButton{{background:transparent;color:{TOKENS.text};'
+                             'border:none;border-radius:0;padding:0;min-height:0;}'
+                             f'QPushButton:hover{{background:{background(TOKENS.surface_alt)};}}')
+                row.addWidget(control)
+            themed_style(group, lambda target=name: f'QFrame#{target}{{background:transparent;'
+                         f'border:1px solid {TOKENS.border};border-radius:7px;}}')
+            header.addWidget(group)
+        self.accounts_menu = self.control_menu.addMenu('Contas e cotas de IA')
+        self.accounts_menu.aboutToShow.connect(self._refresh_accounts_menu)
         self.shortcut_tabs.customize_requested.connect(self._customize_prompts)
         self.shortcut_tabs.controller.feedback.connect(self._shortcut_result)
         self.shortcut_tabs.controller.payload.connect(self._capture_result)
@@ -221,6 +241,25 @@ class CompactWindow(QWidget):
         app.screenAdded.connect(self._watch_screen)
         for screen in app.screens():
             self._watch_screen(screen)
+
+    def _refresh_accounts_menu(self):
+        from ..core import ai_sessions
+        self.accounts_menu.clear()
+        for provider, name in ai_sessions.NAMES.items():
+            button = self.ai_strip.buttons[provider]
+            left = button.remaining
+            status = 'sem confirmação' if left is None else f'{left}% disponível'
+            row = next((item for item in self.ai_strip.delivery_items
+                        if item.get('provider') == provider), {})
+            count = row.get('count')
+            extras = [f'{count} entregas' if count != 1 else '1 entrega'] if count else []
+            items = [item for item in self.ai_strip.items if item.get('provider') == provider]
+            tickets = sum(n for item in items if (n := ai_sessions.available_resets(item)) is not None and n > 0)
+            if tickets:
+                extras.append(f'{tickets} tickets')
+            action = self.accounts_menu.addAction(' · '.join([name, status, *extras]))
+            action.triggered.connect(lambda checked=False, p=provider: QTimer.singleShot(
+                0, lambda: self.ai_strip.details(p, anchor=self.control_button)))
 
     def _animate_actions(self, expanded):
         self.drawer_animation.stop()

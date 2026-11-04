@@ -5,13 +5,29 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot, ClassInfo, QPoint
-from PySide6.QtGui import QGuiApplication, QIcon
+from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot, ClassInfo, QPoint, QRectF, QSize
+from PySide6.QtGui import QGuiApplication, QIcon, QPainter, QPen, QColor, QPixmap
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QStyle,
                               QVBoxLayout, QWidget, QMenu, QWidgetAction, QSizePolicy)
 
 from ..adapters.desktop_tools import DesktopTools
-from .theme import background, themed_style, TOKENS, set_control_icon, shortcut_style, prepare_surface, paint_surface
+from .theme import background, themed_style, TOKENS, set_control_icon, on_theme_change, shortcut_style, prepare_surface, paint_surface
+
+
+def keyboard_icon():
+    """A small vector keyboard that keeps the same outline in every icon theme."""
+    pixmap = QPixmap(24, 24)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(QPen(QColor(TOKENS.text), 1.6))
+    painter.drawRoundedRect(QRectF(2.5, 5, 19, 14), 2.5, 2.5)
+    for x in (6, 10, 14, 18):
+        for y in (9, 12):
+            painter.drawPoint(x, y)
+    painter.drawLine(7, 16, 17, 16)
+    painter.end()
+    return QIcon(pixmap)
 
 
 def _show_desktop_request():
@@ -309,7 +325,9 @@ class ShortcutTabs(QWidget):
             self.buttons[key] = button
             row.addWidget(button, 1)
         keyboard = QPushButton(self)
-        set_control_icon(keyboard, 'input-keyboard', QStyle.StandardPixmap.SP_ComputerIcon)
+        on_theme_change(keyboard, lambda: keyboard.setIcon(keyboard_icon()))
+        keyboard.setIcon(keyboard_icon())
+        keyboard.setIconSize(QSize(20, 20))
         keyboard.setFixedSize(24, 24)
         keyboard.setStyleSheet('min-height:0;max-height:24px;padding:0;')
         keyboard.setFocusPolicy(Qt.FocusPolicy.NoFocus)

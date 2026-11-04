@@ -48,17 +48,21 @@ estão descritos abaixo.
 | **Entrada e acessibilidade** | Observar teclado, ponteiro, trackpads, toque, controles e áudio; solicitar reparo de entrada ou manter um monitor residente opcional, sem depender do PhaseZero. |
 | **Opções e continuidade** | Iniciar com a sessão por padrão, desativar quando quiser, consultar operações pelo código e acompanhar temporários próprios preservados. |
 
-O **modo compacto** tem 280 px de largura e recursos em duas linhas. **Central**
-abre a interface principal; **Voltar** retorna ao widget mantendo a aba e o
-monitoramento. A saída fica em **Controles → Sair do Fôlego** ou na bandeja,
-sem botões de minimizar, maximizar e fechar nas duas interfaces.
-A faixa de IAs acompanha Codex, Codex Web, Claude e Grok
-no próprio Fôlego; passe o mouse para abrir o painel na conta padrão e escolha
-outras na lista lateral. Consumo, resets, tickets e referência da assinatura
-ficam separados. Os quatro medidores seguem o padrão circular do PhaseZero:
+O **modo compacto** tem 280 px de largura e recursos em duas linhas. O ícone de
+grade abre a **Central**; a seta ao lado reúne **Ocultar widget**, **Sair do
+Fôlego** e **Contas e cotas de IA**. **Voltar** retorna ao widget mantendo a aba e o
+monitoramento. A saída também fica na bandeja. As duas interfaces dispensam
+botões de minimizar, maximizar e fechar.
+A faixa de IAs mostra somente provedores com cota positiva e confirmada,
+ordenados pelo percentual disponível. Contas sem cota ou sem confirmação
+continuam acessíveis em **Contas e cotas de IA**; passe o mouse sobre um medidor
+visível para abrir o painel da conta exibida. Consumo, resets, tickets e
+referência da assinatura ficam separados. Os medidores seguem o padrão circular do PhaseZero:
 disco do provedor, percentual disponível no centro e anel verde/amarelo/vermelho.
-**?** com anel cinza indica cota sem confirmação. O anel faz uma transição suave
-ao receber um novo percentual; entregas para revisitar fazem a borda interna pulsar.
+Uma cota desconhecida não é tratada como zero. O anel faz uma transição suave
+ao receber um novo percentual; uma cota que volta aparece com uma transição curta
+e a reposição confirmada usa o aviso sonoro existente. Entregas para revisitar
+fazem a borda interna pulsar.
 Ao lado das entregas, um **presente verde piscando** mostra as redefinições
 disponíveis confirmadas das contas do provedor. Clique para consultar a conta;
 o resgate continua no cliente de IA.
@@ -101,7 +105,7 @@ fundo)**. A prévia acompanha a barra e a escolha é salva ao soltá-la. Textos,
 ícones, contornos de teclas e indicadores mantêm a opacidade; os painéis de
 contas usam um fundo contínuo, com os elementos internos transparentes.
 
-![Widget compacto do Fôlego com navegação Central e Controles](docs/handoff/validation/navigation-2026-11-01/compact.png)
+![Widget compacto com cabeçalho de ícones e cotas disponíveis](docs/handoff/validation/compact-header-quota-2026-11-03/compact.png)
 
 ## Começar
 

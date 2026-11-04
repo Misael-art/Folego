@@ -1,8 +1,9 @@
-"""Quota truth, animation lifetime and the four-column compact layout."""
+"""Quota truth, animation lifetime and the compact availability strip."""
 import time
 
 from PySide6.QtCore import QVariantAnimation
 from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QStyle
 
 from folego.core import ai_sessions as ai
 from folego.ui.ai_strip import AIStrip
@@ -50,7 +51,8 @@ def test_rings_show_remaining_not_used_and_expiry_cancels_transition(qapp):
     assert button.remaining is None and button.displayed is None
     assert button.transition.state() == QVariantAnimation.State.Stopped
     assert not contains_color(button, '#dc2626')
-    assert 'desconhecida' in button.accessibleName()
+    assert not strip.columns['codex'].isVisible()
+    assert 'cota desconhecida ou vencida' in button.accessibleName()
     strip.shutdown()
 
 
@@ -60,7 +62,10 @@ def test_all_providers_use_rings_with_truthful_zero_and_unknown(qapp):
     for provider, remaining in zip(ai.NAMES, (100, 61, 20, 0)):
         button = strip.buttons[provider]
         assert button.remaining == remaining
-        assert f'{remaining}% disponível' in button.accessibleName()
+        if remaining:
+            assert f'{remaining}% disponível' in button.accessibleName()
+        else:
+            assert not strip.columns[provider].isVisible()
         assert not button.icon().isNull() and button.text() == ai.NAMES[provider]
     strip.failed('unavailable')
     assert all(b.remaining is None for b in strip.buttons.values())
@@ -70,13 +75,14 @@ def test_all_providers_use_rings_with_truthful_zero_and_unknown(qapp):
 
 def test_pulse_only_for_confirmed_deliveries_while_visible(qapp):
     strip = make(qapp)
+    strip.set_items([observation('claude', 50)])
     strip.set_deliveries([dict(provider='claude', count=2, pending=[])])
     assert strip.delivery_pulse.state() == QVariantAnimation.State.Stopped
     strip.show();qapp.processEvents()
     assert strip.delivery_pulse.state() == QVariantAnimation.State.Running
     strip.delivery_pulse.setCurrentTime(900)
     assert strip.buttons['claude'].halo > .9
-    assert strip.buttons['claude'].remaining is None  # completion never invents quota
+    assert strip.buttons['claude'].remaining == 50  # completion never changes quota
     assert all(b.halo == 0 for p, b in strip.buttons.items() if p != 'claude')
     strip._delivery_failed('unreadable')
     assert strip.delivery_pulse.state() == QVariantAnimation.State.Stopped
@@ -86,6 +92,55 @@ def test_pulse_only_for_confirmed_deliveries_while_visible(qapp):
     assert strip.delivery_pulse.state() == QVariantAnimation.State.Stopped
     assert all(b.transition.state() == QVariantAnimation.State.Stopped and b.halo == 0
                for b in strip.buttons.values())
+    strip.shutdown()
+
+
+def test_sorted_availability_alternate_account_and_confirmed_return(qapp):
+    strip = make(qapp)
+    codex = observation('codex', 25)
+    codex.update(account_id='default', default=True)
+    claude = observation('claude', 71)
+    claude.update(account_id='claude', default=True)
+    empty = observation('grok', 0)
+    web = ai.unknown('web')
+    strip.show(); qapp.processEvents()
+    strip.set_items([codex, claude, empty, web])
+    assert [strip.layout().itemAt(i).widget() for i in range(2)] == [
+        strip.columns['claude'], strip.columns['codex']]
+    codex['windows'][0]['remaining'] = 80
+    strip.render()
+    assert strip.layout().itemAt(0).widget() is strip.columns['codex']
+    codex['windows'][0]['remaining'] = 71
+    strip.render()
+    assert strip.layout().itemAt(0).widget() is strip.columns['codex']  # stable tie
+    codex['windows'][0]['remaining'] = 25
+    strip.render()
+    assert strip.layout().itemAt(0).widget() is strip.columns['claude']
+    assert not strip.columns['grok'].isVisible() and not strip.columns['web'].isVisible()
+    assert not strip.empty_label.isVisible()
+    alternative = observation('codex', 45)
+    alternative.update(account_id='alternate', default=False, label='Outra conta')
+    codex['windows'][0]['remaining'] = 0
+    strip.set_items([codex, alternative, claude, empty, web])
+    assert strip.display_accounts['codex'] == 'alternate'
+    assert strip.buttons['codex'].remaining == 45
+    assert 'Outra conta' in strip.buttons['codex'].accessibleName()
+    claude['windows'][0]['remaining'] = 0
+    strip.render()
+    assert not strip.columns['claude'].isVisible()
+    claude['windows'][0]['remaining'] = 60
+    strip.render()
+    assert strip.columns['claude'].isVisible()
+    duration = strip.style().styleHint(QStyle.StyleHint.SH_Widget_Animation_Duration, None, strip)
+    expected = (QVariantAnimation.State.Running if duration > 0 and
+                strip.style().styleHint(QStyle.StyleHint.SH_Widget_Animate, None, strip)
+                else QVariantAnimation.State.Stopped)
+    assert strip.arrival_animations['claude'].state() == expected
+    strip.hide(); qapp.processEvents()
+    strip.show(); qapp.processEvents()
+    assert strip.arrival_animations['claude'].state() == QVariantAnimation.State.Stopped
+    strip.set_items([empty, web])
+    assert strip.empty_label.isVisible()
     strip.shutdown()
 
 

@@ -1,8 +1,10 @@
 """Quota indicators, new completed sessions and verified application opening."""
-from PySide6.QtCore import Qt, QTimer, QUrl, QEvent, QPoint, QSize, QRectF, QVariantAnimation, QEasingCurve
+import time
+
+from PySide6.QtCore import Qt, QTimer, QUrl, QEvent, QPoint, QSize, QRectF, QVariantAnimation, QEasingCurve, QPropertyAnimation
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap, QDesktopServices, QPen
 from PySide6.QtWidgets import (QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QWidget,
-                              QMenu, QInputDialog, QWidgetAction, QGraphicsOpacityEffect)
+                              QMenu, QInputDialog, QWidgetAction, QGraphicsOpacityEffect, QStyle)
 
 from ..core import ai_sessions
 from .theme import themed_style, TOKENS, on_theme_change
@@ -30,6 +32,16 @@ def gift_icon():
     return QIcon(pixmap)
 
 
+def available_account(items, now):
+    """Choose a confirmed usable account, preferring the default when usable."""
+    usable = [(ai_sessions.effective(item, now), item) for item in items]
+    usable = [(left, item) for left, item in usable if left is not None and left > 0]
+    if not usable:
+        return None, None
+    default = next(((left, item) for left, item in usable if item.get('default')), None)
+    return default or max(usable, key=lambda pair: (pair[0], pair[1].get('account_id') or ''))
+
+
 class AIStrip(QWidget):
     def __init__(self, parent=None, *, collect_fn=None, deliveries=None, opener=None, monitor=None):
         super().__init__(parent)
@@ -39,6 +51,10 @@ class AIStrip(QWidget):
         self.account_menu = None
         self.account_panel = None
         self.buttons = {}
+        self.columns = {}
+        self.display_accounts = {}
+        self.visible_providers = set()
+        self.arrival_animations = {}
         self.badges = {}
         self.reset_badges = {}
         self._reset_bright = True
@@ -67,11 +83,14 @@ class AIStrip(QWidget):
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.setAccessibleName(ai_sessions.NAMES[provider] + ": cota desconhecida")
             button.installEventFilter(self)
-            button.clicked.connect(lambda checked=False, p=provider: self.open_agent(p))
+            button.clicked.connect(lambda checked=False, p=provider: self.open_agent(
+                p, self.display_accounts.get(p)))
             button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
             button.customContextMenuRequested.connect(lambda point, p=provider: self.options(p, point))
             self.buttons[provider] = button
-            column = QVBoxLayout()
+            column_widget = QWidget()
+            column = QVBoxLayout(column_widget)
+            column.setContentsMargins(0, 0, 0, 0)
             column.setSpacing(0)
             badge_row = QWidget()
             badge_row.setFixedHeight(14)
@@ -101,7 +120,19 @@ class AIStrip(QWidget):
             self.reset_badges[provider] = reset_badge
             column.addWidget(button)
             column.addWidget(badge_row, 0, Qt.AlignmentFlag.AlignHCenter)
-            layout.addLayout(column, 1)
+            effect = QGraphicsOpacityEffect(column_widget)
+            effect.setOpacity(1.0)
+            column_widget.setGraphicsEffect(effect)
+            arrival = QPropertyAnimation(effect, b'opacity', self)
+            arrival.setDuration(220)
+            arrival.setEasingCurve(QEasingCurve.Type.OutCubic)
+            self.arrival_animations[provider] = arrival
+            self.columns[provider] = column_widget
+            layout.addWidget(column_widget, 1)
+        self.empty_label = QLabel('Sem cotas disponíveis confirmadas')
+        self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_label.setAccessibleName('Nenhuma cota disponível confirmada; consulte contas e cotas nos controles')
+        layout.addWidget(self.empty_label, 1)
         self.monitor.deliveries_ready.connect(self.set_deliveries)
         self.monitor.quotas_ready.connect(self.set_items)
         self.freshness = QTimer(self)
@@ -164,7 +195,7 @@ class AIStrip(QWidget):
         value = round(value * 8) / 8
         for provider, button in self.buttons.items():
             count = next((r.get('count') for r in self.delivery_items if r['provider'] == provider), None)
-            button.set_halo(value if count else 0.0)
+            button.set_halo(value if count and self.columns[provider].isVisible() else 0.0)
 
     def open_agent(self, provider, account=None):
         account = account or self.default_item(provider).get('account_id')
@@ -198,12 +229,14 @@ class AIStrip(QWidget):
             menu.addAction('Abrir Limits no Codex Web', lambda: self.open_agent('web'))
         return menu
 
-    def details(self, provider):
+    def details(self, provider, anchor=None):
         if self.account_menu is not None:
             self.account_menu.close()
         button = self.buttons[provider]
         menu = QMenu(button)
         panel = AccountPanel(provider, [i for i in self.items if i['provider'] == provider])
+        if self.display_accounts.get(provider):
+            panel.select(self.display_accounts[provider])
         menu.setObjectName('accountPopup')
         menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         menu.setStyleSheet('QMenu#accountPopup{background:transparent;border:none;padding:0;}')
@@ -217,7 +250,8 @@ class AIStrip(QWidget):
         menu.addAction(action)
         self.account_menu, self.account_panel = menu, panel
         menu.aboutToHide.connect(lambda: self._panel_hidden(menu))
-        point = button.mapToGlobal(QPoint(0, button.height()))
+        anchor = anchor or button
+        point = anchor.mapToGlobal(QPoint(0, anchor.height()))
         point.setX(max(area.left(), min(point.x(), area.right() + 1 - panel.width() - 4)))
         point.setY(max(area.top(), min(point.y(), area.bottom() + 1 - panel.height() - 4)))
         menu.popup(point)
@@ -251,16 +285,22 @@ class AIStrip(QWidget):
         if show: show(message)
 
     def render(self):
+        now = time.time()
         has_resets = False
         has_deliveries = False
+        available = []
         for provider, button in self.buttons.items():
             items = [item for item in self.items if item.get("provider") == provider]
-            left = ai_sessions.effective(self.default_item(provider))
-            button.set_remaining(left)
-            summary = "cota desconhecida" if left is None else f"{left}% disponível"
+            left, selected = available_account(items, now)
+            self.display_accounts[provider] = selected.get('account_id') if selected else None
+            if selected is not None:
+                available.append((provider, left))
+            button.set_remaining(left if selected else ai_sessions.effective(self.default_item(provider), now))
+            summary = (f'{left}% disponível · {selected.get("label", "conta")}' if selected else
+                       '0% disponível' if button.remaining == 0 else 'cota desconhecida ou vencida')
             delivery = next((r for r in self.delivery_items if r['provider'] == provider), {})
             count = delivery.get('count')
-            has_deliveries |= bool(count)
+            has_deliveries |= bool(count) and selected is not None
             if not count: button.set_halo(0.0)
             badge = self.badges[provider]
             partial = not delivery.get('complete', True)
@@ -284,10 +324,36 @@ class AIStrip(QWidget):
             if any(n is None for _, n in confirmed): detail.append('Outras contas sem confirmação atual')
             detail.append('Clique para ver a conta · resgate no cliente')
             reset_badge.setToolTip('\n'.join(detail))
-            has_resets |= total > 0
+            has_resets |= total > 0 and selected is not None
             button.setAccessibleName(ai_sessions.NAMES[provider] + ": " + summary + ' · ' + completed
                                      + (' · ' + resets if total else ''))
-            button.setToolTip('Uso e renovação por conta · clique para abrir o cliente da conta padrão')
+            button.setToolTip('Uso e renovação por conta · clique para abrir o cliente da conta exibida')
+        order = {provider: index for index, provider in enumerate(ai_sessions.NAMES)}
+        available.sort(key=lambda pair: (-pair[1], order[pair[0]]))
+        self.empty_label.setVisible(not available)
+        for index, (provider, _) in enumerate(available):
+            column = self.columns[provider]
+            was_visible = provider in self.visible_providers
+            if self.layout().indexOf(column) != index:
+                self.layout().insertWidget(index, column, 1)
+            column.show()
+            if not was_visible and self.isVisible():
+                duration = self.style().styleHint(QStyle.StyleHint.SH_Widget_Animation_Duration, None, self)
+                if self.style().styleHint(QStyle.StyleHint.SH_Widget_Animate, None, self) and duration > 0:
+                    animation = self.arrival_animations[provider]
+                    animation.stop()
+                    animation.setDuration(min(220, duration))
+                    column.graphicsEffect().setOpacity(0.0)
+                    animation.setStartValue(0.0)
+                    animation.setEndValue(1.0)
+                    animation.start()
+        visible = {p for p, _ in available}
+        for provider in self.buttons:
+            if provider not in visible:
+                self.arrival_animations[provider].stop()
+                self.columns[provider].graphicsEffect().setOpacity(1.0)
+                self.columns[provider].hide()
+        self.visible_providers = visible
         if has_deliveries and self.isVisible():
             if self.delivery_pulse.state() != QVariantAnimation.State.Running:
                 self.delivery_pulse.start()
@@ -325,6 +391,9 @@ class AIStrip(QWidget):
         self.freshness.stop()
         self.reset_blink.stop()
         self.delivery_pulse.stop()
+        for provider, animation in self.arrival_animations.items():
+            animation.stop()
+            self.columns[provider].graphicsEffect().setOpacity(1.0)
         super().hideEvent(event)
 
     def shutdown(self):
@@ -332,6 +401,7 @@ class AIStrip(QWidget):
         self.freshness.stop()
         self.reset_blink.stop()
         self.delivery_pulse.stop()
+        for animation in self.arrival_animations.values(): animation.stop()
         for button in self.buttons.values(): button.transition.stop()
         if self._owns_monitor: self.monitor.shutdown()
         self.opener.close()

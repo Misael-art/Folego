@@ -186,7 +186,9 @@ def main():
                     compact.grab().save(str(root/(prefix+'-rings-compact.png')))
                     strip.grab().save(str(root/(prefix+'-rings.png')))
                     assert [b.remaining for b in strip.buttons.values()]==[31,None,8,None]
-                    assert all(b.width()>=b.sizeHint().width() for b in strip.buttons.values())
+                    assert [p for p in ai.NAMES if strip.columns[p].isVisible()]==['codex','claude']
+                    assert all(b.width()>=b.sizeHint().width() for p,b in strip.buttons.items()
+                               if strip.columns[p].isVisible())
                     records.append(dict(case='quota rings',theme=key,transparency=transparency,
                                         remaining=[31,None,8,None],width=compact.width()))
                 apply_theme(app,'ps2',transparency=0)
@@ -199,17 +201,12 @@ def main():
                 wait(lambda:31<button.displayed<68)
                 strip.grab().save(str(root/'transition.png'))
                 wait(lambda:button.displayed==68)
-                items[0]['windows'][0]['resets_at']=now-1;strip.render()
-                assert button.remaining is None and button.transition.state()==button.transition.State.Stopped
-                strip.grab().save(str(root/'expired.png'))
-                # Wait for the same hover event used in production to open accounts.
+                # Hover and click still target the account represented by the visible ring.
                 pointer_click(button.mapToGlobal(button.rect().center()),backend,compact,click=False)
                 wait(lambda:strip.account_menu is not None and strip.account_menu.isVisible())
                 assert strip.account_panel.selected=='codex-qa'
                 strip.account_menu.grab().save(str(root/'rings-accounts.png'))
                 strip.account_menu.close();app.processEvents()
-                # Calibration may outlast the tooltip delay. Close that owned
-                # popup before sending a direct native click at the same point.
                 binary,wayland=backend._input();assert wayland
                 subprocess.run([binary,'click','0xC0'],env=backend.env,check=True,capture_output=True)
                 wait(lambda:bool(requests))
@@ -218,6 +215,19 @@ def main():
                 wait(lambda:strip.account_menu is not None and strip.account_menu.isVisible())
                 assert strip.account_panel.selected=='codex-qa'
                 strip.account_menu.close();app.processEvents()
+                items[0]['windows'][0]['resets_at']=now-1;strip.render()
+                assert button.remaining is None and button.transition.state()==button.transition.State.Stopped
+                assert not strip.columns['codex'].isVisible()
+                strip.grab().save(str(root/'expired.png'))
+                strip.details('codex',anchor=compact.control_button)
+                wait(lambda:strip.account_menu is not None and strip.account_menu.isVisible())
+                assert strip.account_panel.selected=='codex-qa'
+                strip.account_menu.close();app.processEvents()
+                items[0]['windows'][0]['resets_at']=now+3600
+                items[0]['windows'][0]['remaining']=60
+                strip.render()
+                assert strip.columns['codex'].isVisible()
+                assert strip.arrival_animations['codex'].state()==strip.arrival_animations['codex'].State.Running
                 compact.hide();app.processEvents()
                 assert strip.delivery_pulse.state()==strip.delivery_pulse.State.Stopped
                 compact.show();wait(lambda:compact.windowHandle().isExposed())
@@ -382,6 +392,8 @@ def main():
             compact.control_button.pressed.connect(lambda:menu_events.append('pressed'))
             compact.control_menu.aboutToShow.connect(lambda:menu_events.append('show'))
             compact.control_menu.aboutToHide.connect(lambda:menu_events.append('hide'))
+            compact._animate_actions(True)
+            wait(lambda:compact.drawer_animation.state()==compact.drawer_animation.State.Stopped)
             pointer_click(compact.control_button.mapToGlobal(compact.control_button.rect().center()),backend,compact)
             wait(compact.control_menu.isVisible)
             compact.control_menu.grab().save(str(root/'controls.png'))

@@ -137,6 +137,9 @@ def test_reset_blink_runs_only_with_visible_fresh_offers_and_stops_on_failure(qa
     assert not strip.reset_blink.isActive()
     strip.show()
     qapp.processEvents()
+    assert not strip.reset_blink.isActive() and not strip.columns['codex'].isVisible()
+    item.update(observed_at=now, windows=[ai.quota_window('Sessão', 50, now + 60, now)])
+    strip.render()
     assert strip.reset_blink.isActive()
     gift = strip.reset_badges['codex']
     assert gift.text() == '9+' and '12 redefinições' in gift.toolTip()

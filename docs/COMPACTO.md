@@ -1,12 +1,14 @@
 # Widget, sessões de IA e atalhos
 
 O widget tem 280 px de largura em pixels lógicos do desktop. Recursos ficam em
-duas linhas; alertas completos e mensagens podem aumentar a altura. **Central**
-abre a janela principal e recolhe o widget. **Voltar**, no topo da central,
+duas linhas; alertas completos e mensagens podem aumentar a altura. O ícone de
+grade abre a **Central** e recolhe o widget. A seta ao lado abre os controles;
+o ícone de teclado e sua seta são um grupo separado para abrir o teclado embaixo
+ou no topo. **Voltar**, no topo da central,
 retorna ao controle flutuante sem perder a aba, os campos em edição ou parar o
 monitoramento. As duas interfaces dispensam minimizar, maximizar e fechar.
-Para encerrar, use **Controles → Sair do Fôlego** ou a bandeja. **Ocultar widget**,
-no menu Controles, mantém um caminho de retorno: sem bandeja e com a central
+Para encerrar, use a seta da Central → **Sair do Fôlego** ou a bandeja. **Ocultar widget**,
+no mesmo menu, mantém um caminho de retorno: sem bandeja e com a central
 oculta, ela é reaberta antes de ocultar o widget. O cabeçalho da central permite
 arrastar a janela. Pausar controla a telemetria de recursos. A consulta de IAs é separada
 e continua enquanto o Fôlego está aberto, inclusive com o widget oculto ou a
@@ -15,23 +17,35 @@ auxiliar de entrada; um som em andamento conclui a restauração do volume.
 
 ## Sessões de IA
 
-Passe o mouse sobre Codex, Codex Web, Claude ou Grok para abrir o painel de contas.
-A conta padrão aparece primeiro; escolha outra na lista à esquerda. O percentual
-gasto, tickets e referência da assinatura ficam em destaque; cada janela mostra
+O widget mostra somente provedores com cota positiva confirmada, do maior para o
+menor **percentual disponível**. Um empate mantém a ordem Codex, Codex Web,
+Claude e Grok. A conta padrão representa o provedor quando tem cota; se estiver
+zerada ou sem confirmação, a conta elegível com maior percentual aparece em seu
+lugar. Nome acessível, clique e painel se referem à mesma conta. Passe o mouse
+num indicador visível para abrir o painel. Todos os provedores, inclusive os
+ocultos, ficam em **Contas e cotas de IA** na seta da Central. O menu informa
+zero, ausência de confirmação, entregas e tickets separadamente. Se nenhuma
+cota positiva estiver confirmada, a faixa mostra uma mensagem curta. A conta
+padrão aparece primeiro na lista lateral do painel; escolha outra quando quiser.
+O percentual gasto, tickets e referência da assinatura ficam em destaque; cada janela mostra
 seu próprio reset e tempo restante. Detalhes adicionais têm rolagem. Clique fora
 ou use Escape para fechar. O clique direto no indicador abre o cliente da conta
-padrão; **Abrir cliente** no painel usa a conta selecionada.
+exibida; **Abrir cliente** no painel usa a conta selecionada.
 
-Os quatro indicadores usam o mesmo desenho circular do medidor do PhaseZero:
+Os indicadores usam o mesmo desenho circular do medidor do PhaseZero:
 disco colorido de identificação, percentual **disponível** no centro e anel
-externo proporcional à cota da conta padrão. O anel é verde acima de 60%, amarelo
-de 21% a 60% e vermelho até 20%; zero mostra **0** com o anel vazio.
-**?** com anel cinza significa dado desconhecido, vencido ou parcial.
-Uma outra conta não altera o percentual da padrão; seu estado aparece ao selecioná-la.
+externo proporcional à cota da conta exibida. O anel é verde acima de 60%, amarelo
+de 21% a 60% e vermelho até 20%. Zero confirmado e dado desconhecido ou vencido
+saem da faixa, mas preservam estados distintos no menu e no painel. Uma outra
+conta não altera o percentual da padrão enquanto ela tiver cota positiva.
 
 Uma atualização entre percentuais conhecidos move o anel suavemente em 450 ms;
 o número e a descrição acessível mostram o valor atual desde o início.
 Expiração ou falha retiram o percentual imediatamente e cancelam a transição.
+Uma conta que ganha cota durante a observação entra na faixa com transição curta,
+respeitando a preferência de animação do estilo Qt. A reposição confirmada usa
+o aviso sonoro já configurável em Opções; a primeira leitura e a simples passagem
+da data de reset não tocam som.
 Entregas confirmadas para revisitar fazem a borda interna pulsar em ciclos de
 1,8 s, mantendo a contagem separada abaixo. Isso não representa cota ou tickets.
 Sem entregas confirmadas, o pulso para. Todas as animações param com o widget
@@ -71,9 +85,11 @@ quando a fonte daquele provedor informa tickets (atualmente confirmado no Codex)
   mudar a organização invalida uso e perfil anteriores mesmo sem trocar o token.
   A espera por HTTP 429 continua valendo para a mesma credencial durante essa troca.
   Não há rede no loop gráfico.
-- Codex Web e Grok: esta fonte não oferece uma franquia percentual confirmada.
-  Permanecem com **?** e anel cinza. Metadados de assinatura, quando disponíveis, aparecem como
-  tal, separados da reposição de cota. A data de Grok pode ser informada pelo
+- Codex Web e Grok: se suas fontes não oferecerem uma franquia percentual
+  confirmada, ficam no menu de contas, fora da faixa principal. Quando houver
+  observação válida e cota positiva, entram automaticamente. Metadados de
+  assinatura, quando disponíveis, aparecem como tal, separados da reposição de
+  cota. A data de Grok pode ser informada pelo
   usuário; isso não confirma pagamento ou cota. Esses campos continuam
   indisponíveis nas fontes consultadas; não se usam tokens gastos na conversa
   como percentual da franquia do plano.

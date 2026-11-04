@@ -239,9 +239,22 @@ def test_the_widget_button_returns_to_the_central_window_and_folds_itself(qapp):
 
 def test_widget_header_uses_navigation_and_control_menu_instead_of_window_buttons(qapp):
     view,host=make(qapp)
-    assert view.open_button.text()=='Central'
+    assert view.open_button.text()=='' and not view.open_button.icon().isNull()
+    assert view.open_button.accessibleName()=='Abrir a central do Fôlego'
     assert not hasattr(view,'hide_button') and not hasattr(view,'quit_button')
-    assert [a.text() for a in view.control_menu.actions()]==['Ocultar widget','Sair do Fôlego']
+    assert [a.text() for a in view.control_menu.actions()]==[
+        'Ocultar widget','Sair do Fôlego','Contas e cotas de IA']
+    view._refresh_accounts_menu()
+    assert len(view.accounts_menu.actions())==4
+    assert all('sem confirmação' in action.text() for action in view.accounts_menu.actions())
+    from folego.core import ai_sessions as ai
+    import time
+    item=ai.unknown('codex')
+    item['reset_credits']=dict(available=2,observed_at=time.time())
+    view.ai_strip.set_items([item])
+    view._refresh_accounts_menu()
+    assert '2 tickets' in view.accounts_menu.actions()[0].text()
+    assert not view.ai_strip.columns['codex'].isVisible()
     view.quit_action.trigger()
     assert host.quits==1
 
