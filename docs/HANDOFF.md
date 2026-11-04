@@ -8,6 +8,8 @@ mesma raiz canônica, branch `codex/compact-header-quota-20261103`, commit de
 código `c3274fec9950d450a93abfd954637b515ea94426`. A GUI b3 residente no
 host não foi reiniciada nem substituída; a mudança foi exercitada numa janela
 própria com dados sintéticos, sem interromper supervisores ou agentes.
+O commit de passagem é `2508ecc4cc638d025aa451c55c21ac675d7b3af5`.
+O working tree estava limpo após os dois commits.
 
 O cabeçalho do widget de 280 px tem marca em Noto Sans, teclado e seta unidos,
 e ícone da Central com seta para ocultar, sair e consultar todas as contas.
@@ -46,7 +48,15 @@ teto de 20, sem apagar payloads nem alterar limites.
 Limites: a captura e o Qt offscreen não certificam leitor de tela, clique físico
 em todos os monitores/escalas, áudio real nem uso prolongado. Os aceites de
 entrada, retenção de temporários e Modo Desempenho abaixo seguem abertos.
-Próximo passo deste incremento: revisar o PR e, quando integrado, reiniciar o
+Publicação pendente: `git push -u origin codex/compact-header-quota-20261103`
+foi recusado pelo guard `.workspace/workspace.py prepush`, que bloqueia criar
+branches remotas por push mesmo após registrar a branch de continuidade. A
+branch remota ainda não existe; nenhum PR ou CI deste incremento foi criado ou
+observado. Os commits e a evidência estão preservados localmente. O owner deve
+criar a branch remota de mesmo nome a partir do `main` integrado, pelo fluxo
+oficial do GitHub; depois confirmar SHA/base, enviar os commits sem forçar,
+abrir o PR e observar os checks.
+Após integração, reiniciar o
 Fôlego pelo fluxo do próprio aplicativo para testar a nova faixa com contas
 reais, sem usar credenciais como fixtures nem presumir que uma data de reset
 confirma cota. Não gerar release por este ajuste visual isolado.
