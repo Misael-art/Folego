@@ -196,6 +196,7 @@ def main():
                     dock_target=dock_geometry(mode,compact.screen().availableGeometry())
                     actual=compositor_rect()
                     assert all(abs(a-b)<=1 for a,b in zip(actual,(dock_target.x(),dock_target.y(),dock_target.width(),dock_target.height()))),(mode,actual,dock_target)
+                    assert compact.action_drawer.maximumHeight()==0,(mode,'actions did not start collapsed')
                     compact.ai_strip.set_items(items)
                     assert compact.ai_strip.visible_providers == {'codex','claude'},(mode,compact.ai_strip.visible_providers)
                     wait(lambda: all(compact.ai_strip.arrival_animations[p].state()==
@@ -213,6 +214,16 @@ def main():
                                         strip=compact.ai_strip.mapTo(compact,QPoint(0,0)).y(),
                                         strip_size=[compact.ai_strip.width(),compact.ai_strip.height()],
                                         viewport_height=compact.dock_scroll.viewport().height()))
+                    compact.grab().save(str(root/('dock-'+mode+'-collapsed.png')))
+                    if mode=='top':
+                        binary,_=backend._input()
+                        subprocess.run([binary,'mousemove','--','0','220'],env=backend.env,
+                                       check=True,capture_output=True)
+                        app.processEvents()
+                    hover_y=52 if mode=='top' else min(200,compact.height()//2)
+                    pointer_click(compact.mapToGlobal(QPoint(compact.width()//2,hover_y)),backend,compact,click=False)
+                    wait(lambda:compact.action_drawer.maximumHeight()==compact.shortcut_tabs.sizeHint().height() and
+                                 compact.drawer_animation.state()==compact.drawer_animation.State.Stopped)
                     actions=[compact.shortcut_tabs.buttons[key] for key in ('select_all','delete_all','prompts','copy','paste','print')]
                     centers=[button.mapTo(compact,button.rect().center()) for button in actions]
                     assert all(button.isVisible() and 0<=center.x()<compact.width() and 0<=center.y()<compact.height()
@@ -224,6 +235,11 @@ def main():
                         assert compact._handles['back'].x()==(0 if mode=='left' else compact.width()-16)
                     else:
                         assert all(abs(centers[i].y()-centers[0].y())<3 for i in range(1,6))
+                        assert (compact.gauge_widget.x()<compact.ai_strip.x()<compact.readings_widget.x()<
+                                compact.pause_button.mapTo(compact.card,QPoint(0,0)).x())
+                        assert (compact.pause_button.mapTo(compact,QPoint(0,0)).y()>
+                                compact.keyboard_group.mapTo(compact,QPoint(0,0)).y())
+                        assert compact.height()<190
                     image=compact.grab().toImage()
                     assert all(image.pixelColor(x,y).alpha()<32 for x,y in
                                ((0,0),(image.width()-1,0),(0,image.height()-1),
@@ -239,6 +255,8 @@ def main():
                     wait(lambda:all(animation.state()==animation.State.Stopped for animation in
                                     compact.ai_strip.arrival_animations.values()))
                     scroll=compact.dock_scroll.verticalScrollBar()
+                    if mode=='top':
+                        assert scroll.maximum()==0,('top clipped with four quotas',scroll.maximum())
                     scroll.setValue(scroll.maximum());app.processEvents()
                     last=compact.ai_strip.columns['grok']
                     last_y=last.mapTo(compact.dock_scroll.viewport(),QPoint(0,0)).y()
@@ -250,6 +268,13 @@ def main():
                     compact.ai_strip.set_deliveries([])
                     compact.ai_strip.set_items(items)
                     scroll.setValue(0);app.processEvents()
+                    binary,_=backend._input()
+                    leave_delta={'right':(-200,0),'left':(200,0),'top':(0,200)}[mode]
+                    subprocess.run([binary,'mousemove','--',*map(str,leave_delta)],
+                                   env=backend.env,check=True,capture_output=True)
+                    wait(lambda:compact.action_drawer.maximumHeight()==0 and
+                                 compact.drawer_animation.state()==compact.drawer_animation.State.Stopped)
+                    records.append(dict(case='dock actions retract',mode=mode,collapsed=True))
                     back=compact._handles['back']
                     assert back.geometry().bottom()<compact.action_drawer.y(),(mode,back.geometry().getRect(),compact.action_drawer.y())
                     back.hovered=True;back.update();app.processEvents()

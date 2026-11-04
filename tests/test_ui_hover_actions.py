@@ -1,4 +1,5 @@
 import time
+import pytest
 from PySide6.QtCore import QEvent
 from PySide6.QtGui import QEnterEvent, QWindow
 from PySide6.QtWidgets import QApplication
@@ -39,3 +40,30 @@ def test_entering_another_surface_reconciles_popup_synthetic_enter(qapp):
     QApplication.sendEvent(other,QEnterEvent(QPointF(),QPointF(),QPointF()))
     wait(qapp,lambda:view.action_drawer.maximumHeight()==0)
     other.destroy();view.force_close()
+
+
+@pytest.mark.parametrize('mode', ('left', 'right', 'top'))
+def test_dock_actions_reveal_on_hover_and_retract_after_leave(qapp, mode):
+    from PySide6.QtCore import QRect
+    from PySide6.QtTest import QTest
+    view,_=make(qapp)
+    view._screen_area=lambda:QRect(0,0,948,593)
+    view.show_compact()
+    view.set_dock_mode(mode)
+    QTest.qWait(450)
+    assert view._dock_mode==mode and view.action_drawer.maximumHeight()==0
+    size=view.size()
+    back_rect=view._handles['back'].geometry()
+    QApplication.sendEvent(view,QEnterEvent(QPointF(),QPointF(),QPointF()))
+    wait(qapp,lambda:view.action_drawer.maximumHeight()==view.shortcut_tabs.sizeHint().height())
+    assert all(view.shortcut_tabs.buttons[key].isVisible() for key in
+               ('select_all','delete_all','prompts','copy','paste','print'))
+    assert view.size()==size
+    if mode=='top': assert view._handles['back'].geometry()==back_rect
+    assert view.dock_scroll.geometry().bottom()<view.action_drawer.geometry().top()
+    QApplication.sendEvent(view,QEvent(QEvent.Type.Leave))
+    wait(qapp,lambda:view.action_drawer.maximumHeight()==0)
+    assert view.size()==size
+    if mode=='top': assert view._handles['back'].geometry()==back_rect
+    assert view.keyboard_group.isVisible() and view.navigation_group.isVisible()
+    view.force_close()

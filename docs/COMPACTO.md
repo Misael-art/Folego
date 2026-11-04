@@ -20,19 +20,23 @@ auxiliar de entrada; um som em andamento conclui a restauração do volume.
 Ao passar o mouse pela borda esquerda do widget, uma faixa em dois tons mais
 escuros revela a seta para a barra direita. A borda direita abre a barra
 esquerda; a borda superior abre a barra horizontal no topo. A seta da borda
-externa de cada lateral, ou da base da barra superior, retorna aos 280 px do
+externa de cada lateral, ou do centro da borda superior, retorna aos 280 px do
 compacto. Os controles, leitura de
 recursos e cotas são os mesmos componentes nas quatro formas. As laterais têm
 112–128 unidades lógicas de largura: o indicador principal fica centralizado,
 seguido do estado, métricas, espaço livre, pausa e cotas confirmadas em coluna.
 As métricas se alinham à borda correspondente; os cantos da janela são
 recortados de forma arredondada.
-As seis ações coloridas ficam sempre acessíveis na base, uma por linha. A
-rolagem da área de leitura aparece quando as cotas e avisos excedem a altura
-disponível; as ações ficam fixas abaixo dela. Em tela curta, como a área útil
-948 × 593 do Steam Deck nesta sessão, o topo usa duas linhas. Em larguras de
-monitor HD e widescreen, os indicadores e controles ocupam uma linha, e as
-ações formam outra na base.
+As seis ações coloridas aparecem ao entrar com o ponteiro e se recolhem após
+sair, nas três barras como no compacto. Nas laterais, formam uma coluna na base;
+a área de leitura rola independentemente quando as cotas e avisos excedem a
+altura útil. A barra superior tem 132 unidades lógicas de altura a partir de
+900 unidades de largura: Fôlego e o indicador de folga começam à esquerda,
+seguidos pelas cotas confirmadas, métricas e o grupo de teclado/menu na ponta
+direita, com Pausar abaixo desses dois controles. Ações expandidas formam uma
+linha na base; quatro cotas com badges cabem simultaneamente na área útil de
+948 × 593 do Steam Deck. Em larguras menores, o topo preserva uma composição
+em duas linhas e 190 unidades de altura.
 
 O encaixe usa a área disponível da tela informada pelo Qt para excluir os
 painéis conhecidos. Em X11, a geometria muda em 260 ms. Em KDE/Wayland, o

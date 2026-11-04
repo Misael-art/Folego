@@ -67,7 +67,8 @@ def test_dock_geometry_respects_available_screen_and_panels():
     area = QRect(24, 38, 1500, 812)
     assert dock_geometry('right', area) == QRect(1399, 38, 125, 812)
     assert dock_geometry('left', area) == QRect(24, 38, 125, 812)
-    assert dock_geometry('top', area) == QRect(24, 38, 1500, 142)
+    assert dock_geometry('top', area) == QRect(24, 38, 1500, 132)
+    assert dock_geometry('top', QRect(0, 0, 948, 593)) == QRect(0, 0, 948, 132)
     assert dock_geometry('top', QRect(0, 0, 700, 500)) == QRect(0, 0, 700, 190)
     with pytest.raises(ValueError):
         dock_geometry('bottom', area)
@@ -83,6 +84,9 @@ def test_dock_reflows_existing_controls_and_returns_to_compact(qapp):
     for mode in ('right', 'left', 'top'):
         view.set_dock_mode(mode)
         QTest.qWait(450)
+        assert view.action_drawer.maximumHeight() == 0
+        view._animate_actions(True)
+        QTest.qWait(180)
         assert view._dock_mode == mode
         assert view.geometry() == dock_geometry(mode, view._screen_area())
         assert view.ai_strip.layout().direction() == (QBoxLayout.Direction.TopToBottom
@@ -135,6 +139,16 @@ def test_wayland_dock_waits_for_confirmed_placement(qapp, monkeypatch):
 
 def _four_quotas(view):
     from folego.core import ai_sessions as ai
+    from PySide6.QtWidgets import QApplication
+    monitor = view.ai_strip.monitor
+    monitor.pause()
+    deadline = time.monotonic() + 2
+    while monitor.poller._inflight or monitor.delivery_poller._inflight:
+        monitor.poller.drain()
+        monitor.delivery_poller.drain()
+        QApplication.processEvents()
+        assert time.monotonic() < deadline
+        time.sleep(.01)
     now = time.time()
     items = []
     for provider, remaining in (('codex', 90), ('web', 70), ('claude', 50), ('grok', 30)):
@@ -142,9 +156,12 @@ def _four_quotas(view):
         item.update(account_id=provider + '-qa', default=True, observed_at=now,
                     windows=[ai.quota_window('Sessão QA', 100 - remaining, now + 3600, now)])
         items.append(item)
+    deliveries = [dict(provider=item['provider'], count=1, pending=[])
+                  for item in items]
+    monitor.poller._collect = lambda: items
+    monitor.delivery_poller._collect = lambda: deliveries
     view.ai_strip.set_items(items)
-    view.ai_strip.set_deliveries([dict(provider=item['provider'], count=1, pending=[])
-                                  for item in items])
+    view.ai_strip.set_deliveries(deliveries)
 
 
 @pytest.mark.parametrize('width,height', ((948, 593), (1920, 1080), (2560, 1080)))
@@ -159,6 +176,8 @@ def test_side_dock_reaches_all_quotas_above_fixed_actions(qapp, width, height, m
     _four_quotas(view)
     view.set_dock_mode(mode)
     QTest.qWait(450)
+    view._animate_actions(True)
+    QTest.qWait(180)
     scroll = view.dock_scroll.verticalScrollBar()
     assert view.geometry() == dock_geometry(mode, QRect(0, 0, width, height))
     assert view.dock_scroll.geometry().bottom() < view.action_drawer.geometry().top()
@@ -186,8 +205,13 @@ def test_top_dock_keeps_four_quotas_and_actions_inside_view(qapp, width, height)
     _four_quotas(view)
     view.set_dock_mode('top')
     QTest.qWait(450)
+    assert view.action_drawer.maximumHeight() == 0
+    view._animate_actions(True)
+    QTest.qWait(180)
     assert view.geometry() == dock_geometry('top', QRect(0, 0, width, height))
     assert view.dock_scroll.geometry().bottom() < view.action_drawer.geometry().top()
+    if width >= 900:
+        assert view.dock_scroll.verticalScrollBar().maximum() == 0
     assert all(column.isVisible() for column in view.ai_strip.columns.values())
     viewport = view.dock_scroll.viewport()
     for column in view.ai_strip.columns.values():
@@ -196,6 +220,16 @@ def test_top_dock_keeps_four_quotas_and_actions_inside_view(qapp, width, height)
         assert left >= 0 and left + column.width() <= viewport.width()
         assert position.y() >= 0 and position.y() + column.height() <= viewport.height()
     assert view._handles['back'].geometry().bottom() < view.action_drawer.y()
+    if width >= 900:
+        gauge_x = view.gauge_widget.mapTo(view, QPoint(0, 0)).x()
+        quota_x = view.ai_strip.mapTo(view, QPoint(0, 0)).x()
+        metrics_x = view.readings_widget.mapTo(view, QPoint(0, 0)).x()
+        pause_x = view.pause_button.mapTo(view, QPoint(0, 0)).x()
+        assert gauge_x < quota_x < metrics_x < pause_x
+        assert view.brand.mapTo(view, QPoint(0, 0)).x() < quota_x
+        assert view.pause_button.mapTo(view, QPoint(0, 0)).y() > view.keyboard_group.y()
+        assert view.pause_button.mapTo(view, QPoint(0, 0)).y() - view.keyboard_group.y() < 40
+        assert pause_x + view.pause_button.width() <= view.width()
     view.force_close()
 
 

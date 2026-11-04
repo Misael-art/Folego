@@ -1,5 +1,49 @@
 # Passagem para o próximo agente — atualizada em 04/11/2026
 
+## Barra superior fina e ações recolhíveis — 04/11/2026
+
+Pedido aprovado após mockup: folga primeiro à esquerda, depois cotas de IA/CLI,
+métricas sem intercalar cotas, teclado/menu na ponta direita com Pausar abaixo;
+seis atalhos coloridos recolhíveis também nas barras esquerda, direita e
+superior. Owner: checkout canônico, branch
+`codex/compact-header-quota-20261103`. Dependências: os mesmos componentes Qt,
+observações de cota e geometria KWin existentes; nenhum novo grant ou efeito
+de recurso. Aceite: topo mais baixo sem corte de quatro cotas com badges,
+atalhos revelados/recolhidos por hover nos três encaixes e retorno funcional.
+
+Em largura útil a partir de 900, a barra superior tem 132 unidades lógicas de
+altura (antes 190 em 948). O cabeçalho, indicador principal, cotas, leituras e
+três controles à direita são reorganizados numa faixa compacta; as margens
+internas do medidor e das métricas são reduzidas só nesse modo. A alça de
+retorno fica no centro da borda superior, estável durante a animação dos
+atalhos. Os seis botões começam recolhidos em qualquer encaixe, abrem em 140 ms
+ao entrar com o ponteiro e se recolhem após sair; nas laterais, o conteúdo
+continua rolando separadamente dos botões. Larguras abaixo de 900 mantêm o
+arranjo superior em duas linhas e 190 unidades de altura.
+
+Validação da fonte: `./dev test tests/test_ui_compact.py
+tests/test_ui_hover_actions.py -q` **35 passed**. `./dev check` final com Python
+3.14.7, HOME/XDG privados e perfis sequenciais: **1242 passed, 2 skipped**
+headless; **1586 passed, 2 skipped** Qt offscreen. `git diff --check` limpo.
+Testes Qt simulam áreas úteis de 948 × 593, 1920 × 1080 e 2560 × 1080.
+[Recibo e capturas KDE/Wayland](handoff/validation/top-hover-2026-11-04/README.md)
+confirmam 948 × 132 no topo, quatro cotas com badges sem rolagem mesmo com
+atalhos abertos, hover físico de entrada/saída nas três barras e retorno ao
+compacto. As tentativas nativas anteriores pararam por sobreposição do Plasma
+ao alvo do ponteiro e pela alça superior que mudava de posição; foram
+preservadas e não contam como aceites. Uma suíte focada falhou por observações
+reais sobrepondo dados sintéticos após reexibição da faixa; o teste passou a
+isolar o coletor sintético e o gate final passou. O primeiro teste da altura
+de 130 detectou corte; a versão de 132 com margens próprias eliminou a rolagem
+superior de quatro cotas.
+
+Limites: a sessão física só cobre 948 × 593, sem QA de gesto real de scroll
+lateral, outras escalas/monitores, áudio, leitor de tela ou soak. HD/widescreen
+seguem simulados no Qt offscreen. Próximos passos: instalar a revisão no
+processo residente, confirmar o estado dos monitores e publicar branch/PR
+somente pelo fluxo permitido pelo guard; release b4 requer SHA/CI/artefatos
+elegíveis. Não houve merge autorizado.
+
 ## Alinhamento, cantos e cotas nas barras — 04/11/2026
 
 Owner: checkout canônico, branch `codex/compact-header-quota-20261103`.
