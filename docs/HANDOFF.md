@@ -60,6 +60,12 @@ Após o commit de passagem `28385cb`, `git ls-remote --heads` continuou sem
 essa branch, `gh pr list --head` retornou vazio e o push normal foi recusado
 pelo guard local por criar branch fora da continuidade registrada. Nenhum
 push, PR, tag ou release b4 foi criado; não contornar o guard.
+Prévia local em `.scratch/release-b4-responsive`: wheel e sdist b4 gerados
+offline; os 156 arquivos `folego/` do wheel coincidem byte a byte com as fontes.
+O wheel foi instalado sem dependências numa venv descartável própria e
+`python -I -m folego --help` passou. O arquivo fonte sai de `git archive` do
+commit final; `SHA256SUMS` dos três pacotes foi conferido. Artefatos permanecem
+locais e precisam corresponder ao SHA elegível quando a publicação for possível.
 
 ## Refinamento das barras adaptativas — 04/11/2026
 
