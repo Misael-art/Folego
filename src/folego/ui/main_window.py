@@ -476,6 +476,10 @@ class MainWindow(QMainWindow):
         self.activateWindow()
 
     def show_compact(self, mode=None):
+        # QAction.triggered passes its checked bool to Python callables that
+        # accept one positional argument. It is not a dock-mode request.
+        if isinstance(mode, bool):
+            mode = None
         self._request_history()
         if self._compact is None:
             caps = self._caps or desktop_caps.detect(

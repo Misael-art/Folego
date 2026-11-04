@@ -399,6 +399,17 @@ def test_back_from_docked_widget_restores_floating_mode(window, qapp):
     window.quit()
 
 
+def test_tray_action_opens_widget_without_treating_checked_as_mode(window, qapp):
+    window.show()
+    menu = window.tray._menu()
+    next(action for action in menu.actions()
+         if action.text() == 'Mostrar controle compacto').trigger()
+    qapp.processEvents()
+    assert window._compact is not None and window._compact.isVisible()
+    assert window._compact._dock_mode == 'compact'
+    window.quit()
+
+
 def test_the_window_never_detects_tunings_by_itself(window):
     window.apply_snapshot(snap())
     assert window.tunings.rows[0].state_label.text() == "consultando…"

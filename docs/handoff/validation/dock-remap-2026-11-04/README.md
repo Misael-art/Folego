@@ -18,6 +18,9 @@ cotas continuaram alcançáveis. Capturas da janela própria:
 Teste focado: `./dev test tests/test_ui_compact.py
 tests/test_ui_main_window_tabs.py tests/test_ui_hover_actions.py -q`, aprovado.
 Gate final `./dev check`: **1247 passed, 2 skipped** sem Qt;
-**1597 passed, 2 skipped** Qt offscreen. A prova física cobre apenas a área
-948 × 593 e a transição da janela própria, sem certificar HD, widescreen ou
+**1598 passed, 2 skipped** Qt offscreen. Na instalação do host, a ação da
+bandeja revelou que `QAction.triggered` enviava um booleano ao novo argumento
+de posição; o valor passou a ser ignorado, e um teste específico cobre a
+abertura pelo menu. A prova física cobre apenas a área 948 × 593 e a transição
+da janela própria, sem certificar HD, widescreen ou
 outras escalas do compositor.
