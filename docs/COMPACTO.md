@@ -47,6 +47,10 @@ o encaixe: a regra inicial do KWin para o widget flutuante pode ter reposicionad
 a mesma janela. **Voltar** na Central abre o widget flutuante. O menu **Posição
 do widget** na Central e no widget oferece também as duas laterais e o topo,
 sem depender da alça de borda estar visível.
+O flutuante preserva a posição quando ela cabe na área útil; se a altura mudou,
+ajusta apenas o necessário para manter a janela inteira acessível. Uma mudança
+tardia do KWin na barra é conferida por leitura da geometria, com número limitado
+de correções.
 Se o compositor não confirmar, a interface informa a incerteza e não repete o
 pedido por conta própria. O modo de encaixe vale para a janela atual; uma nova
 abertura inicia no compacto.

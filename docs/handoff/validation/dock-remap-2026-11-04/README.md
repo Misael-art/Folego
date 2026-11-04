@@ -18,9 +18,15 @@ cotas continuaram alcançáveis. Capturas da janela própria:
 Teste focado: `./dev test tests/test_ui_compact.py
 tests/test_ui_main_window_tabs.py tests/test_ui_hover_actions.py -q`, aprovado.
 Gate final `./dev check`: **1247 passed, 2 skipped** sem Qt;
-**1598 passed, 2 skipped** Qt offscreen. Na instalação do host, a ação da
+**1602 passed, 2 skipped** Qt offscreen. Na instalação do host, a ação da
 bandeja revelou que `QAction.triggered` enviava um booleano ao novo argumento
 de posição; o valor passou a ser ignorado, e um teste específico cobre a
-abertura pelo menu. A prova física cobre apenas a área 948 × 593 e a transição
+abertura pelo menu. A regra do KWin também posicionou o flutuante parcialmente
+fora da tela quando sua altura aumentou; agora a posição é conferida e limitada
+à área útil. Duas tentativas nativas intermediárias detectaram conflitos entre
+a conferência e cliques de encaixe ou mudanças tardias do KWin. Elas estão
+preservadas em `.scratch/dev-tests-reviewed` e não contam como aceite; a prova
+final é o [recibo atual](result.json). A prova física cobre apenas a área
+948 × 593 e a transição
 da janela própria, sem certificar HD, widescreen ou
 outras escalas do compositor.

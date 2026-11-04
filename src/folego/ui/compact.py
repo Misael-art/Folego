@@ -306,6 +306,11 @@ class CompactWindow(QWidget):
         self._dock_target = None
         self._needs_show_reconcile = False
         self._requested_mode = None
+        self._needs_compact_clamp = False
+        self._show_clamp_phase = None
+        self._dock_verify_phase = None
+        self._dock_verify_attempts = 0
+        self._dock_verify_waits = 0
         self._compact_geometry = None
         self._capture_waiting = False
         self._capture_restore = False
@@ -355,6 +360,8 @@ class CompactWindow(QWidget):
             lambda busy: self._screen_changed() if not busy and self._dock_mode != 'compact' else None)
         self.shortcut_tabs.controller.busy_changed.connect(
             lambda busy: self._reconcile_after_show() if not busy else None)
+        self.shortcut_tabs.controller.busy_changed.connect(
+            lambda busy: self._reconcile_compact_after_show() if not busy else None)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -593,6 +600,10 @@ class CompactWindow(QWidget):
             raise ValueError('Modo de encaixe desconhecido')
         if mode == self._dock_mode or self._dock_pending or self._force_close:
             return
+        if self._show_clamp_phase or self._dock_verify_phase:
+            self._requested_mode = mode
+            self._needs_show_reconcile = True
+            return
         controller = self.shortcut_tabs.controller
         if controller.future is not None:
             self._shortcut_result('Aguarde a solicitação atual antes de encaixar o widget')
@@ -626,6 +637,10 @@ class CompactWindow(QWidget):
         if mode == 'compact':
             target = QRect(target.x(), target.y(), 280,
                            max(target.height(), self.card.sizeHint().height()))
+            x, y = clamp_position(target.x(), target.y(), target.width(), target.height(), self._screens())
+            target.moveTo(x, y)
+            self._needs_compact_clamp = False
+            self._dock_verify_attempts = 0
         if self._caps.session_type == 'wayland':
             self.setFixedSize(target.size())
         else:
@@ -675,6 +690,10 @@ class CompactWindow(QWidget):
             self.dock_fade.start()
         if self._needs_show_reconcile:
             QTimer.singleShot(0, self._reconcile_after_show)
+        if self._dock_mode == 'compact' and self._needs_compact_clamp:
+            QTimer.singleShot(80, self._reconcile_compact_after_show)
+        if self._dock_mode != 'compact' and self._dock_verify_attempts:
+            QTimer.singleShot(180, self._verify_dock_after_show)
 
     def _refresh_accounts_menu(self):
         from ..core import ai_sessions
@@ -777,6 +796,57 @@ class CompactWindow(QWidget):
         if controller.future is None: controller.request('capture-status')
 
     def _capture_result(self, value):
+        if value.get('operation') == 'widget-geometry' and self._dock_verify_phase == 'geometry':
+            self._dock_verify_phase = None
+            if self._requested_mode is not None and self._requested_mode != self._dock_mode:
+                QTimer.singleShot(0, self._reconcile_after_show)
+                return
+            actual = value.get('geometry')
+            if not isinstance(actual, tuple) or len(actual) != 4 or self._dock_mode == 'compact':
+                self._dock_verify_attempts = 0
+                return
+            target = dock_geometry(self._dock_mode, self._screen_area())
+            expected = (target.x(), target.y(), target.width(), target.height())
+            if all(abs(a - b) <= 1 for a, b in zip(actual, expected)):
+                self._dock_verify_attempts = 0
+                return
+            self._dock_verify_attempts -= 1
+            self._dock_verify_phase = 'place'
+            if not self.shortcut_tabs.controller.request('widget-place', expected):
+                self._dock_verify_phase = None
+                self._dock_verify_attempts = 0
+                self._shortcut_result('Encaixe do widget não restaurado')
+            return
+        if value.get('operation') == 'widget-place' and self._dock_verify_phase == 'place':
+            self._dock_verify_phase = None
+            if self._needs_show_reconcile:
+                QTimer.singleShot(0, self._reconcile_after_show)
+            elif self._dock_verify_attempts:
+                QTimer.singleShot(180, self._verify_dock_after_show)
+            return
+        if value.get('operation') == 'widget-geometry' and self._show_clamp_phase == 'geometry':
+            self._show_clamp_phase = None
+            if self._requested_mode is not None and self._requested_mode != self._dock_mode:
+                QTimer.singleShot(0, self._reconcile_after_show)
+                return
+            geometry = value.get('geometry')
+            if (not isinstance(geometry, tuple) or len(geometry) != 4
+                    or self._dock_mode != 'compact' or not self.isVisible()):
+                return
+            x, y, width, height = geometry
+            clamped = clamp_position(x, y, width, height, self._screens())
+            if clamped != (x, y):
+                self._show_clamp_phase = 'place'
+                if not self.shortcut_tabs.controller.request(
+                        'widget-place', (*clamped, width, height)):
+                    self._show_clamp_phase = None
+                    self._shortcut_result('Posição do widget flutuante não restaurada')
+            return
+        if value.get('operation') == 'widget-place' and self._show_clamp_phase == 'place':
+            self._show_clamp_phase = None
+            if self._needs_show_reconcile:
+                QTimer.singleShot(0, self._reconcile_after_show)
+            return
         if value.get('operation') == 'widget-geometry' and self._dock_pending:
             geometry = value.get('geometry')
             if isinstance(geometry, tuple) and len(geometry) == 4:
@@ -793,6 +863,19 @@ class CompactWindow(QWidget):
             self._finish_capture()
 
     def _capture_failed(self, _message):
+        if self._dock_verify_phase and self.shortcut_tabs.controller.action in ('widget-geometry', 'widget-place'):
+            self._dock_verify_phase = None
+            self._dock_verify_attempts = 0
+            self._shortcut_result('Posição da barra não confirmada')
+            if self._needs_show_reconcile:
+                QTimer.singleShot(0, self._reconcile_after_show)
+            return
+        if self._show_clamp_phase and self.shortcut_tabs.controller.action in ('widget-geometry', 'widget-place'):
+            self._show_clamp_phase = None
+            self._shortcut_result('Posição do widget flutuante não confirmada')
+            if self._needs_show_reconcile:
+                QTimer.singleShot(0, self._reconcile_after_show)
+            return
         if self.shortcut_tabs.controller.action == 'widget-geometry' and self._dock_pending:
             self._dock_pending = None
             self._shortcut_result('Posição atual do widget não confirmada; encaixe não iniciado')
@@ -1023,6 +1106,13 @@ class CompactWindow(QWidget):
         self._restore_position()
         self.show()
         self.raise_()
+        if self._caps.session_type == 'wayland':
+            self._dock_verify_attempts = 3 if (desired_mode in ('left', 'right', 'top')
+                                                 or desired_mode is None and self._dock_mode != 'compact') else 0
+            self._dock_verify_waits = 0
+        if self._caps.session_type == 'wayland' and desired_mode in (None, 'compact'):
+            self._needs_compact_clamp = True
+            QTimer.singleShot(80, self._reconcile_compact_after_show)
         if desired_mode is not None:
             self._requested_mode = desired_mode
         if self._dock_mode != 'compact' or self._requested_mode is not None:
@@ -1050,7 +1140,40 @@ class CompactWindow(QWidget):
         if not self.shortcut_tabs.controller.request('widget-place',
                 (target.x(), target.y(), target.width(), target.height())):
             self._dock_pending = None
+            self._dock_verify_attempts = 0
             self._shortcut_result('Não foi possível restaurar a posição da barra')
+
+    def _verify_dock_after_show(self):
+        if not self._dock_verify_attempts or self._dock_mode == 'compact' or self._force_close:
+            return
+        if (not self.isVisible() or not self._screen_area().isValid()
+                or self._dock_pending or self._dock_verify_phase
+                or self.shortcut_tabs.controller.future is not None):
+            self._dock_verify_waits += 1
+            if self._dock_verify_waits <= 40:
+                QTimer.singleShot(100, self._verify_dock_after_show)
+            else:
+                self._dock_verify_attempts = 0
+                self._shortcut_result('Encaixe sem confirmação após aguardar o controlador')
+            return
+        self._dock_verify_waits = 0
+        self._dock_verify_phase = 'geometry'
+        if not self.shortcut_tabs.controller.request('widget-geometry'):
+            self._dock_verify_phase = None
+            self._dock_verify_attempts = 0
+            self._shortcut_result('Posição da barra não confirmada')
+
+    def _reconcile_compact_after_show(self):
+        if (not self._needs_compact_clamp or not self.isVisible() or self._force_close
+                or self._dock_mode != 'compact' or not self._screen_area().isValid()
+                or self._dock_pending or self._show_clamp_phase
+                or self.shortcut_tabs.controller.future is not None):
+            return
+        self._needs_compact_clamp = False
+        self._show_clamp_phase = 'geometry'
+        if not self.shortcut_tabs.controller.request('widget-geometry'):
+            self._show_clamp_phase = None
+            self._shortcut_result('Posição do widget flutuante não confirmada')
 
     def _watch_screen(self, screen):
         screen.availableGeometryChanged.connect(self._screen_changed)
@@ -1078,6 +1201,9 @@ class CompactWindow(QWidget):
             else:
                 self.move(target.topLeft())
             return
+        if self.isVisible() and self._caps.session_type == 'wayland':
+            self._needs_compact_clamp = True
+            QTimer.singleShot(80, self._reconcile_compact_after_show)
         if self.isVisible() and self._caps.absolute_position:
             x, y = clamp_position(self.x(), self.y(), self.width(), self.height(), self._screens())
             self.move(x, y)

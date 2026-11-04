@@ -214,8 +214,8 @@
     {
       "case": "full window position menu and floating return",
       "geometry": [
-        20,
-        120,
+        604,
+        368,
         280,
         201
       ]

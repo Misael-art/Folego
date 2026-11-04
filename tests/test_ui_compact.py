@@ -166,6 +166,91 @@ def test_wayland_dock_waits_for_confirmed_placement(qapp, monkeypatch):
     view.force_close()
 
 
+def test_wayland_floating_widget_clamps_after_kwin_initial_position(qapp, monkeypatch):
+    from PySide6.QtCore import QRect
+    from PySide6.QtTest import QTest
+    view, _ = make(qapp, caps=wayland())
+    view._screen_area = lambda: QRect(0, 0, 948, 593)
+    view._screens = lambda: ((0, 0, 948, 593),)
+    requested = []
+    monkeypatch.setattr(view.shortcut_tabs.controller, 'request',
+                        lambda action, value=None: requested.append((action, value)) or True)
+    view.show_compact()
+    QTest.qWait(100)
+    assert requested == [('widget-geometry', None)]
+    view._capture_result({'operation': 'widget-geometry',
+                          'geometry': (604, 368, 280, 256)})
+    assert requested[-1] == ('widget-place', (604, 337, 280, 256))
+    view._capture_result({'operation': 'widget-place', 'geometry': requested[-1][1]})
+    assert view._show_clamp_phase is None
+    view.force_close()
+
+
+def test_dock_choice_during_floating_geometry_check_is_kept(qapp, monkeypatch):
+    from PySide6.QtCore import QRect
+    view, _ = make(qapp, caps=wayland())
+    view._screen_area = lambda: QRect(0, 0, 948, 593)
+    view._screens = lambda: ((0, 0, 948, 593),)
+    requested = []
+    monkeypatch.setattr(view.shortcut_tabs.controller, 'request',
+                        lambda action, value=None: requested.append((action, value)) or True)
+    view.show_compact()
+    view._reconcile_compact_after_show()
+    view.set_dock_mode('left')
+    assert view._requested_mode == 'left'
+    view._capture_result({'operation': 'widget-geometry',
+                          'geometry': (604, 368, 280, 256)})
+    qapp.processEvents()
+    assert requested[-1][0] == 'widget-geometry'  # original floating position for return
+    view._capture_result({'operation': 'widget-geometry',
+                          'geometry': (604, 337, 280, 256)})
+    assert requested[-1] == ('widget-place', (0, 0, 112, 593))
+    view._capture_result({'operation': 'widget-place', 'geometry': requested[-1][1]})
+    assert view._dock_mode == 'left' and view._dock_pending is None
+    view.force_close()
+
+
+def test_dock_remap_rechecks_kwin_and_corrects_late_rule(qapp, monkeypatch):
+    from PySide6.QtCore import QRect
+    view, _ = make(qapp, caps=wayland())
+    view._screen_area = lambda: QRect(0, 0, 948, 593)
+    requested = []
+    monkeypatch.setattr(view.shortcut_tabs.controller, 'request',
+                        lambda action, value=None: requested.append((action, value)) or True)
+    view.show()
+    view._dock_mode = 'top'
+    view._dock_verify_attempts = 3
+    view._verify_dock_after_show()
+    assert requested[-1] == ('widget-geometry', None)
+    view._capture_result({'operation': 'widget-geometry',
+                          'geometry': (604, 368, 948, 132)})
+    assert requested[-1] == ('widget-place', (0, 0, 948, 132))
+    view._capture_result({'operation': 'widget-place', 'geometry': requested[-1][1]})
+    assert view._dock_verify_attempts == 2
+    view.force_close()
+
+
+def test_dock_recheck_waits_for_busy_shortcut_controller(qapp, monkeypatch):
+    from PySide6.QtCore import QRect
+    from PySide6.QtTest import QTest
+    view, _ = make(qapp, caps=wayland())
+    view._screen_area = lambda: QRect(0, 0, 948, 593)
+    requested = []
+    controller = view.shortcut_tabs.controller
+    monkeypatch.setattr(controller, 'request',
+                        lambda action, value=None: requested.append((action, value)) or True)
+    view.show()
+    view._dock_mode = 'top'
+    view._dock_verify_attempts = 1
+    controller.future = object()
+    view._verify_dock_after_show()
+    assert view._dock_verify_waits == 1 and not requested
+    controller.future = None
+    QTest.qWait(120)
+    assert requested == [('widget-geometry', None)]
+    view.force_close()
+
+
 def test_docked_widget_reapplies_edge_after_remapping(qapp):
     from PySide6.QtCore import QRect
     from PySide6.QtTest import QTest

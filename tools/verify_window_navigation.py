@@ -286,6 +286,7 @@ def main():
                         window.show_compact()  # same dock, remapped after the floating KWin position rule
                         window.hide_window()
                         wait(lambda:compact.isVisible() and compact._dock_pending is None and
+                                     compact._dock_verify_attempts==0 and compact._dock_verify_phase is None and
                                      all(abs(a-b)<=1 for a,b in zip(compositor_rect(),
                                          (dock_target.x(),dock_target.y(),dock_target.width(),dock_target.height()))))
                         records.append(dict(case='top restored after full window',geometry=compositor_rect()))
@@ -306,7 +307,8 @@ def main():
                 QTest.mouseClick(compact.open_button,Qt.MouseButton.LeftButton)
                 wait(lambda:window.isVisible() and not compact.isVisible())
                 window.widget_position_menu.actions()[1].trigger()
-                wait(lambda:compact.isVisible() and compact._dock_mode=='left' and compact._dock_pending is None)
+                wait(lambda:compact.isVisible() and compact._dock_mode=='left' and compact._dock_pending is None
+                             and compact._dock_verify_attempts==0 and compact._dock_verify_phase is None)
                 left_target=dock_geometry('left',compact.screen().availableGeometry())
                 assert all(abs(a-b)<=1 for a,b in zip(compositor_rect(),
                            (left_target.x(),left_target.y(),left_target.width(),left_target.height())))
@@ -569,6 +571,11 @@ def main():
                 (root/'hover-failure.json').write_text(json.dumps(dict(height=c.action_drawer.maximumHeight(),
                     delay=c.drawer_delay.isActive(),under_mouse=c.underMouse(),
                     geometry=[c.x(),c.y(),c.width(),c.height()],
+                    dock_mode=c._dock_mode,dock_pending=c._dock_pending,
+                    dock_verify_attempts=c._dock_verify_attempts,dock_verify_phase=c._dock_verify_phase,
+                    requested_mode=c._requested_mode,needs_reconcile=c._needs_show_reconcile,
+                    controller_action=c.shortcut_tabs.controller.action,
+                    controller_busy=c.shortcut_tabs.controller.future is not None,
                     native=call('qdbus6','org.kde.KWin','/KWin','org.kde.KWin.getWindowInfo',surface[0]) if surface else None,
                     popup=popup.windowTitle() if popup else None,
                     popup_visible=popup.isVisible() if popup else None,
