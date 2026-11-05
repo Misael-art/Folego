@@ -13,6 +13,7 @@ Central, opções, prompts, teclado, widget e os controles usados nas demais aba
 | Seta nativa em caixa nos seletores | Chevron vetorial com contraste claro/escuro e área de abertura uniforme. |
 | Botão de menu pequeno com indicador duplicado | Controle plano de 32 × 32, foco visível e realce do tema. |
 | Navegação encostada à borda e retorno duplicado | Abas com 6 px de folga nos dois lados e inicial maiúscula; marca FÔLEGO; cabeçalho sem Voltar. Modo widget e o menu de posição mantêm o retorno. |
+| Nome longo de grupo impedindo janela de 800 px no Ubuntu | O seletor de grupos pode encolher; a lista aberta mantém o texto completo. O teste de 800 px foi preservado. |
 
 Os 111 testes focados finais passaram, incluindo quatro casos novos de arraste e
 navegação por teclado das barras verticais/horizontais em tema claro/escuro.
@@ -28,6 +29,16 @@ parcial e `interruption.json` estão preservados em
 `.scratch/dev-tests-reviewed/modern-controls-gui-interrupted-before-navigation-20261104`;
 essa execução não comprova o gate completo. O gate remoto do commit publicado
 é a verificação integral desta entrega.
+
+O CI inicial de `cb5f16b` detectou a largura mínima de 826 px após a nova
+aparência dos seletores. A correção em `d1fd7a6` passou nos 46 testes locais
+de layout e abas; a falha inicial não foi ignorada nem o limite de 800 px
+ampliado.
+
+O CI da revisão conjunta `d39ace0` aprovou os seis jobs de produto, incluindo
+as suítes completas sem Qt, Qt offscreen e consultas da CLI em HOME privado.
+O código visual e a correção de largura estão nessa revisão; as execuções
+canceladas do SHA intermediário não são contabilizadas como aprovadas.
 
 Tentativas nativas anteriores ficaram preservadas em `.scratch/dev-tests-reviewed/modern-controls-native-*`.
 Elas completaram etapas visuais, mas falharam em entrada/saída posterior e não

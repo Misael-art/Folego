@@ -1,4 +1,4 @@
-# Passagem para o próximo agente — atualizada em 04/11/2026
+# Passagem para o próximo agente — atualizada em 05/11/2026
 
 ## Cooler junto à temperatura — 04/11/2026
 
@@ -41,6 +41,69 @@ O diff, a captura e os testes desta tarefa foram revisados. O PR #3 no SHA
 `d39ace0` passou nos seis jobs de produto do CI; o revisor automático foi
 skipped. Próximo: validar a rotação física numa máquina que exporte tacômetro
 e revisar o PR empilhado após #2, sem merge ou release nesta tarefa.
+
+## Controles modernos e navegação da Central — 05/11/2026
+
+Pedidos integrados: modernizar a rolagem e revisar controles destoantes; dar
+folga igual aos botões laterais, usar inicial maiúscula nos rótulos, marca
+FÔLEGO e retirar Voltar do cabeçalho. Owner: checkout canônico, branch
+`codex/prompt-implantation-20261104`, PR #3 empilhado sobre #2. Dependências:
+tema central Qt e navegação já existente para o widget. Aceite: 6 px dos dois
+lados das abas, marca em caixa alta, retorno por Modo widget/menu funcional,
+rolagem vertical/horizontal utilizável e estilos coerentes nos oito temas.
+
+Código em `cb5f16b`: uma receita global para barras de rolagem, com área de
+12 px e polegar arredondado de 6 px que ganha destaque no hover/pressão; as
+receitas locais de prompts e widget foram removidas. Medidores têm trilho e
+preenchimento em cápsula, seletores usam chevrons vetoriais de contraste
+claro/escuro e o menu da janela tem alvo de 32 × 32. As abas mostram Central,
+Ajustes etc., com margens laterais iguais. A marca visual é FÔLEGO, inclusive
+no compacto e na chamada da Central; os identificadores/captions usados pelo
+KWin foram preservados. O botão Voltar e seu callback exclusivo saíram;
+Modo widget e o menu Posição do widget mantêm a navegação.
+
+Os **111 testes focados** finais passaram em `./dev test` (abas, dashboard,
+layout, temas, transparência, hover e prompts), incluindo arraste e teclado
+nas barras e os caminhos de retorno após remover Voltar. O
+[ensaio KDE/Wayland e a revisão visual](handoff/validation/modern-controls-2026-11-04/README.md)
+passaram em janela/HOME/XDG próprios nos oito temas, com captura atual da
+Central sem Voltar. Abertura de seletores e do menu final foi nativa; seleção
+no popup usa eventos Qt locais. O roteiro agora reconfere posição KWin antes
+do clique e aguarda o clamp do widget. Tentativas anteriores que falharam
+nessa entrada/saída ficaram preservadas e não contam como jornadas aprovadas.
+
+Uma tentativa local de `./dev check` anterior ao último ajuste aprovou 1247
+testes headless, mas perdeu o processo Qt antes do recibo final. O log parcial
+e o registro de interrupção permanecem em `.scratch/dev-tests-reviewed`;
+não declarar essa tentativa como gate completo. O CI do SHA publicado é a
+verificação integral. Os seis jobs de produto da revisão conjunta `d39ace0`
+passaram no GitHub; o revisor automático foi skipped. As execuções de
+`d1fd7a6` foram canceladas pelo avanço da mesma branch e não são contadas
+como aprovadas separadamente.
+
+O primeiro CI de `cb5f16b` encontrou uma regressão real no Ubuntu: o seletor
+com nome longo de grupo de processos exigia largura de 826 px. `d1fd7a6`
+limita sua dica de conteúdo para permitir encolhimento sem perder a lista de
+escolha. Os 46 testes de layout/abas passaram depois disso; o limite de
+800 px no teste existente foi preservado. Um commit local temporário incluiu
+por engano os arquivos que a outra atividade havia acabado de preparar;
+antes de publicar, ele foi dividido com preservação do working tree e do
+stage alheio. O commit enviado contém só as duas linhas do seletor. Nenhum
+histórico remoto foi reescrito.
+
+Preservação: outra atividade tratou CPU/temperatura/cooler em
+README, COMPACTO, collector, snapshot, sysfs, compacto e testes correspondentes.
+Esses hunks foram preservados fora de `cb5f16b`/`d1fd7a6`; o stage do compacto e dos
+documentos foi seletivo. O owner registrou esse trabalho separadamente em
+`16fd251` e `d39ace0`. Suítes locais dessa outra atividade não foram
+interrompidas nem rodadas em paralelo com a verificação focada deste lote.
+A GUI antiga PID 4436 foi preservada neste lote para não disputar a atualização
+do host. A outra atividade concluiu a troca: a unit existente agora está
+`active/running`, `Result=success`, PID 94795, iniciada às 00:02:42 de 05/11,
+depois das alterações visuais. O KWin confirmou seu widget 280 × 253. A nova
+instância usa o ambiente gerenciado do checkout atualizado; a prova de pixels
+do cabeçalho/abas continua sendo a janela QA própria. Próximo: inspecionar a
+Central residente pelo uso normal e revisar o PR #3 após #2.
 
 ## Cantos reais da Central — 04/11/2026
 
