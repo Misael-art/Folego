@@ -204,6 +204,28 @@ class DashboardTab(QWidget):
         self.headline = QLabel("Aguardando primeira leitura…")
         self.headline.setObjectName("headline")
         self.headline.setWordWrap(True)
+        self.summary_values = {}
+        summary = QGridLayout()
+        summary.setContentsMargins(0, 0, 0, 0)
+        summary.setHorizontalSpacing(12)
+        summary.setVerticalSpacing(4)
+        for row, (key, caption) in enumerate((('available', 'Disponível'),
+                                              ('used', 'Em uso'),
+                                              ('application', 'Aplicativo'))):
+            label = QLabel(caption)
+            label.setObjectName('why')
+            value = QLabel('—')
+            value.setObjectName('summaryValue')
+            value.setWordWrap(True)
+            value.setAccessibleName(caption)
+            self.summary_values[key] = value
+            summary.addWidget(label, row, 0)
+            summary.addWidget(value, row, 1)
+        summary.setColumnStretch(1, 1)
+        self.hero_alert = QLabel('')
+        self.hero_alert.setObjectName('why')
+        self.hero_alert.setWordWrap(True)
+        self.hero_alert.hide()
         self.details = QLabel("")
         self.details.setWordWrap(True)
         self.resources = QLabel("saúde por recurso: aguardando a primeira amostra.")
@@ -252,10 +274,12 @@ class DashboardTab(QWidget):
         hero_text.setSpacing(6)
         hero_text.addStretch(1)
         hero_text.addWidget(self.headline)
+        hero_text.addLayout(summary)
         self.verdict_line = QLabel("")
         self.verdict_line.setObjectName("why")
         self.verdict_line.setWordWrap(True)
         hero_text.addWidget(self.verdict_line)
+        hero_text.addWidget(self.hero_alert)
         hero_text.addWidget(self.primary_button, 0, Qt.AlignmentFlag.AlignLeft)
         hero_text.addStretch(1)
         self.widget_button = QPushButton("⧉  Modo widget")
@@ -324,11 +348,20 @@ class DashboardTab(QWidget):
                       thumbnails_kb: int | None = None,
                       extra_notes=(), signal=None, last_operation: str = ""):
         signal = signal or title_signal.compute(snapshot, self._thresholds)
-        self.headline.setText(signal.text.replace('Fôlego', 'FÔLEGO', 1))
+        verdict = VERDICT.get(signal.level, VERDICT[health.UNKNOWN])[0]
+        heading = 'Coleta indisponível' if signal.level == health.UNKNOWN else verdict
+        self.headline.setText(f'FÔLEGO {signal.emoji} · {heading}')
+        self.headline.setToolTip(signal.text)
+        self._show_summary(snapshot)
+        notices = [reason.message for reason in signal.report.reasons
+                   if reason.code in ('runtime_critical', 'tmpfs_inodes_exhausted', 'snapshot_stale')] if signal.report else []
+        if signal.level == health.UNKNOWN and not notices:
+            notices.append(signal.text)
+        self.hero_alert.setText('\n'.join(dict.fromkeys(notices)))
+        self.hero_alert.setVisible(bool(notices))
         self.details.setText(self._details(snapshot))
         headroom = headroom_pct(snapshot)
         self.gauge.set_state(headroom, signal.level)
-        verdict = VERDICT.get(signal.level, VERDICT[health.UNKNOWN])[0]
         self.verdict_line.setText(
             f"{verdict}: menor folga {headroom}% entre memória, swap e temporários." if headroom is not None
             else f"{verdict}: aguardando dados de memória, swap e temporários.")
@@ -372,7 +405,12 @@ class DashboardTab(QWidget):
             self.primary_button.setText(button)
 
     def invalidate_health(self, signal):
-        self.headline.setText(signal.text)
+        self.headline.setText('FÔLEGO ⚪ · Coleta indisponível')
+        self.headline.setToolTip(signal.text)
+        for value in self.summary_values.values():
+            value.setText('—')
+        self.hero_alert.setText(signal.text)
+        self.hero_alert.show()
         self.resources.setText("saúde não comprovada; aguardando nova amostra")
         self.gauge.set_state(None, health.UNKNOWN)
         self.verdict_line.setText("Saúde não comprovada; aguardando nova amostra.")
@@ -380,6 +418,18 @@ class DashboardTab(QWidget):
             card.set_value(None, "ok", "aguardando nova amostra")
         self._sync_rows(())
         self._show_empty_state(signal, unavailable=True)
+
+    def _show_summary(self, snapshot):
+        values = self.summary_values
+        if snapshot.mem is None or snapshot.mem.mem_total_kb <= 0:
+            for label in values.values():
+                label.setText('—')
+            return
+        total, available = snapshot.mem.mem_total_kb, snapshot.mem.mem_available_kb
+        gb = lambda value: title_signal.fmt1(value / title_signal.MB) + ' GB'
+        values['available'].setText(gb(available))
+        values['used'].setText(f'{gb(total - available)} de {gb(total)}')
+        values['application'].setText(f'{snapshot.self_rss_kb // title_signal.KB} MB')
 
     def _show_cards(self, snapshot) -> None:
         cards, t = self.cards, self._thresholds
@@ -495,7 +545,9 @@ class DashboardTab(QWidget):
     def diagnostic_text(self) -> str:
         """Sanitized copy: verdicts and counts, never commands or credentials."""
         return "\n".join(text for text in (
-            self.headline.text(), self.details.text(), self.resources.text(),
+            self.headline.text(),
+            *(f'{label.accessibleName()}: {label.text()}' for label in self.summary_values.values()),
+            self.hero_alert.text(), self.details.text(), self.resources.text(),
             self.last_operation.text(), self.automation_status.text(), self.input_status.text(),
             self.status.text()) if text)
 

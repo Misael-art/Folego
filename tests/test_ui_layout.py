@@ -116,7 +116,7 @@ def test_critical_runtime_and_browser_group_still_fit_800_pixels(window, qapp):
     window.show()
     qapp.processEvents()
     assert window.width() == 800
-    assert "Runtime da sessão crítico" in window.dashboard.headline.text()
+    assert "Runtime da sessão crítico" in window.dashboard.hero_alert.text()
     assert window.minimumSizeHint().width() <= 800
 
 

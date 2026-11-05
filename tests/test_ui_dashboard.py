@@ -32,11 +32,25 @@ def panel(qapp):
     return DashboardTab(on_jump=jumps.append), jumps
 
 
-def test_the_headline_repeats_the_title_signal(panel):
+def test_the_headline_keeps_the_verdict_without_mixing_resource_values(panel):
     view, jumps = panel
     view.show_snapshot(snap(psi10=14.0))
     assert "🔴" in view.headline.text()
     assert view.headline.text().startswith('FÔLEGO ')
+    assert 'GB' not in view.headline.text()
+
+
+def test_hero_summary_aligns_values_and_clears_them_when_health_expires(panel):
+    from folego.ui.title_signal import TitleSignal
+    view, _ = panel
+    view.show_snapshot(snap(total_kb=8 * 1024**2, available_kb=3 * 1024**2,
+                            self_rss_kb=128 * 1024))
+    assert {key: label.text() for key, label in view.summary_values.items()} == {
+        'available': '3,0 GB', 'used': '5,0 GB de 8,0 GB', 'application': '128 MB'}
+    assert 'Disponível: 3,0 GB' in view.diagnostic_text()
+    view.invalidate_health(TitleSignal('unknown', '⚪', 'Leitura antiga; aguarde a próxima amostra'))
+    assert all(label.text() == '—' for label in view.summary_values.values())
+    assert 'Leitura antiga' in view.hero_alert.text()
 
 
 def test_suggestions_land_in_order_with_their_own_jump_target(panel):

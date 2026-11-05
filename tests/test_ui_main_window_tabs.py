@@ -382,7 +382,7 @@ def test_position_menu_returns_to_widget_without_tray_or_losing_current_tab(wind
 
 def test_dashboard_widget_button_restores_floating_mode(window, qapp, monkeypatch):
     from PySide6.QtCore import QRect
-    from PySide6.QtTest import QTest
+    from PySide6.QtTest import QSignalSpy
     from folego.ui.desktop_caps import detect
     monkeypatch.setattr(window, '_offer_kwin_rule', lambda: None)
     window._compact_factory = lambda owner, _: CompactWindow(
@@ -392,10 +392,15 @@ def test_dashboard_widget_button_restores_floating_mode(window, qapp, monkeypatc
     compact = window._compact
     compact._screen_area = lambda: QRect(0, 0, 948, 593)
     compact.set_dock_mode('top')
-    QTest.qWait(350)
+    assert compact.dock_animation.duration() == 260
+    if compact.dock_animation.state() != compact.dock_animation.State.Stopped:
+        assert QSignalSpy(compact.dock_animation.finished).wait(1000)
     compact.open_button.click()
     window.dashboard.widget_button.click()
-    QTest.qWait(350)
+    qapp.processEvents()  # start the queued request before observing its animation
+    assert compact.dock_animation.duration() == 260
+    if compact.dock_animation.state() != compact.dock_animation.State.Stopped:
+        assert QSignalSpy(compact.dock_animation.finished).wait(1000)
     assert compact.isVisible() and compact._dock_mode == 'compact'
     assert compact.width() == 280
     window.quit()

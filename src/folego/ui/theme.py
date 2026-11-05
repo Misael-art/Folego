@@ -230,6 +230,7 @@ QLabel#headline {{
     font-weight: 600;
     color: {TOKENS.text};
 }}
+QLabel#summaryValue {{font-size:11pt;font-weight:600;color:{TOKENS.text};}}
 QLabel#why {{
     color: {TOKENS.muted};
 }}

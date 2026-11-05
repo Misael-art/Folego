@@ -161,7 +161,8 @@ def main():
             sample=Snapshot(ts=time.time(),mono=time.monotonic(),mem=MemInfo(16*1024**2,6*1024**2),
                 swap_used_kb=1024,swap_total_kb=8192,pressure_memory=None,pressure_io=None,pressure_cpu=None,
                 load=None,apps=(),self_rss_kb=0,cpu_busy_frac=.52,temperature_c=61,temperature_sensor='demonstração',
-                battery=BatteryInfo(25,'Discharging',3600),sources=(SourceQuality('battery','ok'),),
+                battery=BatteryInfo(25,'Discharging',3600),sources=tuple(SourceQuality(name,'ok')
+                    for name in ('meminfo','swaps','processes','tmpfs','battery')),
                 tmpfs=(TmpfsVolume('/qa/runtime','tmpfs',100,81,19,is_runtime=True),))
             compact.show_snapshot(sample)
             if args.prompt_key or args.standard_shortcuts or args.console_themes or args.background_transparency or args.ai_quota_rings or args.dock_modes:
