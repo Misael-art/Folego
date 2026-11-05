@@ -2,6 +2,7 @@
 
 ## Recuperação NTFS pelo Linux e registro de incidentes — 05/11/2026
 
+Incremento integrado no commit `e051952e4e0bbe0fdaf13bf48a5e17e3b60766f9`.
 O pedido de recuperação real do cartão foi autorizado, mas a pré-checagem
 somente leitura ainda bloqueia qualquer efeito: `/dev/mmcblk0p1`, UUID
 `58D14C064972BE55`, está montado `rw` em `/mnt/sdcard`; não há outro disco
@@ -42,12 +43,15 @@ persistente independente com ao menos 539 GB livres, identificar consumidores,
 autenticar pelo fluxo oficial e instalar a ferramenta necessária pelo método
 revisado. Revalidar tudo antes de copiar; não reparar o original antes de cópia
 certificada. A verificação visual KDE/Wayland e o registro do monitor real
-foram realizados após reabrir somente `app-folego@autostart.service`: PID
-**497268**, `active/running`, `Result=success`. O fluxo real Central → Disco →
+foram realizados após reabrir somente `app-folego@autostart.service`. Após o
+commit, a unit foi reiniciada para carregar a correção final: PID **536652**,
+`active/running`, `Result=success`; `disk timeline --json` leu 58 amostras do
+boot atual. O fluxo real Central → Disco →
 Verificar agora mostrou três índices NTFS, o contador Btrfs estável e a última
-amostra local com horário curto. `disk timeline --json` leu amostras privadas
-do boot atual, incluindo um pico ACPI de 94 °C durante um `rustc` de outra
-tarefa; a relação com os reinícios anteriores permanece desconhecida. A
+amostra local com horário curto. O histórico incluiu um pico ACPI de 94 °C
+durante um `rustc` de outra tarefa e, após o último restart, 97 °C às 19:54:35.
+Uma leitura direta do sensor indicou 80 °C às 19:54:49, com pressão de memória
+e I/O baixa; a relação com os reinícios anteriores permanece desconhecida. A
 captura foi inspecionada no KDE/Wayland pela ferramenta de desktop; não há
 aceite de duração longa. Em uma imagem NTFS descartável de 32 MiB na área de
 QA revisada, `mkntfs -F -Q`, `ntfsfix --no-action` e
