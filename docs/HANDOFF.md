@@ -1,5 +1,59 @@
 # Passagem para o próximo agente — atualizada em 05/11/2026
 
+## Recuperação NTFS pelo Linux e registro de incidentes — 05/11/2026
+
+O pedido de recuperação real do cartão foi autorizado, mas a pré-checagem
+somente leitura ainda bloqueia qualquer efeito: `/dev/mmcblk0p1`, UUID
+`58D14C064972BE55`, está montado `rw` em `/mnt/sdcard`; não há outro disco
+persistente conectado, o NVMe oferece apenas cerca de 124 GiB livres para um
+volume NTFS com cerca de 285 GiB ocupados, a conta não tem leitura bruta sem
+autenticação e `ddrescue` não está instalado. Uma imagem integral da partição
+exige **538.345.104.998 bytes livres** com a margem adotada pelo plano. Nenhuma
+desmontagem, correção, scrub ou cópia do cartão ocorreu. O processo
+`lowntfs-3g` PID 3504 confirma a origem `/dev/mmcblk0p1` dos avisos; três
+inodes de índices se repetiram no boot atual. Isso confirma erro de metadados
+NTFS, mas não a causa do reinício nem uma falha física específica.
+
+O Fôlego agora orienta uma recuperação Linux: preservar dados, criar imagem
+retomável do volume desmontado, investigar/corrigir somente cópias e restaurar
+após verificação. A aba Disco agrupa os inodes de índice distintos visíveis no
+journal limitado, sem percorrer o SD. `disk recovery` faz pré-checagem de
+identidade, montagem, leitura bruta, ferramenta, ancestral físico e espaço do
+destino; não cria imagem nem autoriza um efeito futuro. `disk timeline` lê
+amostras privadas de RAM, swap, PSI, temperatura e maior CPU que o worker da
+GUI grava a cada 15 s, até 4 MiB por boot e 32 MiB no total. Sem GUI ativa,
+fonte válida ou espaço no histórico, o dado fica ausente/desconhecido; não se
+infere estabilidade. A escrita fica no estado XDG do Fôlego, nunca no cartão.
+`disk timeline --boot-id <ID>` consulta amostras de um boot preservado mesmo
+depois de avançar o histórico recente; ID inválido é recusado.
+
+Validação em HOME/XDG e QA privados: testes focados de núcleo **8 passed**;
+teste GUI focado **5 passed**; `./dev check` sequencial **1259 passed, 2 skipped**
+headless e **1630 passed, 2 skipped** Qt offscreen. A primeira tentativa ampla
+teve uma falha na simulação de permissão do destino, corrigida sem afrouxar o
+guard; o registro dela foi preservado em `.scratch/dev-tests-reviewed`.
+Após a consulta por boot e a recusa de eventos malformados, as suítes finais
+repetiram **1260 passed, 2 skipped** com `./dev test-headless` e
+**1631 passed, 2 skipped** com `./dev test`. Nenhum gate foi afrouxado.
+`disk recovery /dev/mmcblk0p1 --destination /home/misael/Projects/Folego --json`
+retornou `can_image=false` com quatro bloqueios: origem montada, leitura bruta,
+ferramenta ausente e espaço insuficiente. Próximo: obter destino externo
+persistente independente com ao menos 539 GB livres, identificar consumidores,
+autenticar pelo fluxo oficial e instalar a ferramenta necessária pelo método
+revisado. Revalidar tudo antes de copiar; não reparar o original antes de cópia
+certificada. A verificação visual KDE/Wayland e o registro do monitor real
+foram realizados após reabrir somente `app-folego@autostart.service`: PID
+**497268**, `active/running`, `Result=success`. O fluxo real Central → Disco →
+Verificar agora mostrou três índices NTFS, o contador Btrfs estável e a última
+amostra local com horário curto. `disk timeline --json` leu amostras privadas
+do boot atual, incluindo um pico ACPI de 94 °C durante um `rustc` de outra
+tarefa; a relação com os reinícios anteriores permanece desconhecida. A
+captura foi inspecionada no KDE/Wayland pela ferramenta de desktop; não há
+aceite de duração longa. Em uma imagem NTFS descartável de 32 MiB na área de
+QA revisada, `mkntfs -F -Q`, `ntfsfix --no-action` e
+`ntfsresize --check --no-action` terminaram com código 0; esse ensaio não
+certifica a recuperação dos índices corrompidos do cartão.
+
 ## Travamento observado em 05/11/2026 e correção da leitura de boots
 
 Investigação somente leitura do host, sem reproduzir o travamento. O `last -x`

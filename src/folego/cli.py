@@ -325,6 +325,13 @@ def build_parser() -> argparse.ArgumentParser:
     guide = disk_sub.add_parser("guide", help="orientação manual para um risco; não repara")
     guide.add_argument("issue", choices=("thermal", "pressure", "ntfs", "btrfs", "service", "reboot"))
     guide.add_argument("--json", action="store_true", help="saída para máquinas")
+    recovery = disk_sub.add_parser("recovery", help="pré-checagem NTFS para cópia de resgate; não repara")
+    recovery.add_argument("source", help="dispositivo NTFS, por exemplo /dev/mmcblk0p1")
+    recovery.add_argument("--destination", help="diretório persistente para a imagem integral")
+    recovery.add_argument("--json", action="store_true", help="saída para máquinas")
+    timeline = disk_sub.add_parser("timeline", help="amostras locais antes de incidentes (somente leitura)")
+    timeline.add_argument("--json", action="store_true", help="saída para máquinas")
+    timeline.add_argument("--boot-id", help="consultar um boot específico preservado")
 
     plan = disk_sub.add_parser("plan", help="dry-run: o que poderia ser liberado (nada muda)")
     plan.add_argument("--json", action="store_true", help="saída para máquinas")
@@ -910,6 +917,8 @@ def _cmd_tmp(args) -> int:
 _HANDLERS = {
     "health": lambda args: _cmd_host_health(args),
     "guide": lambda args: _cmd_host_guide(args),
+    "recovery": lambda args: _cmd_ntfs_recovery(args),
+    "timeline": lambda args: _cmd_host_timeline(args),
     "plan": _cmd_plan,
     "quarantine": _cmd_quarantine,
     "restore": _cmd_restore,
@@ -955,6 +964,39 @@ def _cmd_host_guide(args) -> int:
                        "title": title, "guidance": guidance, "effect": "none"})
     else:
         print(f"{title}\n\n{guidance}")
+    return EXIT_OK
+
+
+def _cmd_ntfs_recovery(args) -> int:
+    from .adapters.ntfs_recovery import assess_ntfs_recovery
+    report = assess_ntfs_recovery(args.source, args.destination)
+    if args.json:
+        _emit_machine({"ok": True, "outcome": "avaliado", "effect": "none", **report})
+    else:
+        print("Recuperação NTFS — pré-checagem, nada alterado")
+        print(f"Origem: {report['source']} · UUID {report['source_uuid'] or 'desconhecido'}")
+        if report["required_free_bytes"] is not None:
+            print(f"Espaço exigido no destino: {report['required_free_bytes']:,} bytes")
+        for blocker in report["blockers"]:
+            print(f"  · {blocker}")
+        if report["can_image"]:
+            print("Condições observadas para planejar a imagem; revalidar no ato da execução.")
+    return EXIT_OK
+
+
+def _cmd_host_timeline(args) -> int:
+    from .adapters.host_timeline import read_timeline
+    report = read_timeline(limit=80, boot_id=args.boot_id)
+    if args.json:
+        _emit_machine({"ok": report["quality"] == "ok", "outcome": "observado",
+                       "effect": "none", **report})
+    else:
+        print(f"Histórico local: {report['quality']} · {report['reason'] or 'amostras recentes'}")
+        for row in report["samples"][-10:]:
+            print(f"  {row['at']} · RAM {row['mem_available_kb']} KiB · "
+                  f"PSI memória {row['psi_mem_avg10']}% · "
+                  f"PSI I/O {row['psi_io_avg10']}% · "
+                  f"temperatura {row['temperature_c']} °C")
     return EXIT_OK
 
 

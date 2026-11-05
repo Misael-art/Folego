@@ -18,11 +18,13 @@ def _report():
                 {"quality": "ok", "counters": {"corruption_errs": 6741},
                  "delta": {"corruption_errs": 0}}],
             "ntfs": {"quality": "ok", "count_10m": 17,
+                     "index_inodes_10m": 3,
                      "mount": {"mount": "/mnt/sdcard"}},
             "services": {"quality": "ok", "items": [
                 {"unit": "codex-quota-panel.service", "restarts": 403}]},
             "boots": {"quality": "ok", "items": [{}, {}, {}, {}],
-                      "reason": "sem registro de desligamento; causa desconhecida"}}
+                      "reason": "sem registro de desligamento; causa desconhecida"},
+            "timeline": {"quality": "ok", "last_at": "2026-11-05T05:18:30-03:00"}}
 
 
 def test_host_guard_uses_one_grouped_area_and_guides_without_effect(qapp, monkeypatch):
@@ -42,8 +44,10 @@ def test_host_guard_uses_one_grouped_area_and_guides_without_effect(qapp, monkey
     assert "ACPI: 81" in panel.thermal_value.text()
     assert "RPM indisponível" in panel.thermal_detail.text()
     assert "possível volume /mnt/sdcard" in panel.rows["ntfs"].text()
+    assert "3 índices identificados" in panel.rows["ntfs"].text()
     assert "+0 desde a leitura anterior" in panel.rows["btrfs"].text()
     assert "causa desconhecida" in panel.rows["reboot"].text()
+    assert "última amostra local: 05/11 05:18:30" in panel.rows["reboot"].text()
     assert "itens para revisar" in win.dashboard.host_status.text()
     assert "Saúde do host" in win.dashboard.diagnostic_text()
     panel.copy_button.click()
@@ -54,7 +58,8 @@ def test_host_guard_uses_one_grouped_area_and_guides_without_effect(qapp, monkey
     seen = []
     monkeypatch.setattr(QMessageBox, "information", lambda *args: seen.append(args[1:]))
     panel._guide("ntfs")
-    assert seen and "chkdsk" in seen[0][1]
+    assert seen and "Pelo Linux" in seen[0][1]
+    assert "Sem destino suficiente" in seen[0][1]
     destination = os.environ.get("FOLEGO_HOST_GUARD_CAPTURE")
     if destination:
         assert win.grab().save(str(Path(destination)))

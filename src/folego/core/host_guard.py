@@ -74,9 +74,12 @@ GUIDES = {
         "nem encerra agentes por este aviso."),
     "ntfs": (
         "Avisos NTFS", "Identifique o volume e preserve primeiro os dados insubstituíveis "
-        "em outro destino verificado. Evite novas escritas e varreduras desnecessárias. "
-        "Planeje a desmontagem segura e uma verificação completa com chkdsk no Windows. "
-        "ntfsfix não substitui essa verificação. Nenhum reparo é executado aqui."),
+        "em outro destino persistente e verificado. Evite novas escritas e varreduras "
+        "desnecessárias. Pelo Linux, planeje uma imagem recuperável do volume desmontado, "
+        "investigue uma cópia e extraia os arquivos com verificação. ntfsfix só corrige "
+        "alguns problemas fundamentais; não garante reparar índices NTFS. Recrie o volume "
+        "e restaure apenas depois de preservar uma cópia certificada. Sem destino suficiente, "
+        "não tente reparar o cartão original."),
     "btrfs": (
         "Contadores Btrfs", "O número acumulado não mostra sozinho quando ocorreu o erro. "
         "Priorize backup verificado se a contagem crescer. Um scrub planejado pode verificar "
@@ -89,7 +92,8 @@ GUIDES = {
     "reboot": (
         "Reinícios anteriores", "O fim de um diário sem registro de desligamento "
         "não prova a causa do reinício. Preserve horários, boot IDs e mensagens "
-        "anteriores; investigue energia, temperatura, kernel e armazenamento com "
+        "anteriores; compare com as amostras locais de RAM, swap, pressão e calor, "
+        "quando disponíveis. Investigue energia, kernel e armazenamento com "
         "evidências próprias. O Fôlego não reinicia o host para testar."),
     "pressure": (
         "Pressão de CPU e I/O", "PSI mede a espera observada pelo kernel em uma janela "

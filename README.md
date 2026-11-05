@@ -192,6 +192,8 @@ Estas consultas não limpam arquivos nem encerram processos:
 ./dev run startup status --json
 ./dev run disk health --json
 ./dev run disk guide ntfs
+./dev run disk recovery /dev/mmcblk0p1 --json
+./dev run disk timeline --json
 ```
 
 **Saúde do host** aparece na Central e no início da aba Disco. A temperatura e
@@ -200,11 +202,29 @@ separadamente a cada cinco minutos enquanto o Fôlego monitora. A CLI consulta
 sob demanda, sem alterar o host. A GUI guarda um pequeno ponto de comparação
 dos contadores Btrfs em seu estado XDG; o primeiro valor é histórico de idade
 desconhecida, e uma falha nesse estado não é tratada como contador zerado.
-Avisos NTFS são buscados em janela limitada do journal, sem percorrer o volume.
+Avisos NTFS são buscados em janela limitada do journal, incluindo o número de
+índices identificados, sem percorrer o volume. Enquanto a GUI monitora, uma
+amostra privada e limitada de RAM, swap, PSI, temperatura e maior CPU é gravada
+a cada 15 segundos para investigar o período anterior a um reinício; a CLI
+`disk timeline` lê até 80 amostras recentes, ou de um boot preservado com
+`--boot-id`. O histórico possui limites de
+4 MiB por boot e 32 MiB no total; ao atingir o limite, a gravação para e o
+registro existente é preservado. `disk recovery` só verifica identidade da
+origem, montagem, acesso bruto, ferramenta e destino independente com espaço
+para imagem integral e margem. A checagem não abre o dispositivo nem concede
+autorização futura: todos os pontos devem ser revalidados antes de qualquer
+cópia ou reparo.
 Sem permissão, sensor ou histórico, a interface mostra **desconhecido**. As
-orientações não executam `ntfsfix`, `chkdsk`, `btrfs scrub`, `btrfs check --repair`,
+orientações não executam `ntfsfix`, `btrfs scrub`, `btrfs check --repair`,
 parada de serviços ou reinício do host. Consulte também [os limites e o
 mockup](docs/handoff/validation/host-guard-2026-11-05/README.md).
+
+Para NTFS danificado, a [documentação do NTFS-3G](https://github.com/tuxera/ntfs-3g/blob/edge/ntfsprogs/ntfsfix.8.in)
+limita `ntfsfix` a algumas inconsistências fundamentais. A cópia de resgate
+retomável pode usar [GNU ddrescue](https://www.gnu.org/software/ddrescue/manual/ddrescue_manual.html)
+quando houver destino independente suficiente e o volume puder ser desmontado
+sem interromper consumidores desconhecidos. A pré-checagem do Fôlego não cria
+essa cópia; a fonte original não é reparada automaticamente.
 
 Para acompanhar um comando seu como sessão protegida:
 

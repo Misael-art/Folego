@@ -58,6 +58,11 @@ def host_guard_path() -> Path:
     return state_dir() / "host-guard.json"
 
 
+def host_timeline_dir() -> Path:
+    """Private, bounded samples preceding a possible abrupt reboot."""
+    return state_dir() / "host-timeline"
+
+
 def coordinator_lock_path() -> Path:
     """Trava entre processos das mutações (flock por usuário/estado)."""
     return state_dir() / "coordinator.lock"

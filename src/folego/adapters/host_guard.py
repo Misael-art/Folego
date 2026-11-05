@@ -11,11 +11,14 @@ from datetime import datetime
 from pathlib import Path
 
 from .. import paths
+from .host_timeline import read_timeline
 from ..safely.atomicfile import write_atomic
 
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _COUNTERS = {"write_errs", "read_errs", "flush_errs", "corruption_errs", "generation_errs"}
-_NTFS_PATTERN = "ntfs_mst_post_read_fixup_warn|[Nn][Tt][Ff][Ss].*(corrupt|[Ee]rror)"
+_NTFS_PATTERN = ("ntfs_mst_post_read_fixup_warn|[Nn][Tt][Ff][Ss].*(corrupt|[Ee]rror)"
+                 "|Corrupt index block signature")
+_NTFS_INDEX = re.compile(r"^Corrupt index block signature: vcn ([0-9]{1,20}) inode ([0-9]{1,20})$")
 
 
 def _command(argv: list[str], timeout: float = 3.0) -> tuple[int, str, str]:
@@ -186,22 +189,42 @@ def _ntfs_events(run, mounts: list[dict]) -> dict:
         return {"quality": "unknown", "reason": err or "journal indisponível",
                 "count_10m": None, "mount": None}
     entries = []
+    affected = set()
     for line in out.splitlines()[:80]:
         try:
             entry = json.loads(line)
+            if not isinstance(entry, dict):
+                raise ValueError("evento do journal não é objeto")
         except (ValueError, TypeError):
             return {"quality": "unknown", "reason": "evento do journal malformado",
                     "count_10m": None, "mount": None}
         entries.append(entry)
+        message = entry.get("MESSAGE")
+        match = _NTFS_INDEX.fullmatch(message) if isinstance(message, str) else None
+        if match:
+            affected.add((int(match[2]), int(match[1])))
     # Atribuição só é confiável quando há exatamente um volume NTFS/fuseblk.
     volumes = [m for m in mounts if m["type"] in ("ntfs", "ntfs3", "fuseblk")]
     mount = volumes[0] if len(volumes) == 1 else None
-    last_us = max((int(e.get("__REALTIME_TIMESTAMP", 0)) for e in entries), default=0)
+    try:
+        timestamps = []
+        for entry in entries:
+            raw_time = entry.get("__REALTIME_TIMESTAMP")
+            if not isinstance(raw_time, str) or not raw_time.isdecimal() or len(raw_time) > 17:
+                raise ValueError("horário do journal inválido")
+            timestamps.append(int(raw_time))
+        last_us = max(timestamps, default=0)
+        last_at = (datetime.fromtimestamp(last_us / 1_000_000).astimezone()
+                   .isoformat(timespec="seconds") if last_us else None)
+    except (ValueError, OverflowError, OSError) as exc:
+        return {"quality": "unknown", "reason": str(exc), "count_10m": None,
+                "mount": None}
     return {"quality": "partial" if len(entries) == 80 else "ok",
             "count_10m": len(entries),
+            "index_blocks_10m": len(affected),
+            "index_inodes_10m": len({inode for inode, _ in affected}),
             "mount": mount, "attribution": "single_candidate" if mount else "unknown",
-            "last_at": (datetime.fromtimestamp(last_us / 1_000_000).astimezone().isoformat(timespec="seconds")
-                        if last_us else None), "window_minutes": 10}
+            "last_at": last_at, "window_minutes": 10}
 
 
 def _services(run) -> dict:
@@ -280,13 +303,14 @@ class HostObserver:
 
     def __init__(self, *, proc_root: Path | None = None, sys_root: Path | None = None,
                  state_path: Path | None = None, run=None, record: bool = False,
-                 clock=None):
+                 clock=None, timeline_dir: Path | None = None):
         self.proc_root = Path(proc_root) if proc_root else Path(paths.proc_root())
         self.sys_root = Path(sys_root) if sys_root else Path(paths.sys_root())
         self.state_path = Path(state_path) if state_path else paths.host_guard_path()
         self.run = run or _command
         self.record = record
         self.clock = clock or time.time
+        self.timeline_dir = timeline_dir if timeline_dir is not None else paths.host_timeline_dir()
         self._boot_cache = None
 
     def observe(self) -> dict:
@@ -309,6 +333,17 @@ class HostObserver:
                                                         self.record, now, boot_id)
         ntfs = _ntfs_events(run, mounts if not mounts_problem else [])
         services = _services(run)
+        timeline = read_timeline(self.timeline_dir, limit=1)
+        last_sample = timeline["samples"][-1] if timeline["samples"] else None
+        if last_sample and last_sample.get("boot_id") == boot_id:
+            try:
+                age = now - datetime.fromisoformat(last_sample["at"]).timestamp()
+                if age > 120 or age < -30:
+                    timeline = {"quality": "stale", "reason": "última amostra antiga",
+                                "samples": timeline["samples"]}
+            except (ValueError, TypeError):
+                timeline = {"quality": "unknown", "reason": "horário inválido",
+                            "samples": timeline["samples"]}
         if self._boot_cache is None or self._boot_cache[0] != boot_id:
             self._boot_cache = (boot_id, _boots(run))
         return {"observed_at": datetime.fromtimestamp(now).astimezone().isoformat(timespec="seconds"),
@@ -318,4 +353,7 @@ class HostObserver:
                 "btrfs_reason": btrfs_problem,
                 "baseline_quality": "unknown" if baseline_problem and baseline_problem != "novo" else "ok",
                 "baseline_reason": baseline_problem,
-                "ntfs": ntfs, "services": services, "boots": self._boot_cache[1]}
+                "ntfs": ntfs, "services": services, "boots": self._boot_cache[1],
+                "timeline": {"quality": timeline["quality"], "reason": timeline["reason"],
+                             "last_at": last_sample["at"] if last_sample else None,
+                             "last_boot_id": last_sample["boot_id"] if last_sample else None}}

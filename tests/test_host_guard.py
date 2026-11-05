@@ -2,7 +2,7 @@
 import json
 import time
 
-from folego.adapters.host_guard import HostObserver, _boots
+from folego.adapters.host_guard import HostObserver, _boots, _ntfs_events
 from folego.core.host_guard import ThermalTracker
 from folego.core.snapshot import MemInfo, Snapshot
 from folego.core.sysfs import read_thermal_trips
@@ -37,8 +37,12 @@ def _run(argv, timeout):
     if "systemd-logind.service" in argv:
         return 1, "", ""
     if "-g" in argv:
-        return 0, json.dumps({"MESSAGE": "ntfs_mst_post_read_fixup_warn",
-                              "__REALTIME_TIMESTAMP": "1000000000"}) + "\n", ""
+        assert "Corrupt index block signature" in argv[argv.index("-g") + 1]
+        return 0, "\n".join(json.dumps({"MESSAGE": message,
+                                        "__REALTIME_TIMESTAMP": "1000000000"})
+                            for message in (
+                                "ntfs_mst_post_read_fixup_warn",
+                                "Corrupt index block signature: vcn 3 inode 382656")) + "\n", ""
     raise AssertionError(argv)
 
 
@@ -57,7 +61,9 @@ def test_btrfs_baseline_preserves_history_and_reports_new_errors(tmp_path):
     third = observer.observe()
     assert third["btrfs"][0]["trend"] == "stable"
     assert third["btrfs"][0]["recent_delta"]["corruption_errs"] == 1
-    assert third["ntfs"]["count_10m"] == 1
+    assert third["ntfs"]["count_10m"] == 2
+    assert third["ntfs"]["index_inodes_10m"] == 1
+    assert third["ntfs"]["index_blocks_10m"] == 1
     assert third["ntfs"]["mount"]["mount"] == "/mnt/card0"
     assert third["services"]["items"][0]["restarts"] == 403
     assert third["boots"]["previous_end"] == "inconclusive"
@@ -75,6 +81,14 @@ def test_corrupt_baseline_is_preserved_and_ambiguous_ntfs_is_not_attributed(tmp_
     assert result["btrfs"][0]["delta"] is None
     assert result["ntfs"]["mount"] is None
     assert state.read_bytes() == before
+
+
+def test_malformed_ntfs_journal_does_not_create_a_safe_count():
+    mounts = [{"mount": "/mnt/card", "source": "/dev/mmcblk0p1", "type": "fuseblk"}]
+    for payload in ("[]\n", '{"MESSAGE":"Corrupt index block signature: vcn 0 inode 1"}\n'):
+        result = _ntfs_events(lambda argv, timeout: (0, payload, ""), mounts)
+        assert result["quality"] == "unknown"
+        assert result["count_10m"] is None
 
 
 def test_boot_history_finds_logind_poweroff_beyond_noisy_tail():

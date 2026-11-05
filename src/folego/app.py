@@ -38,7 +38,20 @@ def main() -> int:
         apply_theme(app)
         from .actions.accessibility import Supervisor
         from .adapters.host_guard import HostObserver
-        win = MainWindow(collector_factory=MetricsCollector, accessibility_factory=Supervisor,
+        from .adapters.host_timeline import HostTimelineRecorder
+
+        def resource_collector():
+            collector = MetricsCollector()
+            recorder = HostTimelineRecorder()
+
+            def collect():
+                snapshot = collector.collect()
+                recorder.record(snapshot)
+                return snapshot
+
+            return collect
+
+        win = MainWindow(collector_factory=resource_collector, accessibility_factory=Supervisor,
                          startup_defaults=True,
                          host_guard_factory=lambda: HostObserver(record=True))
         win.show()

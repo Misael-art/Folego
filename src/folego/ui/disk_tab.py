@@ -184,6 +184,11 @@ class HostHealthPanel(QWidget):
             quantity = f"pelo menos {count}" if ntfs.get("quality") == "partial" else str(count)
             ntfs_text = (f"{quantity} {'aviso' if count == 1 else 'avisos'} de metadados nos últimos 10 min" if count else
                          "Nenhum aviso observado nos últimos 10 min (integridade não comprovada)") + target
+            affected = ntfs.get("index_inodes_10m")
+            if isinstance(affected, int) and affected > 0:
+                prefix = "ao menos " if ntfs.get("quality") == "partial" else ""
+                label = "índice identificado" if affected == 1 else "índices identificados"
+                ntfs_text += f" · {prefix}{affected} {label}"
         self.rows["ntfs"].setText(ntfs_text)
 
         services = report.get("services", {})
@@ -232,6 +237,17 @@ class HostHealthPanel(QWidget):
             boot_text = "Histórico de boot desconhecido · " + boots.get("reason", "")
         else:
             boot_text = f"{count} {'boot' if count == 1 else 'boots'} no journal · " + boots.get("reason", "encerramento anterior desconhecido")
+        timeline = report.get("timeline", {})
+        if timeline.get("quality") in ("ok", "partial") and timeline.get("last_at"):
+            try:
+                sample_at = datetime.fromisoformat(timeline["last_at"]).strftime("%d/%m %H:%M:%S")
+            except (TypeError, ValueError):
+                sample_at = "horário desconhecido"
+            boot_text += f" · última amostra local: {sample_at}"
+        elif timeline.get("quality") == "partial":
+            boot_text += " · amostras locais incompletas"
+        elif timeline.get("quality") in ("missing", "unknown", "stale"):
+            boot_text += " · amostras locais indisponíveis"
         self.rows["reboot"].setText(boot_text)
 
     def show_thermal(self, thermal: dict):
