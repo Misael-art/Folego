@@ -324,7 +324,7 @@ class DashboardTab(QWidget):
                       thumbnails_kb: int | None = None,
                       extra_notes=(), signal=None, last_operation: str = ""):
         signal = signal or title_signal.compute(snapshot, self._thresholds)
-        self.headline.setText(signal.text)
+        self.headline.setText(signal.text.replace('Fôlego', 'FÔLEGO', 1))
         self.details.setText(self._details(snapshot))
         headroom = headroom_pct(snapshot)
         self.gauge.set_state(headroom, signal.level)

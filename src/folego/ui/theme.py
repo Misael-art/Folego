@@ -1,8 +1,9 @@
 """One live theme authority for every Qt surface, with persistent selection."""
+from pathlib import Path
 from PySide6.QtCore import QSettings, QObject, QEvent, Qt
 from PySide6.QtGui import QColor, QPalette, QIcon, QPainter
 from PySide6.QtWidgets import QApplication, QWidget, QStyle, QStyleOption, QDialog
-from .palettes import THEMES, DEFAULT_THEME, Tokens, on_color
+from .palettes import THEMES, DEFAULT_THEME, Tokens, luminance, on_color
 
 THEME_KEY = 'appearance/theme'
 TRANSPARENCY_KEY = 'appearance/background_transparency'
@@ -101,6 +102,8 @@ def control_icon(style, name, fallback, *, fallback_icon=None):
     return tint_icon(icon)
 
 def stylesheet():
+    arrow = Path(__file__).with_name('icons') / (
+        'chevron-down-light.svg' if luminance(TOKENS.surface) < .35 else 'chevron-down-dark.svg')
     return f"""
 QWidget {{
     background-color: transparent;
@@ -148,7 +151,7 @@ QTabWidget#sidebar::pane {{
 QTabWidget#sidebar QTabBar::tab {{
     min-width: 128px;
     padding: 8px 16px;
-    margin: 2px 6px 2px 0;
+    margin: 2px 6px;
     border: none;
     border-left: 3px solid transparent;
     border-radius: {TOKENS.radius}px;
@@ -167,7 +170,7 @@ QFrame#hero, QFrame#card {{
     border: 1px solid {TOKENS.border};
     border-radius: {TOKENS.radius * 2}px;
 }}
-QFrame#hero QLabel, QFrame#card QLabel, QFrame#card QProgressBar {{
+QFrame#hero QLabel, QFrame#card QLabel {{
     background: transparent;
 }}
 QFrame#card[level="warning"] {{
@@ -261,6 +264,18 @@ QPushButton:disabled {{
 QPushButton:default {{
     border-color: {TOKENS.accent};
 }}
+QToolButton#windowControls {{
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: {TOKENS.radius}px;
+    padding: 5px;
+}}
+QToolButton#windowControls:hover, QToolButton#windowControls:pressed {{
+    background: {background(TOKENS.surface_alt)};
+    border-color: {TOKENS.border};
+}}
+QToolButton#windowControls:focus {{border:2px solid {TOKENS.focus};padding:4px;}}
+QToolButton#windowControls::menu-indicator {{image:none;width:0;height:0;}}
 QTableWidget, QTreeWidget, QListView {{
     background: {background(TOKENS.surface)};
     alternate-background-color: {background(TOKENS.surface_alt)};
@@ -280,20 +295,77 @@ QTableWidget:focus, QTreeWidget:focus {{
 }}
 QProgressBar {{
     background: {background(TOKENS.surface_alt)};
-    border: 1px solid {TOKENS.border};
-    border-radius: {TOKENS.radius}px;
+    border: none;
+    border-radius: 4px;
     text-align: center;
 }}
 QProgressBar::chunk {{
     background-color: {TOKENS.accent};
-    border-radius: {TOKENS.radius - 1}px;
+    border-radius: 4px;
 }}
+QScrollBar:vertical, QScrollBar:horizontal {{
+    background: transparent;
+    border: none;
+}}
+QScrollBar:vertical {{width: 12px; margin: 2px 0;}}
+QScrollBar:horizontal {{height: 12px; margin: 0 2px;}}
+QScrollBar::handle:vertical {{
+    background: {TOKENS.muted};
+    border-radius: 3px;
+    min-height: 32px;
+    margin: 0 3px;
+}}
+QScrollBar::handle:horizontal {{
+    background: {TOKENS.muted};
+    border-radius: 3px;
+    min-width: 32px;
+    margin: 3px 0;
+}}
+QScrollBar::handle:vertical:hover, QScrollBar::handle:vertical:pressed {{
+    background: {TOKENS.accent};
+    margin: 0 2px;
+    border-radius: 4px;
+}}
+QScrollBar::handle:horizontal:hover, QScrollBar::handle:horizontal:pressed {{
+    background: {TOKENS.accent};
+    margin: 2px 0;
+    border-radius: 4px;
+}}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+    width: 0;
+    height: 0;
+    border: none;
+    background: transparent;
+}}
+QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical,
+QScrollBar::left-arrow:horizontal, QScrollBar::right-arrow:horizontal {{
+    width: 0;
+    height: 0;
+}}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical,
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
+    background: transparent;
+}}
+QAbstractScrollArea::corner {{background:transparent;border:none;}}
 QMenu {{background:{background(TOKENS.surface)};color:{TOKENS.text};border:1px solid {TOKENS.border};}}
 QMenu::item:selected {{background:{TOKENS.accent};color:{TOKENS.accent_text};}}
 QMenu::item:disabled {{color:{TOKENS.muted};}}
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox {{
     background:{background(TOKENS.surface)};color:{TOKENS.text};border:1px solid {TOKENS.border};
     border-radius:4px;padding:4px;
+}}
+QComboBox {{padding:4px 28px 4px 8px;}}
+QComboBox::drop-down {{width:24px;border:none;background:transparent;}}
+QComboBox::down-arrow {{image:url("{arrow.as_posix()}");width:12px;height:12px;}}
+QComboBox:hover {{border-color:{TOKENS.accent};}}
+QComboBox QAbstractItemView {{
+    background:{background(TOKENS.surface)};
+    color:{TOKENS.text};
+    selection-background-color:{TOKENS.accent};
+    selection-color:{TOKENS.accent_text};
+    border:1px solid {TOKENS.border};
+    outline:none;
 }}
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus {{border:2px solid {TOKENS.focus};}}
 QGroupBox {{border:1px solid {TOKENS.border};border-radius:6px;margin-top:12px;padding-top:12px;}}

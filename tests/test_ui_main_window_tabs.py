@@ -147,7 +147,7 @@ def window(qapp):
 
 def test_the_window_offers_resource_tabs_and_accessibility_in_order(window):
     assert [window.tabs.tabText(i) for i in range(window.tabs.count())] == \
-        ["central", "ajustes", "desempenho", "órfãos", "disco", "temporários", "acessibilidade", "prompts", "opções"]
+        ["Central", "Ajustes", "Desempenho", "Órfãos", "Disco", "Temporários", "Acessibilidade", "Prompts", "Opções"]
     assert window.tabs.widget(0) is window.dashboard
     assert window.tabs.widget(2) is window.performance
     assert window.tabs.widget(5) is window.tmpfs
@@ -359,19 +359,20 @@ def test_no_tray_close_keeps_visible_compact_and_workers_alive(window, qapp):
     assert poller.stopped
 
 
-def test_back_returns_to_widget_without_tray_or_losing_current_tab(window,qapp):
+def test_position_menu_returns_to_widget_without_tray_or_losing_current_tab(window,qapp):
     from PySide6.QtCore import Qt
     poller=FakePoller();window._poller=poller
     window.tabs.setCurrentWidget(window.options)
     window.show();qapp.processEvents()
     assert window.windowFlags() & Qt.WindowType.FramelessWindowHint
-    assert window.back_button.text()=='Voltar'
-    window.back_button.click();qapp.processEvents()
+    assert not hasattr(window, 'back_button')
+    assert window.brand.text() == 'FÔLEGO'
+    window.widget_position_menu.actions()[0].trigger();qapp.processEvents()
     assert not window.isVisible() and window._compact.isVisible() and not poller.stopped
     window._compact.open_button.click();qapp.processEvents()
     assert window.isVisible() and not window._compact.isVisible()
     assert window.tabs.currentWidget() is window.options
-    window.back_button.click();qapp.processEvents()
+    window.widget_position_menu.actions()[0].trigger();qapp.processEvents()
     assert window._compact.isVisible() and not window.isVisible() and not poller.stopped
     assert [a.text() for a in window.control_menu.actions()]==[
         'Sair do Fôlego', 'Posição do widget']
@@ -379,10 +380,11 @@ def test_back_returns_to_widget_without_tray_or_losing_current_tab(window,qapp):
     assert poller.stopped
 
 
-def test_back_from_docked_widget_restores_floating_mode(window, qapp):
+def test_dashboard_widget_button_restores_floating_mode(window, qapp, monkeypatch):
     from PySide6.QtCore import QRect
     from PySide6.QtTest import QTest
     from folego.ui.desktop_caps import detect
+    monkeypatch.setattr(window, '_offer_kwin_rule', lambda: None)
     window._compact_factory = lambda owner, _: CompactWindow(
         owner, caps=detect(session_type='x11', platform='xcb', tray=True))
     window.show()
@@ -392,7 +394,7 @@ def test_back_from_docked_widget_restores_floating_mode(window, qapp):
     compact.set_dock_mode('top')
     QTest.qWait(350)
     compact.open_button.click()
-    window.back_button.click()
+    window.dashboard.widget_button.click()
     QTest.qWait(350)
     assert compact.isVisible() and compact._dock_mode == 'compact'
     assert compact.width() == 280
@@ -584,7 +586,7 @@ def test_navigation_is_a_left_sidebar_with_horizontal_labels(window):
     assert isinstance(bar, SidebarTabBar)
     hint = bar.tabSizeHint(0)
     assert hint.width() > hint.height(), "rótulo horizontal: aba mais larga que alta"
-    assert [window.tabs.tabText(i) for i in range(window.tabs.count())][0] == "central"
+    assert [window.tabs.tabText(i) for i in range(window.tabs.count())][0] == "Central"
 
 
 def test_widget_mode_opens_the_widget_and_folds_the_window_without_touching_kwin(qapp, monkeypatch):

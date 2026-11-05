@@ -14,9 +14,9 @@ import sys
 from concurrent.futures import Future
 
 from PySide6.QtGui import QGuiApplication, QKeySequence, QPainter, QPainterPath, QShortcut
-from PySide6.QtCore import QRectF, QTimer, Qt
+from PySide6.QtCore import QRectF, QSize, QTimer, Qt
 from PySide6.QtWidgets import (QMainWindow, QStyle, QStyleOptionTab, QStylePainter, QTabBar,
-                              QTabWidget, QFrame, QHBoxLayout, QLabel, QPushButton,
+                              QTabWidget, QFrame, QHBoxLayout, QLabel,
                               QToolButton, QMenu)
 
 from . import desktop_caps, title_signal
@@ -194,22 +194,19 @@ class MainWindow(QMainWindow):
         self.tabs.setObjectName("sidebar")
         self.tabs.setTabPosition(QTabWidget.TabPosition.West)
         for title, attribute in TABS:
-            self.tabs.addTab(getattr(self, attribute), title)
+            self.tabs.addTab(getattr(self, attribute), title.capitalize())
         self.setCentralWidget(self.tabs)
         self.navigation_header = NavigationHeader()
         header = QHBoxLayout(self.navigation_header)
         header.setContentsMargins(12, 8, 12, 8)
-        self.back_button = QPushButton('Voltar')
-        set_control_icon(self.back_button, 'go-previous', QStyle.StandardPixmap.SP_ArrowBack)
-        self.back_button.setAccessibleName('Voltar ao controle flutuante do Fôlego')
-        self.back_button.setToolTip('Voltar ao widget sem encerrar o monitoramento')
-        self.back_button.clicked.connect(self.return_to_compact)
-        header.addWidget(self.back_button)
-        brand = QLabel('Fôlego')
-        brand.setObjectName('section')
-        header.addWidget(brand)
+        self.brand = QLabel('FÔLEGO')
+        self.brand.setObjectName('section')
+        header.addWidget(self.brand)
         header.addStretch(1)
         self.control_button = QToolButton()
+        self.control_button.setObjectName('windowControls')
+        self.control_button.setFixedSize(32, 32)
+        self.control_button.setIconSize(QSize(18, 18))
         set_control_icon(self.control_button, 'application-menu', QStyle.StandardPixmap.SP_TitleBarMenuButton)
         self.control_button.setAccessibleName('Controles do Fôlego')
         self.control_button.setToolTip('Controles do Fôlego')
@@ -517,10 +514,6 @@ class MainWindow(QMainWindow):
         self.show_compact(mode='compact')
         self._offer_kwin_rule()
         return self.hide_window()
-
-    def return_to_compact(self):
-        self.show_compact(mode='compact')
-        self.hide_window()
 
     def _offer_kwin_rule(self) -> None:
         """No Wayland do Plasma, só uma regra do KWin mantém o widget por cima; pergunta uma vez."""

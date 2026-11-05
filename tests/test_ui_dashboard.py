@@ -36,6 +36,7 @@ def test_the_headline_repeats_the_title_signal(panel):
     view, jumps = panel
     view.show_snapshot(snap(psi10=14.0))
     assert "🔴" in view.headline.text()
+    assert view.headline.text().startswith('FÔLEGO ')
 
 
 def test_suggestions_land_in_order_with_their_own_jump_target(panel):

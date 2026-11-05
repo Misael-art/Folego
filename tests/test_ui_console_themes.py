@@ -1,8 +1,9 @@
 """Live theme coverage: existing/hidden/new surfaces, persistence and contrast."""
 import pytest
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QLabel, QMenu, QFrame
+from PySide6.QtWidgets import QLabel, QMenu, QFrame, QScrollBar, QStyle, QStyleOptionSlider
+from PySide6.QtTest import QTest
 
 from folego.ui import theme
 from folego.ui.palettes import THEMES, DEFAULT_THEME, contrast, on_color
@@ -29,6 +30,35 @@ def test_console_text_focus_and_action_contrast(key):
     assert min(contrast(t.focus, s) for s in surfaces) >= 3
     for color in t.actions:
         assert contrast(on_color(color), color) >= 4.5
+
+
+@pytest.mark.parametrize('key', ('snes-us', 'ps2'))
+@pytest.mark.parametrize('orientation', (Qt.Orientation.Vertical, Qt.Orientation.Horizontal))
+def test_scroll_thumb_drags_without_arrow_buttons(qapp, restore_theme, key, orientation):
+    theme.apply_theme(qapp, key)
+    bar = QScrollBar(orientation)
+    bar.setRange(0, 100)
+    bar.setPageStep(20)
+    bar.resize(12, 220) if orientation == Qt.Orientation.Vertical else bar.resize(220, 12)
+    bar.show()
+    qapp.processEvents()
+    option = QStyleOptionSlider()
+    bar.initStyleOption(option)
+    style = bar.style()
+    for control in (QStyle.SubControl.SC_ScrollBarAddLine, QStyle.SubControl.SC_ScrollBarSubLine):
+        assert style.subControlRect(QStyle.ComplexControl.CC_ScrollBar, option, control, bar).isEmpty()
+    thumb = style.subControlRect(QStyle.ComplexControl.CC_ScrollBar, option,
+                                QStyle.SubControl.SC_ScrollBarSlider, bar)
+    assert not thumb.isEmpty()
+    start = thumb.center()
+    end = start + (bar.rect().bottomRight() - bar.rect().topLeft()) * .5
+    QTest.mousePress(bar, Qt.MouseButton.LeftButton, pos=start)
+    QTest.mouseMove(bar, end)
+    QTest.mouseRelease(bar, Qt.MouseButton.LeftButton, pos=end)
+    assert bar.value() > 0
+    bar.setFocus()
+    QTest.keyClick(bar, Qt.Key.Key_End)
+    assert bar.value() == bar.maximum()
 
 
 def test_live_theme_covers_existing_hidden_and_new_surfaces(qapp, restore_theme):

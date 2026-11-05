@@ -243,7 +243,7 @@ class CompactWindow(QWidget):
         header.setContentsMargins(0, 0, 0, 0)
         header.setSpacing(2)
         self.header_layout = header
-        self.brand = QLabel("Fôlego")
+        self.brand = QLabel("FÔLEGO")
         font = QFont('Noto Sans', 11)
         font.setWeight(QFont.Weight.DemiBold)
         font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, -0.2)
@@ -374,11 +374,6 @@ class CompactWindow(QWidget):
         self.dock_scroll.viewport().setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.dock_scroll.viewport().setAutoFillBackground(False)
         self.card.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
-        themed_style(self.dock_scroll.verticalScrollBar(), lambda:
-            'QScrollBar:vertical{background:transparent;width:5px;margin:3px 0;border:0;}'
-            f'QScrollBar::handle:vertical{{background:{TOKENS.border};border-radius:2px;min-height:24px;}}'
-            'QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}'
-            'QScrollBar::add-page:vertical,QScrollBar::sub-page:vertical{background:transparent;}')
         self.dock_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.dock_scroll.hide()
         self.action_drawer = QWidget(self)

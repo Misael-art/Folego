@@ -50,12 +50,11 @@ estão descritos abaixo.
 
 O **modo compacto** tem 280 px de largura e recursos em duas linhas. O ícone de
 grade abre a **Central**; a seta ao lado reúne **Ocultar widget**, **Sair do
-Fôlego** e **Contas e cotas de IA**. **Voltar** retorna ao widget mantendo a aba e o
-monitoramento. A saída também fica na bandeja. As duas interfaces dispensam
-botões de minimizar, maximizar e fechar.
-Ao voltar da Central, **Voltar** abre o widget flutuante. O menu **Posição do
-widget**, disponível na Central e no widget, permite escolher diretamente o
-flutuante, a lateral esquerda, a lateral direita ou a barra superior.
+Fôlego** e **Contas e cotas de IA**. **Modo widget**, na Central, retorna ao
+flutuante mantendo o monitoramento. A saída também fica na bandeja. As duas
+interfaces dispensam botões de minimizar, maximizar e fechar.
+O menu **Posição do widget**, disponível na Central e no widget, permite escolher
+diretamente o flutuante, a lateral esquerda, a lateral direita ou a barra superior.
 Passe o mouse pela borda esquerda, direita ou superior do widget para revelar a
 faixa de encaixe. A seta leva, respectivamente, à barra lateral direita,
 lateral esquerda ou horizontal superior. A seta na borda da barra retorna ao

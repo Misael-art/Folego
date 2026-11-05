@@ -95,11 +95,7 @@ class PromptPanel(QWidget):
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.scroll.setWidgetResizable(True)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        themed_style(self.scroll, lambda: 'QScrollArea,QScrollArea>QWidget>QWidget{background:transparent;}'
-            f'QScrollBar:vertical{{background:{background(T.surface_alt)};width:6px;margin:2px 0;}}'
-            f'QScrollBar::handle:vertical{{background:{T.border};min-height:24px;border-radius:3px;}}'
-            'QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}'
-            'QScrollBar::add-page:vertical,QScrollBar::sub-page:vertical{background:transparent;}')
+        themed_style(self.scroll, lambda: 'QScrollArea,QScrollArea>QWidget>QWidget{background:transparent;}')
         content = QWidget()
         blocks = QVBoxLayout(content)
         blocks.setContentsMargins(12, 8, 10, 8)

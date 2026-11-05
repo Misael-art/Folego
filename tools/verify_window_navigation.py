@@ -76,10 +76,11 @@ def main():
             subprocess.run([binary,'mousemove','--','4','0'],env=backend.env,check=True,capture_output=True)
             app.processEvents()
         windows=native('^'+re.escape(widget.windowTitle())+'$');assert len(windows)==1
-        raw=call('qdbus6','org.kde.KWin','/KWin','org.kde.KWin.getWindowInfo',windows[0])
-        x=float(re.search(r'(?m)^x:\s*([-0-9.]+)',raw)[1]);y=float(re.search(r'(?m)^y:\s*([-0-9.]+)',raw)[1])
+        def position():
+            raw=call('qdbus6','org.kde.KWin','/KWin','org.kde.KWin.getWindowInfo',windows[0])
+            return tuple(float(re.search(r'(?m)^'+axis+r':\s*([-0-9.]+)',raw)[1]) for axis in ('x','y'))
         origin=widget.mapToGlobal(QPoint(0,0))
-        desired=(point.x()+x-origin.x(),point.y()+y-origin.y())
+        offset=(point.x()-origin.x(),point.y()-origin.y())
         call('kdotool','windowraise',windows[0])
         factors=[widget.devicePixelRatioF()]*2
         def cursor():
@@ -90,18 +91,22 @@ def main():
         # A diagonal through the void below a short output is constrained by KWin
         # and is not a usable sample for calibrating relative input.
         # Recheck Y after crossing outputs: KWin can remap it at a scale boundary.
-        for axis in (1,0,1):
-            for _ in range(20):
-                before=cursor();delta=desired[axis]-before[axis]
-                if abs(delta)<=1:break
-                amounts=[0,0];amounts[axis]=max(-200,min(200,round(delta*factors[axis])))
-                subprocess.run([binary,'mousemove','--',*map(str,amounts)],env=backend.env,check=True,capture_output=True)
-                time.sleep(.06);app.processEvents();after=cursor()
-                moved=after[axis]-before[axis]
-                if abs(moved)>1 and amounts[axis]:factors[axis]=max(.2,min(4,abs(amounts[axis]/moved)))
-        assert max(abs(cursor()[i]-desired[i]) for i in range(2))<=1,(desired,cursor(),raw,origin,point)
+        for placement in range(3):
+            location=position();desired=tuple(location[i]+offset[i] for i in range(2))
+            for axis in (1,0,1):
+                for _ in range(20):
+                    before=cursor();delta=desired[axis]-before[axis]
+                    if abs(delta)<=1:break
+                    amounts=[0,0];amounts[axis]=max(-200,min(200,round(delta*factors[axis])))
+                    subprocess.run([binary,'mousemove','--',*map(str,amounts)],env=backend.env,check=True,capture_output=True)
+                    time.sleep(.06);app.processEvents();after=cursor()
+                    moved=after[axis]-before[axis]
+                    if abs(moved)>1 and amounts[axis]:factors[axis]=max(.2,min(4,abs(amounts[axis]/moved)))
+            if max(abs(a-b) for a,b in zip(location,position()))<=1:break
+        else:raise AssertionError('Owned QA target kept moving before input')
+        assert max(abs(cursor()[i]-desired[i]) for i in range(2))<=1,(desired,cursor(),location,origin,point)
         surface=re.search(r'window[:=]\s*(\{[0-9a-fA-F-]+\})',call('kdotool','getmouselocation'))
-        assert surface and call('kdotool','getwindowpid',surface[1])==str(os.getpid()),('pointer outside owned QA window',raw,origin,point,desired,call('kdotool','getmouselocation'))
+        assert surface and call('kdotool','getwindowpid',surface[1])==str(os.getpid()),('pointer outside owned QA window',location,origin,point,desired,call('kdotool','getmouselocation'))
         if widget.windowTitle()!='Fôlego — widget':
             assert call('kdotool','getwindowname',surface[1])==widget.windowTitle(),'pointer outside intended owned target'
         if click:subprocess.run([binary,'click','0xC0'],env=backend.env,check=True,capture_output=True)
@@ -124,7 +129,7 @@ def main():
             finally:call('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript',name)
             assert all(abs(f-c)<=1 for f,c in zip(measured['frame'],measured['client'])),measured
             assert window.windowFlags() & Qt.WindowType.FramelessWindowHint
-            assert window.back_button.isVisible()
+            assert not hasattr(window,'back_button') and window.brand.text()=='FÔLEGO'
             window.tabs.setCurrentWidget(window.options);app.processEvents()
             central=window.grab()
             central.save(str(root/'central.png'))
@@ -137,7 +142,7 @@ def main():
                                 transparent_corners=True,
                                 compositor_geometry=measured,
                                 client_size=[window.width(),window.height()],available=[area.width(),area.height()]))
-            QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)
+            window.widget_position_menu.actions()[0].trigger()
             wait(lambda:not window.isVisible() and window._compact.isVisible() and window._compact.windowHandle().isExposed())
             assert not window._poller._stop.is_set()
             compact=window._compact
@@ -148,16 +153,17 @@ def main():
             wait(lambda:window.isVisible() and window.windowHandle().isExposed() and not compact.isVisible())
             assert window.tabs.currentWidget() is window.options and not window._poller._stop.is_set()
             records.append(dict(case='return to previous central tab',tab='opções',workers_active=True))
-            QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)
+            window.widget_position_menu.actions()[0].trigger()
             wait(lambda:compact.isVisible() and compact.windowHandle().isExposed() and not window.isVisible())
             backend=compact.shortcut_tabs.controller.backend
             from folego.core.snapshot import Snapshot,MemInfo,BatteryInfo,SourceQuality
             from folego.core.tmpfs import TmpfsVolume
-            compact.show_snapshot(Snapshot(ts=time.time(),mono=time.monotonic(),mem=MemInfo(16*1024**2,6*1024**2),
+            sample=Snapshot(ts=time.time(),mono=time.monotonic(),mem=MemInfo(16*1024**2,6*1024**2),
                 swap_used_kb=1024,swap_total_kb=8192,pressure_memory=None,pressure_io=None,pressure_cpu=None,
                 load=None,apps=(),self_rss_kb=0,cpu_busy_frac=.52,temperature_c=61,temperature_sensor='demonstração',
                 battery=BatteryInfo(25,'Discharging',3600),sources=(SourceQuality('battery','ok'),),
-                tmpfs=(TmpfsVolume('/qa/runtime','tmpfs',100,81,19,is_runtime=True),)))
+                tmpfs=(TmpfsVolume('/qa/runtime','tmpfs',100,81,19,is_runtime=True),))
+            compact.show_snapshot(sample)
             if args.prompt_key or args.standard_shortcuts or args.console_themes or args.background_transparency or args.ai_quota_rings or args.dock_modes:
                 script=root/'place-owned-widget.js'
                 script.write_text('const w=workspace.windowList().find(w=>w.pid==='+str(os.getpid())+
@@ -320,7 +326,7 @@ def main():
                            (left_target.x(),left_target.y(),left_target.width(),left_target.height())))
                 QTest.mouseClick(compact.open_button,Qt.MouseButton.LeftButton)
                 wait(lambda:window.isVisible() and not compact.isVisible())
-                QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)
+                window.widget_position_menu.actions()[0].trigger()
                 wait(lambda:compact.isVisible() and compact._dock_mode=='compact' and compact._dock_pending is None)
                 assert compact.width()==280
                 records.append(dict(case='full window position menu and floating return',geometry=compositor_rect()))
@@ -437,7 +443,11 @@ def main():
                     prefix=key+('-'+str(transparency) if args.background_transparency else '')
                     settle=time.monotonic()+.15;wait(lambda:time.monotonic()>=settle)
                     window.grab().save(str(root/(prefix+'-central.png')))
-                    QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)
+                    window.dashboard.show_snapshot(sample)
+                    window.tabs.setCurrentWidget(window.dashboard);app.processEvents()
+                    window.grab().save(str(root/(prefix+'-dashboard.png')))
+                    window.tabs.setCurrentWidget(window.options);app.processEvents()
+                    window.widget_position_menu.actions()[0].trigger()
                     wait(lambda:compact.isVisible() and compact.windowHandle().isExposed())
                     compact._animate_actions(True)
                     wait(lambda:compact.drawer_animation.state()==compact.drawer_animation.State.Stopped)
@@ -480,7 +490,7 @@ def main():
                                         input='native dropdown click, Qt popup navigation and slider keys'))
                     QTest.mouseClick(compact.open_button,Qt.MouseButton.LeftButton)
                     wait(lambda:window.isVisible() and window.windowHandle().isExposed())
-                QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)
+                window.widget_position_menu.actions()[0].trigger()
                 wait(lambda:compact.isVisible() and compact.windowHandle().isExposed())
             if args.prompt_key:
                 from folego.core.development_prompts import PROMPTS,text
@@ -560,14 +570,19 @@ def main():
             compact.control_menu.aboutToHide.connect(lambda:menu_events.append('hide'))
             compact._animate_actions(True)
             wait(lambda:compact.drawer_animation.state()==compact.drawer_animation.State.Stopped)
+            wait(lambda:not compact._needs_compact_clamp and compact._show_clamp_phase is None
+                 and compact.shortcut_tabs.controller.future is None)
             pointer_click(compact.control_button.mapToGlobal(compact.control_button.rect().center()),backend,compact)
             wait(compact.control_menu.isVisible)
             compact.control_menu.grab().save(str(root/'controls.png'))
-            point=compact.control_menu.mapToGlobal(compact.control_menu.actionGeometry(compact.quit_action).center())
-            pointer_click(point,backend,compact)
+            # Wayland popups are not standalone KWin windows. Select within
+            # the popup using Qt's own local coordinates after native opening.
+            QTest.mouseClick(compact.control_menu,Qt.MouseButton.LeftButton,
+                             pos=compact.control_menu.actionGeometry(compact.quit_action).center())
             wait(lambda:window._quitting)
             assert window._poller._stop.is_set() and window.ai_monitor.poller._stop.is_set()
-            records.append(dict(case='explicit exit in controls',workers_stopped=True))
+            records.append(dict(case='explicit exit in controls',workers_stopped=True,
+                                input='native menu open; Qt local popup click'))
         except Exception as exc:
             import traceback
             (root/'failure.txt').write_text(traceback.format_exc())

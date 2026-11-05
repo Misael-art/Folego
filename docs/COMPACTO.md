@@ -4,9 +4,10 @@ O widget tem 280 px de largura em pixels lógicos do desktop. Recursos ficam em
 duas linhas; alertas completos e mensagens podem aumentar a altura. O ícone de
 grade abre a **Central** e recolhe o widget. A seta ao lado abre os controles;
 o ícone de teclado e sua seta são um grupo separado para abrir o teclado embaixo
-ou no topo. **Voltar**, no topo da central,
-retorna ao controle flutuante sem perder a aba, os campos em edição ou parar o
-monitoramento. As duas interfaces dispensam minimizar, maximizar e fechar.
+ou no topo. **Modo widget**, na Central, retorna ao controle flutuante sem
+parar o monitoramento. Em outras abas, use **Posição do widget → Widget
+flutuante** no menu do cabeçalho; a aba e os campos em edição são preservados.
+As duas interfaces dispensam minimizar, maximizar e fechar.
 Para encerrar, use a seta da Central → **Sair do Fôlego** ou a bandeja. **Ocultar widget**,
 no mesmo menu, mantém um caminho de retorno: sem bandeja e com a central
 oculta, ela é reaberta antes de ocultar o widget. O cabeçalho da central permite
@@ -44,7 +45,7 @@ Fôlego pede ao KWin para posicionar **somente sua própria janela** e verifica
 a posição antes de concluir; o conteúdo reaparece suavemente após a confirmação.
 Ao reabrir uma barra depois de visitar a Central, o Fôlego confirma novamente
 o encaixe: a regra inicial do KWin para o widget flutuante pode ter reposicionado
-a mesma janela. **Voltar** na Central abre o widget flutuante. O menu **Posição
+a mesma janela. **Modo widget** na Central abre o widget flutuante. O menu **Posição
 do widget** na Central e no widget oferece também as duas laterais e o topo,
 sem depender da alça de borda estar visível.
 O flutuante preserva a posição quando ela cabe na área útil; se a altura mudou,
