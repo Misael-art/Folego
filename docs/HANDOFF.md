@@ -1,5 +1,76 @@
 # Passagem para o próximo agente — atualizada em 05/11/2026
 
+## Prévia v0.2.0b5 e registro de design — 05/11/2026
+
+A rodada entregou as melhorias da auditoria de `8033b0f` e a documentação
+consolidada. A apresentação pertence a `src/folego/ui`, na branch
+`codex/prompt-implantation-20261104` e no [PR #3](https://github.com/Misael-art/Folego/pull/3).
+O incremento `9d67aa3` usa os componentes Qt, o snapshot e o posicionamento
+KWin existentes. `02ea5d6` sincroniza os testes de remapeamento com a exposição
+da janela. O PR é draft e depende do #2. No #2, um job Qt da revisão documental
+posterior da b4 está cancelado, com o outro job Qt verde. O CI do SHA da b5 é
+independente desses resultados.
+
+O widget lateral mantém cabeçalho e gaveta de ações fora da área rolável.
+O conteúdo cabe horizontalmente mesmo com trilho e a última cota fica
+acessível por rolagem. O topo tem 120 px a partir de 900 px úteis, com a
+marca e a folga em uma coluna, quatro cotas em faixa própria, leituras
+agrupadas e controles à direita. Ao remapear, a confirmação só lê geometria
+depois que o Qt expõe a janela própria. O fade usa animação com vida própria,
+separada do efeito gráfico substituído durante as transições.
+
+Atividade recente separa ação, resultado e horário, com detalhes expansíveis
+e diagnóstico integral. Disco, Temporários e Órfãos mostram os estados antes
+das tabelas. Desempenho prioriza apps observados, Acessibilidade aproxima
+verificação e estado, Opções agrupa preferências e recuperação, e Prompts
+quebra títulos longos em até duas linhas, com dica integral.
+O [registro de design](DESIGN.md) reúne conceitos, mockups e revisões com
+detalhes técnicos, evidências e propostas ainda em aberto.
+
+- **Local.** 228 focados na revisão intermediária, 15 regressões de encaixe
+  no código final e `./dev check` final com **1250 passed, 2 skipped** sem Qt
+  e **1616 passed, 2 skipped** Qt offscreen. Python 3.14.7 e HOME/XDG privados.
+  A primeira suíte completa falhou em dois testes de exposição do widget.
+  As tentativas de validação com falhas foram preservadas integralmente
+  em `.scratch/dev-tests-reviewed` e não integram as contagens finais.
+- **Compositor.** [19 casos KDE/Wayland em janela própria](handoff/validation/design-b5-2026-11-05/README.md).
+  Central em 900 × 620 na saída widescreen. Encaixes na área útil 948 × 593,
+  laterais 112 × 593 e topo 948 × 120, quatro cotas com badges, atalhos
+  recolhíveis e retorno. O teste de topo mediu rolagem zero com atalhos
+  abertos. As capturas offscreen complementam o ensaio em 800 × 600.
+- **Host.** A GUI PID 4173 saiu pelo item da própria bandeja, com owner e
+  identidade conferidos. `./dev setup` instalou a fonte `0.2.0b5` e a unit
+  gráfica existente iniciou em PID **155844**, `active/running`,
+  `Result=success`, com janela confirmada pelo KWin. Entrada e Desempenho
+  mantiveram os PIDs 4233 e 4236. A prova de pixels pertence às janelas de QA.
+- **Distribuição.** O SHA `02ea5d650cbd535406359d58507ebf8d0baf40c8`
+  passou nos seis jobs de produto do PR, com revisor automático skipped.
+  O fonte arquivado conferiu 941 blobs do Git, o wheel 159 arquivos do pacote,
+  e os metadados de wheel/sdist conferiram a versão b5. O teste de instalação
+  em ambientes descartáveis confirmou CLI sem Qt e preservação do estado
+  ao remover a GUI. Artefatos locais em `.scratch/release-b5-ilmYqx`.
+
+A [prévia pública v0.2.0b5](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b5)
+foi publicada em 05/11/2026 às 08:21:56 UTC. A tag anotada e a página da
+release apontam para `02ea5d650cbd535406359d58507ebf8d0baf40c8`.
+Os [três jobs da tag](https://github.com/Misael-art/Folego/actions/runs/41993576302)
+passaram antes da publicação. Os quatro downloads públicos foram conferidos
+contra os arquivos locais. O primeiro push da branch usou `HEAD` e foi
+recusado pelo guard. O refspec da branch registrada passou pelo guard, assim
+como a tag aprovada no registro central. O PR mantém a base #2.
+
+| Arquivo | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `Folego-0.2.0b5-source.tar.gz` | 19.694.640 | `29ab7245f0636d9079cf930e7c1ffac4c31c96835eb4398ab99b9a98f8adf923` |
+| `folego-0.2.0b5-py3-none-any.whl` | 457.029 | `e170d83a4a249e539bccc6bd31c1039ede3ee305ed3e2dd8aba5fe19ef0f0928` |
+| `folego-0.2.0b5.tar.gz` | 640.463 | `3ef2d88786b89920c5a296242ecda7ebf42315135d014a53e756466d9ce3d83a` |
+| `SHA256SUMS` | 281 | `03c2c827b656dde83cbd24c9c0dd35610204005e5dbcdbea540d4a50d3c4f86b` |
+
+Próximo incremento de design: validar toque, leitor de tela e escalas físicas
+adicionais. A documentação registra como propostas a largura dos caminhos
+longos e a densidade de tabelas com conteúdo realista. O aceite de bateria
+física, tacômetro em hardware compatível e uso prolongado continua separado.
+
 ## Texto do quadro superior organizado — 05/11/2026
 
 O pedido mencionava um quadro sem nova captura; foi solicitado esclarecimento
