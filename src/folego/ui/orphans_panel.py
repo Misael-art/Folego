@@ -63,6 +63,8 @@ class OrphansPanel(QWidget):
         self.term_button = QPushButton("Encerrar selecionado (SIGTERM)")
         self.force_button = QPushButton("Forçar sobreviventes (SIGKILL)")
         self.group_picker = QComboBox()
+        self.group_picker.setMinimumContentsLength(16)
+        self.group_picker.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.group_picker.setEnabled(False)
         self.group_picker.currentIndexChanged.connect(self._group_choice_changed)
         self.group_button = QPushButton("Encerrar grupo")
