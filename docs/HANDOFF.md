@@ -1,5 +1,40 @@
 # Passagem para o próximo agente — atualizada em 04/11/2026
 
+## Cooler junto à temperatura — 04/11/2026
+
+Pedido: monitorar o cooler e mostrar RPM junto à temperatura; o usuário viu
+CPU e cooler com apresentação estranha. Owner: `core/sysfs.py` →
+`core/collector.py`/`Snapshot` → `ui/compact.py`, na branch canônica e PR #3.
+O coletor lê `fan*_input` do hwmon, prioriza rótulo CPU, ignora GPU/disco e
+mantém ausência/valor inválido como desconhecido; zero RPM é leitura válida.
+Nenhum controle de ventoinha é acionado. O widget flutuante usa uma terceira
+linha de duas colunas para ACPI/temperatura e RPM, sem encostar no percentual
+de CPU; laterais e topo também exibem a rotação perto da temperatura.
+
+Neste host, `/sys/class/hwmon` e `sensors` mostram somente temperatura `acpitz`
+para o sistema, além de GPU/NVMe; não há `fan*_input` nem sensor específico da
+CPU. O percentual CPU vem de `/proc/stat`, a leitura ACPI é explicitamente
+rotulada e não comprova a temperatura da CPU. O cooler aparece **— RPM**, com
+tooltip de indisponibilidade. A [captura Wayland própria](handoff/validation/cooler-monitor-2026-11-04/README.md)
+mostra CPU 44%, ACPI 83 °C e — RPM sem quebra ou sobreposição; a janela QA foi
+fechada pelo próprio aplicativo. A instância residente não foi reiniciada.
+
+`./dev test tests/test_temperature.py tests/test_ui_compact.py -q`: **44 passed**.
+`./dev check` sequencial, Python 3.14.7 gerenciado, HOME/XDG privados:
+**1250 passed, 2 skipped** headless; **1612 passed, 2 skipped** Qt offscreen.
+O hardware real não oferece RPM para aceite físico; os testes do sensor usam
+sysfs descartável. Uma primeira rodada de UI falhou por quebra da tabela,
+foi corrigida e está retida em `.scratch/dev-tests-reviewed`. Três execuções
+antigas concluídas foram movidas integralmente à mesma área, sem exclusão,
+para liberar slots de QA.
+
+Código/evidência estão no commit `16fd251`. Uma corrida de stage chegou a
+misturar o incremento com `ui/orphans_panel.py` num commit transitório;
+o ajuste alheio ficou isolado em `d1fd7a6` e o código do cooler no commit acima.
+O diff, a captura e os testes desta tarefa foram revisados. Próximo: conferir
+CI do SHA publicado e revisar o PR #3; numa máquina que exporte tacômetro,
+validar a rotação física ao lado da temperatura.
+
 ## Cantos reais da Central — 04/11/2026
 
 Pedido: a janela aberta da Central continuava quadrada, conforme captura do
