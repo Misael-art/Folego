@@ -27,9 +27,21 @@ transferência de outro aplicativo. A seleção/cópia integral foi exercitada n
 teste Qt. Os 20 workspaces de QA ocupam o orçamento atual do wrapper; não
 foram apagados para repetir as suítes completas. CI do PR é o gate completo.
 
-Próximo: conferir CI no SHA publicado, atualizar a GUI residente pelo ciclo de
-saída do próprio app e conferir o menu real; preservar PR #2 e tag b4 sem
-regravar o release.
+O commit `92ecf9f` foi publicado na branch própria e abriu o
+[PR #3](https://github.com/Misael-art/Folego/pull/3) como draft, com base na
+branch do PR #2. O SHA `92ecf9f6b7c22ab8d8039ac5e11042b16c9f89f8`
+passou nos seis jobs de produto do CI (dois núcleo/CLI, dois contratos CLI e
+dois Qt offscreen); um revisor automático foi skipped. A GUI residente antiga
+PID 6584 saiu pelo item **Sair do Fôlego** de sua própria bandeja, com
+`Result=success`. `./dev setup` reconfirmou o ambiente b4 e a unit existente
+`app-folego@autostart.service` foi iniciada novamente: PID 214646,
+`active/running`, executando o launcher da raiz canônica. O ambiente GUI
+carrega os 13 modelos na ordem aprovada. Não houve alteração de outros
+serviços, sessão física, tag ou assets da prévia b4.
+
+Próximo: conferir o painel pelo uso físico da instância residente; o ensaio
+Wayland isolado já aprovou a apresentação, e os testes Qt aprovaram a cópia.
+Revisar o PR #3 após o PR #2, sem promover a b4 a release estável por isso.
 
 ## Prévia v0.2.0b4 publicada — 04/11/2026
 
