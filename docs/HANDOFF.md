@@ -1,5 +1,36 @@
 # Passagem para o próximo agente — atualizada em 04/11/2026
 
+## Prompt de implantação entre diagnóstico e continuação — 04/11/2026
+
+Pedido: incluir no menu **Prompts** o roteiro genérico de implantação escrito
+nesta sessão, como segundo modelo, sem substituir o modelo existente de melhoria
+pontual. Owner: catálogo único `core/development_prompts.py`; a GUI deriva dele
+ordem, texto copiado e contagem. A ordem agora é **Diagnosticar o estado real do
+projeto → Implantar o diagnóstico item a item → Continuar de onde o agente
+anterior parou**; o menu tem 13 modelos. O novo texto orienta a reconferir o
+diagnóstico, coordenar agentes em checkout único, concluir cada incremento com
+regressão, gates, handoff, commit, push e PR, e preservar aceites físicos ou
+incertos como pendências explícitas. O preâmbulo comum de autorização continua
+aplicado; selecionar um título apenas copia, sem executar o pedido.
+
+Base: `7293222`, branch b4 e PR #2 draft, ainda sem merge. Esta alteração usa
+branch própria empilhada, `codex/prompt-implantation-20261104`; o PR dela deve
+ter a branch b4 como base até que o PR #2 seja integrado. Testes focados
+`./dev test tests/test_development_prompts.py tests/test_ui_prompt_panel.py -q`:
+**7 passed**, Python 3.14.7 gerenciado, Qt offscreen, HOME/XDG privados.
+`./dev test-headless tests/test_development_prompts.py -q`: **3 passed**, sem
+Qt. Em sessão KDE/Wayland, painel próprio 480 × 540 mostrou 13 modelos e os
+três primeiros na ordem correta; captura em
+`.scratch/dev-tests-reviewed/prompt-implantation-20261104/prompt-panel.png`.
+O ensaio Wayland verificou apresentação, não clique físico nem área de
+transferência de outro aplicativo. A seleção/cópia integral foi exercitada no
+teste Qt. Os 20 workspaces de QA ocupam o orçamento atual do wrapper; não
+foram apagados para repetir as suítes completas. CI do PR é o gate completo.
+
+Próximo: conferir CI no SHA publicado, atualizar a GUI residente pelo ciclo de
+saída do próprio app e conferir o menu real; preservar PR #2 e tag b4 sem
+regravar o release.
+
 ## Prévia v0.2.0b4 publicada — 04/11/2026
 
 Pedido explícito desta rodada: resolver a continuidade e publicar a versão mais

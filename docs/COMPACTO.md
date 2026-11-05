@@ -366,14 +366,15 @@ assim, copiar nunca envia Ctrl+C para interromper um trabalho no terminal. O
 aplicativo de destino precisa aceitar esses atalhos. O Fôlego não lê nem grava
 o conteúdo da área de transferência ou as teclas em logs.
 
-**Prompts** abre uma lista de 12 títulos: diagnóstico real, continuidade,
-implementação, investigação de erro, revisão, testes, desempenho, segurança,
+**Prompts** abre uma lista de 13 títulos: diagnóstico real, implantação do
+diagnóstico item a item, continuidade, implementação de melhoria,
+investigação de erro, revisão, testes, desempenho, segurança,
 usabilidade, design com mockups, passagem de contexto e prontidão para PR/distribuição. Escolher um
 copia seu texto para a área de transferência; depois cole no agente desejado.
 Não cola, executa ou envia pedidos automaticamente. Os textos são genéricos,
 respeitam as instruções e autorizações do projeto e pedem evidências verificáveis.
 
-O seletor usa seis blocos: **Diagnóstico e continuidade**, **Desenvolvimento e
+O seletor usa seis blocos: **Diagnóstico, implantação e continuidade**, **Desenvolvimento e
 correção**, **Qualidade e segurança**, **Desempenho**, **Design e experiência**
 e **Documentação e entrega**. Cada bloco tem faixa lateral colorida, título
 horizontal e linhas clicáveis com ícone de copiar; clicar em qualquer ponto da

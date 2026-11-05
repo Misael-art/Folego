@@ -25,7 +25,7 @@ def test_every_grouped_choice_copies_full_text_once_and_closes(qapp, monkeypatch
     for prompt in PROMPTS:
         tabs.show_prompts()
         panel = tabs.prompt_panel
-        assert panel.count.text() == '12 modelos'
+        assert panel.count.text() == '13 modelos'
         assert [h.text() for h in panel.headings.values()] == [title for _, title, _ in PROMPT_CATEGORIES]
         assert set(panel.buttons) == {p.key for p in PROMPTS}
         button = panel.buttons[prompt.key]
@@ -33,7 +33,7 @@ def test_every_grouped_choice_copies_full_text_once_and_closes(qapp, monkeypatch
         button.click()
         assert tabs.prompt_menu is None and tabs.prompt_panel is None
         assert copied == [text(p.key) for p in PROMPTS[:len(copied)]]
-    assert len(copied) == 12
+    assert len(copied) == 13
     tabs.shutdown()
 
 
@@ -46,9 +46,9 @@ def test_picker_keyboard_navigation_copies_and_escape_closes(qapp, monkeypatch):
     QTest.keyClick(menu, Qt.Key.Key_Home)
     assert panel.buttons['diagnose'].hasFocus()
     QTest.keyClick(panel.buttons['diagnose'], Qt.Key.Key_Down)
-    assert panel.buttons['continue'].hasFocus()
-    QTest.keyClick(panel.buttons['continue'], Qt.Key.Key_Return)
-    assert copied == [text('continue')] and tabs.prompt_menu is None
+    assert panel.buttons['implant'].hasFocus()
+    QTest.keyClick(panel.buttons['implant'], Qt.Key.Key_Return)
+    assert copied == [text('implant')] and tabs.prompt_menu is None
     tabs.show_prompts()
     QTest.keyClick(tabs.prompt_menu, Qt.Key.Key_Escape)
     assert tabs.prompt_menu is None

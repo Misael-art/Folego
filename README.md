@@ -91,11 +91,13 @@ cada minuto. A estimativa restante aparece quando o sistema informa tempo ou
 energia e consumo compatíveis. Ela varia conforme o uso. Os avisos seguem a
 preferência de sons em **opções**.
 
-A biblioteca oferece 12 prompts de desenvolvimento: escolha um título para copiar e cole no
+A biblioteca oferece 13 prompts de desenvolvimento: escolha um título para copiar e cole no
 agente desejado. O teclado virtual preserva o foco do campo de destino no KWin.
 O seletor organiza os títulos em seis blocos com faixas laterais coloridas,
 cabeçalhos horizontais e ícones de copiar. O painel tem até 480 × 540 px,
 com rolagem e rodapé fixo para **Janelas, Edição, Terminal e Custom**.
+Os três primeiros modelos seguem diagnóstico, implantação item a item e
+continuação do trabalho a partir da passagem existente.
 **Design e mockups para aprovação** copia o prompt integral de Product Design
 fornecido pelo usuário, para propor e revisar visuais antes da implementação.
 O mesmo menu inclui dez atalhos padrão em **Janelas**, **Edição** e **Terminal**:

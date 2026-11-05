@@ -12,7 +12,7 @@ def test_design_mockups_prompt_preserves_the_complete_user_text():
 
 
 def test_existing_prompts_keep_their_context_and_catalog_ids_are_unique():
-    assert len(PROMPTS) == len({p.key for p in PROMPTS}) == 12
+    assert len(PROMPTS) == len({p.key for p in PROMPTS}) == 13
     for prompt in PROMPTS:
         if prompt.key != 'design-mockups':
             assert text(prompt.key) == CONTEXT + '\n\n' + prompt.body
@@ -24,3 +24,10 @@ def test_categories_cover_each_prompt_once_in_the_approved_order():
     keys = [key for _, _, items in PROMPT_CATEGORIES for key in items]
     assert len(keys) == len(set(keys)) == len(PROMPTS)
     assert set(keys) == {p.key for p in PROMPTS}
+    assert PROMPT_CATEGORIES[0][2] == ('diagnose', 'implant', 'continue')
+    assert [p.key for p in PROMPTS[:3]] == ['diagnose', 'implant', 'continue']
+    body = text('implant')
+    assert all(part in body for part in (
+        'checkout canônico', 'outro agente', 'um agente escritor por vez',
+        'commit pequeno, push', 'SHA remoto', 'Qt offscreen',
+    ))
