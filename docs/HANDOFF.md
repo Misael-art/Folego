@@ -1,5 +1,43 @@
 # Passagem para o próximo agente — atualizada em 05/11/2026
 
+## Texto do quadro superior organizado — 05/11/2026
+
+O pedido mencionava um quadro sem nova captura; foi solicitado esclarecimento
+e, sem resposta durante a janela de trabalho, adotado explicitamente o quadro
+superior da última captura. Owner: `ui/dashboard_tab.py`, na branch/PR #3
+atuais. Aceite: separar estado geral dos valores de memória/app, manter alertas
+e ação recomendada visíveis, preservar a cópia do diagnóstico e limpar os
+valores quando a saúde perde validade, com layout ainda compatível com 800 × 600.
+
+`af3da6f` troca a frase grande por título FÔLEGO + estado e três linhas
+alinhadas: Disponível, Em uso e Aplicativo. Explicação, alertas e ação têm
+espaços próprios. O sinal integral permanece no tooltip; a cópia recebe as
+linhas em texto simples. Os widgets continuam apresentando dados do snapshot,
+sem nova coleta ou efeitos de recursos. O fixture Wayland passou a declarar
+as fontes sintéticas de memória/swap para exibir um resumo coerente.
+
+`./dev test tests/test_ui_dashboard.py tests/test_ui_layout.py
+tests/test_ui_main_window_tabs.py tests/test_ui_console_themes.py
+tests/test_ui_transparency.py -q`: **103 passed** na execução final. Uma falha
+anterior de coleta ausente foi corrigida mantendo "Coleta indisponível";
+o teste de retorno ao widget foi sincronizado com a solicitação enfileirada
+e o sinal de término, mantendo a exigência da duração de 260 ms. Houve uma
+tentativa intermediária com importação incorreta no teste, corrigida. Logs
+dessas falhas foram retidos em `.scratch/dev-tests-reviewed/hero-text-*` e
+não contam como gates aprovados. O [recibo e capturas Wayland](handoff/validation/hero-summary-2026-11-05/README.md)
+passaram nos oito temas em janela própria; a prova não certifica todas as
+escalas físicas nem leitor de tela.
+
+O SHA `af3da6f` passou nos seis jobs de produto do PR #3; revisor automático
+skipped. A GUI antiga PID 94795 saiu pelo próprio item Sair do Fôlego da
+bandeja, após revalidar o owner D-Bus. A unit ficou inativa com sucesso;
+`./dev setup` sincronizou a fonte e a unit existente iniciou novamente em
+PID 226852, `active/running`, `Result=success`. Os monitores de entrada e
+desempenho mantiveram os PIDs 4501/4502. A nova instância usa o entrypoint do
+ambiente gerenciado; o resultado visual medido em pixels é da janela QA,
+não uma introspecção do processo residente. Próximo: uso normal do resumo
+na Central e revisão do PR empilhado após #2. A tag b4 permanece anterior.
+
 ## Cooler junto à temperatura — 04/11/2026
 
 Pedido: monitorar o cooler e mostrar RPM junto à temperatura; o usuário viu
