@@ -2,7 +2,7 @@
 import json
 import time
 
-from folego.adapters.host_guard import HostObserver
+from folego.adapters.host_guard import HostObserver, _boots
 from folego.core.host_guard import ThermalTracker
 from folego.core.snapshot import MemInfo, Snapshot
 from folego.core.sysfs import read_thermal_trips
@@ -34,8 +34,8 @@ def _run(argv, timeout):
         return 0, ("IDX BOOT ID FIRST LAST\n"
                    " -1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa Wed yesterday\n"
                    "  0 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb Thu today\n"), ""
-    if "-b" in argv and "-n" in argv and "40" in argv:
-        return 0, "last message, no shutdown proof\n", ""
+    if "systemd-logind.service" in argv:
+        return 1, "", ""
     if "-g" in argv:
         return 0, json.dumps({"MESSAGE": "ntfs_mst_post_read_fixup_warn",
                               "__REALTIME_TIMESTAMP": "1000000000"}) + "\n", ""
@@ -75,6 +75,27 @@ def test_corrupt_baseline_is_preserved_and_ambiguous_ntfs_is_not_attributed(tmp_
     assert result["btrfs"][0]["delta"] is None
     assert result["ntfs"]["mount"] is None
     assert state.read_bytes() == before
+
+
+def test_boot_history_finds_logind_poweroff_beyond_noisy_tail():
+    def run(argv, timeout):
+        assert timeout <= 3
+        if "--list-boots" in argv:
+            return 0, (" -2 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa Wed earlier\n"
+                       " -1 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb Thu previous\n"
+                       "  0 cccccccccccccccccccccccccccccccc Thu current\n"), ""
+        assert "systemd-logind.service" in argv and "-g" in argv
+        assert "40" not in argv
+        if "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" in argv:
+            return 0, "System is powering down.\n", ""
+        return 1, "", ""
+
+    result = _boots(run)
+    assert result["quality"] == "ok"
+    assert [item["end"] for item in result["items"][:-1]] == [
+        "inconclusive", "shutdown_recorded"]
+    assert result["previous_end"] == "shutdown_recorded"
+    assert "1 boot anterior" in result["reason"]
 
 
 def test_thermal_guard_uses_only_matching_acpi_limits_and_fresh_samples(tmp_path):

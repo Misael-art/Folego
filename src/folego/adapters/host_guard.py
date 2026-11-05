@@ -252,21 +252,23 @@ def _boots(run) -> dict:
         return {"quality": "partial", "reason": "boot anterior ausente no journal", "items": items}
     incomplete = False
     for item in items[:-1]:
-        code, tail, err = run(["journalctl", "-b", item["boot_id"], "-n", "40",
-                               "-o", "cat", "--no-pager"], 2.0)
-        if code != 0:
+        code, events, err = run(["journalctl", "-b", item["boot_id"],
+                                 "-u", "systemd-logind.service",
+                                 "-g", "System is powering down\\.", "-n", "1",
+                                 "-o", "cat", "--no-pager"], 2.0)
+        if code not in (0, 1) or (code == 1 and err.strip()):
             item["end"] = "unknown"
             item["reason"] = err or "fim do boot ilegível"
             incomplete = True
             continue
-        orderly = any(marker in tail for marker in ("Reached target System Shutdown",
-                                                     "systemd-shutdown", "Powering off", "Rebooting now"))
-        item["end"] = "shutdown_recorded" if orderly else "inconclusive"
+        item["end"] = ("shutdown_recorded" if code == 0 and
+                       "System is powering down." in events else "inconclusive")
     previous = items[-2]
     without_record = sum(item.get("end") == "inconclusive" for item in items[:-1])
-    reason = (f"{without_record} anterior(es) sem registro de desligamento nas últimas "
-              "40 mensagens; causa desconhecida" if without_record else
-              "desligamento registrado nos boots anteriores consultáveis")
+    reason = (f"{without_record} "
+              f"{'boot anterior' if without_record == 1 else 'boots anteriores'} "
+              "sem registro de desligamento do logind no diário; causa desconhecida"
+              if without_record else "desligamento registrado nos boots anteriores consultáveis")
     if incomplete:
         reason += "; parte do histórico indisponível"
     return {"quality": "partial" if incomplete else "ok", "items": items,
