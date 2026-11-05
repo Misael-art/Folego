@@ -11,6 +11,8 @@ requests out. This widget measures nothing and mutates nothing on purpose: the
 rules live in ``core.suggestions``, so the same verdicts are testable without a
 display and reusable by the tray tooltip.
 """
+import re
+
 from PySide6.QtCore import QRectF, Qt, Slot
 from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen
 from PySide6.QtWidgets import (QFrame, QGridLayout, QHBoxLayout, QLabel, QProgressBar,
@@ -25,6 +27,16 @@ from ..core.suggestions import suggest
 LEVEL_EMOJI = {"critico": "🔴", "alto": "🟠", "medio": "🟡"}
 TARGET_LABEL = {"memoria": "desempenho", "ajustes": "ajustes",
                 "orfaos": "órfãos", "disco": "disco", "tmpfs": "temporários"}
+OPERATION_LABEL = {
+    "performance.close": "Encerramento de aplicativo",
+    "disk.quarantine": "Movimentação para quarentena",
+    "disk.restore": "Restauração do disco",
+    "disk.purge": "Exclusão definitiva",
+    "tmpfs.release": "Liberação de temporários",
+    "tmpfs.restore": "Restauração de temporários",
+    "tmpfs.expire": "Expiração de temporários retidos",
+}
+HISTORY_STAMP = re.compile(r"\d{2}/\d{2} \d{2}:\d{2}:\d{2}|data inválida")
 
 
 VERDICT = {health.GREEN: ("Saudável", 'ok'), health.YELLOW: ("Atenção", 'warning'),
@@ -235,7 +247,15 @@ class DashboardTab(QWidget):
         self.last_operation = QLabel("última operação: ainda não consultada.")
         self.last_operation.setObjectName("quality")
         self.last_operation.setWordWrap(True)
+        self.last_operation.setTextFormat(Qt.TextFormat.PlainText)
         self.last_operation.setAccessibleName("Última operação registrada")
+        self.operation_title = QLabel("Última operação")
+        self.operation_title.setObjectName("section")
+        self.operation_meta = QLabel("Aguardando leitura do histórico.")
+        self.operation_reason = QLabel()
+        for label in (self.operation_title, self.operation_meta, self.operation_reason):
+            label.setTextFormat(Qt.TextFormat.PlainText)
+            label.setWordWrap(True)
         self.automation_status = QLabel(
             "automação: estado ainda não lido; execução real desligada.")
         self.automation_status.setObjectName("quality")
@@ -313,12 +333,24 @@ class DashboardTab(QWidget):
         activity = QFrame()
         activity.setObjectName("card")
         activity_layout = QVBoxLayout(activity)
-        for widget in (self.last_operation, self.automation_status, self.resources, self.details):
+        for widget in (self.operation_title, self.operation_meta, self.operation_reason):
             activity_layout.addWidget(widget)
+        self.operation_reason.hide()
         input_row = QHBoxLayout()
         input_row.addWidget(self.input_status, 1)
         input_row.addWidget(self.input_button)
         activity_layout.addLayout(input_row)
+        self.technical_details = QWidget()
+        detail_layout = QVBoxLayout(self.technical_details)
+        detail_layout.setContentsMargins(0, 0, 0, 0)
+        for widget in (self.last_operation, self.automation_status, self.resources, self.details):
+            detail_layout.addWidget(widget)
+        self.technical_details.hide()
+        self.details_button = QPushButton("Ver detalhes técnicos")
+        self.details_button.setCheckable(True)
+        self.details_button.toggled.connect(self._toggle_technical_details)
+        activity_layout.addWidget(self.details_button, 0, Qt.AlignmentFlag.AlignLeft)
+        activity_layout.addWidget(self.technical_details)
         footer = QHBoxLayout()
         footer.addWidget(self.status, 1)
         footer.addWidget(self.copy_button, 0)
@@ -368,7 +400,7 @@ class DashboardTab(QWidget):
         self._show_cards(snapshot)
         self.resources.setText(self._resources(snapshot))
         if last_operation:
-            self.last_operation.setText(f"última operação: {last_operation}")
+            self.show_operation(last_operation)
         self._sync_rows(suggest(snapshot, orphan_count=orphan_count,
                                 thumbnails_kb=thumbnails_kb))
         self._show_empty_state(signal, unavailable=bool(snapshot.errors))
@@ -389,6 +421,25 @@ class DashboardTab(QWidget):
                          "dentro do orçamento")
         notes.extend(extra_notes)
         self.status.setText(" · ".join(notes))
+
+    def show_operation(self, text: str):
+        self.last_operation.setText(f"última operação: {text}")
+        fields = text.split(" · ", 2)
+        if len(fields) != 3 or not HISTORY_STAMP.fullmatch(fields[0]):
+            self.operation_title.setText("Última operação")
+            self.operation_meta.setText(text)
+            self.operation_reason.hide()
+            return
+        stamp, action, result = fields
+        outcome, _, reason = result.partition(" — ")
+        self.operation_title.setText(OPERATION_LABEL.get(action, action))
+        self.operation_meta.setText(f"{outcome.capitalize()} · {stamp}")
+        self.operation_reason.setText(reason)
+        self.operation_reason.setVisible(bool(reason))
+
+    def _toggle_technical_details(self, expanded: bool):
+        self.technical_details.setVisible(expanded)
+        self.details_button.setText("Ocultar detalhes técnicos" if expanded else "Ver detalhes técnicos")
 
     def _show_empty_state(self, signal, *, unavailable=False):
         if not self.rows:

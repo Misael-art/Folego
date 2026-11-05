@@ -1,9 +1,9 @@
 """Lazy editor for the compact menu's private texts and keyboard macros."""
 import uuid
 
-from PySide6.QtCore import Qt, QSignalBlocker
+from PySide6.QtCore import QSize, Qt, QSignalBlocker
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QListWidget,
-                              QPushButton, QLineEdit, QPlainTextEdit, QComboBox,
+                              QListWidgetItem, QPushButton, QLineEdit, QPlainTextEdit, QComboBox,
                               QStackedWidget, QMessageBox)
 
 from .desktop_shortcuts import DesktopController
@@ -50,6 +50,9 @@ class CustomPromptsTab(QWidget):
         self.items.setAccessibleName('Textos e macros cadastrados')
         self.items.setMinimumWidth(155)
         self.items.setMaximumWidth(220)
+        self.items.setWordWrap(True)
+        self.items.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.items.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.items.currentRowChanged.connect(self._selected)
         body.addWidget(self.items, 1)
         self.form = QWidget()
@@ -186,7 +189,11 @@ class CustomPromptsTab(QWidget):
         with QSignalBlocker(self.items):
             self.items.clear()
             for item in self.entries:
-                self.items.addItem(item['title'] + (' · Texto' if item['kind'] == 'text' else ' · Macro'))
+                text = item['title'] + (' · Texto' if item['kind'] == 'text' else ' · Macro')
+                entry = QListWidgetItem(text)
+                entry.setSizeHint(QSize(0, self.items.fontMetrics().lineSpacing() * 2 + 8))
+                entry.setToolTip(text)
+                self.items.addItem(entry)
             row = next((i for i, e in enumerate(self.entries) if e['id'] == self._selection_after_save), 0)
             self.items.setCurrentRow(row if self.entries else -1)
         if self.entries: self._fill(self.entries[row])

@@ -30,8 +30,8 @@ As métricas se alinham à borda correspondente; os cantos da janela são
 recortados de forma arredondada.
 As seis ações coloridas aparecem ao entrar com o ponteiro e se recolhem após
 sair, nas três barras como no compacto. Nas laterais, formam uma coluna na base;
-a área de leitura rola independentemente quando as cotas e avisos excedem a
-altura útil. A barra superior tem 132 unidades lógicas de altura a partir de
+a área de leitura rola entre o cabeçalho fixo e os atalhos quando as cotas e
+avisos excedem a altura útil. A barra superior tem 120 unidades lógicas de altura a partir de
 900 unidades de largura: Fôlego e o indicador de folga começam à esquerda,
 seguidos pelas cotas confirmadas, métricas e o grupo de teclado/menu na ponta
 direita, com Pausar abaixo desses dois controles. Ações expandidas formam uma

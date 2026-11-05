@@ -220,8 +220,9 @@ def main():
                     wait(lambda: all(compact.ai_strip.arrival_animations[p].state()==
                                      compact.ai_strip.arrival_animations[p].State.Stopped
                                      for p in ('codex','claude')))
+                    viewport=compact.dock_scroll.viewport()
                     quota_positions=[(provider,compact.ai_strip.columns[provider].isVisible(),
-                                      compact.ai_strip.columns[provider].mapTo(compact,QPoint(0,0)).y(),
+                                      compact.ai_strip.columns[provider].mapTo(viewport,QPoint(0,0)).y(),
                                       compact.ai_strip.columns[provider].height()) for provider in ('codex','claude')]
                     assert all(visible and 0<=y<compact.height() for _,visible,y,_ in quota_positions),(mode,quota_positions,compact.ai_strip.geometry().getRect(),compact.card.sizeHint().height())
                     if mode in ('left','right'):
@@ -275,11 +276,19 @@ def main():
                     scroll=compact.dock_scroll.verticalScrollBar()
                     if mode=='top':
                         assert scroll.maximum()==0,('top clipped with four quotas',scroll.maximum())
+                    header_position=compact.header_widget.mapTo(compact,QPoint(0,0))
                     scroll.setValue(scroll.maximum());app.processEvents()
                     last=compact.ai_strip.columns['grok']
                     last_y=last.mapTo(compact.dock_scroll.viewport(),QPoint(0,0)).y()
                     assert 0<=last_y and last_y+last.height()<=compact.dock_scroll.viewport().height(),(mode,last_y,last.height(),compact.dock_scroll.viewport().height(),scroll.maximum())
-                    assert compact.dock_scroll.geometry().bottom()<compact.action_drawer.geometry().top()
+                    scroll_bottom=compact.dock_scroll.mapTo(compact,QPoint(0,compact.dock_scroll.height())).y()
+                    assert scroll_bottom<=compact.action_drawer.y()
+                    assert compact.header_widget.mapTo(compact,QPoint(0,0))==header_position
+                    if mode in ('left','right'):
+                        assert compact.side_content.width()==viewport.width()
+                        for group in (compact.keyboard_group,compact.navigation_group):
+                            x=group.mapTo(compact,QPoint(0,0)).x()
+                            assert 0<=x and x+group.width()<=compact.width()
                     compact.grab().save(str(root/('dock-'+mode+'-scrolled.png')))
                     records.append(dict(case='all quotas reachable',mode=mode,scroll_max=scroll.maximum(),
                                         last_quota_y=last_y,actions_top=compact.action_drawer.y()))
@@ -309,6 +318,7 @@ def main():
                     compact.grab().save(str(root/('dock-'+mode+'-grip.png')))
                     pointer_click(back.mapToGlobal(back.rect().center()),backend,compact)
                     wait(lambda:compact._dock_mode=='compact' and compact._dock_pending is None)
+                    wait(lambda:compositor_rect()[3]>=compact.card.sizeHint().height())
                     assert compact.width()==280
                     returned=compositor_rect()
                     assert all(abs(a-b)<=1 for a,b in zip(returned[:3],compact_origin[:3])),(mode,returned,compact_origin)

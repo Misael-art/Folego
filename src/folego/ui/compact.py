@@ -6,7 +6,8 @@ Wayland placement is compositor-owned; X11 positions are clamped to live screens
 """
 import os
 
-from PySide6.QtCore import QPoint, QRect, QRectF, Qt, QTimer, QPropertyAnimation, QEasingCurve, QEvent
+from PySide6.QtCore import (QPoint, QRect, QRectF, Qt, QTimer, QPropertyAnimation,
+                            QVariantAnimation, QEasingCurve, QEvent)
 from PySide6.QtGui import QGuiApplication, QWindow, QFont, QPainter, QPainterPath, QPen, QColor, QRegion
 from PySide6.QtWidgets import (QBoxLayout, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
                                QScrollArea, QVBoxLayout, QWidget, QSizePolicy, QApplication,
@@ -21,6 +22,8 @@ from ..core.battery_alerts import battery_band, remaining_text
 POSITION_KEY = "compact/position"
 WIDGET_TITLE = "Fôlego — widget"
 DOCK_MODES = ('compact', 'right', 'left', 'top')
+SLIM_TOP_WIDTH = 900
+SLIM_TOP_HEIGHT = 120
 
 
 def dock_geometry(mode: str, area: QRect) -> QRect:
@@ -28,7 +31,7 @@ def dock_geometry(mode: str, area: QRect) -> QRect:
     if mode not in DOCK_MODES[1:] or not area.isValid():
         raise ValueError('Borda ou tela indisponível')
     if mode == 'top':
-        height = min(area.height(), 132 if area.width() >= 900 else 190)
+        height = min(area.height(), SLIM_TOP_HEIGHT if area.width() >= SLIM_TOP_WIDTH else 190)
         return QRect(area.left(), area.top(), area.width(), height)
     width = min(128, max(112, area.width() // 12))
     width = min(width, area.width())
@@ -376,6 +379,13 @@ class CompactWindow(QWidget):
         self.card.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
         self.dock_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.dock_scroll.hide()
+        self.side_content = QWidget(self)
+        self.side_content.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        self.side_layout = QVBoxLayout(self.side_content)
+        self.side_layout.setContentsMargins(0, 0, 0, 0)
+        self.side_layout.setSpacing(2)
+        self.side_layout.addStretch(1)
+        self.side_content.hide()
         self.action_drawer = QWidget(self)
         self.action_drawer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         drawer = QVBoxLayout(self.action_drawer)
@@ -389,6 +399,12 @@ class CompactWindow(QWidget):
         self.drawer_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.drawer_animation.valueChanged.connect(self._drawer_frame)
         self.drawer_animation.finished.connect(self._screen_changed)
+        self.dock_fade = QVariantAnimation(self)
+        self.dock_fade.setDuration(220)
+        self.dock_fade.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.dock_fade.setEndValue(1.0)
+        self.dock_fade.valueChanged.connect(self._fade_frame)
+        self.dock_fade.finished.connect(lambda: self.card.setGraphicsEffect(None))
         self.drawer_delay = QTimer(self)
         self.drawer_delay.setSingleShot(True)
         self.drawer_delay.setInterval(200)
@@ -413,16 +429,17 @@ class CompactWindow(QWidget):
 
     def _arrange_sections(self, mode, target_width=None, target_height=None):
         side = mode in ('left', 'right')
-        slim_top = mode == 'top' and (target_width or self.width()) >= 900
+        slim_top = mode == 'top' and (target_width or self.width()) >= SLIM_TOP_WIDTH
         short_side = side and (target_height or self.height()) < 700
         for section in self._sections:
             self.inner.removeWidget(section)
+            self.side_layout.removeWidget(section)
         for section in (self.gauge_widget, self.readings_widget, self.pause_button,
                         self.top_controls):
             self.inner.removeWidget(section)
         for row in range(6):
             self.inner.setRowStretch(row, 0)
-        for column in range(4):
+        for column in range(5):
             self.inner.setColumnStretch(column, 0)
             self.inner.setColumnMinimumWidth(column, 0)
         for section in (self.gauge_widget, self.readings_widget):
@@ -432,12 +449,14 @@ class CompactWindow(QWidget):
             self.body_layout.addWidget(self.readings_widget)
         for layout, saved in ((self.gauge_widget.layout(), self._gauge_margins),
                               (self.readings_layout, self._readings_margins)):
-            margins = (0, 0, 0, 0) if slim_top else (saved.left(), saved.top(),
-                                                    saved.right(), saved.bottom())
+            margins = (0, 0, 0, 0) if side or slim_top else (saved.left(), saved.top(),
+                                                            saved.right(), saved.bottom())
             layout.setContentsMargins(*margins)
         self.body_layout.setDirection(QBoxLayout.Direction.TopToBottom if side
                                       else QBoxLayout.Direction.LeftToRight)
         self.body_layout.setStretch(1, 0 if side else 1)
+        gauge_side = 64 if slim_top else 68
+        self.gauge.setFixedSize(gauge_side, gauge_side)
         self.ai_strip.layout().setDirection(QBoxLayout.Direction.TopToBottom if side
                                              else QBoxLayout.Direction.LeftToRight)
         self.shortcut_tabs.set_orientation(mode)
@@ -449,6 +468,7 @@ class CompactWindow(QWidget):
         self.header_layout.removeWidget(self.brand)
         self.header_layout.removeWidget(self.keyboard_group)
         self.header_layout.removeWidget(self.navigation_group)
+        self.gauge_widget.layout().removeWidget(self.brand)
         for section in (self.keyboard_group, self.navigation_group, self.pause_button):
             self.top_controls_layout.removeWidget(section)
         keyboard_button = self.shortcut_tabs.buttons['keyboard']
@@ -459,12 +479,14 @@ class CompactWindow(QWidget):
             button.setFixedSize(width, 25 if side else 28)
         self.header_layout.setColumnStretch(0, 1)
         self.header_layout.setColumnStretch(1, 1 if side else 0)
+        self.header_widget.setVisible(not slim_top)
         if side:
             self.header_layout.addWidget(self.brand, 0, 0, 1, 2, Qt.AlignmentFlag.AlignHCenter)
             self.header_layout.addWidget(self.keyboard_group, 1, 0, Qt.AlignmentFlag.AlignHCenter)
             self.header_layout.addWidget(self.navigation_group, 1, 1, Qt.AlignmentFlag.AlignHCenter)
         elif slim_top:
-            self.header_layout.addWidget(self.brand, 0, 0)
+            self.gauge_widget.layout().insertWidget(0, self.brand)
+            self.brand.show()
             self.top_controls_layout.addWidget(self.keyboard_group, 0, 0)
             self.top_controls_layout.addWidget(self.navigation_group, 0, 1)
             self.top_controls_layout.addWidget(self.pause_button, 1, 0, 1, 2,
@@ -497,14 +519,14 @@ class CompactWindow(QWidget):
             font = QFont(label.font())
             font.setPointSize(8 if short_side or slim_top else 9)
             label.setFont(font)
-        self.free_label.setWordWrap(not side and not slim_top)
+        self.free_label.setWordWrap(not slim_top)
         self.battery_label.setWordWrap(side)
         self.battery_label.setAlignment(reading_alignment)
         self.pause_button.setMinimumWidth(0)
         self.pause_button.setMaximumWidth(16777215)
         if slim_top:
             self.pause_button.setFixedWidth(100)
-            self.readings_widget.setFixedWidth(min(600, max(320, (target_width or self.width()) // 2 - 80)))
+            self.readings_widget.setFixedWidth(330)
         else:
             self.readings_widget.setMinimumWidth(0)
             self.readings_widget.setMaximumWidth(16777215)
@@ -522,20 +544,21 @@ class CompactWindow(QWidget):
                                              else Qt.LayoutDirection.LeftToRight)
         header, body, notices, ai, footer = self._sections
         if side:
-            for row, section in enumerate((header, body, notices, ai)):
-                self.inner.addWidget(section, row, 0, Qt.AlignmentFlag.AlignTop)
-            self.inner.setRowStretch(4, 1)
-        elif slim_top:
             self.inner.addWidget(header, 0, 0)
-            self.inner.addWidget(self.gauge_widget, 1, 0, Qt.AlignmentFlag.AlignVCenter)
-            self.inner.addWidget(ai, 1, 1, Qt.AlignmentFlag.AlignVCenter)
-            self.inner.addWidget(self.readings_widget, 1, 2,
+            self.inner.addWidget(self.dock_scroll, 1, 0)
+            self.inner.setRowStretch(1, 1)
+            for row, section in enumerate((body, notices, ai)):
+                self.side_layout.insertWidget(row, section)
+        elif slim_top:
+            self.inner.addWidget(self.gauge_widget, 0, 0, Qt.AlignmentFlag.AlignVCenter)
+            self.inner.addWidget(ai, 0, 1, Qt.AlignmentFlag.AlignVCenter)
+            self.inner.addWidget(self.readings_widget, 0, 2,
                                  Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-            self.inner.addWidget(self.top_controls, 0, 3, 2, 1,
+            self.inner.addWidget(notices, 0, 3, Qt.AlignmentFlag.AlignVCenter)
+            self.inner.addWidget(self.top_controls, 0, 4,
                                  Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
-            self.inner.addWidget(notices, 2, 0, 1, 4)
-            self.inner.setColumnMinimumWidth(3, 102)
-            self.inner.setColumnStretch(2, 1)
+            self.inner.setColumnMinimumWidth(4, 102)
+            self.inner.setColumnStretch(3, 1)
         elif mode == 'top':
             self.inner.addWidget(header, 0, 0, Qt.AlignmentFlag.AlignVCenter)
             self.inner.addWidget(body, 0, 1, Qt.AlignmentFlag.AlignVCenter)
@@ -577,18 +600,28 @@ class CompactWindow(QWidget):
         screen = self.screen() or QGuiApplication.primaryScreen()
         return screen.availableGeometry() if screen is not None else QRect()
 
-    def _set_card_scroll(self, vertical):
+    def _set_card_scroll(self, mode):
         layout = self.layout()
-        if vertical and self.card.parent() is not self.dock_scroll:
-            layout.removeWidget(self.card)
-            self.dock_scroll.setWidget(self.card)
-            layout.insertWidget(0, self.dock_scroll)
-            self.dock_scroll.show()
-        elif not vertical and self.card.parent() is self.dock_scroll:
-            layout.removeWidget(self.dock_scroll)
-            self.dock_scroll.takeWidget()
+        scroll = self.dock_scroll
+        previous = scroll.takeWidget()
+        if previous is self.side_content:
+            self.side_content.setParent(self)
+            self.side_content.hide()
+        layout.removeWidget(scroll)
+        self.inner.removeWidget(scroll)
+        layout.removeWidget(self.card)
+        scroll.setParent(self)
+        if mode == 'top':
+            scroll.setWidget(self.card)
+            layout.insertWidget(0, scroll)
+        else:
             layout.insertWidget(0, self.card)
-            self.dock_scroll.hide()
+            if mode in ('left', 'right'):
+                scroll.setWidget(self.side_content)
+                scroll.setParent(self.card)
+                self.side_content.show()
+        self.card.show()
+        scroll.setVisible(mode != 'compact')
 
     def set_dock_mode(self, mode):
         if mode not in DOCK_MODES:
@@ -624,12 +657,13 @@ class CompactWindow(QWidget):
         self.drawer_animation.stop()
         self.action_drawer.setMaximumHeight(0)
         self._dock_mode = mode
-        self._set_card_scroll(mode != 'compact')
+        self._set_card_scroll(mode)
         self._arrange_sections(mode, target.width(), target.height())
         self.action_drawer.setMaximumHeight(0)
         self.setMinimumSize(0, 0)
         self.setMaximumSize(16777215, 16777215)
         if mode == 'compact':
+            self.inner.activate()
             target = QRect(target.x(), target.y(), 280,
                            max(target.height(), self.card.sizeHint().height()))
             x, y = clamp_position(target.x(), target.y(), target.width(), target.height(), self._screens())
@@ -642,9 +676,7 @@ class CompactWindow(QWidget):
             self.setGeometry(origin)
         self._place_handles()
         if self._caps.session_type == 'wayland':
-            if hasattr(self, 'dock_fade'):
-                self.dock_fade.stop()
-                self.dock_fade.deleteLater()
+            self.dock_fade.stop()
             self._dock_pending = mode
             effect = QGraphicsOpacityEffect(self.card)
             effect.setOpacity(0.55)
@@ -672,16 +704,11 @@ class CompactWindow(QWidget):
         if self._dock_mode == 'compact':
             self.setMinimumHeight(0)
             self.setMaximumHeight(16777215)
+            if self.height() < self.card.sizeHint().height():
+                self.adjustSize()
         effect = self.card.graphicsEffect()
         if isinstance(effect, QGraphicsOpacityEffect):
-            self.dock_fade = QPropertyAnimation(effect, b'opacity', self)
-            self.dock_fade.setDuration(220)
-            self.dock_fade.setEasingCurve(QEasingCurve.Type.OutCubic)
             self.dock_fade.setStartValue(effect.opacity())
-            self.dock_fade.setEndValue(1.0)
-            self.dock_fade.finished.connect(
-                lambda: self.card.setGraphicsEffect(None)
-                if self.card.graphicsEffect() is effect else None)
             self.dock_fade.start()
         if self._needs_show_reconcile:
             QTimer.singleShot(0, self._reconcile_after_show)
@@ -689,6 +716,11 @@ class CompactWindow(QWidget):
             QTimer.singleShot(80, self._reconcile_compact_after_show)
         if self._dock_mode != 'compact' and self._dock_verify_attempts:
             QTimer.singleShot(180, self._verify_dock_after_show)
+
+    def _fade_frame(self, value):
+        effect = self.card.graphicsEffect()
+        if isinstance(effect, QGraphicsOpacityEffect):
+            effect.setOpacity(value)
 
     def _refresh_accounts_menu(self):
         from ..core import ai_sessions
@@ -877,7 +909,10 @@ class CompactWindow(QWidget):
         if self.shortcut_tabs.controller.action == 'widget-place' and self._dock_pending:
             self._dock_pending = None
             self.card.setGraphicsEffect(None)
-            self._shortcut_result('Posição da barra não confirmada; confira a janela antes de tentar novamente')
+            if self._dock_verify_attempts:
+                QTimer.singleShot(180, self._verify_dock_after_show)
+            else:
+                self._shortcut_result('Posição da barra não confirmada; confira a janela antes de tentar novamente')
         if self.shortcut_tabs.controller.action == 'print': self._finish_capture()
 
     def _finish_capture(self):
@@ -986,8 +1021,8 @@ class CompactWindow(QWidget):
                     f'<tr><td>{thermal}</td><td align="right">{fan}</td></tr></table>')
             else:
                 self.detail_label.setText('<table width="100%" cellspacing="0"><tr>'
-                    f'<td>{memory}</td><td align="right">{cpu}</td><td align="right">{thermal} · {fan}</td></tr>'
-                    f'<tr><td>{swap}</td><td align="right">{temp}</td><td align="right">{battery}</td></tr></table>')
+                    f'<td>{memory}</td><td>{cpu}</td><td>{thermal} · {fan}</td></tr>'
+                    f'<tr><td>{swap}</td><td>{temp}</td><td>{battery}</td></tr></table>')
 
     def _battery_color(self):
         colors = {'green': TOKENS.ok, 'yellow': readable('#e8bd18', (TOKENS.surface, TOKENS.surface_alt)),
@@ -1154,7 +1189,9 @@ class CompactWindow(QWidget):
     def _verify_dock_after_show(self):
         if not self._dock_verify_attempts or self._dock_mode == 'compact' or self._force_close:
             return
-        if (not self.isVisible() or not self._screen_area().isValid()
+        surface = self.windowHandle()
+        if (not self.isVisible() or surface is None or not surface.isExposed()
+                or not self._screen_area().isValid()
                 or self._dock_pending or self._dock_verify_phase
                 or self.shortcut_tabs.controller.future is not None):
             self._dock_verify_waits += 1

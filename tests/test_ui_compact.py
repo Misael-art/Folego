@@ -67,8 +67,8 @@ def test_dock_geometry_respects_available_screen_and_panels():
     area = QRect(24, 38, 1500, 812)
     assert dock_geometry('right', area) == QRect(1399, 38, 125, 812)
     assert dock_geometry('left', area) == QRect(24, 38, 125, 812)
-    assert dock_geometry('top', area) == QRect(24, 38, 1500, 132)
-    assert dock_geometry('top', QRect(0, 0, 948, 593)) == QRect(0, 0, 948, 132)
+    assert dock_geometry('top', area) == QRect(24, 38, 1500, 120)
+    assert dock_geometry('top', QRect(0, 0, 948, 593)) == QRect(0, 0, 948, 120)
     assert dock_geometry('top', QRect(0, 0, 700, 500)) == QRect(0, 0, 700, 190)
     with pytest.raises(ValueError):
         dock_geometry('bottom', area)
@@ -223,8 +223,8 @@ def test_dock_remap_rechecks_kwin_and_corrects_late_rule(qapp, monkeypatch):
     view._verify_dock_after_show()
     assert requested[-1] == ('widget-geometry', None)
     view._capture_result({'operation': 'widget-geometry',
-                          'geometry': (604, 368, 948, 132)})
-    assert requested[-1] == ('widget-place', (0, 0, 948, 132))
+                          'geometry': (604, 368, 948, 120)})
+    assert requested[-1] == ('widget-place', (0, 0, 948, 120))
     view._capture_result({'operation': 'widget-place', 'geometry': requested[-1][1]})
     assert view._dock_verify_attempts == 2
     view.force_close()
@@ -247,6 +247,26 @@ def test_dock_recheck_waits_for_busy_shortcut_controller(qapp, monkeypatch):
     assert view._dock_verify_waits == 1 and not requested
     controller.future = None
     QTest.qWait(120)
+    assert requested == [('widget-geometry', None)]
+    view.force_close()
+
+
+def test_initial_place_failure_after_remap_rechecks_owned_geometry(qapp, monkeypatch):
+    from PySide6.QtCore import QRect
+    from PySide6.QtTest import QTest
+    view, _ = make(qapp, caps=wayland())
+    view._screen_area = lambda: QRect(0, 0, 948, 593)
+    controller = view.shortcut_tabs.controller
+    requested = []
+    monkeypatch.setattr(controller, 'request',
+                        lambda action, value=None: requested.append((action, value)) or True)
+    view.show()
+    view._dock_mode = view._dock_pending = 'left'
+    view._dock_verify_attempts = 3
+    controller.action = 'widget-place'
+    view._capture_failed('Janela ainda não mapeada')
+    assert view._dock_pending is None and not requested
+    QTest.qWait(220)
     assert requested == [('widget-geometry', None)]
     view.force_close()
 
@@ -315,7 +335,7 @@ def _four_quotas(view):
     view.ai_strip.set_deliveries(deliveries)
 
 
-@pytest.mark.parametrize('width,height', ((948, 593), (1920, 1080), (2560, 1080)))
+@pytest.mark.parametrize('width,height', ((948, 593), (1280, 760), (1920, 1080), (2560, 1080)))
 @pytest.mark.parametrize('mode', ('left', 'right'))
 def test_side_dock_reaches_all_quotas_above_fixed_actions(qapp, width, height, mode):
     from PySide6.QtCore import QPoint, QRect
@@ -327,16 +347,24 @@ def test_side_dock_reaches_all_quotas_above_fixed_actions(qapp, width, height, m
     _four_quotas(view)
     view.set_dock_mode(mode)
     QTest.qWait(450)
+    keyboard = view.shortcut_tabs.buttons['keyboard']
+    keyboard_position = keyboard.mapTo(view, QPoint(0, 0))
     view._animate_actions(True)
     QTest.qWait(180)
     scroll = view.dock_scroll.verticalScrollBar()
     assert view.geometry() == dock_geometry(mode, QRect(0, 0, width, height))
-    assert view.dock_scroll.geometry().bottom() < view.action_drawer.geometry().top()
+    bottom = view.dock_scroll.mapTo(view, QPoint(0, view.dock_scroll.height())).y()
+    assert bottom <= view.action_drawer.y()
     assert all(column.isVisible() for column in view.ai_strip.columns.values())
     if height == 593:
         assert scroll.maximum() > 0
     scroll.setValue(scroll.maximum())
     qapp.processEvents()
+    assert keyboard.mapTo(view, QPoint(0, 0)) == keyboard_position
+    assert view.side_content.width() == view.dock_scroll.viewport().width()
+    for group in (view.keyboard_group, view.navigation_group):
+        left = group.mapTo(view, QPoint(0, 0)).x()
+        assert 0 <= left and left + group.width() <= view.width()
     last = view.ai_strip.columns['grok']
     top = last.mapTo(view.dock_scroll.viewport(), QPoint(0, 0)).y()
     assert top >= 0
@@ -365,11 +393,13 @@ def test_top_dock_keeps_four_quotas_and_actions_inside_view(qapp, width, height)
         assert view.dock_scroll.verticalScrollBar().maximum() == 0
     assert all(column.isVisible() for column in view.ai_strip.columns.values())
     viewport = view.dock_scroll.viewport()
-    for column in view.ai_strip.columns.values():
-        position = column.mapTo(viewport, QPoint(0, 0))
+    components = (view.gauge_widget, view.readings_widget, view.top_controls,
+                  *view.ai_strip.columns.values())
+    for component in components:
+        position = component.mapTo(viewport, QPoint(0, 0))
         left = position.x()
-        assert left >= 0 and left + column.width() <= viewport.width()
-        assert position.y() >= 0 and position.y() + column.height() <= viewport.height()
+        assert left >= 0 and left + component.width() <= viewport.width()
+        assert position.y() >= 0 and position.y() + component.height() <= viewport.height()
     assert view._handles['back'].geometry().bottom() < view.action_drawer.y()
     if width >= 900:
         gauge_x = view.gauge_widget.mapTo(view, QPoint(0, 0)).x()

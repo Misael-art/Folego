@@ -1,0 +1,232 @@
+{
+  "passed": true,
+  "platform": "wayland",
+  "cases": [
+    {
+      "case": "frameless central",
+      "native_frame_equals_client": true,
+      "transparent_corners": true,
+      "compositor_geometry": {
+        "frame": [
+          1779,
+          230,
+          900,
+          620
+        ],
+        "client": [
+          1779,
+          230,
+          900,
+          620
+        ]
+      },
+      "client_size": [
+        900,
+        620
+      ],
+      "available": [
+        2560,
+        1080
+      ]
+    },
+    {
+      "case": "back to widget without tray",
+      "workers_active": true
+    },
+    {
+      "case": "return to previous central tab",
+      "tab": "op\u00e7\u00f5es",
+      "workers_active": true
+    },
+    {
+      "case": "quota positions",
+      "mode": "right",
+      "positions": [
+        [
+          "codex",
+          true,
+          291,
+          61
+        ],
+        [
+          "claude",
+          true,
+          354,
+          61
+        ]
+      ],
+      "strip": 345,
+      "strip_size": [
+        90,
+        124
+      ],
+      "viewport_height": 537
+    },
+    {
+      "case": "native dock placement",
+      "mode": "right",
+      "geometry": [
+        836,
+        0,
+        112,
+        593
+      ],
+      "available": [
+        0,
+        0,
+        948,
+        593
+      ]
+    },
+    {
+      "case": "all quotas reachable",
+      "mode": "right",
+      "scroll_max": 197,
+      "last_quota_y": 325,
+      "actions_top": 456
+    },
+    {
+      "case": "dock actions retract",
+      "mode": "right",
+      "collapsed": true
+    },
+    {
+      "case": "quota positions",
+      "mode": "left",
+      "positions": [
+        [
+          "codex",
+          true,
+          291,
+          61
+        ],
+        [
+          "claude",
+          true,
+          354,
+          61
+        ]
+      ],
+      "strip": 345,
+      "strip_size": [
+        90,
+        124
+      ],
+      "viewport_height": 537
+    },
+    {
+      "case": "native dock placement",
+      "mode": "left",
+      "geometry": [
+        0,
+        0,
+        112,
+        593
+      ],
+      "available": [
+        0,
+        0,
+        948,
+        593
+      ]
+    },
+    {
+      "case": "all quotas reachable",
+      "mode": "left",
+      "scroll_max": 197,
+      "last_quota_y": 325,
+      "actions_top": 456
+    },
+    {
+      "case": "dock actions retract",
+      "mode": "left",
+      "collapsed": true
+    },
+    {
+      "case": "quota positions",
+      "mode": "top",
+      "positions": [
+        [
+          "codex",
+          true,
+          37,
+          49
+        ],
+        [
+          "claude",
+          true,
+          37,
+          49
+        ]
+      ],
+      "strip": 37,
+      "strip_size": [
+        89,
+        49
+      ],
+      "viewport_height": 120
+    },
+    {
+      "case": "native dock placement",
+      "mode": "top",
+      "geometry": [
+        0,
+        0,
+        948,
+        120
+      ],
+      "available": [
+        0,
+        0,
+        948,
+        593
+      ]
+    },
+    {
+      "case": "all quotas reachable",
+      "mode": "top",
+      "scroll_max": 0,
+      "last_quota_y": 19,
+      "actions_top": 98
+    },
+    {
+      "case": "dock actions retract",
+      "mode": "top",
+      "collapsed": true
+    },
+    {
+      "case": "top restored after full window",
+      "geometry": [
+        0,
+        0,
+        948,
+        120
+      ]
+    },
+    {
+      "case": "native dock return",
+      "geometry": [
+        20,
+        120,
+        280,
+        218
+      ]
+    },
+    {
+      "case": "full window position menu and floating return",
+      "geometry": [
+        604,
+        368,
+        280,
+        210
+      ]
+    },
+    {
+      "case": "explicit exit in controls",
+      "workers_stopped": true,
+      "input": "native menu open; Qt local popup click"
+    }
+  ],
+  "errors": [],
+  "scope": "owned Qt windows and compositor metadata; private HOME/XDG/Pulse; no user text or resource effects"
+}

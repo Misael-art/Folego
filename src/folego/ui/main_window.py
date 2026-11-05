@@ -382,7 +382,8 @@ class MainWindow(QMainWindow):
             snapshot, orphan_count=len(candidates),
             thumbnails_kb=self.disk.thumbnails_kb, extra_notes=notes,
             signal=signal, last_operation=self._last_operation_text())
-        self.tmpfs.show_volumes(snapshot.tmpfs, ts=snapshot.ts)
+        self.tmpfs.show_volumes(snapshot.tmpfs, ts=snapshot.ts,
+                               quality=snapshot.source("tmpfs").status)
         if self.tray.tray is not None:
             self.tray.show_snapshot(snapshot, signal=signal)
         if self._compact is not None:
@@ -412,7 +413,7 @@ class MainWindow(QMainWindow):
 
     def _apply_history(self, text):
         self._history_text = text
-        self.dashboard.last_operation.setText(text)
+        self.dashboard.show_operation(text)
         if self._compact is not None:
             self._compact.set_operation(text)
 

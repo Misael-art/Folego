@@ -11,6 +11,7 @@ import sys
 import json
 from datetime import datetime
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMessageBox, QPushButton,
                                QTableWidget, QTableWidgetItem, QVBoxLayout,
                                QWidget)
@@ -136,17 +137,26 @@ class DiskTab(QWidget):
         q_bar = QHBoxLayout()
         q_bar.addWidget(self.quarantine_list_button)
         q_bar.addWidget(self.restore_button)
-        q_bar.addWidget(self.purge_button)
         q_bar.addStretch(1)
 
+        plan_title = QLabel("Análise do disco")
+        quarantine_title = QLabel("Quarentena reversível")
+        for title in (plan_title, quarantine_title):
+            title.setObjectName("section")
+        self.table.hide()
+        self.quarantine_table.hide()
         layout = QVBoxLayout(self)
+        layout.addWidget(plan_title)
         layout.addWidget(self.summary)
-        layout.addWidget(self.table, 2)
-        layout.addWidget(self.quarantine_summary)
-        layout.addWidget(self.quarantine_table, 1)
-        layout.addWidget(self.status)
-        layout.addLayout(q_bar)
         layout.addLayout(bar)
+        layout.addWidget(self.table, 2)
+        layout.addWidget(quarantine_title)
+        layout.addWidget(self.quarantine_summary)
+        layout.addLayout(q_bar)
+        layout.addWidget(self.quarantine_table, 1)
+        layout.addWidget(self.purge_button, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self.status)
+        layout.addStretch(1)
 
     # -------------------------------------------------------------------- reading
 
@@ -164,6 +174,7 @@ class DiskTab(QWidget):
             self.rows = []
             self.thumbnails_kb = None
             self.table.setRowCount(0)
+            self.table.hide()
             self.quarantine_button.setEnabled(False)
             self.summary.setText("sem plano")
             detail = f"não foi possível planejar: {reason}"
@@ -192,7 +203,8 @@ class DiskTab(QWidget):
         reclaimable = sum(i.get("bytes", 0) for i in items if i.get("reclaimable"))
         self.summary.setText(
             f"recuperáveis {fmt_bytes(reclaimable)} em {len(self.rows)} item(ns) · "
-            f"lidos {fmt_bytes(payload.get('scanned_bytes', 0))}")
+            f"lidos {fmt_bytes(payload.get('scanned_bytes', 0))}" if self.rows
+            else "Nenhum item encontrado no escopo analisado.")
         plan_note = ("isto é um plano: nada foi movido. Quarentenar move o item "
                      "para um destino reversível; restaurar devolve ao caminho "
                      "original.")
@@ -214,6 +226,7 @@ class DiskTab(QWidget):
             reason = (payload or {}).get("reason") or "o filho não respondeu"
             self.quarantine_rows = []
             self.quarantine_table.setRowCount(0)
+            self.quarantine_table.hide()
             self.quarantine_summary.setText(f"quarentena ilegível: {reason}")
             self._q_selection_changed()
             return
@@ -231,6 +244,7 @@ class DiskTab(QWidget):
             "stored": e.get("state") == "stored",
         } for e in entries]
         self.quarantine_table.setRowCount(len(self.quarantine_rows))
+        self.quarantine_table.setVisible(bool(self.quarantine_rows))
         for row, item in enumerate(self.quarantine_rows):
             for column, (key, _) in enumerate(QUARANTINE_COLUMNS):
                 self.quarantine_table.setItem(
@@ -248,6 +262,7 @@ class DiskTab(QWidget):
 
     def _fill_table(self):
         self.table.setRowCount(len(self.rows))
+        self.table.setVisible(bool(self.rows))
         for row, item in enumerate(self.rows):
             for column, (key, _) in enumerate(COLUMNS):
                 self.table.setItem(row, column, QTableWidgetItem(item[key]))

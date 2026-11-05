@@ -82,6 +82,16 @@ def test_the_last_operation_is_shown_verbatim_and_never_invented(panel):
     view.show_snapshot(snap(), last_operation="17/10 12:00:00 · disk.quarantine · sucesso")
     assert "disk.quarantine · sucesso" in view.last_operation.text()
     assert view.last_operation.text().startswith("última operação:")
+    assert view.operation_title.text() == "Movimentação para quarentena"
+    assert view.operation_meta.text() == "Sucesso · 17/10 12:00:00"
+    assert view.technical_details.isHidden()
+    assert "disk.quarantine · sucesso" in view.diagnostic_text()
+    view.details_button.click()
+    assert not view.technical_details.isHidden()
+    view.show_operation("histórico ilegível — mutações não comprovadas")
+    assert view.operation_title.text() == "Última operação"
+    assert "histórico ilegível" in view.operation_meta.text()
+    assert view.operation_reason.isHidden()
 
 
 def test_clicking_a_suggestion_only_asks_to_change_tab(panel):

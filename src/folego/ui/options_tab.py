@@ -75,8 +75,18 @@ class OptionsTab(QWidget):
         box.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         self.settings_box = box
         self.build_theme_options()
-        for widget in (self.choice, text, self.status, self.verify, self.pending, self.operation_id, self.reconcile, self.cancel, self.operation_status, self.retention, self.retain, self.retained_runs, self.recover_run_button):
-            box.addWidget(widget)
+        for title, controls in (
+            ("Início com a sessão", (self.choice, text, self.status, self.verify)),
+            ("Operações pendentes", (self.pending, self.operation_id, self.reconcile, self.cancel,
+                                     self.operation_status)),
+            ("Temporários do Fôlego", (self.retention, self.retain, self.retained_runs,
+                                       self.recover_run_button)),
+        ):
+            group = QGroupBox(title)
+            group_layout = QVBoxLayout(group)
+            for widget in controls:
+                group_layout.addWidget(widget)
+            box.addWidget(group)
         box.addStretch(1)
         area.setWidget(content)
         outer.addWidget(area)
