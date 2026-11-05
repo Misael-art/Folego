@@ -1,5 +1,42 @@
 # Passagem para o próximo agente — atualizada em 05/11/2026
 
+## Saúde do host e guarda preventiva — 05/11/2026
+
+O incremento `59c5ff5` na branch canônica e no PR #3 acrescenta monitoramento
+passivo, integrado à Central, ao início da aba Disco e à CLI (`disk health` e
+`disk guide`). O [mockup e a validação visual](handoff/validation/host-guard-2026-11-05/README.md)
+precederam a implementação. A Central resume itens para revisar e leva à aba
+Disco; a aba apresenta temperatura atual/pico em quatro minutos, limite do
+mesmo sensor, RPM quando disponível, PSI CPU/I/O, avisos NTFS em dez minutos,
+contadores e diferenças Btrfs, units de usuário em falha ou reinício, e quatro
+boots registrados. O botão Orientação só explica um próximo passo manual.
+Verificar agora usa o worker de cinco minutos; Copiar dados copia o diagnóstico
+observado. Nenhum reparo, scrub, fsck, sinal, ajuste de ventoinha ou reinício de
+serviço/host foi acrescentado.
+
+`./dev check` passou sequencialmente: **1254 passed, 2 skipped** sem Qt em
+23,41 s; **1625 passed, 2 skipped** Qt offscreen em 114,94 s. Python 3.14.7,
+HOME/XDG privados, QA em `.scratch/dev-tests-reviewed/host-guard-20261105-*`.
+O teste focado final da GUI passou; os recibos de janela própria KDE/Wayland
+clara/escura confirmam navegação Central → Disco, ausência de rolagem horizontal
+em 800 × 600, abertura da orientação e acesso à análise antiga por rolagem.
+Dados dessa prova visual são sintéticos e não medem o dispositivo físico.
+
+A consulta real somente leitura `./dev run disk health --json` em 05/11 às
+06:03 -03 observou ACPI 78 °C com limite passivo 100 °C, RPM indisponível,
+PSI CPU 3,65% e I/O 0% em 60 s, 12 avisos NTFS em dez minutos com `/mnt/sdcard`
+como candidato, e 6.741 erros de corrupção acumulados no Btrfs sem baseline
+do Fôlego para datar a diferença. Os três boots anteriores do diário não
+mostraram encerramento nas últimas 40 mensagens de cada um; **a causa é
+desconhecida**. `codex-quota-panel.service` não estava na lista de units em
+falha/ativação nessa consulta; isso não prova correção, e o owner continua o
+SteamZero. O Fôlego não percorre nem repara o volume NTFS, e um único mount
+`fuseblk` é apenas candidato. Journal, sensores e baseline ausentes aparecem
+como desconhecidos, sem inferência de saúde. Leitor de tela, tacômetro físico,
+integridade dos dados e duração longa ainda não foram certificados. Próximo:
+observar o painel na instância residente após a atualização normal da GUI e
+correlacionar novos eventos com evidência do owner de cada recurso.
+
 ## Prévia v0.2.0b5 e registro de design — 05/11/2026
 
 A rodada entregou as melhorias da auditoria de `8033b0f` e a documentação
