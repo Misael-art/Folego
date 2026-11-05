@@ -174,6 +174,8 @@ class Snapshot:
     boot_id: str = ""
     temperature_c: float | None = None
     temperature_sensor: str = ""
+    fan_rpm: int | None = None
+    fan_sensor: str = ""
     battery: BatteryInfo | None = None
 
     @property

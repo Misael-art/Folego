@@ -354,12 +354,21 @@ de cima para baixo em 140 ms; ao sair, aguarda 200 ms antes de recolher. Menus
 abertos preservam a área durante a escolha. O teclado fica sempre no cabeçalho:
 ícone para abrir embaixo e seta para abrir no topo.
 
-As métricas mostram RAM e Swap à esquerda, CPU e Tmp alinhados à direita e a
-temperatura em °C à direita da CPU. **Tmp** é a ocupação dos temporários em
+As métricas mostram RAM e Swap à esquerda, CPU e Tmp alinhados à direita. No
+widget flutuante, a terceira linha põe temperatura e RPM lado a lado; na barra
+superior ficam juntos à direita da CPU.
+**Tmp** é a ocupação dos temporários em
 memória, não a temperatura. A coleta lê sensores CPU/SoC em sysfs; se ausentes,
 aceita o sensor de sistema ACPI, identificado no tooltip. Não usa temperatura
 de GPU/disco como temperatura do host. Ausente/ilegível resulta em **— °C**.
-A leitura acontece no coletor, fora do loop gráfico, sem alterar ventoinhas.
+Quando a fonte é `acpitz`, a tela mostra **ACPI**: essa zona não comprova a
+temperatura específica da CPU. O percentual **CPU** é uso agregado dos núcleos,
+medido separadamente a partir de `/proc/stat`.
+O RPM vem do tacômetro `fan*_input` em sysfs: o sensor rotulado CPU tem
+preferência, seguido do primeiro ventilador do host. Sensores de GPU e disco
+não entram nessa leitura. Zero é uma leitura válida de ventoinha parada;
+ausência ou valor inválido aparece como **— RPM**. O tooltip identifica o sensor.
+As leituras acontecem no coletor, fora do loop gráfico, sem alterar ventoinhas.
 
 **Copiar** solicita a cópia da seleção do aplicativo em foco. **Colar** solicita
 a colagem nele. Usam os atalhos alternativos de edição Ctrl+Insert e Shift+Insert;

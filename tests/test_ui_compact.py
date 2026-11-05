@@ -592,3 +592,29 @@ def test_the_widget_shows_the_basic_numbers_and_a_mini_gauge(qapp):
     text = view.detail_label.text()
     assert "RAM 70%" in text and "Swap 50%" in text
     assert view.gauge.value == 30
+
+
+def test_cooler_speed_stays_next_to_temperature_in_each_position(qapp):
+    from dataclasses import replace
+
+    view, _ = make(qapp)
+    sample = replace(snap(), temperature_c=56, temperature_sensor='k10temp',
+                     fan_rpm=2340, fan_sensor='thinkpad · CPU Fan')
+    for mode in ('compact', 'left', 'right', 'top'):
+        if mode != 'compact':
+            view.set_dock_mode(mode)
+            qapp.processEvents()
+        view.show_snapshot(sample)
+        text = view.detail_label.text()
+        assert text.index('56 °C') < text.index('2340 RPM')
+        if mode == 'compact':
+            assert text.count('<tr>') == 3
+            assert '<tr><td>56 °C</td><td align="right">2340 RPM</td></tr>' in text
+        assert 'thinkpad · CPU Fan' in view.detail_label.toolTip()
+    view.show_snapshot(replace(sample, fan_rpm=None, fan_sensor=''))
+    assert '— RPM' in view.detail_label.text()
+    assert 'RPM indisponível' in view.detail_label.toolTip()
+    view.show_snapshot(replace(sample, temperature_sensor='acpitz'))
+    assert 'ACPI 56 °C' in view.detail_label.text()
+    assert 'não confirma temperatura da CPU' in view.detail_label.toolTip()
+    view.force_close()

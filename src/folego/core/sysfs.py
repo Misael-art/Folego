@@ -97,6 +97,48 @@ def read_temperature(root: Path) -> tuple[float | None, str]:
     return max(values) if values else max(acpi) if acpi else (None, '')
 
 
+def read_fan_speed(root: Path) -> tuple[int | None, str]:
+    """Read a CPU-labelled or first host fan tachometer; never use a GPU fan."""
+    import itertools
+
+    fans: list[tuple[bool, str, int]] = []
+    try:
+        boards = list(itertools.islice((root / 'class/hwmon').glob('hwmon*'), 65))
+        if len(boards) > 64:
+            return None, ''
+        for board in boards:
+            try:
+                name = (board / 'name').read_text().strip()
+                if name in ('amdgpu', 'nouveau', 'nvme'):
+                    continue
+                inputs = list(itertools.islice(board.glob('fan*_input'), 33))
+                if len(inputs) > 32:
+                    continue
+                for item in inputs:
+                    try:
+                        speed = int(item.read_text().strip())
+                        if not 0 <= speed <= 100_000:
+                            continue
+                        label_path = item.with_name(item.name.replace('_input', '_label'))
+                        try:
+                            label = label_path.read_text().strip()[:80]
+                        except OSError:
+                            label = ''
+                        source = f'{name} · {label or item.name.removesuffix("_input")}'
+                        cpu_fan = 'cpu' in label.casefold() or 'processor' in label.casefold()
+                        fans.append((cpu_fan, source, speed))
+                    except (OSError, ValueError):
+                        continue
+            except OSError:
+                continue
+    except OSError:
+        return None, ''
+    if not fans:
+        return None, ''
+    _, source, speed = min(fans, key=lambda fan: (not fan[0], fan[1]))
+    return speed, source
+
+
 def read_zram_mm_stat(root: Path | None = None, device: str = "zram0") -> ZramStat | None:
     root = root or Path(paths.sys_root())
     try:

@@ -130,6 +130,7 @@ class MetricsCollector:
             add("self_rss", OK)
 
         temperature, sensor = sysfs.read_temperature(self._sys())
+        fan_rpm, fan_sensor = sysfs.read_fan_speed(self._sys())
         battery, battery_quality = sysfs.read_battery(self._sys())
         add("battery", battery_quality.status, battery_quality.detail)
         finished = self.clock()
@@ -158,6 +159,8 @@ class MetricsCollector:
         return Snapshot(
             temperature_c=temperature,
             temperature_sensor=sensor,
+            fan_rpm=fan_rpm,
+            fan_sensor=fan_sensor,
             battery=battery,
             boot_id=boot_id,
             ts=self.wall_clock(),

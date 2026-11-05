@@ -936,10 +936,17 @@ class CompactWindow(QWidget):
         measured = [v for v in snapshot.tmpfs if v.quality == "ok" and v.total_bytes]
         temp = f"Tmp {max(v.used_frac for v in measured) * 100:.0f}%" if measured else "Tmp —"
         thermal = '— °C' if snapshot.temperature_c is None else f'{snapshot.temperature_c:.0f} °C'
-        self._detail_values = memory, cpu, thermal, swap, temp
+        if snapshot.temperature_c is not None and snapshot.temperature_sensor == 'acpitz':
+            thermal = f'ACPI {thermal}'
+        fan = '— RPM' if snapshot.fan_rpm is None else f'{snapshot.fan_rpm} RPM'
+        self._detail_values = memory, cpu, thermal, fan, swap, temp
         self._render_details()
         self._show_battery(snapshot)
-        self.detail_label.setToolTip('Temperatura do host · ' + (snapshot.temperature_sensor or 'sensor não disponível')
+        self.detail_label.setToolTip('CPU = uso agregado dos núcleos'
+                                     + '\nTemperatura · ' + (snapshot.temperature_sensor or 'sensor não disponível')
+                                     + (' (zona do sistema; não confirma temperatura da CPU)'
+                                        if snapshot.temperature_sensor == 'acpitz' else '')
+                                     + '\nCooler · ' + (snapshot.fan_sensor or 'RPM indisponível neste host')
                                      + '\nTmp = ocupação dos temporários em memória')
         alerts = []
         for volume in snapshot.tmpfs:
@@ -964,17 +971,23 @@ class CompactWindow(QWidget):
     def _render_details(self):
         if not hasattr(self, '_detail_values'):
             return
-        memory, cpu, thermal, swap, temp = self._detail_values
+        memory, cpu, thermal, fan, swap, temp = self._detail_values
         if self._dock_mode in ('left', 'right'):
             self.detail_label.setTextFormat(Qt.TextFormat.PlainText)
-            self.detail_label.setText('\n'.join((memory, cpu, thermal, swap, temp)))
+            self.detail_label.setText('\n'.join((memory, cpu, thermal, fan, swap, temp)))
         else:
             battery = (f'<span style="color:{self._battery_color()};font-weight:700">{self._battery_text}</span>'
                        if self._dock_mode == 'top' else '')
             self.detail_label.setTextFormat(Qt.TextFormat.RichText)
-            self.detail_label.setText('<table width="100%" cellspacing="0"><tr>'
-                f'<td>{memory}</td><td align="right">{cpu}</td><td align="right">{thermal}</td></tr>'
-                f'<tr><td>{swap}</td><td align="right">{temp}</td><td align="right">{battery}</td></tr></table>')
+            if self._dock_mode == 'compact':
+                self.detail_label.setText('<table width="100%" cellspacing="0"><tr>'
+                    f'<td>{memory}</td><td align="right">{cpu}</td></tr>'
+                    f'<tr><td>{swap}</td><td align="right">{temp}</td></tr>'
+                    f'<tr><td>{thermal}</td><td align="right">{fan}</td></tr></table>')
+            else:
+                self.detail_label.setText('<table width="100%" cellspacing="0"><tr>'
+                    f'<td>{memory}</td><td align="right">{cpu}</td><td align="right">{thermal} · {fan}</td></tr>'
+                    f'<tr><td>{swap}</td><td align="right">{temp}</td><td align="right">{battery}</td></tr></table>')
 
     def _battery_color(self):
         colors = {'green': TOKENS.ok, 'yellow': readable('#e8bd18', (TOKENS.surface, TOKENS.surface_alt)),

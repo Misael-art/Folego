@@ -78,7 +78,10 @@ Os atalhos coloridos aparecem em duas linhas iguais ao passar o mouse pelo
 widget e se recolhem ao sair. **Copiar, Colar e Print** ficam abaixo de
 **Selecionar tudo, Apagar tudo e Prompts**. O ícone de teclado no cabeçalho abre
 na parte inferior; somente sua seta abre no topo. CPU e Tmp ficam alinhados,
-com a temperatura do host em °C à direita da CPU (sensor indisponível: **— °C**).
+com a temperatura do host em °C e a rotação do cooler em RPM lado a lado na
+terceira linha (sensor indisponível: **— °C** ou **— RPM**). Quando só existe a
+zona térmica do sistema, a leitura mostra **ACPI** para não sugerir que mede
+diretamente a CPU.
 **Tmp** indica a ocupação dos temporários em memória. A altura
 pode crescer para preservar alertas e mensagens. [Uso, configuração de contas,
 dependências e limites](docs/COMPACTO.md).
