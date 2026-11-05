@@ -1,5 +1,48 @@
 # Passagem para o próximo agente — atualizada em 05/11/2026
 
+## Travamento observado em 05/11/2026 e correção da leitura de boots
+
+Investigação somente leitura do host, sem reproduzir o travamento. O `last -x`
+marca o boot iniciado às 04:42 como interrompido antes do seguinte, às 16:03;
+o journal desse boot só reteve mensagens de 14:56 a **15:18:46**. Não há pedido
+de desligamento no recorte final. A máquina ainda emitia logs às 15:18:46;
+o intervalo até 16:03 não revela quando deixou de responder nem quem a
+reiniciou. Os boots seguintes terminaram de modo **ordenado**: às 16:16:01 o
+`systemd-logind` registrou pressão curta da tecla de energia e às 17:29:29 o
+`sddm` recebeu `PowerOff` do greeter. `last -x` confirmou os dois shutdowns.
+
+No boot interrompido, `plasmashell` abortou às 15:01, 15:03, 15:08 e 15:12;
+três relançamentos relataram falha de inicialização do plugin Qt, sem core
+disponível. O diário continuou ativo depois disso, então essas falhas explicam
+instabilidade visual, mas não comprovam o colapso do kernel. Entre 15:00 e
+15:18, o `lowntfs-3g` emitiu 319 avisos de fixup e 319 de índice corrompido
+no cartão `/dev/mmcblk0p1` montado em `/mnt/sdcard`. O `systemd-swap` expandiu
+o pool com `zram2` às 15:04, usou backing `/dev/loop12` e registrou writeback
+de 32.707 páginas frias às 15:18:19. São correlações temporais, sem prova
+causal. No journal retido não há OOM, panic, lockup ou erro de controlador
+NVMe/MMC na janela final. O Btrfs seguiu com `corruption_errs=6741` e os
+contadores de leitura, escrita, flush e geração em zero, sem delta novo.
+
+Os boots anteriores usavam `nowatchdog` e `nosoftlockup` em `/etc/default/grub`,
+o que reduz a chance de um travamento gerar uma pilha útil. O boot atual usa
+`quiet splash steamzero.gamemode=1` e registrou o NMI watchdog habilitado;
+essa diferença também impede comparação controlada de estabilidade. Acesso
+sem privilégio não permitiu ler `/sys/fs/pstore` nem SMART do NVMe. Não houve
+alteração de boot, swap, serviços, mounts, nem tentativa de reparo. Próximo:
+preservar os dados insubstituíveis do SD, obter SMART/pstore por autenticação
+oficial se disponível e observar um novo episódio com registro persistente de
+temperatura, PSI, swap e I/O, sem provocar carga para reproduzi-lo.
+
+O monitor de boots do Fôlego foi corrigido em `11923d2`: procurar só nas últimas 40 linhas
+classificava os dois desligamentos limpos como inconclusivos, pois o ruído de
+shutdown escondia o evento. Agora consulta o evento específico do `logind`
+em cada boot; ausência permanece inconclusiva. A consulta real passou a
+mostrar **1 boot inconclusivo e 2 com desligamento registrado**. Teste focado
+passou em HOME/XDG privados. `./dev check` sequencial: **1255 passed, 2 skipped**
+sem Qt em 26,44 s; **1626 passed, 2 skipped** Qt offscreen em 106,36 s. As
+árvores de QA concluídas foram preservadas em `.scratch/dev-tests-reviewed`.
+A prova de desligamento não atribui causa ao boot inconclusivo.
+
 ## Saúde do host e guarda preventiva — 05/11/2026
 
 O incremento `59c5ff5` na branch canônica e no PR #3 acrescenta monitoramento
