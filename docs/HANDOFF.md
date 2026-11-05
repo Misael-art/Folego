@@ -17,7 +17,13 @@ CPU. O percentual CPU vem de `/proc/stat`, a leitura ACPI é explicitamente
 rotulada e não comprova a temperatura da CPU. O cooler aparece **— RPM**, com
 tooltip de indisponibilidade. A [captura Wayland própria](handoff/validation/cooler-monitor-2026-11-04/README.md)
 mostra CPU 44%, ACPI 83 °C e — RPM sem quebra ou sobreposição; a janela QA foi
-fechada pelo próprio aplicativo. A instância residente não foi reiniciada.
+fechada pelo próprio aplicativo. Após o push, a instância residente antiga
+PID 4436, confirmada na unit própria, saiu por **Sair do Fôlego** da sua
+bandeja. A unit chegou a `inactive/dead`, `Result=success`, e foi iniciada
+novamente em PID 94795, `active/running`, usando o entrypoint deste checkout.
+Os monitores de entrada/desempenho mantiveram PIDs 4501/4502. A aparência
+medida por pixels é da janela QA; a revisão carregada na residente é inferida
+da reinicialização após o bootstrap do ambiente, não consultada dentro dela.
 
 `./dev test tests/test_temperature.py tests/test_ui_compact.py -q`: **44 passed**.
 `./dev check` sequencial, Python 3.14.7 gerenciado, HOME/XDG privados:
@@ -31,9 +37,10 @@ para liberar slots de QA.
 Código/evidência estão no commit `16fd251`. Uma corrida de stage chegou a
 misturar o incremento com `ui/orphans_panel.py` num commit transitório;
 o ajuste alheio ficou isolado em `d1fd7a6` e o código do cooler no commit acima.
-O diff, a captura e os testes desta tarefa foram revisados. Próximo: conferir
-CI do SHA publicado e revisar o PR #3; numa máquina que exporte tacômetro,
-validar a rotação física ao lado da temperatura.
+O diff, a captura e os testes desta tarefa foram revisados. O PR #3 no SHA
+`d39ace0` passou nos seis jobs de produto do CI; o revisor automático foi
+skipped. Próximo: validar a rotação física numa máquina que exporte tacômetro
+e revisar o PR empilhado após #2, sem merge ou release nesta tarefa.
 
 ## Cantos reais da Central — 04/11/2026
 
