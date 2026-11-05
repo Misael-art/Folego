@@ -4,6 +4,7 @@ A regra de segurança: ausência/idade não viram verde nem zero. A regra de
 estabilidade: piorar é imediato; melhorar exige amostras consecutivas.
 """
 import pytest
+from dataclasses import replace
 
 from folego.core.health import (GREEN, RED, THRESHOLDS_VERSION, UNKNOWN, YELLOW,
                                 HealthEngine, HealthThresholds)
@@ -60,7 +61,21 @@ def judge(snapshot, now=None, **thresholds):
 
 def test_every_report_carries_the_thresholds_version():
     report = judge(snap())
-    assert report.thresholds_version == THRESHOLDS_VERSION == 1
+    assert report.thresholds_version == THRESHOLDS_VERSION == 2
+
+
+def test_matching_thermal_limit_warns_without_calling_acpi_cpu_temperature():
+    source = (SourceQuality("temperature", OK), SourceQuality("swaps", OK),
+              SourceQuality("processes", OK))
+    sample = replace(snap(sources=source), temperature_c=97,
+                     temperature_sensor="acpitz", thermal_passive_c=100)
+    report = judge(sample)
+    assert report.level == YELLOW
+    reason = next(r for r in report.reasons if r.code == "thermal_near_limit")
+    assert "ACPI" in reason.message and "CPU" not in reason.message
+    assert judge(replace(sample, temperature_c=101)).level == RED
+    assert "thermal_high" in judge(replace(sample, temperature_c=101)).codes()
+    assert "thermal_near_limit" not in judge(replace(sample, thermal_passive_c=None)).codes()
     custom = judge(snap(), version=7)
     assert custom.thresholds_version == 7
 

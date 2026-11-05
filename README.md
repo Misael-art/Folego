@@ -43,6 +43,7 @@ regras de adaptação e evidências de cada superfície.
 |---|---|
 | **Visão geral** | Acompanhar RAM, CPU, swap/zram, tmpfs e bateria, com alertas de pressão e indicação de dados ausentes ou antigos. |
 | **Diagnóstico de temporários** | Identificar os maiores consumidores, processos que mantêm arquivos abertos e caminhos oficiais de encerramento quando conhecidos. |
+| **Saúde do host** | Acompanhar calor, pressão de CPU/I/O, avisos NTFS, contadores Btrfs, units de usuário instáveis e boots registrados; orientar proteção e reparo manual sem executar fsck nem desligar serviços alheios. |
 | **Quarentena e recuperação** | Revisar ações de disco e tmpfs, com cópia verificada e recuperação nos fluxos suportados. |
 | **Proteção de sessões** | Registrar trabalhos que devem continuar ativos e revisar candidatos sem tratar nome, idade ou CPU baixa como autorização. |
 | **Ajustes reversíveis** | Revisar ajustes suportados, como opções de segundo plano do navegador, com preservação do estado anterior. |
@@ -189,7 +190,21 @@ Estas consultas não limpam arquivos nem encerram processos:
 ./dev run automation status --json
 ./dev run accessibility status --json
 ./dev run startup status --json
+./dev run disk health --json
+./dev run disk guide ntfs
 ```
+
+**Saúde do host** aparece na Central e no início da aba Disco. A temperatura e
+a pressão vêm da coleta de recursos; integridade, units e boots são consultados
+separadamente a cada cinco minutos enquanto o Fôlego monitora. A CLI consulta
+sob demanda, sem alterar o host. A GUI guarda um pequeno ponto de comparação
+dos contadores Btrfs em seu estado XDG; o primeiro valor é histórico de idade
+desconhecida, e uma falha nesse estado não é tratada como contador zerado.
+Avisos NTFS são buscados em janela limitada do journal, sem percorrer o volume.
+Sem permissão, sensor ou histórico, a interface mostra **desconhecido**. As
+orientações não executam `ntfsfix`, `chkdsk`, `btrfs scrub`, `btrfs check --repair`,
+parada de serviços ou reinício do host. Consulte também [os limites e o
+mockup](docs/handoff/validation/host-guard-2026-11-05/README.md).
 
 Para acompanhar um comando seu como sessão protegida:
 

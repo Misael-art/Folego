@@ -1,0 +1,13 @@
+{
+  "platform": "wayland",
+  "owned_window_mapped": true,
+  "window": [
+    800,
+    593
+  ],
+  "horizontal_scroll": 0,
+  "vertical_scroll_max": 216,
+  "guide": "Calor e carga",
+  "state": "synthetic",
+  "host_effects": 0
+}

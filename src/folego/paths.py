@@ -53,6 +53,11 @@ def operations_journal_path() -> Path:
     return state_dir() / "operations.jsonl"
 
 
+def host_guard_path() -> Path:
+    """Small persistent baseline for Btrfs counters; not an action journal."""
+    return state_dir() / "host-guard.json"
+
+
 def coordinator_lock_path() -> Path:
     """Trava entre processos das mutações (flock por usuário/estado)."""
     return state_dir() / "coordinator.lock"

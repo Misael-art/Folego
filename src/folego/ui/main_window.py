@@ -36,6 +36,7 @@ from .ai_monitor import AIMonitor
 from .theme import TOKENS, _background_color, set_control_icon, prepare_surface
 from ..core import health
 from ..core.battery_alerts import BatteryAlertTracker
+from ..core.host_guard import ThermalTracker
 from ..core.exclusions import ExclusionError, ExclusionList
 from ..core.orphans import OrphanTracker, active_investigation, group_targets
 from ..core.sessions import SessionError, SessionRegistry
@@ -106,7 +107,8 @@ class MainWindow(QMainWindow):
                  sessions: SessionRegistry | None = None,
                  exclusions: ExclusionList | None = None, journal=None,
                  config_store=None, grant_store=None, compact_factory=None, process_jobs=None,
-                 accessibility_factory=None, startup_defaults=False):
+                 accessibility_factory=None, startup_defaults=False,
+                 host_guard_factory=None):
         super().__init__()
         self.setObjectName('mainWindow')
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
@@ -117,6 +119,9 @@ class MainWindow(QMainWindow):
         self._journal = journal or Journal()
         self._history_reader = HistoryReader(self._journal)
         self._history_poller = None
+        self._host_guard_poller = None
+        self._host_guard_factory = host_guard_factory
+        self._thermal_tracker = ThermalTracker()
         self._history_text = "aguardando leitura do histórico"
         self._config_store = config_store or ConfigStore()
         self._grant_store = grant_store or GrantStore()
@@ -171,6 +176,7 @@ class MainWindow(QMainWindow):
                                     on_force=self._force,
                                     on_group=self._group)
         self.disk = DiskTab(jobs=self._disk_jobs, confirm_fn=confirm_fn)
+        self.disk.host_refresh_requested.connect(self._request_host_guard)
         self._performance_jobs = TuneJobs(parent=self, argv_factory=performance_argv,
                                           timeout_ms=CLOSE_TIMEOUT_MS)
         self.performance = PerformanceTab(jobs=self._performance_jobs, confirm_fn=confirm_fn)
@@ -244,6 +250,7 @@ class MainWindow(QMainWindow):
         self._request_history()
         if self._accessibility_factory:
             self.accessibility.start()
+        self._start_host_guard()
         if self._collector_factory is None or self._poller is not None:
             return
         if not self.tray.install():
@@ -259,6 +266,36 @@ class MainWindow(QMainWindow):
         self._poller.snapshot_ready.connect(self.apply_snapshot)
         self._poller.error.connect(self.show_error)
         self._poller.start()
+
+    def _start_host_guard(self):
+        if self._host_guard_factory is None or self._host_guard_poller is not None:
+            return
+        from .workers import Poller
+        observer = self._host_guard_factory()
+        self._host_guard_poller = Poller(observer.observe, interval_s=300,
+                                         offload=True, parent=self)
+        self._host_guard_poller.snapshot_ready.connect(self._show_host_report)
+        self._host_guard_poller.error.connect(self._show_host_error)
+        self._host_guard_poller.start()
+        self._host_guard_poller.request()
+
+    def _request_host_guard(self):
+        if self._paused:
+            self.disk.show_host_error("monitoramento pausado")
+        elif self._host_guard_poller is None:
+            self.disk.show_host_error("observador não iniciado")
+        else:
+            self._host_guard_poller.request()
+
+    def _show_host_report(self, report: dict):
+        if self._paused:
+            return
+        self.disk.show_host_report(report)
+        self.dashboard.show_host_report(report)
+
+    def _show_host_error(self, message: str):
+        self.disk.show_host_error(message)
+        self.dashboard.show_host_error(message)
 
     def _show_accessibility(self, report):
         words = {"observed": "configuração observada", "degraded": "revisão necessária",
@@ -314,6 +351,7 @@ class MainWindow(QMainWindow):
 
     def show_error(self, message: str):
         self._collection_error = message
+        self.disk.show_thermal({"state": "unknown", "reason": f"falha de coleta: {message}"})
         self.dashboard.status.setText(f"⚠ última falha de coleta: {message}")
         self._refresh_freshness()
 
@@ -364,6 +402,7 @@ class MainWindow(QMainWindow):
         signal = title_signal.compute(snapshot, self._thresholds,
                                       engine=self._health)
         self._last_snapshot = snapshot
+        self.disk.show_thermal(self._thermal_tracker.observe(snapshot))
         self._last_signal = signal
         self.setWindowTitle(signal.text)
         # Uma leitura só das sessões/exclusões por amostra: os predicados são
@@ -583,6 +622,10 @@ class MainWindow(QMainWindow):
         self._paused = True
         if self._poller is not None:
             self._poller.pause()
+        if self._host_guard_poller is not None:
+            self._host_guard_poller.pause()
+        self.disk.show_thermal({"state": "unknown", "reason": "monitoramento pausado"})
+        self._show_host_error("monitoramento pausado; última verificação não é atual")
         if self._compact is not None:
             self._compact.set_paused(True)
         self.tray.set_paused(True)
@@ -594,6 +637,8 @@ class MainWindow(QMainWindow):
         self._paused = False
         if self._poller is not None:
             self._poller.resume()
+        if self._host_guard_poller is not None:
+            self._host_guard_poller.resume()
         if self._compact is not None:
             self._compact.set_paused(False)
         self.tray.set_paused(False)
@@ -692,6 +737,8 @@ class MainWindow(QMainWindow):
                 self._poller.stop()
             if self._history_poller is not None:
                 self._history_poller.stop()
+            if self._host_guard_poller is not None:
+                self._host_guard_poller.stop()
             self.performance.shutdown()
             self._performance_jobs.shutdown()
             self._jobs.shutdown()

@@ -69,6 +69,20 @@ def suggest(snapshot: Snapshot, *, orphan_count: int = 0,
             "Modo Desempenho e revise um alvo específico antes de fechar.",
             "memoria"))
 
+    thermal_limits = (snapshot.thermal_passive_c, snapshot.thermal_critical_c)
+    thermal_limit = min((value for value in thermal_limits if value is not None),
+                        default=None)
+    if (snapshot.temperature_c is not None and thermal_limit is not None
+            and snapshot.temperature_c >= thermal_limit - 5
+            and (not snapshot.sources or snapshot.source("temperature").status == "ok")):
+        label = "ACPI" if snapshot.temperature_sensor == "acpitz" else snapshot.temperature_sensor
+        out.append(Suggestion(
+            "thermal", CRITICO if snapshot.temperature_c >= thermal_limit else ALTO,
+            f"{label} {snapshot.temperature_c:g} °C perto do limite térmico",
+            "Revise os consumidores em Desempenho e reduza pelo aplicativo responsável "
+            "uma tarefa pesada, se necessário. A leitura não prova a causa do calor.",
+            "memoria"))
+
     if snapshot.mem and snapshot.mem.mem_total_kb:
         avail = snapshot.mem.mem_available_kb
         if avail / snapshot.mem.mem_total_kb < thresholds.available_frac:

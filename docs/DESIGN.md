@@ -142,6 +142,34 @@ resultados e limites de cada rodada.
   o título e guarda o texto completo na dica e no formulário. Menu e macros
   têm navegação por teclado e retornam o foco ao destino. [Mockup aprovado e comparação](../design-qa.md) · [Editor Custom](handoff/validation/custom-prompts-2026-11-01/README.md)
 
+## Saúde do host e guarda preventiva — 05/11/2026
+
+O [mockup](handoff/validation/host-guard-2026-11-05/mockup.png) antecedeu a
+implementação e reutiliza a aba Disco, a navegação lateral e a paleta existente.
+A [captura Wayland clara](handoff/validation/host-guard-2026-11-05/wayland.png)
+e a [escura](handoff/validation/host-guard-2026-11-05/wayland-dark.png) mostram
+a revisão: o resumo da Central leva aos detalhes, o aviso térmico ocupa uma
+única área de destaque, e pressão, NTFS, serviços, Btrfs e boots aparecem numa
+lista contínua. A análise de espaço e a quarentena continuam abaixo, alcançáveis
+pela mesma rolagem. Não foi criada uma décima aba nem uma grade de cartões.
+
+O título do aviso diferencia temperatura atual de pico recente e nomeia **ACPI**
+quando é essa a fonte. O limite térmico só aparece quando o sensor correspondente
+o fornece. RPM ausente permanece ausente. Contador Btrfs absoluto é distinguido
+da diferença entre leituras, e o primeiro ponto de comparação não a inventa.
+Avisos NTFS exibem janela, número e volume apenas como candidato quando há uma
+única montagem compatível. Uma unit exibe a contagem atual do systemd, sem
+afirmar que ela causou um reboot. O journal sem desligamento registrado é
+inconclusivo, não um diagnóstico de causa.
+
+Os botões dizem **Orientação** ou **Copiar dados**: não simulam backup ou
+reparo. A manutenção do filesystem e a correção da unit continuam com seus
+responsáveis; o Fôlego apresenta evidência, próximo passo e estado desconhecido.
+O mockup sugeria “Proteger dados”, mas a entrega usa um verbo que corresponde ao
+efeito real. A coleta lenta não entra no poll de dois segundos nem toca caminhos
+montados do cartão. A revisão em 800 × 600 e KDE/Wayland está no
+[recibo](handoff/validation/host-guard-2026-11-05/README.md).
+
 ## Revisões, propostas e aceite
 
 | Achado ou direção | Disposição |

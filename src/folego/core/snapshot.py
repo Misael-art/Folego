@@ -176,6 +176,8 @@ class Snapshot:
     temperature_sensor: str = ""
     fan_rpm: int | None = None
     fan_sensor: str = ""
+    thermal_passive_c: float | None = None
+    thermal_critical_c: float | None = None
     battery: BatteryInfo | None = None
 
     @property

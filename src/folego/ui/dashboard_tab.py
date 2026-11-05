@@ -271,6 +271,13 @@ class DashboardTab(QWidget):
         self.input_button = QPushButton("Ver entradas")
         self.input_button.setAccessibleName("Abrir monitor de entrada e reparo de acessibilidade")
         self.input_button.clicked.connect(lambda: self._jump("accessibility"))
+        self.host_status = QLabel("Saúde do host: aguardando verificação.")
+        self.host_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.host_status.setWordWrap(True)
+        self.host_status.setAccessibleName("Saúde do host e integridade dos volumes")
+        self.host_button = QPushButton("Ver saúde")
+        self.host_button.setAccessibleName("Abrir os detalhes de saúde do host na aba Disco")
+        self.host_button.clicked.connect(lambda: self._jump("disco"))
         self.copy_button = QPushButton("Copiar diagnóstico")
         self.copy_button.setAccessibleName(
             "Copiar um diagnóstico legível, sem comandos nem credenciais")
@@ -336,6 +343,10 @@ class DashboardTab(QWidget):
         for widget in (self.operation_title, self.operation_meta, self.operation_reason):
             activity_layout.addWidget(widget)
         self.operation_reason.hide()
+        host_row = QHBoxLayout()
+        host_row.addWidget(self.host_status, 1)
+        host_row.addWidget(self.host_button)
+        activity_layout.addLayout(host_row)
         input_row = QHBoxLayout()
         input_row.addWidget(self.input_status, 1)
         input_row.addWidget(self.input_button)
@@ -599,8 +610,36 @@ class DashboardTab(QWidget):
             self.headline.text(),
             *(f'{label.accessibleName()}: {label.text()}' for label in self.summary_values.values()),
             self.hero_alert.text(), self.details.text(), self.resources.text(),
-            self.last_operation.text(), self.automation_status.text(), self.input_status.text(),
+            self.last_operation.text(), self.automation_status.text(),
+            self.host_status.text(), self.input_status.text(),
             self.status.text()) if text)
+
+    def show_host_report(self, report: dict):
+        alerts = 0
+        ntfs = report.get("ntfs", {})
+        if ntfs.get("quality") in ("ok", "partial") and ntfs.get("count_10m", 0) > 0:
+            alerts += 1
+        if report.get("services", {}).get("items"):
+            alerts += 1
+        for disk in report.get("btrfs", []):
+            delta = disk.get("recent_delta") or disk.get("delta")
+            if delta and any(delta.values()):
+                alerts += 1
+                break
+        unknown = (report.get("btrfs_quality") != "ok" or
+                   report.get("baseline_quality") != "ok" or
+                   ntfs.get("quality") not in ("ok", "partial") or
+                   report.get("services", {}).get("quality") != "ok")
+        if alerts:
+            self.host_status.setText(f"Saúde do host: {alerts} "
+                                     f"{'item para revisar' if alerts == 1 else 'itens para revisar'}.")
+        elif unknown:
+            self.host_status.setText("Saúde do host: leitura parcial ou desconhecida.")
+        else:
+            self.host_status.setText("Saúde do host: sem novos avisos nesta consulta; integridade não comprovada.")
+
+    def show_host_error(self, message: str):
+        self.host_status.setText(f"Saúde do host: verificação indisponível ({message[:120]}).")
 
     def copy_diagnostic(self):
         clipboard = QGuiApplication.clipboard()
@@ -626,6 +665,13 @@ class DashboardTab(QWidget):
         if snapshot.cpu_busy_frac is not None:
             parts.append(f"cpu {snapshot.cpu_busy_frac * 100:.0f}% de "
                          f"{snapshot.cpu_count} cpu(s)")
+        if snapshot.temperature_c is not None:
+            source = "ACPI" if snapshot.temperature_sensor == "acpitz" else snapshot.temperature_sensor
+            parts.append(f"{source or 'sensor térmico'} {snapshot.temperature_c:g} °C")
+            if snapshot.thermal_passive_c is not None:
+                parts.append(f"limite passivo {snapshot.thermal_passive_c:g} °C")
+        parts.append(f"cooler {snapshot.fan_rpm} RPM" if snapshot.fan_rpm is not None
+                     else "cooler RPM indisponível")
         if snapshot.zram is not None:
             parts.append("zram usado "
                          f"{title_signal.fmt1(snapshot.zram.mem_used_total_kb / title_signal.KB)} MB"
@@ -643,6 +689,10 @@ class DashboardTab(QWidget):
             if snapshot.pressure_memory.full_avg10 is not None:
                 parts.append(f"psi/full "
                              f"{snapshot.pressure_memory.full_avg10:.1f}".replace(".", ","))
+        if snapshot.pressure_cpu:
+            parts.append(f"psi/cpu avg60 {snapshot.pressure_cpu.some_avg60:.1f}".replace(".", ","))
+        if snapshot.pressure_io:
+            parts.append(f"psi/io avg60 {snapshot.pressure_io.some_avg60:.1f}".replace(".", ","))
         if snapshot.load:
             parts.append(f"load 1m {snapshot.load.one:.2f}".replace(".", ","))
         if snapshot.apps:

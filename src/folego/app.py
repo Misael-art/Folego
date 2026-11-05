@@ -37,7 +37,10 @@ def main() -> int:
         app.setDesktopFileName("folego")
         apply_theme(app)
         from .actions.accessibility import Supervisor
-        win = MainWindow(collector_factory=MetricsCollector, accessibility_factory=Supervisor, startup_defaults=True)
+        from .adapters.host_guard import HostObserver
+        win = MainWindow(collector_factory=MetricsCollector, accessibility_factory=Supervisor,
+                         startup_defaults=True,
+                         host_guard_factory=lambda: HostObserver(record=True))
         win.show()
         win.start()
         try:

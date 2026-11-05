@@ -320,6 +320,12 @@ def build_parser() -> argparse.ArgumentParser:
     disk = commands.add_parser("disk", help="higiene de disco (dry-run primeiro)")
     disk_sub = disk.add_subparsers(dest="sub", required=True)
 
+    health = disk_sub.add_parser("health", help="integridade e riscos do host (somente leitura)")
+    health.add_argument("--json", action="store_true", help="saída para máquinas")
+    guide = disk_sub.add_parser("guide", help="orientação manual para um risco; não repara")
+    guide.add_argument("issue", choices=("thermal", "pressure", "ntfs", "btrfs", "service", "reboot"))
+    guide.add_argument("--json", action="store_true", help="saída para máquinas")
+
     plan = disk_sub.add_parser("plan", help="dry-run: o que poderia ser liberado (nada muda)")
     plan.add_argument("--json", action="store_true", help="saída para máquinas")
     plan.add_argument("--prazo", type=float, default=30.0,
@@ -902,6 +908,8 @@ def _cmd_tmp(args) -> int:
 
 
 _HANDLERS = {
+    "health": lambda args: _cmd_host_health(args),
+    "guide": lambda args: _cmd_host_guide(args),
     "plan": _cmd_plan,
     "quarantine": _cmd_quarantine,
     "restore": _cmd_restore,
@@ -909,6 +917,45 @@ _HANDLERS = {
     "list": _cmd_list,
     "tmp": _cmd_tmp,
 }
+
+
+def _cmd_host_health(args) -> int:
+    from .adapters.host_guard import HostObserver
+    from .core.collector import MetricsCollector
+    from .core.host_guard import ThermalTracker
+    report = HostObserver(record=False).observe()
+    report["thermal"] = ThermalTracker().observe(MetricsCollector().collect())
+    if args.json:
+        _emit_machine({"ok": True, "outcome": "observado", **report})
+    else:
+        thermal = report["thermal"]
+        print("Saúde do host — somente leitura")
+        print(f"Temperatura: {thermal['sensor'] or 'fonte desconhecida'} "
+              f"{thermal['current_c'] if thermal['current_c'] is not None else '—'} °C")
+        for row in report["btrfs"]:
+            print(f"Btrfs {row['id']}: "
+                  + (f"corrupção {row['counters']['corruption_errs']}; tendência {row['trend']}"
+                     if row['quality'] == 'ok' else f"desconhecido: {row['reason']}"))
+        ntfs = report["ntfs"]
+        print(f"NTFS: {ntfs.get('count_10m', '—')} aviso(s) em 10 min; "
+              f"qualidade {ntfs['quality']}")
+        for row in report["services"]["items"]:
+            print(f"Serviço: {row['unit']} · reinícios {row.get('restarts', '—')}")
+        print(f"Boot anterior: {report['boots'].get('previous_end', 'desconhecido')} "
+              f"({report['boots'].get('reason', '')})")
+        print("Orientações: folego disk guide thermal|pressure|ntfs|btrfs|service|reboot")
+    return EXIT_OK
+
+
+def _cmd_host_guide(args) -> int:
+    from .core.host_guard import GUIDES
+    title, guidance = GUIDES[args.issue]
+    if args.json:
+        _emit_machine({"ok": True, "outcome": "orientacao", "issue": args.issue,
+                       "title": title, "guidance": guidance, "effect": "none"})
+    else:
+        print(f"{title}\n\n{guidance}")
+    return EXIT_OK
 
 
 def _emit_machine(payload: dict) -> None:

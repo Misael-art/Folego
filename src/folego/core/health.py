@@ -12,7 +12,7 @@ only, because both the UI and the CLI must be able to explain a refusal.
 from dataclasses import dataclass, field
 
 from .snapshot import ERROR, MISSING, PARTIAL, Snapshot
-THRESHOLDS_VERSION = 1
+THRESHOLDS_VERSION = 2
 GREEN = "green"
 YELLOW = "yellow"
 RED = "red"
@@ -36,6 +36,7 @@ class HealthThresholds:
     tmpfs_red_frac: float = 0.90
     stale_after_s: float = 15.0
     recovery_samples: int = 3
+    thermal_margin_c: float = 5.0
 
 
 @dataclass(frozen=True)
@@ -202,6 +203,35 @@ class HealthEngine:
                 metric="self_rss_kb", value=snapshot.self_rss_kb,
                 threshold=self.thresholds.self_rss_yellow_kb,
                 source="self_rss"))
+
+        # The limit belongs to the same observed sensor. In particular an ACPI
+        # zone is never relabelled as a CPU thermometer or given a generic limit.
+        temperature = snapshot.temperature_c
+        passive = snapshot.thermal_passive_c
+        critical = snapshot.thermal_critical_c
+        if (temperature is not None and (passive is not None or critical is not None)
+                and (not snapshot.sources or snapshot.source("temperature").status == "ok")):
+            label = "ACPI" if snapshot.temperature_sensor == "acpitz" else snapshot.temperature_sensor
+            limit = min(value for value in (passive, critical) if value is not None)
+            if critical is not None and temperature >= critical:
+                reasons.append(Reason(
+                    "thermal_critical", _SEVERITY[RED],
+                    f"{label} {temperature:g} °C atingiu o limite crítico {critical:g} °C",
+                    metric="temperature_c", value=temperature, threshold=critical,
+                    source="temperature"))
+            elif passive is not None and temperature >= passive:
+                reasons.append(Reason(
+                    "thermal_high", _SEVERITY[RED],
+                    f"{label} {temperature:g} °C atingiu o limite passivo {passive:g} °C",
+                    metric="temperature_c", value=temperature, threshold=passive,
+                    source="temperature"))
+            elif temperature >= limit - self.thresholds.thermal_margin_c:
+                reasons.append(Reason(
+                    "thermal_near_limit", _SEVERITY[YELLOW],
+                    f"{label} {temperature:g} °C perto do limite {limit:g} °C",
+                    metric="temperature_c", value=temperature,
+                    threshold=limit - self.thresholds.thermal_margin_c,
+                    source="temperature"))
 
         for volume in snapshot.tmpfs:
             if volume.quality != "ok":

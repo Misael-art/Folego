@@ -139,6 +139,45 @@ def read_fan_speed(root: Path) -> tuple[int | None, str]:
     return speed, source
 
 
+def read_thermal_trips(root: Path, sensor: str) -> tuple[float | None, float | None]:
+    """ACPI limits for the ACPI reading only; unrelated zones prove nothing."""
+    if sensor != 'acpitz':
+        return None, None
+    import itertools
+    passive = critical = None
+    matches = 0
+    try:
+        zones = list(itertools.islice((root / 'class/thermal').glob('thermal_zone*'), 33))
+        if len(zones) > 32:
+            return None, None
+        for zone in zones:
+            try:
+                if (zone / 'type').read_text().strip() != sensor:
+                    continue
+                matches += 1
+                trips = list(itertools.islice(zone.glob('trip_point_*_type'), 33))
+                if len(trips) > 32:
+                    return None, None
+                for item in trips:
+                    kind = item.read_text().strip()
+                    if kind not in ('passive', 'critical'):
+                        continue
+                    value = int(item.with_name(item.name.replace('_type', '_temp')).read_text().strip()) / 1000
+                    if not 20 <= value <= 150:
+                        continue
+                    if kind == 'passive':
+                        passive = value if passive is None else min(passive, value)
+                    else:
+                        critical = value if critical is None else min(critical, value)
+            except (OSError, ValueError):
+                continue
+    except OSError:
+        pass
+    if matches != 1:
+        return None, None
+    return passive, critical
+
+
 def read_zram_mm_stat(root: Path | None = None, device: str = "zram0") -> ZramStat | None:
     root = root or Path(paths.sys_root())
     try:

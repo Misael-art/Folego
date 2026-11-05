@@ -11,12 +11,14 @@ import sys
 import json
 from datetime import datetime
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMessageBox, QPushButton,
-                               QTableWidget, QTableWidgetItem, QVBoxLayout,
-                               QWidget)
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMessageBox,
+                               QPushButton, QScrollArea, QTableWidget,
+                               QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..actions.disk.planner import fmt_bytes
+from ..core.host_guard import GUIDES
 
 PLAN_PENDING = "ainda não analisado — use Reconsultar o disco."
 PLAN_LOADING = "consultando o disco (dry-run, nada é escrito)…"
@@ -26,6 +28,248 @@ PLAN_ARGV = (sys.executable, "-m", "folego", "disk", "plan", "--json")
 COLUMNS = (("path", "caminho"), ("size", "tamanho"), ("files", "arquivos"))
 QUARANTINE_COLUMNS = (("name", "nome"), ("size", "tamanho"),
                       ("state", "estado"), ("original", "origem"))
+
+
+class HostHealthPanel(QWidget):
+    """Focused host signals. Every button explains a manual next step."""
+
+    refresh_requested = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._report = None
+        self._thermal = None
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 10)
+        title = QLabel("Saúde do host")
+        title.setObjectName("section")
+        self.updated = QLabel("Aguardando primeira verificação")
+        self.updated.setObjectName("quality")
+        self.updated.setTextFormat(Qt.TextFormat.PlainText)
+        button = QPushButton("Verificar agora")
+        button.setAccessibleName("Verificar novamente a saúde do host")
+        button.clicked.connect(self.refresh_requested)
+        heading = QVBoxLayout()
+        heading.addWidget(title)
+        heading.addWidget(self.updated)
+        top = QHBoxLayout()
+        top.addLayout(heading)
+        top.addStretch(1)
+        self.copy_button = QPushButton("Copiar dados")
+        self.copy_button.setAccessibleName("Copiar diagnóstico da saúde do host")
+        self.copy_button.setEnabled(False)
+        self.copy_button.clicked.connect(self.copy_diagnostic)
+        top.addWidget(self.copy_button)
+        top.addWidget(button)
+        layout.addLayout(top)
+
+        self.thermal_card = QFrame()
+        self.thermal_card.setObjectName("card")
+        self.thermal_card.setProperty("level", "ok")
+        thermal_layout = QHBoxLayout(self.thermal_card)
+        thermal_text = QVBoxLayout()
+        self.thermal_title = QLabel("Temperatura aguardando leitura")
+        self.thermal_title.setObjectName("section")
+        self.thermal_value = QLabel("— °C · origem desconhecida")
+        self.thermal_value.setTextFormat(Qt.TextFormat.PlainText)
+        self.thermal_detail = QLabel("Sem leitura confiável ainda")
+        self.thermal_detail.setWordWrap(True)
+        self.thermal_detail.setTextFormat(Qt.TextFormat.PlainText)
+        thermal_text.addWidget(self.thermal_title)
+        thermal_text.addWidget(self.thermal_value)
+        thermal_text.addWidget(self.thermal_detail)
+        thermal_layout.addLayout(thermal_text, 1)
+        thermal_button = QPushButton("Ver orientação")
+        thermal_button.clicked.connect(lambda: self._guide("thermal"))
+        thermal_button.setAccessibleName("Ver orientação para calor e carga")
+        thermal_layout.addWidget(thermal_button)
+        layout.addWidget(self.thermal_card)
+
+        group = QFrame()
+        group.setObjectName("card")
+        grouped = QVBoxLayout(group)
+        grouped.setSpacing(7)
+        self.rows = {}
+        for index, (key, label) in enumerate((
+                ("pressure", "Pressão de CPU e I/O"),
+                ("ntfs", "Volumes NTFS"), ("service", "Serviços do usuário"),
+                ("btrfs", "Disco Btrfs"), ("reboot", "Reinícios registrados"))):
+            if index:
+                line = QFrame()
+                line.setFrameShape(QFrame.Shape.HLine)
+                grouped.addWidget(line)
+            text = QVBoxLayout()
+            name = QLabel(label)
+            name.setObjectName("section")
+            value = QLabel("Aguardando leitura")
+            value.setWordWrap(True)
+            value.setTextFormat(Qt.TextFormat.PlainText)
+            value.setAccessibleName(f"{label}: aguardando leitura")
+            text.addWidget(name)
+            text.addWidget(value)
+            row = QHBoxLayout()
+            row.addLayout(text, 1)
+            action = QPushButton("Orientação")
+            action.setAccessibleName(f"Ver orientação sobre {label.lower()}")
+            action.clicked.connect(lambda checked=False, issue=key: self._guide(issue))
+            row.addWidget(action)
+            grouped.addLayout(row)
+            self.rows[key] = value
+        layout.addWidget(group)
+
+    def _guide(self, issue: str):
+        title, text = GUIDES[issue]
+        context = self._context(issue)
+        QMessageBox.information(self, title, (context + "\n\n" if context else "") + text)
+
+    def _context(self, issue: str) -> str:
+        report = self._report or {}
+        if issue == "service":
+            items = report.get("services", {}).get("items", [])
+            if items:
+                return "Observado: " + ", ".join(item["unit"] for item in items[:3])
+        if issue == "ntfs":
+            ntfs = report.get("ntfs", {})
+            if ntfs.get("count_10m"):
+                mount = ntfs.get("mount")
+                return f"Observado: {ntfs['count_10m']} avisos em 10 min" + (
+                    f"; possível volume {mount['mount']}" if mount else "; volume não atribuído")
+        if issue == "btrfs":
+            items = [row for row in report.get("btrfs", []) if row.get("quality") == "ok"]
+            if items:
+                return "Observado: " + ", ".join(
+                    f"{row['id']} = {row['counters']['corruption_errs']} erros acumulados"
+                    for row in items[:3])
+        if issue == "reboot":
+            boots = report.get("boots", {})
+            if boots.get("items"):
+                return "Boots registrados:\n" + "\n".join(
+                    f"{row.get('boot_id', 'ID desconhecido')}: {row.get('period', 'período desconhecido')}"
+                    for row in boots["items"][:4])
+        if issue == "thermal" and self._thermal:
+            return (f"Observado: {self._thermal.get('sensor', 'sensor desconhecido')} "
+                    f"{self._thermal.get('current_c', '—')} °C agora; "
+                    f"pico {self._thermal.get('peak_c', '—')} °C em 4 min")
+        return ""
+
+    def copy_diagnostic(self):
+        clipboard = QGuiApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setText(json.dumps({"host": self._report, "thermal": self._thermal},
+                                         ensure_ascii=False, indent=2))
+
+    def show_error(self, message: str):
+        self.updated.setText(f"Verificação indisponível: {message[:180]}")
+        for value in self.rows.values():
+            value.setText("Leitura antiga ou desconhecida; tente verificar novamente")
+        self._report = None
+        self.copy_button.setEnabled(False)
+
+    def show_report(self, report: dict):
+        self._report = report
+        self.copy_button.setEnabled(True)
+        try:
+            seen = datetime.fromisoformat(report["observed_at"])
+            updated = seen.strftime("%d/%m %H:%M")
+        except (KeyError, TypeError, ValueError):
+            updated = "horário desconhecido"
+        self.updated.setText("Última verificação: " + updated)
+        ntfs = report.get("ntfs", {})
+        if ntfs.get("quality") not in ("ok", "partial"):
+            ntfs_text = "Avisos NTFS desconhecidos · " + ntfs.get("reason", "fonte indisponível")
+        else:
+            count = ntfs.get("count_10m", 0)
+            mount = ntfs.get("mount")
+            target = f" · possível volume {mount['mount']}" if mount else " · volume não atribuído"
+            quantity = f"pelo menos {count}" if ntfs.get("quality") == "partial" else str(count)
+            ntfs_text = (f"{quantity} {'aviso' if count == 1 else 'avisos'} de metadados nos últimos 10 min" if count else
+                         "Nenhum aviso observado nos últimos 10 min (integridade não comprovada)") + target
+        self.rows["ntfs"].setText(ntfs_text)
+
+        services = report.get("services", {})
+        items = services.get("items", [])
+        if services.get("quality") != "ok":
+            service_text = "Leitura parcial ou desconhecida · " + services.get("reason", "")
+        elif items:
+            first = items[0]
+            more = (f" · mais {len(items)-1} {'unit' if len(items) == 2 else 'units'}"
+                    if len(items) > 1 else "")
+            count = first.get("restarts")
+            restarts = (f"{count} {'reinício' if count == 1 else 'reinícios'} na contagem atual do systemd"
+                        if isinstance(count, int) else "reinícios desconhecidos")
+            service_text = f"{first['unit']} · {first.get('state', 'estado desconhecido')} · {restarts}{more}"
+        else:
+            service_text = "Nenhuma unit em falha ou reinício observada nesta consulta"
+        self.rows["service"].setText(service_text)
+
+        disks = report.get("btrfs", [])
+        known = [d for d in disks if d.get("quality") == "ok"]
+        if known:
+            total = sum(d["counters"]["corruption_errs"] for d in known)
+            increments = [d["delta"]["corruption_errs"] for d in known if d.get("delta") is not None]
+            complete = (len(known) == len(disks) and report.get("btrfs_quality") == "ok"
+                        and report.get("baseline_quality") == "ok")
+            trend = (f"+{sum(increments)} desde a leitura anterior"
+                     if complete and len(increments) == len(known)
+                     else "tendência ou cobertura desconhecida")
+            recent = sum(d.get("recent_delta", {}).get("corruption_errs", 0)
+                         for d in known if isinstance(d.get("recent_delta"), dict))
+            if recent > 0:
+                trend += (f" · +{recent} {'erro' if recent == 1 else 'erros'} "
+                          "de corrupção nas últimas 24 h")
+            amount = f"{total:,}".replace(",", ".")
+            scope = "" if complete else " observados; demais dispositivos desconhecidos"
+            btrfs_text = f"{amount} {'erro acumulado' if total == 1 else 'erros acumulados'} de corrupção{scope} · {trend}"
+        elif report.get("btrfs_quality") != "ok" or report.get("baseline_quality") != "ok":
+            btrfs_text = "Contadores ou histórico desconhecidos · " + (report.get("btrfs_reason") or report.get("baseline_reason", ""))
+        else:
+            btrfs_text = "Nenhum volume Btrfs observado nesta consulta"
+        self.rows["btrfs"].setText(btrfs_text)
+
+        boots = report.get("boots", {})
+        count = len(boots.get("items", []))
+        if boots.get("quality") == "unknown":
+            boot_text = "Histórico de boot desconhecido · " + boots.get("reason", "")
+        else:
+            boot_text = f"{count} {'boot' if count == 1 else 'boots'} no journal · " + boots.get("reason", "encerramento anterior desconhecido")
+        self.rows["reboot"].setText(boot_text)
+
+    def show_thermal(self, thermal: dict):
+        self._thermal = thermal
+        state = thermal.get("state")
+        value = thermal.get("current_c")
+        if value is None:
+            self.thermal_title.setText("Temperatura desconhecida")
+            self.thermal_value.setText("— °C · fonte indisponível")
+            self.thermal_detail.setText(thermal.get("reason", "Sem leitura recente"))
+            level = "ok"
+        else:
+            titles = {"critical": "Limite térmico crítico alcançado",
+                      "high": "Calor elevado", "recent_high": "Pico de calor recente"}
+            self.thermal_title.setText(titles.get(state, "Temperatura observada"))
+            peak = thermal.get("peak_c")
+            label = thermal.get("sensor") or "sensor desconhecido"
+            self.thermal_value.setText(f"{'ACPI' if label == 'acpitz' else label}: "
+                                       f"{value:g} °C agora · pico {peak:g} °C em 4 min")
+            limit = thermal.get("passive_c")
+            critical = thermal.get("critical_c")
+            rpm = thermal.get("fan_rpm")
+            top = thermal.get("top_process")
+            details = [f"Limite passivo: {limit:g} °C" if limit is not None else
+                       f"Limite crítico: {critical:g} °C" if critical is not None else "Limite térmico não informado",
+                       f"Cooler: {rpm} RPM" if rpm is not None else "RPM indisponível"]
+            if top:
+                details.append(f"Maior CPU no pico: {top['name']} ({top['cpu_percent_of_core']:g}% de um núcleo); relação não comprovada")
+            self.thermal_detail.setText(" · ".join(details))
+            level = "danger" if state == "critical" else "warning" if state in ("high", "recent_high") else "ok"
+        self.thermal_card.setProperty("level", level)
+        self.thermal_card.style().unpolish(self.thermal_card)
+        self.thermal_card.style().polish(self.thermal_card)
+        cpu = thermal.get("pressure_cpu_avg60")
+        io = thermal.get("pressure_io_avg60")
+        self.rows["pressure"].setText(
+            f"PSI em 60 s · CPU {cpu:g}% · I/O {io:g}%" if cpu is not None and io is not None
+            else "PSI de CPU ou I/O indisponível; pressão desconhecida")
 
 
 def plan_argv(acao: str, target: str, confirm: bool) -> list[str]:
@@ -71,6 +315,8 @@ def state_of(item) -> str:
 
 
 class DiskTab(QWidget):
+    host_refresh_requested = Signal()
+
     def __init__(self, *, jobs, confirm_fn=None, parent=None):
         super().__init__(parent)
         self._jobs = jobs
@@ -139,13 +385,17 @@ class DiskTab(QWidget):
         q_bar.addWidget(self.restore_button)
         q_bar.addStretch(1)
 
+        self.host_health = HostHealthPanel()
+        self.host_health.refresh_requested.connect(self.host_refresh_requested.emit)
         plan_title = QLabel("Análise do disco")
         quarantine_title = QLabel("Quarentena reversível")
         for title in (plan_title, quarantine_title):
             title.setObjectName("section")
         self.table.hide()
         self.quarantine_table.hide()
-        layout = QVBoxLayout(self)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.addWidget(self.host_health)
         layout.addWidget(plan_title)
         layout.addWidget(self.summary)
         layout.addLayout(bar)
@@ -157,6 +407,23 @@ class DiskTab(QWidget):
         layout.addWidget(self.purge_button, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.status)
         layout.addStretch(1)
+
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll.setWidget(content)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(self.scroll)
+
+    def show_host_report(self, report: dict):
+        self.host_health.show_report(report)
+
+    def show_host_error(self, message: str):
+        self.host_health.show_error(message)
+
+    def show_thermal(self, thermal: dict):
+        self.host_health.show_thermal(thermal)
 
     # -------------------------------------------------------------------- reading
 
