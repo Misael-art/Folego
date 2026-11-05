@@ -126,9 +126,15 @@ def main():
             assert window.windowFlags() & Qt.WindowType.FramelessWindowHint
             assert window.back_button.isVisible()
             window.tabs.setCurrentWidget(window.options);app.processEvents()
-            window.grab().save(str(root/'central.png'))
+            central=window.grab()
+            central.save(str(root/'central.png'))
+            image=central.toImage()
+            corners=((0,0),(image.width()-1,0),(0,image.height()-1),
+                     (image.width()-1,image.height()-1))
+            assert all(image.pixelColor(x,y).alpha()<32 for x,y in corners),'central window has opaque corners'
             area=window.screen().availableGeometry()
             records.append(dict(case='frameless central',native_frame_equals_client=True,
+                                transparent_corners=True,
                                 compositor_geometry=measured,
                                 client_size=[window.width(),window.height()],available=[area.width(),area.height()]))
             QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)

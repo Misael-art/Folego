@@ -13,8 +13,8 @@ import json
 import sys
 from concurrent.futures import Future
 
-from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QGuiApplication, QKeySequence, QPainter, QPainterPath, QShortcut
+from PySide6.QtCore import QRectF, QTimer, Qt
 from PySide6.QtWidgets import (QMainWindow, QStyle, QStyleOptionTab, QStylePainter, QTabBar,
                               QTabWidget, QFrame, QHBoxLayout, QLabel, QPushButton,
                               QToolButton, QMenu)
@@ -33,7 +33,7 @@ from .accessibility_tab import AccessibilityTab
 from .options_tab import OptionsTab
 from .custom_prompts_tab import CustomPromptsTab
 from .ai_monitor import AIMonitor
-from .theme import set_control_icon, prepare_surface, paint_surface
+from .theme import TOKENS, _background_color, set_control_icon, prepare_surface
 from ..core import health
 from ..core.battery_alerts import BatteryAlertTracker
 from ..core.exclusions import ExclusionError, ExclusionList
@@ -90,7 +90,13 @@ class NavigationHeader(QFrame):
 
 class MainWindow(QMainWindow):
     def paintEvent(self, event):
-        paint_surface(self)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()).adjusted(.5, .5, -.5, -.5),
+                            TOKENS.radius * 2, TOKENS.radius * 2)
+        painter.fillPath(path, _background_color(TOKENS.background))
+        painter.end()
         super().paintEvent(event)
 
     def __init__(self, collector_factory=None,
@@ -102,8 +108,11 @@ class MainWindow(QMainWindow):
                  config_store=None, grant_store=None, compact_factory=None, process_jobs=None,
                  accessibility_factory=None, startup_defaults=False):
         super().__init__()
+        self.setObjectName('mainWindow')
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         prepare_surface(self)
+        # Keep the tab's scrollbar clear of the rounded bottom-right window edge.
+        self.setContentsMargins(0, 0, TOKENS.radius * 2, TOKENS.radius * 2)
         self._thresholds = thresholds or title_signal.Thresholds()
         self._journal = journal or Journal()
         self._history_reader = HistoryReader(self._journal)

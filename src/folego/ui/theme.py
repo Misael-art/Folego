@@ -111,6 +111,9 @@ QWidget {{
 QMainWindow, QDialog {{
     background-color: {background(TOKENS.background)};
 }}
+QMainWindow#mainWindow {{
+    background-color: transparent;
+}}
 QTabWidget::pane, QScrollArea {{
     background: transparent;
 }}
