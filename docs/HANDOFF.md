@@ -1,5 +1,49 @@
 # Passagem para o próximo agente — atualizada em 04/11/2026
 
+## Cantos reais da Central — 04/11/2026
+
+Pedido: a janela aberta da Central continuava quadrada, conforme captura do
+usuário. Owner: checkout canônico `codex/prompt-implantation-20261104`, PR #3
+empilhado sobre #2. Dependências: pintura Qt da `MainWindow`, alfa da janela
+sem moldura no KWin e barra de rolagem da Central. Aceite: quatro cantos com
+alfa real inferior a 32, borda central opaca ou com a transparência escolhida,
+controles preservados e fluxo Central/widget funcional.
+
+O tema preenchia todo `QMainWindow` como retângulo. `43d95bb` deu à janela
+principal um seletor próprio, removeu esse preenchimento retangular e pinta o
+fundo em um caminho arredondado com a cor/alfa do tema. O primeiro teste
+focado ainda encontrou o canto inferior direito opaco: a barra de rolagem
+chegava até ele. A janela passou a reservar 12 px à direita e embaixo para
+manter essa barra dentro do contorno. A execução falha ficou preservada em
+`.scratch/dev-tests-reviewed/central-rounded-first-failed-20261104` e não
+conta como gate aprovado.
+
+Depois do ajuste, `./dev test tests/test_ui_layout.py -q` passou com **9 testes**,
+incluindo quatro cantos em fundos opaco e 50% transparente. `./dev check`
+sequencial, Python 3.14.7 gerenciado, HOME/XDG privados: **1247 passed,
+2 skipped** sem Qt e **1604 passed, 2 skipped** Qt offscreen. O
+[recibo KDE/Wayland](handoff/validation/central-rounded-2026-11-04/README.md)
+passou em janela própria: quatro cantos transparentes, frame/cliente 900 × 620,
+volta ao widget e encaixes. Captura e JSON são sintéticos e versionados. O CI
+do SHA `43d95bb` aprovou os seis jobs de produto do PR #3; revisor automático
+skipped. `git diff --check` limpo.
+
+Host: a GUI antiga PID 214646 tinha apenas o widget próprio mapeado. Depois de
+confirmar bandeja `folego` no mesmo PID e item habilitado **Sair do Fôlego**,
+ela saiu pelo evento DBusMenu; a unit existente ficou `inactive/dead`,
+`Result=success`, sem sinal manual. `./dev setup` sincronizou o ambiente e a
+unit `app-folego@autostart.service` iniciou novamente em PID **312387**,
+`active/running`, `Result=success`. O KWin mostra a Central dessa instância em
+`(1779,230)`, 900 × 620. Os monitores de entrada e desempenho permaneceram
+nos PIDs 6654/6657. A nova instância usa o entrypoint do ambiente sincronizado
+com o checkout corrigido; não houve consulta do módulo dentro do processo. A
+medição de alfa foi feita na janela QA própria, não diretamente nos pixels da
+residente. Nenhum outro serviço ou processo foi interrompido.
+
+PR #3 segue draft e empilhado; b4 publicada permanece na tag anterior. Próximo:
+inspeção visual pelo usuário na Central residente e revisão do PR após #2.
+Outras escalas físicas e leitor de tela continuam com aceite próprio.
+
 ## Prompt de implantação entre diagnóstico e continuação — 04/11/2026
 
 Pedido: incluir no menu **Prompts** o roteiro genérico de implantação escrito
