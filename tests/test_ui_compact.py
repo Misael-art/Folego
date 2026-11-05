@@ -218,6 +218,8 @@ def test_dock_remap_rechecks_kwin_and_corrects_late_rule(qapp, monkeypatch):
     monkeypatch.setattr(view.shortcut_tabs.controller, 'request',
                         lambda action, value=None: requested.append((action, value)) or True)
     view.show()
+    qapp.processEvents()
+    assert view.windowHandle().isExposed()
     view._dock_mode = 'top'
     view._dock_verify_attempts = 3
     view._verify_dock_after_show()
@@ -255,12 +257,16 @@ def test_initial_place_failure_after_remap_rechecks_owned_geometry(qapp, monkeyp
     from PySide6.QtCore import QRect
     from PySide6.QtTest import QTest
     view, _ = make(qapp, caps=wayland())
-    view._screen_area = lambda: QRect(0, 0, 948, 593)
+    area = QRect(0, 0, 948, 593)
+    view._screen_area = lambda: area
+    view._dock_target = dock_geometry('left', area)
     controller = view.shortcut_tabs.controller
     requested = []
     monkeypatch.setattr(controller, 'request',
                         lambda action, value=None: requested.append((action, value)) or True)
     view.show()
+    qapp.processEvents()
+    assert view.windowHandle().isExposed()
     view._dock_mode = view._dock_pending = 'left'
     view._dock_verify_attempts = 3
     controller.action = 'widget-place'
