@@ -17,6 +17,8 @@ serviço/host foi acrescentado.
 `./dev check` passou sequencialmente: **1254 passed, 2 skipped** sem Qt em
 23,41 s; **1625 passed, 2 skipped** Qt offscreen em 114,94 s. Python 3.14.7,
 HOME/XDG privados, QA em `.scratch/dev-tests-reviewed/host-guard-20261105-*`.
+Os seis jobs de produto do PR #3 passaram no SHA `609ab45`; o revisor
+automático foi pulado.
 O teste focado final da GUI passou; os recibos de janela própria KDE/Wayland
 clara/escura confirmam navegação Central → Disco, ausência de rolagem horizontal
 em 800 × 600, abertura da orientação e acesso à análise antiga por rolagem.
@@ -34,8 +36,13 @@ SteamZero. O Fôlego não percorre nem repara o volume NTFS, e um único mount
 `fuseblk` é apenas candidato. Journal, sensores e baseline ausentes aparecem
 como desconhecidos, sem inferência de saúde. Leitor de tela, tacômetro físico,
 integridade dos dados e duração longa ainda não foram certificados. Próximo:
-observar o painel na instância residente após a atualização normal da GUI e
-correlacionar novos eventos com evidência do owner de cada recurso.
+observar o painel por horas reais e correlacionar novos eventos com evidência
+do owner de cada recurso. Após o push, a unit gráfica existente foi reiniciada
+com owner/cgroup conferidos: novo PID **427632**, `active/running`,
+`Result=success`. A primeira coleta criou o baseline Btrfs no estado XDG do
+usuário com modo 0600. Entrada e Desempenho continuaram `active/running` nos
+PIDs **4233** e **4236**. A prova de pixels permanece a das janelas próprias;
+o serviço residente ainda não tem evidência de uso prolongado.
 
 ## Prévia v0.2.0b5 e registro de design — 05/11/2026
 
