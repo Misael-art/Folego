@@ -29,6 +29,10 @@ limites legíveis em 900 × 650; captura
 `.scratch/dev-tests-reviewed/thermal-alert-wayland-20261106/card-themed.png`.
 Essa prova não certifica a entrega da notificação pelo compositor nem uma
 transição térmica física. Os dados da janela foram sintéticos.
+Após o push, a unit de sessão `app-folego@autostart.service`, que executa este
+checkout, foi reiniciada uma vez para carregar o código. O processo anterior
+encerrou ordenadamente e a unit voltou `active/running`, `Result=success`, PID
+128602 às 06:17:40 -03. Não foi gerado calor artificial no host.
 
 O desenho de alívio cooperativo está em `docs/DESIGN.md`: pedido local com ID,
 boot, prazo, confirmação e disjuntor para agentes que optarem por participar.
