@@ -35,6 +35,17 @@ perfil foi degradado artificialmente, nenhuma sessão foi reiniciada e não houv
 teste de efeito automático no hardware defeituoso. Uma recorrência natural
 permitirá conferir o reparo no hardware, seguido de teste físico de gesto/voz.
 
+Complemento no responsável opcional: PhaseZero commit
+`154225b3e4b7dcf4a21331e297eefe893a08b588`, PR #132 draft, impede que seu
+watcher substitua a preferência interna saudável por `pro-audio` com os
+controles do microfone desligados ou por headset indisponível. Isso fecha a
+janela de três segundos em que ele poderia salvar a falha antes da coleta do
+Fôlego. O serviço PhaseZero foi recarregado, PID 307531, com preferência
+`HiFi (Mic, Speaker)` e `mic-biglinux` preservadas. O Fôlego continua
+independente: se o PhaseZero não estiver presente, usa sua própria referência.
+O PR PhaseZero inclui commits anteriores da branch de continuidade; tentativa
+de publicar branch isolada foi bloqueada pela guarda oficial e não foi forçada.
+
 Validação: 13 testes focados da guarda; `./dev check` final com **1276 passed,
 2 skipped** no núcleo e **1655 passed, 2 skipped** na GUI Qt offscreen, em
 áreas privadas, sequenciais. O wrapper recusou uma tentativa intermediária da
