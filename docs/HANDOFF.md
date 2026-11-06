@@ -1,4 +1,43 @@
-# Passagem para o próximo agente — atualizada em 05/11/2026
+# Passagem para o próximo agente — atualizada em 06/11/2026
+
+## Alerta térmico e alívio cooperativo proposto — 06/11/2026
+
+Incremento integrado no commit `228366ba2866cd8f7bed90f101b9ec5e096a7daf`.
+O card de temperatura da aba Disco agora acompanha os limiares da avaliação
+geral e distingue a leitura atual do pico recente. No sensor ACPI deste host,
+95–99 °C pede atenção, 100–104 °C pede redução imediata da carga e a partir de
+105 °C aparece o limite crítico informado pelo equipamento. Esses valores são
+derivados dos limites da própria zona; sem leitura válida/fresca ou sem limite
+compatível, não se presume segurança. O card mostra os limites passivo e crítico
+separadamente. A bandeja, quando disponível, emite avisos distintos ao subir de
+faixa, com repetição limitada, apenas para calor atual. Não houve ajuste de
+cooler, pausa de agente nem efeito automático no host.
+
+Testes focados: **30 passed** no núcleo e **15 passed** na GUI; o primeiro
+`./dev check` sequencial passou com **1260 passed, 2 skipped** headless e
+**1632 passed, 2 skipped** Qt offscreen. Após acrescentar recusa explícita de
+qualidade inválida da fonte, o teste focado final do núcleo passou (**5 passed**).
+Uma repetição do `./dev check` passou no headless (**1260 passed, 2 skipped**),
+mas teve três falhas em testes de tempo/geometria do widget compacto, sem
+alteração nesse componente. A suíte isolada do widget passou (**41 passed**) e
+uma repetição completa de `./dev test` passou (**1632 passed, 2 skipped**).
+Os registros da falha e dos testes verdes foram preservados; não houve
+afrouxamento de teste. QA em HOME/XDG privados e áreas preservadas de
+`.scratch/dev-tests-reviewed`.
+Janela própria no KDE/Wayland real mostrou o card de urgência vermelho e os
+limites legíveis em 900 × 650; captura
+`.scratch/dev-tests-reviewed/thermal-alert-wayland-20261106/card-themed.png`.
+Essa prova não certifica a entrega da notificação pelo compositor nem uma
+transição térmica física. Os dados da janela foram sintéticos.
+
+O desenho de alívio cooperativo está em `docs/DESIGN.md`: pedido local com ID,
+boot, prazo, confirmação e disjuntor para agentes que optarem por participar.
+Cada owner reduziria paralelismo ou pausaria o próprio trabalho após checkpoint;
+ausência de confirmação permanece desconhecida. Não há API de controle de
+Codex/Qoder integrada nem autorização para congelar cgroups, sinalizar processos
+arbitrários ou alterar a unit/scope misto da interface e do agente. Próximo:
+confirmar com os owners um canal suportado de pedido/ACK e projetar opt-in e
+reconciliação antes de acrescentar qualquer executor.
 
 ## Recuperação NTFS pelo Linux e registro de incidentes — 05/11/2026
 
