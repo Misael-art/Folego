@@ -23,7 +23,8 @@ aplicações trabalhando ao mesmo tempo.
 As ações de recursos são manuais e passam por confirmação e verificações de
 proteção. **O executor automático de recursos permanece desligado.** A supervisão
 de entrada tem uma política própria, opcional, para reabilitar dispositivos
-identificados no KWin. O projeto está em desenvolvimento; os limites de validação
+identificados no KWin e restaurar perfis conhecidos de trackpad/microfone no
+Steam Deck. O projeto está em desenvolvimento; os limites de validação
 estão descritos abaixo.
 
 <div align="center">
@@ -49,7 +50,7 @@ regras de adaptação e evidências de cada superfície.
 | **Ajustes reversíveis** | Revisar ajustes suportados, como opções de segundo plano do navegador, com preservação do estado anterior. |
 | **Widget e bandeja** | Consultar o estado em uma janela compacta e retornar à central. No Plasma/Wayland, a regra opcional do KWin exige confirmação. |
 | **CLI independente de Qt** | Investigar o ambiente e consultar operações diretamente pelo terminal. |
-| **Entrada e acessibilidade** | Observar teclado, ponteiro, trackpads, toque, controles e áudio; solicitar reparo de entrada ou manter um monitor residente opcional, sem depender do PhaseZero. |
+| **Entrada e acessibilidade** | Observar teclado, ponteiro, trackpads, toque, controles e áudio; solicitar reparo de entrada ou manter um monitor residente opcional. No Deck, distingue dispositivo presente de perfil Steam/áudio errado e restaura apenas o perfil previamente confirmado, sem depender do PhaseZero. |
 | **Opções e continuidade** | Iniciar com a sessão por padrão, desativar quando quiser, consultar operações pelo código e acompanhar temporários próprios preservados. |
 | **Economia da tela e agentes** | Ativar um temporizador reversível da tela interna, preservar jogos/dock e pedir alívio cooperativo aos agentes participantes. [Contrato e limites](docs/ENERGIA-E-AGENTES.md). |
 

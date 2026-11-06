@@ -1,9 +1,13 @@
 # Supervisão de entrada e acessibilidade
 
 O Fôlego observa capacidades do host, apresenta evidências e pode reabilitar
-entradas no KWin. Ele funciona sem PhaseZero, RetroFE, Docker ou Podman.
+entradas no KWin. No Steam Deck, a mesma política opcional pode restaurar dois
+perfis de desktop conhecidos: trackpad da Steam e microfone interno. Ele
+funciona sem PhaseZero, RetroFE, Docker ou Podman.
 Integrações presentes acrescentam evidência ou impedem uma intervenção
-concorrente. A observação e o monitor automático não executam caminhos externos.
+concorrente. O reparo de perfil usa somente a API local da Steam ou `pactl`;
+não executa caminhos externos, não reinicia a sessão ou serviços e não grava
+áudio.
 Uma solicitação **manual** pode chamar o backend registrado do responsável,
 validando schema, propriedade, permissões e hashes antes do efeito. Não há
 promessa de disponibilidade física universal.
@@ -15,16 +19,24 @@ promessa de disponibilidade física universal.
 | Linux com `/proc/bus/input/devices` legível | Inventário de entradas, identificação de dispositivos e ambiguidade | Nenhum diretamente no kernel |
 | KDE/Wayland com API KWin disponível para o mesmo UID | Estado habilitado e capacidades do compositor | Somente `enabled=true` de uma entrada física identificada e com suporte à propriedade |
 | Outro desktop, X11 ou sessão sem compositor acessível | Inventário disponível; fonte indisponível fica desconhecida | Sem reparo nativo; não há fallback que reinicie o desktop |
-| Steam Deck Jupiter/Galileo observado por DMI | Toque ausente é indisponível; saída de ponteiro do controle é distinguida de gesto físico | Manual: reparador FTS registrado, apenas no hardware/adapter dedicado reconhecido pelo owner; automático: somente KWin |
+| Steam Deck Jupiter/Galileo observado por DMI | Toque ausente é indisponível; perfil de desktop da Steam e saídas mouse/teclado são consultados separadamente | Manual: reparador FTS registrado; automático: KWin e, quando conhecido, perfil `RetroFE Steam Deck Desktop` da Steam, sem trocar perfil durante jogo |
 | Teclado virtual KWin | Disponibilidade, modo e visibilidade | Manual: abre explicitamente e verifica visibilidade, restaurando modo por toque; não digita nem registra texto |
-| PulseAudio/PipeWire via `pactl` | Endpoint padrão, mute e ganho; fontes monitor excluídas | Manual: endpoint revisado como padrão, sem mute; volume zero sobe a 25%, ganho existente preservado; sem captura ou reinício |
-| Controles | Enumeração no kernel | Manual: pede modo controle pela URI pública do Steam; fica amarelo enquanto o perfil não for confirmado; não fecha o Steam |
+| PulseAudio/PipeWire via `pactl` | Endpoint padrão, mute, ganho e perfil da placa interna acp5x | Manual: endpoint revisado; automático no Deck: perfil `HiFi (Mic, Speaker)` quando o atual é o `Pro Audio` conhecido ou headset indisponível, sem mexer em mute, volume ou fonte padrão |
+| Controles | Enumeração no kernel e perfil da Steam quando API local está disponível | Manual: pede modo controle pela URI pública da Steam; o reparo automático de desktop não fecha a Steam |
 | Dispositivo removido ou identidade duplicada | Ausente/ambíguo; baseline anterior preservado | Sem inventar dispositivo ou resetar barramento |
 
 “Configuração observada” significa evidência de enumeração/configuração.
 Não comprova que uma pessoa consegue mover, clicar, digitar, tocar, ouvir ou
 falar. Leitor de tela, greeter SDDM, recuperação FTS, atalhos Steam e perfis de
 jogo precisam de seus próprios responsáveis e validação física.
+
+O incidente de 06/11 mostrou por que enumeração não basta: o KWin via o
+controle e o PipeWire via a placa, mas a Steam havia selecionado o perfil
+`RetroFE Steam Deck Gamepad` no desktop, sem saídas de mouse/teclado, e a placa
+interna estava em `Pro Audio`. Os cartões agora mostram o perfil real e o
+estado da guarda. `HiFi (Headset, Speaker)` salvo pelo PhaseZero apontava para
+um fone ausente; quando a preferência de um responsável ativo diverge do perfil
+interno, o Fôlego mostra o conflito e não inicia uma disputa de perfis.
 
 ## Usar e pausar
 
@@ -75,6 +87,36 @@ somente a política de entrada; `install` cria/inicia a unit **do usuário**
 O processo é independente da janela Qt e não requer Qt. Uma unit pessoal
 preexistente ou caminho simbólico é preservado. O executável é o ambiente que
 executou a instalação: após mover/remover esse ambiente, revise a unit.
+
+No Deck, a guarda aprende cada perfil somente depois de duas observações
+saudáveis, com a política habilitada. A referência da Steam inclui o hash do
+template Desktop instalado; a do microfone registra a placa, o perfil interno
+e se a entrada padrão é a física ou `mic-biglinux`. Duas observações da falha
+específica são necessárias antes de agir. Antes do efeito, o monitor revalida
+boot, KWin, identidade, perfil, jogo/lease e preferência de áudio do responsável.
+Operações antigas de outra capacidade não escondem esses dois diagnósticos.
+O reparo tem limite de três tentativas por hora e intervalo de 120 s por perfil.
+Resultado incerto abre um disjuntor e nunca é repetido automaticamente.
+Mute, fonte externa, outro perfil da Steam, template alterado ou API ausente
+ficam para revisão; o Fôlego não interpreta isso como defeito recuperável.
+
+Se um reparo de perfil ficar incerto, consulte o ID e reconcilie **sem repetir**:
+
+```bash
+./dev run accessibility profile-reconcile ID --confirmar --json
+./dev run accessibility profile-rearm touchpad --confirmar --json
+./dev run accessibility profile-rearm microphone --confirmar --json
+./dev run accessibility profile-capture touchpad --confirmar --json
+```
+
+Rearme apenas depois de confirmar o estado saudável e resolver o conflito.
+Se uma atualização legítima alterar o template Desktop ou a preferência de
+entrada padrão, revise o novo estado saudável e use `profile-capture` para
+registrar uma nova referência; esse comando não troca perfis nem rearma um
+disjuntor aberto. Há a mesma opção para `microphone`.
+O API CEF da Steam usada para consultar/selecionar o perfil é privada ao cliente
+instalado; se ela mudar, o estado fica desconhecido e não há troca por heurística.
+Não há teste automático do gesto físico no trackpad nem de voz captada.
 
 O ciclo padrão é de dez segundos. Fontes externas têm limite individual de
 um segundo, total de coleta de oito segundos e saída limitada. A identidade do
@@ -154,8 +196,9 @@ O reparo manual precisa de plano atual e confirmação. O JSON de `plan` contém
 
 O coordenador existente serializa intervenções e registra intenção antes do
 efeito. O ato confere novamente boot, dono único do barramento e UID, identidade
-do dispositivo, responsáveis, política e orçamento. O único efeito é reabilitar
-a propriedade de uma entrada no compositor; segue-se uma nova leitura. Repetir
+do dispositivo, responsáveis, política e orçamento. Nesse fluxo manual KWin,
+o único efeito é reabilitar a propriedade de uma entrada no compositor; segue-se
+uma nova leitura. Repetir
 o mesmo ID consulta o resultado registrado.
 
 Timeout, perda de resposta ou efeito não verificado ficam **desconhecidos**,
@@ -226,11 +269,13 @@ encerrados e a configuração atual habilitada, a reconciliação explícita é:
 ./dev run accessibility lease-reconcile LEASE_ID --confirmar --json
 ```
 
-No **monitor automático**, integrações legadas são conservadoras: registro PhaseZero inválido/desconhecido
+No **reparo automático KWin**, integrações legadas são conservadoras: registro PhaseZero inválido/desconhecido
 ou guardião registrado ativo bloqueia o reparo; registro válido e inativo permite
 o backend nativo. Recuperações RetroFE pendentes bloqueiam. Essas aplicações
 não são alteradas nem seus serviços interrompidos. No host em que os guardiões
-permanecem ativos, o Fôlego observa e aguarda.
+permanecem ativos, o Fôlego observa e aguarda. A guarda separada de perfis
+Steam/microfone verifica o dono e a preferência de cada perfil; um bloqueio
+antigo de outra capacidade não a desliga.
 
 Quando Docker/Podman estão disponíveis, inventário inacessível, schema inesperado,
 container privilegiado ou exposição de `/dev/input`, `/dev/hidraw`, `/dev` ou `/`

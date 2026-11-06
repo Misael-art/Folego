@@ -297,15 +297,17 @@ def build_parser() -> argparse.ArgumentParser:
     lease_run = access_sub.add_parser("lease-run", help="inicia aplicação cooperante sob propriedade durável de entrada")
     lease_run.add_argument("--provider", required=True)
     lease_run.add_argument("argv", nargs=argparse.REMAINDER)
-    for name in ("status", "plan", "transitions", "enable", "disable", "capture", "rearm", "install", "repair", "reconcile", "watch", "lease", "lease-reconcile"):
+    for name in ("status", "plan", "transitions", "enable", "disable", "capture", "rearm", "install", "repair", "reconcile", "watch", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
         command = access_sub.add_parser(name)
         command.add_argument("--json", action="store_true")
-        if name in ("enable", "disable", "capture", "rearm", "install", "repair", "lease", "lease-reconcile"):
+        if name in ("enable", "disable", "capture", "rearm", "install", "repair", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
             command.add_argument("--confirmar", action="store_true")
         if name == "repair":
             command.add_argument("--plan", required=True, help="plano imutável devolvido por plan --json")
-        if name == "reconcile":
+        if name in ("reconcile", "profile-reconcile"):
             command.add_argument("operation_id")
+        if name in ("profile-rearm", "profile-capture"):
+            command.add_argument("profile", choices=("touchpad", "microphone"))
         if name == "lease-reconcile":
             command.add_argument("lease_id")
         if name == "watch":
@@ -2674,6 +2676,18 @@ def _cmd_accessibility(args):
             result = watch(supervisor=supervisor, interval=args.interval, cycles=args.cycles)
         elif args.sub == "reconcile":
             result = supervisor.reconcile(args.operation_id)
+        elif args.sub == "profile-reconcile":
+            if supervisor.profile_guard is None:
+                raise ValueError("supervisão de perfis indisponível")
+            result = supervisor.profile_guard.reconcile(args.operation_id, confirmed=args.confirmar)
+        elif args.sub == "profile-rearm":
+            if supervisor.profile_guard is None:
+                raise ValueError("supervisão de perfis indisponível")
+            result = supervisor.profile_guard.rearm(args.profile, confirmed=args.confirmar)
+        elif args.sub == "profile-capture":
+            if supervisor.profile_guard is None:
+                raise ValueError("supervisão de perfis indisponível")
+            result = supervisor.profile_guard.capture(args.profile, confirmed=args.confirmar)
         elif args.sub == "repair":
             result = supervisor.repair(ActionPlan.from_dict(json.loads(args.plan)), confirm=args.confirmar)
         else:

@@ -276,6 +276,9 @@ class AccessibilityTab(QWidget):
                 if row["state"] == "observed" and proof and proof["ready"] and proof.get("context") == context:
                     card.setText("Habilitado no sistema · teste físico pendente")
                     card.set_state("ready")
+                elif row["key"] in report.get("desktop_profiles", {}):
+                    card.setText(row["detail"])
+                    card.set_state("attention" if row["state"] != "observed" else "neutral")
                 elif proof or row["state"] in ("degraded", "unknown", "unavailable", "unsupported", "not-observed"):
                     card.setText(f"{WORDS.get(row['state'], 'Desconhecido')} · clique para tentar reparar")
                     card.set_state("attention")
@@ -289,8 +292,8 @@ class AccessibilityTab(QWidget):
         self.auto_button.setText("Desabilitar automação de entrada" if enabled else "Habilitar automação de entrada")
         self.install_button.setEnabled(not self._busy)
         blockers = report.get("blockers", [])
-        self.providers.setText("Monitor automático aguardando: " + "; ".join(blockers) +
-                               "\nReparo manual: clique em uma capacidade; conflitos ativos serão verificados." if blockers else
+        self.providers.setText("Entrada KWin aguardando: " + "; ".join(blockers) +
+                               "\nSteam/microfone têm guarda independente, indicada nos cartões." if blockers else
                                "Backend nativo disponível conforme capacidades; sem responsável externo bloqueando.")
         alerts = report.get("alerts", [])
         if isinstance(alerts, list) and all(isinstance(value, str) for value in alerts):

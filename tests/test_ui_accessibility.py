@@ -35,6 +35,23 @@ def test_panel_explains_capabilities_and_unknown_sources_without_green_defaults(
     assert all("Desconhecido" in label.text() for label in view.cards.values())
 
 
+def test_profile_fault_is_shown_separately_from_old_input_blocker(qapp):
+    view = AccessibilityTab(jobs=Jobs())
+    value = sample()
+    value.update(cards=[{"key": "touchpad", "state": "degraded",
+                         "detail": "Steam: perfil Gamepad no desktop; recuperação automática após nova confirmação"},
+                        {"key": "microphone", "state": "degraded",
+                         "detail": "Pro Audio ativo; preferência do responsável externo diverge"}],
+                 desktop_profiles={"touchpad": {"state": "fault"}, "microphone": {"state": "fault"}},
+                 plans=[], blockers=["operação antiga de toque incerta"])
+    view.show_report(value)
+    assert "perfil Gamepad" in view.cards["touchpad"].text()
+    assert "preferência do responsável" in view.cards["microphone"].text()
+    assert "Entrada KWin aguardando" in view.providers.text()
+    assert "Steam/microfone têm guarda independente" in view.providers.text()
+    view.stop()
+
+
 def test_parent_retains_plan_id_after_timeout_and_refresh_cannot_allow_repeat(qapp):
     jobs = Jobs({"outcome": "desconhecido", "reason": "timeout"})
     value = sample()
