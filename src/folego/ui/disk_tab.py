@@ -261,6 +261,7 @@ class HostHealthPanel(QWidget):
             level = "ok"
         else:
             titles = {"critical": "Limite térmico crítico alcançado",
+                      "danger": "Limite térmico passivo alcançado",
                       "high": "Calor elevado", "recent_high": "Pico de calor recente"}
             self.thermal_title.setText(titles.get(state, "Temperatura observada"))
             peak = thermal.get("peak_c")
@@ -272,12 +273,14 @@ class HostHealthPanel(QWidget):
             rpm = thermal.get("fan_rpm")
             top = thermal.get("top_process")
             details = [f"Limite passivo: {limit:g} °C" if limit is not None else
-                       f"Limite crítico: {critical:g} °C" if critical is not None else "Limite térmico não informado",
+                       "Limite passivo não informado",
+                       f"Limite crítico: {critical:g} °C" if critical is not None else
+                       "Limite crítico não informado",
                        f"Cooler: {rpm} RPM" if rpm is not None else "RPM indisponível"]
             if top:
                 details.append(f"Maior CPU no pico: {top['name']} ({top['cpu_percent_of_core']:g}% de um núcleo); relação não comprovada")
             self.thermal_detail.setText(" · ".join(details))
-            level = "danger" if state == "critical" else "warning" if state in ("high", "recent_high") else "ok"
+            level = "danger" if state in ("danger", "critical") else "warning" if state in ("high", "recent_high") else "ok"
         self.thermal_card.setProperty("level", level)
         self.thermal_card.style().unpolish(self.thermal_card)
         self.thermal_card.style().polish(self.thermal_card)

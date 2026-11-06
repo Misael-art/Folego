@@ -7,6 +7,34 @@ registra a linguagem visual, as decisões que chegaram ao produto e as propostas
 que ainda precisam de evidência. A [passagem](HANDOFF.md) guarda datas, SHAs,
 resultados e limites de cada rodada.
 
+## Calor e pedidos de alívio aos agentes
+
+O alerta térmico usa o limite **do mesmo sensor** que fornece a temperatura.
+Neste host, a zona ACPI informa 100 °C passivo e 105 °C crítico. Com esses
+valores, 95–99 °C é aviso, 100–104 °C é urgência e 105 °C ou mais é limite
+crítico do equipamento. Abaixo de 95 °C a leitura segue visível; nenhum valor
+é transplantado para sensores sem limites ou para outra máquina. O card da aba
+Disco e a avaliação geral compartilham a severidade; a bandeja avisa quando a
+leitura atual entra numa faixa e repete com intervalo limitado. Pico passado
+continua no histórico visual, sem disparar uma notificação como se fosse atual.
+Fonte ausente, antiga ou inválida produz estado desconhecido. O rótulo ACPI
+preserva a distinção em relação à temperatura direta da CPU.
+
+**Controle antiestresse proposto, ainda sem executor:** o Fôlego pode publicar
+uma solicitação local, com ID, boot, prazo e intensidade, para agentes que
+aderirem explicitamente. Um agente participante confirma o recebimento e pode
+adiar novos builds, reduzir jobs ou salvar um ponto de retomada antes de pausar
+seu próprio trabalho. Falta de confirmação permanece desconhecida; não autoriza
+sinal, congelamento ou fechamento pelo Fôlego. O pedido termina por prazo ou
+recuperação térmica sustentada e tem orçamento e disjuntor para evitar oscilações.
+O gatilho combina calor atual e pressão CPU/memória/I/O; PSI sozinho não atribui
+culpa a um processo. Integração com Codex, Qoder ou outro agente só existe após
+um canal suportado e autorização do respectivo owner. Limites de CPU por cgroup
+são opção apenas para jobs iniciados em escopos próprios ou aderidos
+explicitamente, com restauração e confirmação de identidade. Congelar cgroups
+ou enviar SIGSTOP a agentes arbitrários pode deixá-los segurando locks, perder
+heartbeats e tornar o resultado incerto; não faz parte desta proposta.
+
 ## Linguagem visual e estados
 
 - **Hierarquia.** Estado, valor e ação aparecem em níveis separados. FÔLEGO é a

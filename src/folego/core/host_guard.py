@@ -26,7 +26,8 @@ class ThermalTracker:
             self.samples.popleft()
         value = snapshot.temperature_c
         if (now <= 0 or snapshot.is_stale(15) or value is None
-                or not -20 <= value <= 150 or not snapshot.temperature_sensor):
+                or not -20 <= value <= 150 or not snapshot.temperature_sensor
+                or (snapshot.sources and snapshot.source("temperature").status != OK)):
             return {"state": "unknown", "reason": "temperatura ausente ou antiga",
                     "current_c": None, "peak_c": None, "sensor": snapshot.temperature_sensor,
                     "fan_rpm": snapshot.fan_rpm, "passive_c": None,
@@ -51,7 +52,9 @@ class ThermalTracker:
         state = "observed"
         if critical is not None and value >= critical:
             state = "critical"
-        elif passive is not None and value >= passive:
+        elif limit is not None and value >= limit:
+            state = "danger"
+        elif limit is not None and value >= limit - 5:
             state = "high"
         elif limit is not None and peak[1] >= limit - 5:
             state = "recent_high"

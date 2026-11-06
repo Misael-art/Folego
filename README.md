@@ -52,6 +52,11 @@ regras de adaptação e evidências de cada superfície.
 | **Entrada e acessibilidade** | Observar teclado, ponteiro, trackpads, toque, controles e áudio; solicitar reparo de entrada ou manter um monitor residente opcional, sem depender do PhaseZero. |
 | **Opções e continuidade** | Iniciar com a sessão por padrão, desativar quando quiser, consultar operações pelo código e acompanhar temporários próprios preservados. |
 
+Quando o sensor informa limites térmicos, a área Disco distingue aviso a 5 °C
+do limite passivo, urgência ao atingi-lo e limite crítico do equipamento. Com a
+bandeja disponível, o Fôlego avisa sem repetir a cada leitura. O alerta não
+reduz a carga nem suspende agentes por conta própria.
+
 O **modo compacto** tem 280 px de largura e recursos em duas linhas. O ícone de
 grade abre a **Central**; a seta ao lado reúne **Ocultar widget**, **Sair do
 Fôlego** e **Contas e cotas de IA**. **Modo widget**, na Central, retorna ao

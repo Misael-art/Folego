@@ -4,7 +4,7 @@ import time
 
 from folego.adapters.host_guard import HostObserver, _boots, _ntfs_events
 from folego.core.host_guard import ThermalTracker
-from folego.core.snapshot import MemInfo, Snapshot
+from folego.core.snapshot import ERROR, MemInfo, Snapshot, SourceQuality
 from folego.core.sysfs import read_thermal_trips
 
 
@@ -131,8 +131,13 @@ def test_thermal_guard_uses_only_matching_acpi_limits_and_fresh_samples(tmp_path
     now = time.monotonic()
     hot = tracker.observe(Snapshot(**base, mono=now, temperature_c=97))
     cool = tracker.observe(Snapshot(**base, mono=now + 30, temperature_c=81))
-    assert hot["state"] == "recent_high"
+    assert hot["state"] == "high"
     assert cool["peak_c"] == 97 and cool["current_c"] == 81
     assert cool["state"] == "recent_high"
-    missing = tracker.observe(Snapshot(**base, mono=now + 31, temperature_c=None))
+    assert tracker.observe(Snapshot(**base, mono=now + 32, temperature_c=100))["state"] == "danger"
+    assert tracker.observe(Snapshot(**base, mono=now + 33, temperature_c=105))["state"] == "critical"
+    missing = tracker.observe(Snapshot(**base, mono=now + 34, temperature_c=None))
     assert missing["state"] == "unknown" and missing["current_c"] is None
+    failed = tracker.observe(Snapshot(**base, mono=now + 35, temperature_c=105,
+                                      sources=(SourceQuality("temperature", ERROR),)))
+    assert failed["state"] == "unknown"

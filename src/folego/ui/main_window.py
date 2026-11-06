@@ -402,7 +402,9 @@ class MainWindow(QMainWindow):
         signal = title_signal.compute(snapshot, self._thresholds,
                                       engine=self._health)
         self._last_snapshot = snapshot
-        self.disk.show_thermal(self._thermal_tracker.observe(snapshot))
+        thermal = self._thermal_tracker.observe(snapshot)
+        self.disk.show_thermal(thermal)
+        self.tray.show_thermal(thermal)
         self._last_signal = signal
         self.setWindowTitle(signal.text)
         # Uma leitura só das sessões/exclusões por amostra: os predicados são

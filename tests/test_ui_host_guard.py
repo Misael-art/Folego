@@ -55,6 +55,12 @@ def test_host_guard_uses_one_grouped_area_and_guides_without_effect(qapp, monkey
     assert '"thermal"' in qapp.clipboard().text()
     assert "PSI em 60 s" in panel.rows["pressure"].text()
     assert win.disk.scroll.horizontalScrollBar().maximum() == 0
+    win.disk.show_thermal({"state": "danger", "sensor": "acpitz",
+                           "current_c": 100, "peak_c": 100, "passive_c": 100,
+                           "critical_c": 105, "fan_rpm": None})
+    assert panel.thermal_card.property("level") == "danger"
+    assert "passivo" in panel.thermal_title.text()
+    assert "105 °C" in panel.thermal_detail.text()
     seen = []
     monkeypatch.setattr(QMessageBox, "information", lambda *args: seen.append(args[1:]))
     panel._guide("ntfs")
