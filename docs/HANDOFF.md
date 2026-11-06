@@ -27,12 +27,21 @@ afrouxamento de teste. QA em HOME/XDG privados e áreas preservadas de
 Janela própria no KDE/Wayland real mostrou o card de urgência vermelho e os
 limites legíveis em 900 × 650; captura
 `.scratch/dev-tests-reviewed/thermal-alert-wayland-20261106/card-themed.png`.
-Essa prova não certifica a entrega da notificação pelo compositor nem uma
-transição térmica física. Os dados da janela foram sintéticos.
+Essa prova visual não certifica a entrega da notificação pelo compositor; os
+dados da janela foram sintéticos. A observação física posterior está abaixo.
 Após o push, a unit de sessão `app-folego@autostart.service`, que executa este
 checkout, foi reiniciada uma vez para carregar o código. O processo anterior
 encerrou ordenadamente e a unit voltou `active/running`, `Result=success`, PID
 128602 às 06:17:40 -03. Não foi gerado calor artificial no host.
+
+Verificação somente leitura em 06/11, após mais de quatro horas de execução:
+o mesmo processo seguia ativo, a bandeja estava registrada no Plasma e o
+histórico do Fôlego tinha 997 amostras desde 06:17:43. O sensor físico `acpitz`
+alcançou ao menos 95 °C em 15 amostras e 100 °C às 09:32:55; nenhuma amostra
+chegou a 105 °C. Isso confirma leitura real nas faixas de atenção e urgência,
+sem provocar aquecimento. O histórico não registra envio nem apresentação das
+notificações pelo compositor, portanto a entrega visual não está certificada.
+O controle cooperativo dos agentes continua apenas proposto.
 
 O desenho de alívio cooperativo está em `docs/DESIGN.md`: pedido local com ID,
 boot, prazo, confirmação e disjuntor para agentes que optarem por participar.
