@@ -2,7 +2,8 @@
 
 ## Economia de tela e pedido cooperativo — 06/11/2026
 
-Incremento preparado para a prévia `0.2.0b6` na branch registrada e no PR #3.
+Incremento integrado no commit `5544fd157fc3ebfd4e6ce0be0dafd08f91926ff6`
+da branch registrada e do PR #3.
 **Opções → Economia da tela · Steam Deck** começa desligada. Ao ativar, guarda
 antes os seis valores anteriores do PowerDevil, usa 120 s na bateria e 180 s
 na tomada, e reverte somente valores ainda sob controle do Fôlego. Consulta
@@ -43,6 +44,31 @@ O gate final da versão `0.2.0b6`, após reduzir a sondagem de tela cheia para
 2 skipped** no núcleo e **1641 passed, 2 skipped** Qt offscreen. Os 43 casos
 focados de tela e ciclo de vida também passaram. A mudança reduz consultas em
 bateria e mantém recuperação imediata quando o Qt informa remoção de monitor.
+
+Publicação: seis jobs de produto do PR #3 passaram nesse SHA; os três jobs da
+[tag v0.2.0b6](https://github.com/Misael-art/Folego/actions/runs/42242294738)
+também passaram. A [prévia pública](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b6)
+foi publicada em 06/11/2026 às 15:24:06 UTC, com tag anotada nesse commit.
+Fonte completa, wheel, sdist e `SHA256SUMS` foram baixados de volta e conferidos
+byte a byte contra os artefatos locais. O wheel instalado em venvs descartáveis
+passou CLI sem Qt, `doctor` e preservação do estado ao remover a GUI. O pacote
+inclui o entrypoint `folego-agent-hook`; o fonte completo inclui `dev` e
+`uv.lock`. Arquivos locais e relatório de instalação em
+`.scratch/release-b6-20261106`.
+
+| Asset público | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `Folego-0.2.0b6-source.tar.gz` | 21.799.335 | `0e3e7dfab4ed76903b6871ed5b24b3555d8a80673f42f8612b5c2f9a6ac530d4` |
+| `folego-0.2.0b6-py3-none-any.whl` | 487.807 | `ad52de9cbf257c268714a41e5bf38e4cd6c43d8ca211049e3f6f8c6ad06a6326` |
+| `folego-0.2.0b6.tar.gz` | 680.006 | `1a2b8b64ab72be6872e58e6cffa258413ea7baa0d79c30853c33db4c76b47a71` |
+| `SHA256SUMS` | 281 | `ea328431c238a56c4af6f721695be794204cbfddc994f03a0c9a6cccab0a732f` |
+
+O serviço existente `app-folego@autostart.service` foi reiniciado uma vez após
+o push do código: PID **1424153**, `active/running`, `Result=success`, sem avisos
+no journal recente. Tela interna `eDP-1` permaneceu `on` e a preferência da
+economia está desligada. O arquivo de pedido cooperativo não existia em
+temperatura normal. A tag permanece no commit de produto; este registro
+documental posterior avança apenas a branch do PR. **Sem merge.**
 
 ## Alerta térmico e alívio cooperativo proposto — 06/11/2026
 
