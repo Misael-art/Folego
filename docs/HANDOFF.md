@@ -1,6 +1,53 @@
 # Passagem para o próximo agente — atualizada em 06/11/2026
 
+## Economia de tela e pedido cooperativo — 06/11/2026
+
+Incremento preparado para a prévia `0.2.0b6` na branch registrada e no PR #3.
+**Opções → Economia da tela · Steam Deck** começa desligada. Ao ativar, guarda
+antes os seis valores anteriores do PowerDevil, usa 120 s na bateria e 180 s
+na tomada, e reverte somente valores ainda sob controle do Fôlego. Consulta
+KScreen/KWin por worker; fullscreen, monitor externo e leitura desconhecida
+pausam o temporizador. Um monitor externo ativo permite desativar apenas o
+painel eDP, com intenção persistente, verificação posterior e recuperação do
+painel quando o externo desaparece. Entrega confirmada, calor urgente/crítico
+e evento de revisão/encerramento do hook pedem que KScreen reacenda a tela.
+O [contrato e os limites](ENERGIA-E-AGENTES.md) descrevem dependências e
+comportamento. Não há suspensão da sessão, ajuste de brilho/perfil ou sinal a
+processos.
+
+O pedido térmico cooperativo usa arquivo de sessão privado com ID, boot e
+validade de 90 s; o hook `folego-agent-hook` apenas entrega contexto ao Codex.
+Ele não confirma que o agente reduziu a carga. O `hooks.json` do usuário neste
+host foi preservado e acrescido dos eventos `PreToolUse`, `PermissionRequest`
+e `Stop`, com backup privado anterior. Os novos hooks **dependem da revisão de
+confiança do Codex em `/hooks`**; não foi simulada essa confiança. Outros
+agentes ainda não têm canal suportado de alívio.
+
+Teste focado: 14 casos Qt de opções/tela e 3 casos headless do pedido/hook;
+após corrigir o encerramento dos dois backends, 48 casos focados de janela,
+dock, alerta e ciclo de vida passaram. Uma tentativa completa anterior teve
+**1263 passed, 2 skipped** no núcleo e falhou na GUI ao fechar backends sem
+`close`; seu log está preservado em `.scratch/dev-tests-reviewed`. A repetição
+com a correção passou: **1263 passed, 2 skipped** no núcleo e **1640 passed,
+2 skipped** Qt offscreen. HOME/XDG e temporários privados, sem efeitos no host.
+O KDE/Wayland real confirmou a opção no topo da aba e o ciclo curto de ativar,
+reconciliar, pedir `DPMS on` e restaurar PowerDevil. A opção observou a inibição
+de ociosidade já mantida por outro aplicativo, sem forçar a tela a apagar.
+O arquivo de intenção foi removido após restauração e o painel eDP permaneceu
+`on`. Captura própria preservada em
+`.scratch/dev-tests-reviewed/screen-energy-options-wayland-final-20261106.png`.
+Sem dock físico conectado, o remapeamento real das janelas, hotplug e autonomia
+em bateria seguem sem certificação; o teste de dock usa topologia descartável.
+O gate final da versão `0.2.0b6`, após reduzir a sondagem de tela cheia para
+30 segundos e usar o sinal imediato do Qt no hotplug, passou com **1263 passed,
+2 skipped** no núcleo e **1641 passed, 2 skipped** Qt offscreen. Os 43 casos
+focados de tela e ciclo de vida também passaram. A mudança reduz consultas em
+bateria e mantém recuperação imediata quando o Qt informa remoção de monitor.
+
 ## Alerta térmico e alívio cooperativo proposto — 06/11/2026
+
+O canal cooperativo descrito nesta seção era uma proposta naquele commit;
+consulte a implementação e os limites atuais na seção anterior.
 
 Incremento integrado no commit `228366ba2866cd8f7bed90f101b9ec5e096a7daf`.
 O card de temperatura da aba Disco agora acompanha os limiares da avaliação

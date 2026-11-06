@@ -33,10 +33,13 @@ from .accessibility_tab import AccessibilityTab
 from .options_tab import OptionsTab
 from .custom_prompts_tab import CustomPromptsTab
 from .ai_monitor import AIMonitor
+from .desktop_shortcuts import DesktopController
+from .screen_energy import ScreenEnergy
 from .theme import TOKENS, _background_color, set_control_icon, prepare_surface
 from ..core import health
 from ..core.battery_alerts import BatteryAlertTracker
 from ..core.host_guard import ThermalTracker
+from ..core.agent_pressure import PressureBackend
 from ..core.exclusions import ExclusionError, ExclusionList
 from ..core.orphans import OrphanTracker, active_investigation, group_targets
 from ..core.sessions import SessionError, SessionRegistry
@@ -190,6 +193,30 @@ class MainWindow(QMainWindow):
         self.options = OptionsTab()
         self.options.sound_preview.connect(self.ai_monitor.alerts.preview)
         self.ai_monitor.alerts.feedback.connect(self.options.sound_feedback)
+        self._screen_controller = DesktopController(self, backend=ScreenEnergy())
+        self._screen_controller.payload.connect(self._screen_result)
+        self._screen_controller.failed.connect(self._screen_error)
+        self._screen_controller.busy_changed.connect(self._screen_after_busy)
+        self._pressure_controller = DesktopController(self, backend=PressureBackend())
+        self._pressure_controller.payload.connect(self.options.show_cooperative_state)
+        self._pressure_controller.failed.connect(self.options.cooperative_error)
+        self._pressure_controller.busy_changed.connect(self._pressure_after_busy)
+        self._pressure_next = None
+        self._pressure_last_sent = 0.0
+        self._pressure_seen = False
+        self.options.screen_energy_requested.connect(self._screen_energy_request)
+        self.ai_monitor.deliveries_ready.connect(self._screen_delivery_attention)
+        self._screen_delivery_ids = set()
+        self._screen_thermal_level = 0
+        self._screen_wake_pending = False
+        self._screen_reconcile_pending = False
+        self._screen_attention_id = None
+        self._screen_tick_count = 0
+        self._screen_timer = QTimer(self)
+        self._screen_timer.setInterval(5_000)
+        self._screen_timer.timeout.connect(self._screen_energy_tick)
+        QGuiApplication.instance().screenAdded.connect(self._screen_change)
+        QGuiApplication.instance().screenRemoved.connect(self._screen_change)
         self.custom_prompts = CustomPromptsTab()
         self.options.operation_verified.connect(self._operation_verified)
         self._startup_defaults = startup_defaults
@@ -244,6 +271,8 @@ class MainWindow(QMainWindow):
 
     def start(self):
         self.ai_monitor.start()
+        self._screen_controller.request('reconcile')
+        self._screen_timer.start()
         if self._startup_defaults:
             self.options.start(sync=True)
             self._startup_defaults = False
@@ -266,6 +295,84 @@ class MainWindow(QMainWindow):
         self._poller.snapshot_ready.connect(self.apply_snapshot)
         self._poller.error.connect(self.show_error)
         self._poller.start()
+
+    def _screen_energy_request(self, action):
+        self.options.screen_energy_choice.setEnabled(False)
+        if not self._screen_controller.request(action):
+            self.options.screen_energy_error('Operação de tela em curso; consulte o estado antes de repetir')
+
+    def _screen_energy_tick(self):
+        if self._screen_controller.future is not None or not self.options._screen_energy_state.get('enabled'):
+            return
+        self._screen_tick_count += 1
+        self._screen_controller.request('reconcile' if self._screen_tick_count % 6 == 0 else 'attention')
+
+    def _screen_change(self, *_):
+        if self._quitting or not self.options._screen_energy_state.get('enabled'): return
+        if self._screen_controller.future is None:
+            self._screen_controller.request('reconcile')
+        else:
+            self._screen_reconcile_pending = True
+
+    def _screen_result(self, result):
+        if 'enabled' in result:
+            self.options.show_screen_energy(result)
+        attention_id = result.get('attention_id')
+        if attention_id and attention_id != self._screen_attention_id:
+            self._screen_attention_id = attention_id
+            self._wake_screen()
+
+    def _screen_error(self, message):
+        self.options.screen_energy_error(message)
+        if self._screen_controller.action != 'status':
+            QTimer.singleShot(0, lambda: self._screen_controller.request('status'))
+
+    def _wake_screen(self):
+        if not self.options._screen_energy_state.get('enabled'): return
+        if self._screen_controller.future is None:
+            self._screen_controller.request('wake')
+        else:
+            self._screen_wake_pending = True
+
+    def _screen_after_busy(self, busy):
+        if busy: return
+        if self._screen_reconcile_pending:
+            self._screen_reconcile_pending = False
+            self._screen_controller.request('reconcile')
+        elif self._screen_wake_pending:
+            self._screen_wake_pending = False
+            self._wake_screen()
+
+    def _screen_delivery_attention(self, rows):
+        ids = {(item.get('session'), item.get('event'))
+               for row in rows if isinstance(row, dict)
+               for item in row.get('pending', ()) if isinstance(item, dict)
+               and item.get('session') and item.get('event')}
+        if ids - self._screen_delivery_ids:
+            self._wake_screen()
+        self._screen_delivery_ids = ids
+
+    def _pressure_request(self, action, value=None):
+        if self._pressure_controller.future is None:
+            self._pressure_controller.request(action, value)
+        else:
+            self._pressure_next = (action, value)
+
+    def _pressure_after_busy(self, busy):
+        if not busy and self._pressure_next is not None:
+            action, value = self._pressure_next
+            self._pressure_next = None
+            self._pressure_controller.request(action, value)
+
+    def _observe_cooperative_pressure(self, level):
+        now = time.monotonic()
+        if level:
+            if level != self._screen_thermal_level or now - self._pressure_last_sent >= 45:
+                self._pressure_request('publish', 'critical' if level == 2 else 'danger')
+                self._pressure_last_sent = now
+        elif self._screen_thermal_level or not self._pressure_seen:
+            self._pressure_request('clear')
+        self._pressure_seen = True
 
     def _start_host_guard(self):
         if self._host_guard_factory is None or self._host_guard_poller is not None:
@@ -405,6 +512,11 @@ class MainWindow(QMainWindow):
         thermal = self._thermal_tracker.observe(snapshot)
         self.disk.show_thermal(thermal)
         self.tray.show_thermal(thermal)
+        level = {'danger': 1, 'critical': 2}.get(thermal.get('state'), 0)
+        self._observe_cooperative_pressure(level)
+        if level > self._screen_thermal_level:
+            self._wake_screen()
+        self._screen_thermal_level = level
         self._last_signal = signal
         self.setWindowTitle(signal.text)
         # Uma leitura só das sessões/exclusões por amostra: os predicados são
@@ -735,6 +847,9 @@ class MainWindow(QMainWindow):
             return
         if self._quitting or self.tray.tray is None:
             self._freshness_timer.stop()
+            self._screen_timer.stop()
+            self._screen_controller.close()
+            self._pressure_controller.close()
             if self._poller is not None:
                 self._poller.stop()
             if self._history_poller is not None:

@@ -51,6 +51,7 @@ regras de adaptação e evidências de cada superfície.
 | **CLI independente de Qt** | Investigar o ambiente e consultar operações diretamente pelo terminal. |
 | **Entrada e acessibilidade** | Observar teclado, ponteiro, trackpads, toque, controles e áudio; solicitar reparo de entrada ou manter um monitor residente opcional, sem depender do PhaseZero. |
 | **Opções e continuidade** | Iniciar com a sessão por padrão, desativar quando quiser, consultar operações pelo código e acompanhar temporários próprios preservados. |
+| **Economia da tela e agentes** | Ativar um temporizador reversível da tela interna, preservar jogos/dock e pedir alívio cooperativo aos agentes participantes. [Contrato e limites](docs/ENERGIA-E-AGENTES.md). |
 
 Quando o sensor informa limites térmicos, a área Disco distingue aviso a 5 °C
 do limite passivo, urgência ao atingi-lo e limite crítico do equipamento. Com a
@@ -140,12 +141,12 @@ contas usam um fundo contínuo, com os elementos internos transparentes.
 O alvo é **Linux**, com KDE Plasma para a integração completa com o desktop.
 O wrapper gerencia Python **3.14.7**, uv e dependências fixadas em `uv.lock`.
 Não é necessário ativar um ambiente virtual ou instalar pacotes Python globalmente.
-A [prévia 0.2.0b5](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b5)
+A [prévia 0.2.0b6](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b6)
 oferece fonte completa, wheel, sdist e SHA256SUMS. A fonte completa inclui o wrapper
 e o lockfile; os pacotes Python exigem Python 3.14 e a dependência GUI opcional.
 
 ```bash
-git clone --branch v0.2.0b5 https://github.com/Misael-art/Folego.git
+git clone --branch v0.2.0b6 https://github.com/Misael-art/Folego.git
 cd Folego
 ./dev setup
 ./dev gui
