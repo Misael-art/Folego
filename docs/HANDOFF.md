@@ -1,5 +1,48 @@
 # Passagem para o próximo agente — atualizada em 06/11/2026
 
+## Recuperação de perfis do trackpad e microfone — 06/11/2026
+
+Incremento de código `117cf1f35457a530b1804d053cf4dab9f96de9f5`, na branch
+registrada e no PR #3. No episódio das 17:06, a enumeração do controle e da
+placa de som fez ambos os cartões parecerem saudáveis, embora a Steam estivesse
+no perfil `RetroFE Steam Deck Gamepad` sem saídas mouse/teclado e a placa acp5x
+em `Pro Audio`. O PhaseZero também tinha uma preferência de headset ausente.
+A operação antiga e incerta de toque, junto ao guardião PhaseZero ativo,
+bloqueava a política KWin inteira. Sua causa original de troca de perfis não
+foi demonstrada; a correção manual informada pelo usuário restaurou Desktop e
+`HiFi (Mic, Speaker)`, com teste físico de trackpad e áudio relatado pelo usuário.
+
+O monitor residente agora consulta o perfil real da Steam e o perfil/fonte
+PipeWire, separa essas duas guardas do bloqueio antigo KWin e só repara a falha
+exata após duas observações. Aprende a referência saudável em duas leituras;
+grava intenção antes do efeito, revalida boot, KWin, Steam, jogo/lease,
+template, placa e preferência PhaseZero, e verifica o resultado. Não retira
+mute, troca fonte padrão, reinicia áudio/Steam ou mexe em perfil de jogo.
+Preferência PhaseZero divergente, entrada externa, API Steam desconhecida e
+resultado incerto bloqueiam a ação. O limite é três tentativas por hora e
+120 s entre elas, com disjuntor persistente. CLI `profile-reconcile`,
+`profile-rearm` e `profile-capture` fornecem recuperação manual do estado.
+Contrato e limites em [ACESSIBILIDADE.md](ACESSIBILIDADE.md).
+
+Host atual às 18:04 -03: `folego-accessibility.service` reiniciado uma vez,
+`active/running`, PID 240787, escopo novo no status. Após duas observações,
+política `enabled=true` registrou as referências de `touchpad` e `microphone`;
+zero tentativas e nenhum disjuntor. Steam indica Desktop com mouse/teclado,
+PipeWire indica `HiFi (Mic, Speaker)` e `mic-biglinux`. A unit da GUI própria
+também foi recarregada, PID 244046. Na sessão KDE/Wayland real, os cartões
+mostraram “guarda automática ativa” e o aviso antigo KWin separado. Nenhum
+perfil foi degradado artificialmente, nenhuma sessão foi reiniciada e não houve
+teste de efeito automático no hardware defeituoso. Uma recorrência natural
+permitirá conferir o reparo no hardware, seguido de teste físico de gesto/voz.
+
+Validação: 13 testes focados da guarda; `./dev check` final com **1276 passed,
+2 skipped** no núcleo e **1655 passed, 2 skipped** na GUI Qt offscreen, em
+áreas privadas, sequenciais. O wrapper recusou uma tentativa intermediária da
+GUI ao chegar ao limite de 20 áreas de QA; após revisar e remover somente as
+áreas descartáveis desta tarefa, o gate completo passou. A checagem de diff
+passou. CI do novo SHA ainda precisa ser conferido após push; sem merge/release.
+Preservar a alteração preexistente de `AGENTS.md`, que não integra este commit.
+
 ## Economia de tela e pedido cooperativo — 06/11/2026
 
 Incremento integrado no commit `5544fd157fc3ebfd4e6ce0be0dafd08f91926ff6`
