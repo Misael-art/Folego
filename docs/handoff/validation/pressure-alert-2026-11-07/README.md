@@ -23,7 +23,9 @@ a estes avisos. A causa dos reinícios continua indeterminada.
 
 - Poll principal da GUI: 5 s. O gravador continua em 15 s, com 4 MiB por boot,
   32 MiB totais e a mesma política de fsync. Não há nova leitura de `/proc`,
-  sysfs ou journal por causa do alerta.
+  sysfs ou journal por causa do alerta. Três médias PSI `avg60`, em porcentagem,
+  passam a ser incluídas na mesma linha privada para permitir reconstrução
+  pós-boot; o tamanho maior reduz um pouco a duração coberta pelo teto fixo.
 - PSI já presente nas amostras: memória ≥5%, I/O ≥10% ou CPU ≥25% em `avg60`.
   Exige pelo menos 15 s entre a primeira e a última leitura alta, sem lacuna
   superior a 20 s, origem `ok` e idade ≤15 s. A bandeja mostra fonte, janela,
@@ -48,6 +50,8 @@ um ajuste final no texto para reunir fontes simultâneas e mostrar a idade,
 passou com 19 testes e `./dev test tests/test_host_guard.py
 tests/test_host_timeline.py tests/test_ui_tray.py -q` com 30. A suíte completa
 não foi repetida após esse ajuste localizado.
+Após incluir `avg60` no histórico, os testes focados de timeline/guardas
+passaram novamente com 19 testes sem Qt, e host/avisos com 17 testes Qt.
 Uma inspeção separada no KDE/Wayland real, com janela e estado próprios,
 abriu o cartão de saúde, navegou até Disco e mostrou a orientação; não criou
 pressão nem testou notificação real. `git diff --check` passou.

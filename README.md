@@ -224,8 +224,10 @@ registro existente é preservado. A falha de gravação aparece na Central, e
 capacidade a partir de 85% do limite aparece na aba Disco e na CLI. A leitura
 principal da GUI ocorre a cada 5 segundos; o alerta de pressão usa o PSI já
 coletado, exige leituras sustentadas e limita avisos na bandeja a um por tipo
-de pressão a cada 5 minutos. Ele recomenda reduzir tarefas pelo aplicativo
-responsável e não altera processos. O plano para
+de pressão a cada 5 minutos. O histórico registra também as médias PSI de
+60 segundos, em porcentagem, para explicar avisos após um reinício. O alerta
+recomenda reduzir tarefas pelo aplicativo responsável e não altera processos.
+O plano para
 continuidade e dossiês está no [roadmap de resiliência](docs/ROADMAP-RESILIENCIA-HOST.md).
 `disk recovery` só verifica identidade da
 origem, montagem, acesso bruto, ferramenta e destino independente com espaço

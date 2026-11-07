@@ -40,6 +40,8 @@ def test_timeline_throttles_and_preserves_private_boot_history(tmp_path):
     result = read_timeline(folder)
     assert result["quality"] == "ok"
     assert [row["psi_io_avg10"] for row in result["samples"]] == [1.5, 1.5]
+    assert result["samples"][-1]["psi_io_avg60"] == 0.5
+    assert result["samples"][-1]["psi_cpu_avg60"] == 1.0
     assert result["samples"][-1]["mem_available_kb"] == 6_000_000
     assert len(read_timeline(folder, boot_id=BOOT)["samples"]) == 2
     assert read_timeline(folder, boot_id="../other")["quality"] == "unknown"
@@ -159,6 +161,7 @@ def test_boot_summary_bounds_read_and_marks_absent_boot_unknown(tmp_path):
     assert summary['quality'] == 'ok'
     assert summary['window_limited'] is True
     assert summary['last']['mono_ns'] == 115_000_000_000
+    assert summary['last']['psi_mem_avg60'] == 0.1
     assert summary['recent_max_interval_s'] == 15
     assert summary['recent_samples'] == 80
     assert summarize_boot_timeline(folder, 'c325bc6f-a6f8-4093-8b2d-5c10008de2e5')[

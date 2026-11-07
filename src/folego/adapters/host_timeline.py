@@ -55,8 +55,11 @@ def _sample(snapshot: Snapshot) -> dict:
             "mem_available_kb": mem.mem_available_kb if mem else None,
             "swap_used_kb": snapshot.swap_used_kb if snapshot.source("swaps").status == OK else None,
             "psi_mem_avg10": pressure_mem.some_avg10 if pressure_mem else None,
+            "psi_mem_avg60": pressure_mem.some_avg60 if pressure_mem else None,
             "psi_io_avg10": pressure_io.some_avg10 if pressure_io else None,
+            "psi_io_avg60": pressure_io.some_avg60 if pressure_io else None,
             "psi_cpu_avg10": pressure_cpu.some_avg10 if pressure_cpu else None,
+            "psi_cpu_avg60": pressure_cpu.some_avg60 if pressure_cpu else None,
             "temperature_c": (snapshot.temperature_c
                               if snapshot.source("temperature").status == OK else None),
             "temperature_sensor": ((snapshot.temperature_sensor or None)
@@ -284,8 +287,9 @@ def summarize_boot_timeline(directory: Path, boot_id: str) -> dict:
         if type(a) is int and type(b) is int and b > a:
             gaps.append(round((b - a) / 1_000_000_000, 2))
     fields = ("at", "mono_ns", "collector_read_ms", "source_issues",
-              "mem_available_kb", "swap_used_kb", "psi_mem_avg10", "psi_io_avg10",
-              "psi_cpu_avg10", "temperature_c", "temperature_sensor",
+              "mem_available_kb", "swap_used_kb", "psi_mem_avg10", "psi_mem_avg60",
+              "psi_io_avg10", "psi_io_avg60", "psi_cpu_avg10", "psi_cpu_avg60",
+              "temperature_c", "temperature_sensor",
               "battery_percent", "battery_status", "battery_voltage_uv",
               "battery_current_ua", "battery_power_uw", "external_power_online", "top_cpu")
     return {"quality": quality, "reason": reason,
