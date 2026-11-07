@@ -1,5 +1,45 @@
 # Passagem para o próximo agente — atualizada em 07/11/2026
 
+## Energia, calor e pressão nos resets: coleta passiva — 07/11/2026
+
+Incremento `02f586b` na branch/PR #3. A cronologia por boot ID e a distinção
+entre leitura histórica e host atual estão em
+[evidência e limites](handoff/validation/passive-energy-2026-11-07/README.md).
+Nos cortes de 06/11, a última amostra do primeiro tinha ACPI 97 °C e
+compilação; o boot de ~14 s não iniciou a GUI Fôlego; a última do terceiro
+tinha ACPI 83 °C, PSI
+CPU 41,63% e eventos Bluetooth posteriores à última amostra. O ledger não
+registrou operação Fôlego na janela 23:23–23:55. Btrfs permanece sem delta no
+boot atual e a cápsula SMART anterior não mostrou erro de mídia. Nenhuma dessas
+observações identifica a causa; desconexão do carregador foi voluntária.
+
+O mesmo gravador de ~15 s agora preserva tensão/corrente/potência da bateria
+quando o kernel as expõe, com µV/µA/µW, sem inferir potência ou direção. Schema
+2 acrescenta milissegundos, monotônico por boot, duração da fase de leitura e
+qualidade esparsa das fontes. Campos ausentes são `null`; schema antigo continua
+legível sem ganho retroativo de qualidade. Limites de 4 MiB por boot/32 MiB no
+total e fsync limitado não mudaram. O CLI mostra as novas medidas. A GUI
+residente não foi reiniciada; a gravação nova começa na próxima abertura normal.
+
+Medida de 20 s no boot atual, sem separar efeitos de outras tarefas: supervisor
+de entrada 3,24%, serviço de desempenho 1,35% e GUI 7,90% de um núcleo. A GUI
+inclui renderização, portanto isso não isola o coletor nem prova causa do reset.
+Uma consulta limitada ao journal Bluetooth/DRM sem entradas levou ~11 ms;
+polling adicional não foi adotado porque poderia perder os segundos finais e
+duplicaria o journal PhaseZero. SMART segue sem sondagem periódica privilegiada. Owner
+PhaseZero mantém ICC/journal/pstore; SteamZero investiga GPU/Gamescope.
+
+QA: 48 testes headless focados passaram; `./dev check` sequencial final:
+**1282 passed, 2 skipped** headless e **1666 passed, 2 skipped** Qt offscreen;
+`git diff --check` passou. Leitura CLI do histórico real schema 1 e consulta
+somente leitura do observador de disco confirmaram compatibilidade e baseline
+Btrfs estável; testes de coleta usaram sysfs/arquivos descartáveis. Não houve
+validação de queda física de tensão, calor no corte ou recuperação pós-reset.
+Áreas de QA concluídas/falhas foram movidas para retenção revisada, sem apagar
+evidência. `AGENTS.md` preexistente não integra este incremento. Próximo passo:
+dossiê pós-boot com lacunas explícitas e retenção segura antes do limite de
+4 MiB por boot, em coordenação com os owners do journal e SMART.
+
 ## Faixa mínima flutuante e navegação entre visualizações — 07/11/2026
 
 Incremento de interface `710197bd8ca6590c2d598eff83feae11b10cfa10` na
