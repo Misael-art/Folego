@@ -69,6 +69,13 @@ heartbeats e tornar o resultado incerto; não faz parte desta proposta.
 
 ## Widget, encaixes e ações rápidas
 
+A faixa [mini horizontal](handoff/validation/mini-widget-2026-11-07/README.md)
+usa a mesma janela e os mesmos dados do widget: uma linha de leituras essenciais,
+estado textual e cromático, alça de movimento e três caminhos visíveis
+(compacto, Central, seletor de formatos). O seletor lista destinos diretamente
+em todos os formatos. Alertas com fonte ausente não viram valores seguros; o
+compacto e a Central mantêm o detalhamento.
+
 1. **Conceito original.** O cabeçalho com “Central” e vários botões avulsos
    evoluiu para dois grupos. O teclado abre embaixo e seu chevron abre no topo.
    A grade abre a Central e seu chevron reúne ocultar, sair, contas e posições.
@@ -79,7 +86,7 @@ heartbeats e tornar o resultado incerto; não faz parte desta proposta.
    ponteiro e revela a seta. O fluxo aprovado leva da borda esquerda do
    flutuante à lateral direita, da direita à lateral esquerda e da superior
    ao topo. A alça da lateral fica na sua borda externa e retorna ao flutuante.
-   O menu de posição oferece as quatro escolhas sem depender do hover. A
+   O seletor de visualização oferece as cinco escolhas sem depender do hover. A
    geometria usa a área útil da saída e respeita painéis conhecidos. Qt anima
    a posição em 260 ms quando a plataforma permite. No Wayland, o KWin é
    responsável pela posição, com fade, leitura posterior e reposicionamento

@@ -1,12 +1,27 @@
 # Widget, sessões de IA e atalhos
 
+## Mini horizontal
+
+A faixa mínima flutuante ocupa **384 × 46 px lógicos** em uma linha: alça de
+arraste, estado com palavra e cor, CPU agregada, temperatura com origem e uso de
+RAM. Uma leitura ausente ou antiga mostra `—`; `ACPI` não é chamada de
+temperatura direta da CPU. O botão **Expandir** abre o compacto de 280 px, a
+grade abre a Central e a seta abre diretamente os cinco formatos, com marca no
+atual. Todas as barras e o compacto oferecem o mesmo seletor, e a Central
+oferece **Mini horizontal** em **Posição do widget**. A área de arraste não
+executa ações. O hover não abre atalhos nessa faixa; avisos completos e cotas
+continuam no compacto e na Central. Calor no limite do sensor e bateria crítica
+em descarga aparecem também no estado breve, com detalhes ao passar o ponteiro.
+O [mockup e critérios](handoff/validation/mini-widget-2026-11-07/README.md)
+registram a hierarquia e as transições.
+
 O widget tem 280 px de largura em pixels lógicos do desktop. Recursos ficam em
 duas linhas; alertas completos e mensagens podem aumentar a altura. O ícone de
 grade abre a **Central** e recolhe o widget. A seta ao lado abre os controles;
 o ícone de teclado e sua seta são um grupo separado para abrir o teclado embaixo
 ou no topo. **Modo widget**, na Central, retorna ao controle flutuante sem
 parar o monitoramento. Em outras abas, use **Posição do widget → Widget
-flutuante** no menu do cabeçalho; a aba e os campos em edição são preservados.
+flutuante** ou **Mini horizontal** no menu do cabeçalho; a aba e os campos em edição são preservados.
 As duas interfaces dispensam minimizar, maximizar e fechar.
 Para encerrar, use a seta da Central → **Sair do Fôlego** ou a bandeja. **Ocultar widget**,
 no mesmo menu, mantém um caminho de retorno: sem bandeja e com a central
@@ -22,8 +37,9 @@ Ao passar o mouse pela borda esquerda do widget, uma faixa em dois tons mais
 escuros revela a seta para a barra direita. A borda direita abre a barra
 esquerda; a borda superior abre a barra horizontal no topo. A seta da borda
 externa de cada lateral, ou do centro da borda superior, retorna aos 280 px do
-compacto. Os controles, leitura de
-recursos e cotas são os mesmos componentes nas quatro formas. As laterais têm
+compacto. O seletor de visualizações em cada formato também leva diretamente
+às outras quatro superfícies. Os controles, leitura de
+recursos e cotas são os mesmos componentes nas quatro formas completas. As laterais têm
 112–128 unidades lógicas de largura: o indicador principal fica centralizado,
 seguido do estado, métricas, espaço livre, pausa e cotas confirmadas em coluna.
 As métricas se alinham à borda correspondente; os cantos da janela são
@@ -46,8 +62,8 @@ a posição antes de concluir; o conteúdo reaparece suavemente após a confirma
 Ao reabrir uma barra depois de visitar a Central, o Fôlego confirma novamente
 o encaixe: a regra inicial do KWin para o widget flutuante pode ter reposicionado
 a mesma janela. **Modo widget** na Central abre o widget flutuante. O menu **Posição
-do widget** na Central e no widget oferece também as duas laterais e o topo,
-sem depender da alça de borda estar visível.
+do widget** na Central e o seletor direto no widget oferecem mini, compacto,
+as duas laterais e o topo, sem depender da alça de borda estar visível.
 O flutuante preserva a posição quando ela cabe na área útil; se a altura mudou,
 ajusta apenas o necessário para manter a janela inteira acessível. Uma mudança
 tardia do KWin na barra é conferida por leitura da geometria, com número limitado

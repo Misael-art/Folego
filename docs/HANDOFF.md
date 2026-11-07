@@ -1,5 +1,36 @@
 # Passagem para o próximo agente — atualizada em 07/11/2026
 
+## Faixa mínima flutuante e navegação entre visualizações — 07/11/2026
+
+Incremento de interface `710197bd8ca6590c2d598eff83feae11b10cfa10` na
+branch registrada, para o PR #3. A nova faixa **Mini horizontal** mede
+384 × 46 px lógicos e usa a janela, o coletor e os dados do widget existente.
+Mostra estado por palavra e cor, CPU agregada, temperatura com identificação
+da fonte e RAM. Leitura antiga/ausente vira `—`. Calor próximo dos limites,
+limite crítico e bateria crítica em descarga afetam também o estado breve;
+mensagens de falha de posicionamento ficam visíveis como **Aviso**, com texto
+completo no tooltip. A alça pontilhada move a faixa; **Expandir** leva ao
+compacto, a grade abre a Central e o seletor oferece os cinco formatos em um
+nível, com marca no atual. O mesmo seletor existe nos demais widgets; a Central
+também oferece Mini em **Posição do widget**. O
+[mockup e os critérios](handoff/validation/mini-widget-2026-11-07/README.md)
+explicam a hierarquia e os limites do formato.
+
+QA após a última alteração: `./dev check` sequencial com **1280 passed,
+2 skipped** headless e **1664 passed, 2 skipped** Qt offscreen; `git diff
+--check` passou. Testes focados cobrem navegação mini/compacto/laterais/topo/
+Central, retorno à aba anterior, arraste e posição salva em X11, dados antigos,
+calor/bateria críticos e confirmação de geometria no caminho Wayland. No
+KDE/Wayland real, um processo de QA do próprio Fôlego abriu a faixa em uma
+linha, exibiu o estado crítico sem corte e confirmou com o KWin a colocação
+384 × 46 e a volta ao compacto; capturas estão em
+`.scratch/dev-tests-reviewed/mini-widget-20261107/`. Não houve arraste físico
+com o dedo/mouse nem teste de várias horas. A GUI residente não foi reiniciada:
+o modo aparecerá na próxima abertura normal, sem interromper a sessão atual.
+As áreas de QA interrompidas e concluídas foram revisadas e preservadas em
+`.scratch/dev-tests-reviewed/`; nenhuma evidência ou cache compartilhado foi
+apagado. A alteração preexistente de `AGENTS.md` não integra este incremento.
+
 ## Roadmap de resiliência e primeiro incremento — 07/11/2026
 
 O pedido é melhorar o **Fôlego**, sem alterar serviços de PhaseZero,

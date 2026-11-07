@@ -59,13 +59,16 @@ do limite passivo, urgência ao atingi-lo e limite crítico do equipamento. Com 
 bandeja disponível, o Fôlego avisa sem repetir a cada leitura. O alerta não
 reduz a carga nem suspende agentes por conta própria.
 
+O **mini horizontal** reúne estado, CPU, temperatura com fonte e RAM em uma
+faixa flutuante de uma linha. A alça pontilhada move a faixa; **Expandir** abre
+o compacto, a grade abre a Central e a seta lista diretamente todos os formatos.
 O **modo compacto** tem 280 px de largura e recursos em duas linhas. O ícone de
-grade abre a **Central**; a seta ao lado reúne **Ocultar widget**, **Sair do
-Fôlego** e **Contas e cotas de IA**. **Modo widget**, na Central, retorna ao
+grade abre a **Central**; a seta ao lado reúne os cinco formatos,
+**Contas e cotas de IA**, **Ocultar widget** e **Sair do Fôlego**. **Modo widget**, na Central, retorna ao
 flutuante mantendo o monitoramento. A saída também fica na bandeja. As duas
 interfaces dispensam botões de minimizar, maximizar e fechar.
-O menu **Posição do widget**, disponível na Central e no widget, permite escolher
-diretamente o flutuante, a lateral esquerda, a lateral direita ou a barra superior.
+O menu **Posição do widget**, na Central, e o seletor do widget permitem escolher
+diretamente mini, compacto, lateral esquerda, lateral direita ou barra superior.
 Passe o mouse pela borda esquerda, direita ou superior do widget para revelar a
 faixa de encaixe. A seta leva, respectivamente, à barra lateral direita,
 lateral esquerda ou horizontal superior. A seta na borda da barra retorna ao
