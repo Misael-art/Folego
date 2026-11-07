@@ -1,5 +1,49 @@
 # Passagem para o próximo agente — atualizada em 07/11/2026
 
+## Falso alerta de três órfãos do Steam — 07/11/2026
+
+A janela residente avisava sobre PIDs 5988 (`steamwebhelper`), 3942 e 5286
+(`srt-logger`). No boot observado, os três tinham UID 1000 e pertenciam à
+unit `app-steam\x2dinput@autostart.service`, ativa desde 10:45:14. O PID
+5988 era o tratador de falhas do Steam: seu pai 5900 (`pv-adverb`) continuava
+vivo e os demais helpers o referenciavam como `crashpad-handler-pid`. Os dois
+registradores tinham descritores de log e pipes abertos; o 5286 escrevia no
+pipe lido pelo 3942. Nenhum dos três estava comprovadamente dispensável.
+Somavam cerca de 13,5 MiB de RSS estimado, sem garantia de que esse volume
+seria recuperado por inteiro. Nenhum processo recebeu sinal.
+
+A causa do falso positivo foi a regra que tratava qualquer líder de sessão
+vivo com filho em sessão diferente como supervisor adotivo. Ela confundia
+`pv-adverb` com `systemd --user`. O par de registradores era de fato adotado
+pelo gerenciador, mas ainda servia ao Steam ativo; PPID adotivo e CPU parada
+não provam desuso. O código `c74c9510faeb56ce6594cad4e925fc2b4e2ab60d`
+restringe a adoção reconhecida ao gerenciador do usuário com identidade
+coerente, protege os dois tipos de auxiliares Steam na lista e na checagem
+imediata antes de sinalizar, e retira do painel a afirmação de “pai morto”.
+Não foi criada automação de encerramento por padrão: a condição de segurança
+solicitada pelo usuário não se cumpriu. Futuros alvos automáticos exigem
+prova específica do owner, do fim do trabalho e uma forma segura de solicitar
+encerramento, além de orçamento e disjuntor; a heurística atual não basta.
+
+Testes focados: 104 sem Qt e 68 Qt. `./dev check`: 1299 passaram/2 pulados
+sem Qt em 37,96 s; 1685 passaram/2 pulados com Qt offscreen em 110,63 s;
+diff check passou. Suítes sequenciais, HOME/XDG e temporários privados em
+disco. O primeiro `./dev check` foi recusado pelo teto de 20 áreas de QA;
+as duas execuções focadas concluídas desta tarefa foram inspecionadas e
+movidas para `.scratch/dev-tests-reviewed/`, sem apagá-las nem ampliar o teto.
+Os dois workspaces completos passaram pelo mesmo exame e foram preservados
+no mesmo destino após o gate, reabrindo margem para o próximo teste.
+Uma consulta real somente leitura com a regra corrigida (`./dev run orphans
+--janela 0 --ocioso 0`) retornou zero candidatos. Essa janela de zero segundos
+valida a classificação atual, não uma prova de ociosidade de cinco minutos.
+A GUI foi recarregada somente pela unit existente, agora PID 667345,
+`active/running`, `ExecMainStatus=0`, `NRestarts=0`; Steam permaneceu ativo.
+Confirmar o painel após cinco minutos de observação contínua antes de afirmar
+que o aviso residente desapareceu. [PR #4](https://github.com/Misael-art/Folego/pull/4)
+aberto para revisão, sem merge nem release; publicar o presente registro no
+mesmo PR. A interface em Qt offscreen e a consulta CLI não provam recuperação
+de memória, uso físico do Steam ou segurança de encerramento automático.
+
 ## Integração em main — 07/11/2026
 
 Pedido explícito do usuário autorizou o merge após revisão. O [PR #2](https://github.com/Misael-art/Folego/pull/2)
