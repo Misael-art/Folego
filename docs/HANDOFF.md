@@ -1,5 +1,27 @@
 # Passagem para o próximo agente — atualizada em 07/11/2026
 
+## Integração em main — 07/11/2026
+
+Pedido explícito do usuário autorizou o merge após revisão. O [PR #2](https://github.com/Misael-art/Folego/pull/2)
+foi integrado em `main` pelo commit
+`0f38a31d7a04234e43af3b658670b679f2f6dac9`. O último check Qt de sua
+revisão documental estava cancelado; a tentativa 2 do mesmo SHA
+`72932229feeb4e198739ea25fe889e784d60ed54` passou nos três jobs antes
+do merge. O [PR #3](https://github.com/Misael-art/Folego/pull/3) foi então
+apontado para `main` e integrado por
+`810dd7f1ac9bb5eb01c106ab8522a7380215e8c7`. Sua árvore candidata de
+merge era idêntica à árvore do SHA aprovado no PR
+`40380dfba7a3205fb9bb93ce3cff6c1d3516f47d`; seis checks do PR e os
+três jobs do [CI do merge em main](https://github.com/Misael-art/Folego/actions/runs/42391116027)
+passaram. O checkout canônico passou para `main` sem trocar o conteúdo da
+árvore de trabalho. A tag v0.2.0b7 continua no commit de produto `e15ddef`.
+Os dois PRs estão fechados por merge; nenhum serviço externo foi alterado.
+
+A integração harmoniza o código publicado, não determina o mecanismo físico
+dos resets. Retenção com descarte seguro, captura antes da GUI e validação
+física de energia/alertas continuam com os limites e owners abaixo e no
+[roadmap](ROADMAP-RESILIENCIA-HOST.md).
+
 ## Prévia 0.2.0b7: avisos e observação passiva — 07/11/2026
 
 O incremento da branch do PR #3 mantém a coleta de recursos a cada 5 s e o
