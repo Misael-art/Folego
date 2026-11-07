@@ -2,7 +2,7 @@
 import json
 import time
 
-from folego.adapters.host_guard import HostObserver, _boots, _ntfs_events
+from folego.adapters.host_guard import HostObserver, _boots, _ntfs_events, _services
 from folego.adapters.host_timeline import HostTimelineRecorder
 from folego.core.host_guard import PressureAlertTracker, ThermalTracker
 from folego.core.snapshot import ERROR, OK, MemInfo, Pressure, Snapshot, SourceQuality
@@ -63,6 +63,50 @@ def test_pressure_alert_combines_simultaneous_sources_without_popup_burst():
     assert alert['also'] == [{'kind': 'io', 'value': 12},
                              {'kind': 'cpu', 'value': 30}]
     assert tracker.observe(_pressure_sample(120, memory=6, io=12), now_mono=120) is None
+
+
+def test_pressure_alert_remains_visible_until_recovery_and_unknown_is_explicit():
+    tracker = PressureAlertTracker()
+    tracker.observe(_pressure_sample(100), now_mono=100)
+    tracker.observe(_pressure_sample(115), now_mono=115)
+    assert tracker.visible_status() == [{"kind": "cpu", "state": "high", "value": 30}]
+    tracker.observe(_pressure_sample(120, status=ERROR), now_mono=120)
+    assert tracker.visible_status() == [{"kind": "cpu", "state": "unknown", "value": None}]
+    tracker.observe(_pressure_sample(125, cpu=10), now_mono=125)
+    assert tracker.visible_status() == []
+
+
+def test_service_inventory_uses_one_bounded_query_and_does_not_alert_disabled_units():
+    calls = []
+    def run(argv, timeout):
+        calls.append((argv, timeout))
+        if "show" in argv and "Id" in argv:
+            return 0, ("Id=folego-performance.service\nLoadState=loaded\nUnitFileState=enabled\n"
+                       "ActiveState=active\nSubState=running\nResult=success\nNRestarts=0\n\n"
+                       "Id=codex-quota-panel.service\nLoadState=loaded\nUnitFileState=disabled\n"
+                       "ActiveState=inactive\nSubState=dead\nResult=success\nNRestarts=0\n"), ""
+        if "list-units" in argv:
+            return 0, "", ""
+        raise AssertionError(argv)
+    result = _services(run, watched=(("folego-performance.service", "Fôlego"),
+                                     ("codex-quota-panel.service", "SteamZero (legado)")))
+    assert result["quality"] == "ok" and result["items"] == []
+    assert [item["quality"] for item in result["inventory"]] == ["ok", "ok"]
+    assert result["inventory"][1]["owner"] == "SteamZero (legado)"
+    assert len(calls) == 2 and all(timeout <= 3 for _, timeout in calls)
+
+
+def test_missing_service_inventory_is_partial_not_healthy():
+    def run(argv, timeout):
+        if "show" in argv and "Id" in argv:
+            return 0, "", ""
+        if "list-units" in argv:
+            return 0, "", ""
+        raise AssertionError(argv)
+    result = _services(run, watched=(("folego-performance.service", "Fôlego"),))
+    assert result["quality"] == "partial"
+    assert result["inventory"][0]["quality"] == "unknown"
+    assert result["items"] == []
 
 
 def _host(tmp_path, *, mounts=1):

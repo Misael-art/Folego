@@ -2,7 +2,7 @@
 import json
 import sys
 
-from .core.agent_pressure import attention, current
+from .core.agent_pressure import acknowledge, attention, current
 
 
 def main():
@@ -20,6 +20,7 @@ def main():
                    "Se não puder reduzir agora, preserve o trabalho e explique ao usuário.")
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
                                                 "additionalContext": context}}))
+        acknowledge(request)
     except (OSError, ValueError, TypeError):
         # A broken optional advisory never blocks the agent's original tool.
         return

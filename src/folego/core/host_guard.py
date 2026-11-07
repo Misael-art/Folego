@@ -21,6 +21,12 @@ class PressureAlertTracker:
     boot_id: str = ""
     pending: dict[str, tuple[float, float]] = field(default_factory=dict)
     last_notice: dict[str, float] = field(default_factory=dict)
+    visible: dict[str, tuple[str, float | None]] = field(default_factory=dict)
+
+    def visible_status(self) -> list[dict]:
+        """Current sustained risk, or an unknown reading after that risk."""
+        return [{"kind": name, "state": state, "value": value}
+                for name, (state, value) in self.visible.items()]
 
     def observe(self, snapshot: Snapshot, *, now_mono: float | None = None) -> dict | None:
         now = time.monotonic() if now_mono is None else now_mono
@@ -28,8 +34,10 @@ class PressureAlertTracker:
             self.boot_id = snapshot.boot_id
             self.pending.clear()
             self.last_notice.clear()
+            self.visible.clear()
         if snapshot.is_stale(15, now):
             self.pending.clear()
+            self.visible = {name: ("unknown", None) for name in self.visible}
             return None
         alerts = []
         for name, source, limit in _PRESSURE_LIMITS:
@@ -38,9 +46,12 @@ class PressureAlertTracker:
             if (snapshot.source(source).status != OK or value is None
                     or not math.isfinite(value) or not 0 <= value <= 100):
                 self.pending.pop(name, None)
+                if name in self.visible:
+                    self.visible[name] = ("unknown", None)
                 continue  # missing data cannot prove recovery or sustained pressure
             if value < limit:
                 self.pending.pop(name, None)
+                self.visible.pop(name, None)
                 continue
             first, previous = self.pending.get(name, (snapshot.mono, snapshot.mono))
             if snapshot.mono < previous or snapshot.mono - previous > 20:
@@ -48,6 +59,7 @@ class PressureAlertTracker:
             self.pending[name] = (first, snapshot.mono)
             if snapshot.mono - first < 15:
                 continue
+            self.visible[name] = ("high", round(value, 1))
             previous_notice = self.last_notice.get(name)
             if previous_notice is None or now - previous_notice >= 300:
                 alerts.append({"kind": name, "source": source,

@@ -53,6 +53,9 @@ def _atomic(path, value):
 def publish(level, *, runtime=None, clock=time.time):
     if level not in LEVELS: raise ValueError("Nível de pressão desconhecido")
     now = clock()
+    previous = current(runtime=runtime, clock=clock)
+    if previous and previous["level"] == level and previous["expires_at"] - now >= 30:
+        return previous
     payload = {"schema": 1, "id": uuid.uuid4().hex, "level": level,
                "boot_id": _boot_id(),
                "issued_at": now, "expires_at": now + 90,
@@ -65,6 +68,34 @@ def clear(*, runtime=None):
     path = channel_dir(runtime) / "agent-pressure.json"
     if path.is_symlink(): raise ValueError("Canal vinculado")
     path.unlink(missing_ok=True)
+
+
+def acknowledge(request, *, runtime=None, clock=time.time):
+    """Record delivery to one opt-in hook, never compliance or reduced load."""
+    active = current(runtime=runtime, clock=clock)
+    if active is None or active["id"] != request.get("id"):
+        return False
+    if receipt(active, runtime=runtime, clock=clock):
+        return True  # repeated tool calls do not write again
+    _atomic(channel_dir(runtime) / "agent-pressure-receipt.json",
+            {"schema": 1, "request_id": active["id"], "boot_id": active["boot_id"],
+             "received_at": clock()})
+    return True
+
+
+def receipt(request, *, runtime=None, clock=time.time):
+    try:
+        path = channel_dir(runtime) / "agent-pressure-receipt.json"
+        if path.is_symlink() or path.stat().st_size > 512: return None
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if (value.get("schema") != 1 or value.get("request_id") != request["id"]
+                or value.get("boot_id") != request["boot_id"]
+                or not isinstance(value.get("received_at"), (int, float))
+                or not request["issued_at"] <= value["received_at"] <= clock() + 5
+                or request["expires_at"] <= clock()): return None
+        return value
+    except (OSError, ValueError, TypeError, AttributeError, KeyError):
+        return None
 
 
 def current(*, runtime=None, clock=time.time):
@@ -114,8 +145,19 @@ class PressureBackend:
     def perform(self, action, value=None):
         if action == "publish":
             payload = publish(value)
-            return {"message": "Pedido cooperativo publicado para agentes participantes.",
+            confirmed = receipt(payload) is not None
+            return {"message": ("Pedido recebido por ao menos um hook; redução de carga não comprovada."
+                                if confirmed else "Pedido publicado; recebimento e redução de carga não confirmados."),
                     "request_id": payload["id"], "level": value}
+        if action == "status":
+            payload = current()
+            if payload is None:
+                return {"message": "Nenhum pedido cooperativo ativo."}
+            confirmed = receipt(payload) is not None
+            return {"message": ("Pedido recebido por ao menos um hook; redução de carga não comprovada."
+                                if confirmed else "Pedido publicado; recebimento e redução de carga não confirmados."),
+                    "request_id": payload["id"], "level": payload["level"],
+                    "delivery_confirmed": confirmed}
         if action == "clear":
             clear()
             return {"message": "Pedido cooperativo encerrado."}

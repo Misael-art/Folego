@@ -204,6 +204,7 @@ class MainWindow(QMainWindow):
         self._pressure_controller.busy_changed.connect(self._pressure_after_busy)
         self._pressure_next = None
         self._pressure_last_sent = 0.0
+        self._pressure_last_status = 0.0
         self._pressure_seen = False
         self.options.screen_energy_requested.connect(self._screen_energy_request)
         self.ai_monitor.deliveries_ready.connect(self._screen_delivery_attention)
@@ -375,6 +376,10 @@ class MainWindow(QMainWindow):
             if level != self._screen_thermal_level or now - self._pressure_last_sent >= 45:
                 self._pressure_request('publish', 'critical' if level == 2 else 'danger')
                 self._pressure_last_sent = now
+                self._pressure_last_status = now
+            elif now - self._pressure_last_status >= 15:
+                self._pressure_request('status')
+                self._pressure_last_status = now
         elif self._screen_thermal_level or not self._pressure_seen:
             self._pressure_request('clear')
         self._pressure_seen = True
@@ -543,6 +548,8 @@ class MainWindow(QMainWindow):
         self.dashboard.show_snapshot(
             snapshot, orphan_count=len(candidates),
             thumbnails_kb=self.disk.thumbnails_kb, extra_notes=notes,
+            pressure_status=(self._pressure_alert_tracker.visible_status()
+                             if not self._paused else ()),
             signal=signal, last_operation=self._last_operation_text())
         self.tmpfs.show_volumes(snapshot.tmpfs, ts=snapshot.ts,
                                quality=snapshot.source("tmpfs").status)

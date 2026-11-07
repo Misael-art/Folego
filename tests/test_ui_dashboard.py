@@ -53,6 +53,16 @@ def test_hero_summary_aligns_values_and_clears_them_when_health_expires(panel):
     assert 'Leitura antiga' in view.hero_alert.text()
 
 
+def test_pressure_risk_is_visible_in_central_without_tray(panel):
+    view, _ = panel
+    view.show_snapshot(snap(), pressure_status=({"kind": "cpu", "state": "high", "value": 31.4},))
+    assert "Espera sustentada de CPU" in view.hero_alert.text()
+    view.show_snapshot(snap(), pressure_status=({"kind": "cpu", "state": "unknown", "value": None},))
+    assert "risco ainda não foi reavaliado" in view.hero_alert.text()
+    view.show_snapshot(snap(), pressure_status=())
+    assert "PSI de CPU" not in view.hero_alert.text()
+
+
 def test_suggestions_land_in_order_with_their_own_jump_target(panel):
     view, jumps = panel
     view.show_snapshot(snap(psi10=14.0, available_kb=900_000), orphan_count=2)

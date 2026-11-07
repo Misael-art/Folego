@@ -6,7 +6,14 @@ def test_advisory_expires_and_attention_is_bounded(tmp_path):
     runtime.mkdir(mode=0o700)
     issued = agent_pressure.publish('danger', runtime=runtime, clock=lambda: 100)
     assert agent_pressure.current(runtime=runtime, clock=lambda: 101)['id'] == issued['id']
-    assert agent_pressure.current(runtime=runtime, clock=lambda: 191) is None
+    assert agent_pressure.publish('danger', runtime=runtime, clock=lambda: 120)['id'] == issued['id']
+    assert agent_pressure.acknowledge(issued, runtime=runtime, clock=lambda: 121)
+    receipt = agent_pressure.receipt(issued, runtime=runtime, clock=lambda: 122)
+    assert receipt['request_id'] == issued['id']
+    renewed = agent_pressure.publish('danger', runtime=runtime, clock=lambda: 165)
+    assert renewed['id'] != issued['id']
+    assert agent_pressure.receipt(renewed, runtime=runtime, clock=lambda: 166) is None
+    assert agent_pressure.current(runtime=runtime, clock=lambda: 256) is None
     event = agent_pressure.attention('PermissionRequest', runtime=runtime, clock=lambda: 200)
     assert agent_pressure.latest_attention(runtime=runtime, clock=lambda: 201)['id'] == event['id']
     assert agent_pressure.latest_attention(runtime=runtime, clock=lambda: 261) is None
@@ -35,6 +42,9 @@ def test_codex_hook_adds_advice_only_for_current_request(tmp_path, monkeypatch, 
     agent_hook.main()
     output = json.loads(capsys.readouterr().out)
     assert request['id'] in output['hookSpecificOutput']['additionalContext']
+    assert agent_pressure.receipt(request, runtime=runtime) is not None
+    assert agent_pressure.PressureBackend().perform('status')['delivery_confirmed'] is True
+    assert 'não comprovada' in agent_pressure.PressureBackend().perform('status')['message']
     monkeypatch.setattr('sys.stdin', io.StringIO('{"hook_event_name":"Stop"}'))
     agent_hook.main()
     assert capsys.readouterr().out == ''

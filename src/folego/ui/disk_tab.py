@@ -197,6 +197,7 @@ class HostHealthPanel(QWidget):
 
         services = report.get("services", {})
         items = services.get("items", [])
+        inventory = services.get("inventory", [])
         if services.get("quality") != "ok":
             service_text = "Leitura parcial ou desconhecida · " + services.get("reason", "")
         elif items:
@@ -206,10 +207,19 @@ class HostHealthPanel(QWidget):
             count = first.get("restarts")
             restarts = (f"{count} {'reinício' if count == 1 else 'reinícios'} na contagem atual do systemd"
                         if isinstance(count, int) else "reinícios desconhecidos")
-            service_text = f"{first['unit']} · {first.get('state', 'estado desconhecido')} · {restarts}{more}"
+            service_text = (f"{first['unit']} ({first.get('owner', 'responsável desconhecido')}) · "
+                            f"{first.get('state', 'estado desconhecido')} · {restarts}{more}")
         else:
-            service_text = "Nenhuma unit em falha ou reinício observada nesta consulta"
+            unknown = sum(item.get("quality") != "ok" for item in inventory)
+            service_text = (f"Nenhuma falha ou loop observado · {len(inventory)} units identificadas"
+                            + (f" · {unknown} sem leitura confiável" if unknown else ""))
         self.rows["service"].setText(service_text)
+        self.rows["service"].setToolTip("\n".join(
+            f"{item['unit']} · {item.get('owner', 'responsável desconhecido')} · "
+            f"{item.get('state', item.get('reason', 'desconhecido'))} · "
+            f"{item.get('enabled', 'habilitação desconhecida')} · "
+            f"{item.get('source', 'fonte desconhecida')}"
+            for item in inventory))
 
         disks = report.get("btrfs", [])
         known = [d for d in disks if d.get("quality") == "ok"]

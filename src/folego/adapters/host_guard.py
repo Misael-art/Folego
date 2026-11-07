@@ -228,18 +228,76 @@ def _ntfs_events(run, mounts: list[dict]) -> dict:
             "last_at": last_at, "window_minutes": 10}
 
 
-def _services(run) -> dict:
+_WATCHED_SERVICES = (
+    ("folego-accessibility.service", "Fôlego"),
+    ("folego-performance.service", "Fôlego"),
+    ("phasezero-input-restore.service", "PhaseZero"),
+    ("phasezero-ai-memory-watch.service", "PhaseZero"),
+    ("codex-quota-panel.service", "SteamZero (legado)"),
+)
+
+
+def _services(run, watched=_WATCHED_SERVICES) -> dict:
+    # One bounded query for named owners. An inactive, disabled unit is an
+    # observation, not an incident or permission to start it.
+    watched = tuple(watched)
+    if (not watched or len(watched) > 8 or
+            any(not isinstance(row, (tuple, list)) or len(row) != 2 or
+                not isinstance(row[0], str) or
+                not re.fullmatch(r"[a-z0-9@_.-]+\.service", row[0]) or
+                not isinstance(row[1], str) or not 0 < len(row[1]) <= 80
+                for row in watched)):
+        return {"quality": "unknown", "reason": "inventário de serviços inválido", "items": [], "inventory": []}
+    code, raw, watch_error = run(
+        ["systemctl", "--user", "show", *(name for name, _ in watched),
+         "-p", "Id", "-p", "LoadState", "-p", "UnitFileState",
+         "-p", "ActiveState", "-p", "SubState", "-p", "Result", "-p", "NRestarts"], 2.0)
+    inventory = []
+    owners = dict(watched)
+    if code == 0 and len(raw) <= 16384:
+        seen = set()
+        for block in raw.split("\n\n")[:len(watched) + 1]:
+            props = dict(line.split("=", 1) for line in block.splitlines() if "=" in line)
+            name = props.get("Id", "")
+            if name not in owners or name in seen:
+                continue
+            seen.add(name)
+            try:
+                restarts = int(props.get("NRestarts", ""))
+                if restarts < 0: raise ValueError
+            except ValueError:
+                restarts = None
+            quality = ("ok" if props.get("LoadState") == "loaded" and
+                       props.get("ActiveState") in ("active", "inactive", "failed", "activating")
+                       and restarts is not None else "unknown")
+            inventory.append({"unit": name, "owner": owners[name], "source": "systemctl --user show",
+                              "quality": quality, "load": props.get("LoadState", "unknown"),
+                              "enabled": props.get("UnitFileState", "unknown"),
+                              "state": props.get("ActiveState", "unknown"),
+                              "substate": props.get("SubState", "unknown"),
+                              "result": props.get("Result", "unknown"),
+                              "restarts": restarts})
+        for name, owner in watched:
+            if name not in seen:
+                inventory.append({"unit": name, "owner": owner, "source": "systemctl --user show",
+                                  "quality": "unknown", "reason": "unit ausente na consulta"})
+    else:
+        inventory = [{"unit": name, "owner": owner, "source": "systemctl --user show",
+                      "quality": "unknown", "reason": watch_error or "consulta indisponível ou excessiva"}
+                     for name, owner in watched]
     code, out, err = run(["systemctl", "--user", "list-units", "--type=service",
                           "--state=activating,failed", "--plain", "--no-legend", "--no-pager"], 3.0)
     if code != 0:
-        return {"quality": "unknown", "reason": err or "systemd do usuário indisponível", "items": []}
+        return {"quality": "unknown", "reason": err or "systemd do usuário indisponível", "items": [],
+                "inventory": inventory}
     names = []
     for line in out.splitlines():
         parts = line.lstrip("● ").split()
         if parts and parts[0].endswith(".service"):
             names.append(parts[0])
     if len(names) > 16:
-        return {"quality": "partial", "reason": "mais de 16 units candidatas", "items": []}
+        return {"quality": "partial", "reason": "mais de 16 units candidatas", "items": [],
+                "inventory": inventory}
     items = []
     for name in names:
         code, raw, err = run(["systemctl", "--user", "show", name, "-p", "NRestarts",
@@ -256,9 +314,14 @@ def _services(run) -> dict:
             items.append({"unit": name, "quality": "unknown", "reason": "NRestarts inválido"})
             continue
         if restarts >= 5 or props.get("ActiveState") == "failed":
-            items.append({"unit": name, "quality": "ok", "restarts": restarts,
+            items.append({"unit": name, "owner": owners.get(name, "desconhecido"),
+                          "source": "systemctl --user show", "quality": "ok", "restarts": restarts,
                           "state": props.get("SubState", ""), "result": props.get("Result", "")})
-    return {"quality": "ok", "items": sorted(items, key=lambda x: -x.get("restarts", 0))}
+    missing = sum(item["quality"] != "ok" for item in inventory)
+    return {"quality": "partial" if missing else "ok",
+            "reason": f"{missing} unit(s) sem leitura confiável" if missing else "",
+            "items": sorted(items, key=lambda x: -x.get("restarts", 0)),
+            "inventory": inventory}
 
 
 def _boots(run) -> dict:
@@ -328,7 +391,7 @@ class HostObserver:
 
     def __init__(self, *, proc_root: Path | None = None, sys_root: Path | None = None,
                  state_path: Path | None = None, run=None, record: bool = False,
-                 clock=None, timeline_dir: Path | None = None):
+                 clock=None, timeline_dir: Path | None = None, service_watch=None):
         self.proc_root = Path(proc_root) if proc_root else Path(paths.proc_root())
         self.sys_root = Path(sys_root) if sys_root else Path(paths.sys_root())
         self.state_path = Path(state_path) if state_path else paths.host_guard_path()
@@ -336,6 +399,7 @@ class HostObserver:
         self.record = record
         self.clock = clock or time.time
         self.timeline_dir = timeline_dir if timeline_dir is not None else paths.host_timeline_dir()
+        self.service_watch = _WATCHED_SERVICES if service_watch is None else tuple(service_watch)
         self._boot_cache = None
 
     def observe(self) -> dict:
@@ -358,7 +422,7 @@ class HostObserver:
         btrfs, baseline_problem = _compare_and_record(btrfs, self.state_path,
                                                         self.record, now, boot_id)
         ntfs = _ntfs_events(run, mounts if not mounts_problem else [])
-        services = _services(run)
+        services = _services(run, self.service_watch)
         timeline = read_timeline(self.timeline_dir, limit=1, boot_id=boot_id or None,
                                  tail_bytes=65536,
                                  active_boot_id=boot_id or None)

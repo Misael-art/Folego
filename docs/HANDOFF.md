@@ -1,5 +1,39 @@
 # Passagem para o próximo agente — atualizada em 07/11/2026
 
+## Prévia 0.2.0b7: avisos e observação passiva — 07/11/2026
+
+O incremento da branch do PR #3 mantém a coleta de recursos a cada 5 s e o
+gravador de 15 s, sem outro daemon nem varredura rápida. A Central passa a
+mostrar pressão PSI sustentada mesmo sem bandeja. Se a leitura se perde após
+um alerta, aparece como desconhecida até nova avaliação; uma leitura baixa
+válida limpa o aviso. O inventário de serviços acrescenta uma consulta única
+de até 2 s no observador lento de 5 min, com cinco units nomeadas e owner
+explícito, sem reiniciar nenhuma. Units inativas e desabilitadas são apenas
+observadas. Falta de resposta torna a qualidade parcial. Um único ACK privado
+por pedido cooperativo confirma recebimento por hook opt-in do Codex, nunca
+redução efetiva de carga. Pedidos preservam ID até perto da expiração e a
+interface distingue publicação, recebimento e efeito não comprovado.
+
+QA antes do ajuste final de qualidade do inventário: 15 testes focados sem Qt,
+71 Qt; `./dev check` passou com **1292 passed, 2 skipped** headless e
+**1678 passed, 2 skipped** Qt. Suites sequenciais, HOME/XDG e temporários
+privados em disco. A zona `acpitz` chegou a 89 °C durante QA e retornou a
+75 °C; memória disponível permaneceu acima de 7 GiB, sem pressão sustentada.
+O ensaio de CLI real `./dev run disk health --json` levou **108,71 ms** na
+observação propriamente dita, sem contar bootstrap; encontrou cinco units
+nomeadas legíveis, serviço `sddm-wallpaper.service` em falha (owner ainda
+desconhecido), Btrfs sem delta, nenhum aviso NTFS recente e 242 KiB do teto
+de 4 MiB no histórico do boot. O custo não representa tendência de horas.
+O primeiro bootstrap falhou por um temporário `kdotool` que desapareceu durante
+`du`; repetição somente leitura passou. Isso merece revisão do bootstrap,
+sem apagar temporários compartilhados para mascarar a corrida.
+
+Continuam sem aceite: retenção que descarte amostras com prova de identidade e
+integridade, boot antes da GUI/pstore, redução causal da carga após ACK,
+validação física do aviso/energia/dock e guia de recuperação de disco com
+pré-checagem de cópia. Não executar reparo ou provocar pressão para cobrir
+essas lacunas. PhaseZero mantém boot/pstore; SteamZero mantém Gamescope/GPU.
+
 ## Pressão sustentada e folga da coleta — 07/11/2026
 
 Incrementos de código `e6bdd59` e `a6b2b2f` na branch do PR #3. A validação do

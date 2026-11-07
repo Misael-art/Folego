@@ -389,7 +389,8 @@ class DashboardTab(QWidget):
 
     def show_snapshot(self, snapshot, *, orphan_count: int = 0,
                       thumbnails_kb: int | None = None,
-                      extra_notes=(), signal=None, last_operation: str = ""):
+                      extra_notes=(), pressure_status=(), signal=None,
+                      last_operation: str = ""):
         signal = signal or title_signal.compute(snapshot, self._thresholds)
         verdict = VERDICT.get(signal.level, VERDICT[health.UNKNOWN])[0]
         heading = 'Coleta indisponível' if signal.level == health.UNKNOWN else verdict
@@ -400,6 +401,13 @@ class DashboardTab(QWidget):
                    if reason.code in ('runtime_critical', 'tmpfs_inodes_exhausted', 'snapshot_stale')] if signal.report else []
         if signal.level == health.UNKNOWN and not notices:
             notices.append(signal.text)
+        pressure_names = {"cpu": "CPU", "memory": "memória", "io": "disco/I/O"}
+        for item in pressure_status:
+            name = pressure_names.get(item.get("kind"), "recurso")
+            if item.get("state") == "high":
+                notices.append(f"Espera sustentada de {name}: PSI 60 s em {item['value']}%. Revise as tarefas na aba Disco.")
+            elif item.get("state") == "unknown":
+                notices.append(f"PSI de {name} indisponível após alerta; o risco ainda não foi reavaliado.")
         self.hero_alert.setText('\n'.join(dict.fromkeys(notices)))
         self.hero_alert.setVisible(bool(notices))
         self.details.setText(self._details(snapshot))
