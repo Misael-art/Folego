@@ -954,6 +954,23 @@ def _cmd_host_health(args) -> int:
             print(f"Serviço: {row['unit']} · reinícios {row.get('restarts', '—')}")
         print(f"Boot anterior: {report['boots'].get('previous_end', 'desconhecido')} "
               f"({report['boots'].get('reason', '')})")
+        items = report['boots'].get('items', [])
+        if len(items) >= 2:
+            evidence = items[-2].get('timeline', {})
+            last = evidence.get('last')
+            if last:
+                print(f"Última amostra daquele boot: {last['at']} · "
+                      f"qualidade {evidence['quality']} · "
+                      f"janela recente {evidence['recent_samples']} amostra(s)")
+                if items[-2].get('sample_to_journal_s') is not None:
+                    print(f"Até o último registro retido no journal: "
+                          f"{items[-2]['sample_to_journal_s']:g} s "
+                          f"({items[-2].get('gap_clock', 'relógio desconhecido')}; "
+                          "o fim real do boot pode não ter sido registrado)")
+            else:
+                print(f"Amostras daquele boot: {evidence.get('quality', 'desconhecido')} "
+                      f"({evidence.get('reason', 'sem evidência local')})")
+        print(f"Custo desta observação: {report['observer_duration_ms']:.1f} ms")
         print("Orientações: folego disk guide thermal|pressure|ntfs|btrfs|service|reboot")
     return EXIT_OK
 

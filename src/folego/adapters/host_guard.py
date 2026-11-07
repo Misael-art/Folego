@@ -7,11 +7,12 @@ import os
 import re
 import subprocess
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 
 from .. import paths
-from .host_timeline import read_timeline
+from .host_timeline import read_timeline, summarize_boot_timeline
 from ..safely.atomicfile import write_atomic
 
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
@@ -267,7 +268,7 @@ def _boots(run) -> dict:
     items = []
     for line in out.splitlines()[:8]:
         parts = line.split(maxsplit=2)
-        if len(parts) == 3 and len(parts[1]) == 32:
+        if len(parts) == 3 and re.fullmatch(r"[0-9a-f]{32}", parts[1]):
             items.append({"boot_id": parts[1], "period": parts[2]})
             if len(items) == 4:
                 break
@@ -298,6 +299,30 @@ def _boots(run) -> dict:
             "previous_end": previous.get("end", "unknown"), "reason": reason}
 
 
+def _last_journal_entry(run, boot_id: str) -> dict:
+    """Last retained event only; a silent tail of a failed boot remains unknown."""
+    code, out, err = run(["journalctl", "-b", boot_id, "-n", "1", "-o", "json",
+                          "--no-pager"], 2.0)
+    if code != 0:
+        return {"quality": "unknown", "reason": err or "fim do journal indisponível",
+                "last_at": None, "mono_us": None}
+    try:
+        row = json.loads(out.strip())
+        stamp = row["__REALTIME_TIMESTAMP"]
+        if (not isinstance(row, dict) or not isinstance(stamp, str)
+                or not stamp.isdecimal() or len(stamp) > 17):
+            raise ValueError("horário do último evento inválido")
+        last_at = datetime.fromtimestamp(int(stamp) / 1_000_000).astimezone()
+        mono = row.get("__MONOTONIC_TIMESTAMP")
+        mono_us = int(mono) if (isinstance(mono, str) and mono.isdecimal()
+                                and len(mono) <= 17) else None
+    except (ValueError, KeyError, TypeError, OverflowError, OSError) as exc:
+        return {"quality": "unknown", "reason": str(exc), "last_at": None,
+                "mono_us": None}
+    return {"quality": "ok", "reason": "último registro retido, não o fim comprovado do boot",
+            "last_at": last_at.isoformat(timespec="seconds"), "mono_us": mono_us}
+
+
 class HostObserver:
     """Slow probe. `record` only commits a tiny Btrfs baseline for the GUI."""
 
@@ -315,7 +340,8 @@ class HostObserver:
 
     def observe(self) -> dict:
         now = self.clock()
-        deadline = time.monotonic() + 8.0
+        started = time.monotonic()
+        deadline = started + 8.0
 
         def run(argv, timeout):
             remaining = deadline - time.monotonic()
@@ -333,7 +359,8 @@ class HostObserver:
                                                         self.record, now, boot_id)
         ntfs = _ntfs_events(run, mounts if not mounts_problem else [])
         services = _services(run)
-        timeline = read_timeline(self.timeline_dir, limit=1,
+        timeline = read_timeline(self.timeline_dir, limit=1, boot_id=boot_id or None,
+                                 tail_bytes=65536,
                                  active_boot_id=boot_id or None)
         last_sample = timeline["samples"][-1] if timeline["samples"] else None
         if last_sample and last_sample.get("boot_id") == boot_id:
@@ -348,7 +375,30 @@ class HostObserver:
                             "samples": timeline["samples"],
                             "capacity": timeline["capacity"]}
         if self._boot_cache is None or self._boot_cache[0] != boot_id:
-            self._boot_cache = (boot_id, _boots(run))
+            boots = _boots(run)
+            for item in boots["items"][:-1]:
+                timeline_id = str(uuid.UUID(hex=item["boot_id"]))
+                item["timeline"] = summarize_boot_timeline(self.timeline_dir, timeline_id)
+                item["journal_tail"] = _last_journal_entry(run, item["boot_id"])
+                boot_last = item["timeline"].get("last")
+                last_event = item["journal_tail"].get("last_at")
+                item["sample_to_journal_s"] = None
+                item["gap_clock"] = None
+                if boot_last and last_event:
+                    sample_mono = boot_last.get("mono_ns")
+                    event_mono = item["journal_tail"].get("mono_us")
+                    if type(sample_mono) is int and type(event_mono) is int:
+                        difference = event_mono / 1_000_000 - sample_mono / 1_000_000_000
+                        item["gap_clock"] = "monotonic"
+                    else:
+                        difference = (datetime.fromisoformat(last_event).timestamp()
+                                      - datetime.fromisoformat(boot_last["at"]).timestamp())
+                        item["gap_clock"] = "wall"
+                    if difference >= 0:
+                        item["sample_to_journal_s"] = round(difference, 1)
+                    else:
+                        item["gap_clock"] = None
+            self._boot_cache = (boot_id, boots)
         return {"observed_at": datetime.fromtimestamp(now).astimezone().isoformat(timespec="seconds"),
                 "boot_id": boot_id, "mounts_quality": "unknown" if mounts_problem else "ok",
                 "mounts_reason": mounts_problem, "btrfs": btrfs,
@@ -357,7 +407,9 @@ class HostObserver:
                 "baseline_quality": "unknown" if baseline_problem and baseline_problem != "novo" else "ok",
                 "baseline_reason": baseline_problem,
                 "ntfs": ntfs, "services": services, "boots": self._boot_cache[1],
+                "observer_duration_ms": round((time.monotonic() - started) * 1000, 2),
                 "timeline": {"quality": timeline["quality"], "reason": timeline["reason"],
                              "capacity": timeline["capacity"],
+                             "window_limited": timeline.get("window_limited", False),
                              "last_at": last_sample["at"] if last_sample else None,
                              "last_boot_id": last_sample["boot_id"] if last_sample else None}}

@@ -4,7 +4,8 @@ import stat
 from dataclasses import replace
 
 from folego.adapters import host_timeline
-from folego.adapters.host_timeline import HostTimelineRecorder, read_timeline, record_snapshot
+from folego.adapters.host_timeline import (HostTimelineRecorder, read_timeline,
+                                           record_snapshot, summarize_boot_timeline)
 from folego.core.snapshot import BatteryInfo, MemInfo, OK, Pressure, Snapshot, SourceQuality
 
 BOOT = "167c36b6-b7ae-4097-877b-3ab2a96d8b88"
@@ -130,3 +131,45 @@ def test_timeline_limit_is_visible_and_write_failure_reaches_snapshot(tmp_path, 
     assert observed.source('host_timeline').status == 'error'
     assert 'cheio' in observed.source('host_timeline').detail
     assert path.read_bytes() == original
+
+
+def test_boot_summary_bounds_read_and_marks_absent_boot_unknown(tmp_path):
+    folder = tmp_path / 'timeline'
+    recorder = HostTimelineRecorder(folder)
+    recorder.record(_snapshot(100))
+    recorder.record(_snapshot(115))
+    path = folder / f'{BOOT}.jsonl'
+    # Enough valid rows to cross the 64 KiB window without writing to the host.
+    original = path.read_bytes().splitlines()
+    path.write_bytes((original[0] + b'\n') * 170 + original[1] + b'\n')
+    summary = summarize_boot_timeline(folder, BOOT)
+    assert summary['quality'] == 'ok'
+    assert summary['window_limited'] is True
+    assert summary['last']['mono_ns'] == 115_000_000_000
+    assert summary['recent_max_interval_s'] == 15
+    assert summary['recent_samples'] == 80
+    assert summarize_boot_timeline(folder, 'c325bc6f-a6f8-4093-8b2d-5c10008de2e5')[
+        'quality'] == 'missing'
+
+
+def test_boot_summary_keeps_invalid_last_line_visible(tmp_path):
+    folder = tmp_path / 'timeline'
+    HostTimelineRecorder(folder).record(_snapshot(100))
+    path = folder / f'{BOOT}.jsonl'
+    with path.open('ab') as stream:
+        stream.write(b'{interrupted\n')
+    summary = summarize_boot_timeline(folder, BOOT)
+    assert summary['quality'] == 'partial'
+    assert summary['last']['mono_ns'] == 100_000_000_000
+    assert 'ilegível' in summary['reason']
+
+
+def test_boot_summary_never_calls_an_incomplete_tail_empty(tmp_path):
+    folder = tmp_path / 'timeline'
+    HostTimelineRecorder(folder).record(_snapshot(100))
+    path = folder / f'{BOOT}.jsonl'
+    path.write_bytes(b'x' * 70000 + b'\n')
+    summary = summarize_boot_timeline(folder, BOOT)
+    assert summary['quality'] == 'unknown'
+    assert summary['last'] is None
+    assert 'sem linha completa' in summary['reason']

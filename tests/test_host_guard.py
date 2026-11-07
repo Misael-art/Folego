@@ -37,6 +37,9 @@ def _run(argv, timeout):
         return 0, ("IDX BOOT ID FIRST LAST\n"
                    " -1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa Wed yesterday\n"
                    "  0 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb Thu today\n"), ""
+    if "journalctl" == argv[0] and "-o" in argv and "json" in argv and "-n" in argv and "1" in argv:
+        return 0, json.dumps({"__REALTIME_TIMESTAMP": "1700000010000000",
+                              "__MONOTONIC_TIMESTAMP": "120000000"}), ""
     if "systemd-logind.service" in argv:
         return 1, "", ""
     if "-g" in argv:
@@ -99,6 +102,34 @@ def test_stale_timeline_keeps_capacity_and_reports_missing_interval(tmp_path):
     assert result['timeline']['quality'] == 'stale'
     assert result['timeline']['last_boot_id'] == BOOT
     assert result['timeline']['capacity']['active_boot_bytes'] > 0
+
+
+def test_boot_history_includes_bounded_local_evidence_and_missing_boot(tmp_path):
+    proc, sys, _ = _host(tmp_path)
+    folder = tmp_path / 'timeline'
+    previous = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+    HostTimelineRecorder(folder).record(Snapshot(
+        ts=1_700_000_000, mono=100, boot_id=previous, mem=None, swap_used_kb=0,
+        swap_total_kb=0, pressure_memory=None, pressure_io=None,
+        pressure_cpu=None, load=None, apps=(), self_rss_kb=0))
+    observer = HostObserver(proc_root=proc, sys_root=sys, timeline_dir=folder,
+                            state_path=tmp_path / 'state.json', run=_run,
+                            clock=lambda: 1_700_000_300)
+    report = observer.observe()
+    assert report['boots']['items'][0]['timeline']['quality'] == 'ok'
+    assert report['boots']['items'][0]['timeline']['last']['at']
+    assert report['boots']['items'][0]['sample_to_journal_s'] == 20
+    assert report['boots']['items'][0]['gap_clock'] == 'monotonic'
+    assert report['boots']['items'][0]['journal_tail']['quality'] == 'ok'
+    assert report['timeline']['quality'] == 'missing'  # current boot has no file
+    assert report['observer_duration_ms'] >= 0
+
+    (folder / f'{previous}.jsonl').unlink()  # disposable fixture only
+    refreshed = HostObserver(proc_root=proc, sys_root=sys, timeline_dir=folder,
+                             state_path=tmp_path / 'state.json', run=_run,
+                             clock=lambda: 1_700_000_300).observe()
+    assert refreshed['boots']['items'][0]['timeline']['quality'] == 'missing'
+    assert refreshed['boots']['items'][0]['timeline']['last'] is None
 
 
 def test_malformed_ntfs_journal_does_not_create_a_safe_count():

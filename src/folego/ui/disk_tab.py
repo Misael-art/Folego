@@ -145,6 +145,10 @@ class HostHealthPanel(QWidget):
             if boots.get("items"):
                 return "Boots registrados:\n" + "\n".join(
                     f"{row.get('boot_id', 'ID desconhecido')}: {row.get('period', 'período desconhecido')}"
+                    + (f" · última amostra: {row['timeline']['last']['at']}"
+                       if row.get("timeline", {}).get("last") else
+                       " · sem amostra local; estado anterior desconhecido"
+                       if row.get("timeline", {}).get("quality") == "missing" else "")
                     for row in boots["items"][:4])
         if issue == "thermal" and self._thermal:
             return (f"Observado: {self._thermal.get('sensor', 'sensor desconhecido')} "
@@ -237,6 +241,21 @@ class HostHealthPanel(QWidget):
             boot_text = "Histórico de boot desconhecido · " + boots.get("reason", "")
         else:
             boot_text = f"{count} {'boot' if count == 1 else 'boots'} no journal · " + boots.get("reason", "encerramento anterior desconhecido")
+        previous = boots.get("items", [])[-2] if count >= 2 else None
+        previous_timeline = previous.get("timeline", {}) if previous else {}
+        if previous_timeline.get("last"):
+            boot_text += f"\nBoot anterior: última amostra {previous_timeline['last']['at']}"
+            if previous.get("sample_to_journal_s") is not None:
+                boot_text += (f" · {previous['sample_to_journal_s']:g} s até o último "
+                              "registro retido no journal")
+                if previous.get("gap_clock") == "wall":
+                    boot_text += " (relógio civil; sujeito a ajuste)"
+            if previous_timeline.get("quality") != "ok":
+                boot_text += " · evidência parcial"
+        elif previous_timeline.get("quality") == "missing":
+            boot_text += "\nBoot anterior: sem amostra local; estado desconhecido"
+        elif previous_timeline.get("quality") == "unknown":
+            boot_text += "\nBoot anterior: histórico local ilegível"
         timeline = report.get("timeline", {})
         if timeline.get("quality") in ("ok", "partial") and timeline.get("last_at"):
             try:

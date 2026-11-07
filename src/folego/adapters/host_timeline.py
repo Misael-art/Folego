@@ -180,14 +180,17 @@ def _valid_sample(row: object) -> bool:
 
 def read_timeline(directory: Path | None = None, *, limit: int = 80,
                   boot_id: str | None = None,
-                  active_boot_id: str | None = None) -> dict:
-    """Read the most recent bounded samples; unknown data is never zero."""
+                  active_boot_id: str | None = None,
+                  tail_bytes: int | None = None) -> dict:
+    """Read private samples; the slow observer can bound reads to a file tail."""
     folder = Path(directory) if directory else paths.host_timeline_dir()
     try:
         if boot_id is not None and not _BOOT_ID.fullmatch(boot_id):
             raise ValueError("boot ID inválido")
         if active_boot_id is not None and not _BOOT_ID.fullmatch(active_boot_id):
             raise ValueError("boot ID atual inválido")
+        if tail_bytes is not None and not 1024 <= tail_bytes <= _PER_BOOT_LIMIT:
+            raise ValueError("janela de leitura inválida")
         if folder.is_symlink() or not folder.is_dir():
             return {"quality": "missing", "reason": "histórico ausente", "samples": [],
                     "capacity": None}
@@ -215,28 +218,78 @@ def read_timeline(directory: Path | None = None, *, limit: int = 80,
         files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
         recent = deque(maxlen=max(1, min(limit, 200)))
         malformed = 0
+        limited = False
+        no_complete_line = False
         for path in reversed(files[:2] if boot_id is None else files):
-            info = path.stat()
-            if (info.st_size > _PER_BOOT_LIMIT or info.st_uid != os.getuid()
-                    or stat.S_IMODE(info.st_mode) != 0o600):
-                raise ValueError("arquivo de histórico fora do limite ou não privado")
-            with path.open("r", encoding="utf-8") as stream:
-                for line in stream:
-                    try:
-                        row = json.loads(line)
-                    except ValueError:
-                        malformed += 1
-                        continue
-                    if not _valid_sample(row) or row["boot_id"] != path.stem:
-                        malformed += 1
-                        continue
-                    recent.append(row)
+            fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            with os.fdopen(fd, "rb") as stream:
+                info = os.fstat(stream.fileno())
+                if (not stat.S_ISREG(info.st_mode) or info.st_size > _PER_BOOT_LIMIT
+                        or info.st_uid != os.getuid()
+                        or stat.S_IMODE(info.st_mode) != 0o600):
+                    raise ValueError("arquivo de histórico fora do limite ou não privado")
+                if tail_bytes is None:
+                    raw = stream.read(_PER_BOOT_LIMIT + 1)
+                else:
+                    offset = max(0, info.st_size - tail_bytes)
+                    stream.seek(offset)
+                    raw = stream.read(tail_bytes)
+            if tail_bytes is not None and offset:
+                limited = True
+                first_end = raw.find(b"\n")
+                raw = raw[first_end + 1:] if first_end >= 0 else b""
+                if not raw:
+                    no_complete_line = True
+            for line in raw.splitlines():
+                try:
+                    row = json.loads(line)
+                except (ValueError, UnicodeError):
+                    malformed += 1
+                    continue
+                if not _valid_sample(row) or row["boot_id"] != path.stem:
+                    malformed += 1
+                    continue
+                recent.append(row)
         samples = list(recent)
-        quality = "partial" if malformed else "ok" if samples else "missing"
-        reason = (f"{malformed} amostra(s) ilegível(is) preservada(s)" if malformed
-                  else "" if samples else "histórico vazio")
+        quality = ("partial" if malformed else "ok" if samples else "unknown"
+                   if no_complete_line else "missing")
+        reason = (f"{malformed} amostra(s) ilegível(is) preservada(s) na janela" if malformed
+                  else "" if samples else "janela sem linha completa"
+                  if no_complete_line else "sem amostras locais para o boot"
+                  if boot_id is not None else "histórico vazio")
         return {"quality": quality, "reason": reason, "samples": samples,
-                "capacity": capacity}
+                "capacity": capacity, "window_limited": limited}
     except (OSError, ValueError, UnicodeError, TypeError) as exc:
         return {"quality": "unknown", "reason": str(exc), "samples": [],
                 "capacity": None}
+
+
+def summarize_boot_timeline(directory: Path, boot_id: str) -> dict:
+    """A 64 KiB tail only: evidence near a boot end, never a full-boot claim."""
+    report = read_timeline(directory, boot_id=boot_id, limit=80, tail_bytes=65536)
+    rows = report["samples"]
+    last = rows[-1] if rows else None
+    legacy = any(row.get("schema", 1) == 1 for row in rows)
+    quality = ("partial" if legacy and report["quality"] == "ok"
+               else report["quality"])
+    reason = (report["reason"] + "; " if report["reason"] else "")
+    if legacy:
+        reason += "schema antigo sem qualidade das fontes ou relógio monotônico"
+    else:
+        reason = report["reason"]
+    gaps = []
+    for previous, current in zip(rows, rows[1:]):
+        a, b = previous.get("mono_ns"), current.get("mono_ns")
+        if type(a) is int and type(b) is int and b > a:
+            gaps.append(round((b - a) / 1_000_000_000, 2))
+    fields = ("at", "mono_ns", "collector_read_ms", "source_issues",
+              "mem_available_kb", "swap_used_kb", "psi_mem_avg10", "psi_io_avg10",
+              "psi_cpu_avg10", "temperature_c", "temperature_sensor",
+              "battery_percent", "battery_status", "battery_voltage_uv",
+              "battery_current_ua", "battery_power_uw", "external_power_online", "top_cpu")
+    return {"quality": quality, "reason": reason,
+            "last": {key: last.get(key) for key in fields} if last else None,
+            "recent_samples": len(rows), "recent_max_interval_s": max(gaps, default=None),
+            "last_interval_s": gaps[-1] if gaps else None,
+            "window_limited": report.get("window_limited", False),
+            "scope": "últimas 80 amostras válidas em até 64 KiB; não cobre o boot inteiro"}
