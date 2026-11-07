@@ -212,11 +212,15 @@ desconhecida, e uma falha nesse estado não é tratada como contador zerado.
 Avisos NTFS são buscados em janela limitada do journal, incluindo o número de
 índices identificados, sem percorrer o volume. Enquanto a GUI monitora, uma
 amostra privada e limitada de RAM, swap, PSI, temperatura e maior CPU é gravada
-a cada 15 segundos para investigar o período anterior a um reinício; a CLI
+a cada 15 segundos para investigar o período anterior a um reinício, incluindo
+estado da bateria do Deck e presença observada de alimentação externa; a CLI
 `disk timeline` lê até 80 amostras recentes, ou de um boot preservado com
 `--boot-id`. O histórico possui limites de
 4 MiB por boot e 32 MiB no total; ao atingir o limite, a gravação para e o
-registro existente é preservado. `disk recovery` só verifica identidade da
+registro existente é preservado. A falha de gravação aparece na Central, e
+capacidade próxima do limite aparece na aba Disco e na CLI. O plano para
+continuidade e dossiês está no [roadmap de resiliência](docs/ROADMAP-RESILIENCIA-HOST.md).
+`disk recovery` só verifica identidade da
 origem, montagem, acesso bruto, ferramenta e destino independente com espaço
 para imagem integral e margem. A checagem não abre o dispositivo nem concede
 autorização futura: todos os pontos devem ser revalidados antes de qualquer

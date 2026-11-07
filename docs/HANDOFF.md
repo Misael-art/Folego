@@ -1,4 +1,42 @@
-# Passagem para o próximo agente — atualizada em 06/11/2026
+# Passagem para o próximo agente — atualizada em 07/11/2026
+
+## Roadmap de resiliência e primeiro incremento — 07/11/2026
+
+O pedido é melhorar o **Fôlego**, sem alterar serviços de PhaseZero,
+SteamZero, RetroFE ou do sistema. Os sinais dos resets de 06/11 não comprovam
+uma causa única: ACPI 97 °C e `rustc` perto de um, boot gráfico de ~14 s com
+abortos de `kscreen-doctor`, e ACPI 83 °C/PSI CPU alto com eventos Bluetooth
+HCI no seguinte. O SD ausente descarta sua sobrecarga como explicação suficiente
+para os episódios posteriores. O [roadmap de resiliência](ROADMAP-RESILIENCIA-HOST.md)
+registra evidência, apresentação e prioridades para histórico contínuo com
+retenção segura, dossiê pós-boot, alertas, serviços externos observados, saúde
+da própria coleta, alívio cooperativo e economia de energia.
+
+Primeiro incremento `64aa566` na branch/PR #3: o parser de bateria agora exclui baterias
+de periféricos com `scope=Device`; a alimentação externa é observada
+separadamente. A amostra de 15 s guarda bateria/estado/energia externa somente
+com fonte válida. Falha do gravador aparece na qualidade da amostra na Central;
+capacidade próxima do limite aparece na aba Disco e CLI. O limite segue em
+4 MiB por boot/32 MiB total, sem descartar automaticamente evidência. Dados
+antigos continuam legíveis com campos novos ausentes. No hardware real,
+`BAT1` foi lida em 82%, descarregando, `ACAD` offline; a bateria HIDPP do
+periférico foi ignorada. A GUI em execução (iniciada antes desta alteração)
+não foi reiniciada: o novo comportamento residente entra na próxima abertura
+normal, sem interromper a sessão do usuário.
+
+QA: 15 testes headless e 16 Qt focados passaram; o caso adicional de histórico
+antigo consta dos gates completos. `./dev check` sequencial:
+**1280 passed, 2 skipped** headless e **1660 passed, 2 skipped** Qt offscreen;
+`git diff --check` passou. O cartão foi aberto por ~400 ms em processo Qt
+isolado no KDE/Wayland real e a captura revisada em
+`.scratch/dev-tests-reviewed/resilience-20261107/host-health-wayland.png`;
+isso não testa reinício físico, persistência por horas nem o compositor da GUI
+residente. A tentativa inicial de QA foi bloqueada pelo limite de 20 áreas;
+quatro áreas encerradas, sem referência em docs, foram **movidas e preservadas**
+em `.scratch/dev-tests-reviewed/resilience-20261107/` para liberar os gates.
+Nenhum cache compartilhado foi limpo e nenhum serviço externo foi tocado.
+Próximo passo: política de retenção segura e dossiê de boot, com teste de
+incidente em fontes descartáveis antes de qualquer retenção automática.
 
 ## Recuperação de perfis do trackpad e microfone — 06/11/2026
 
