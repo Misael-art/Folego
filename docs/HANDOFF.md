@@ -1,5 +1,39 @@
 # Passagem para o próximo agente — atualizada em 07/11/2026
 
+## Pressão sustentada e folga da coleta — 07/11/2026
+
+Incremento de código `e6bdd59` na branch do PR #3. A validação final do
+texto/agrupamento do alerta passou em 19 testes focados sem Qt e 30 com Qt;
+os 49 testes dos módulos de interface passaram após a guarda de pausa.
+
+Revisão do monitor passivo em
+[evidência e limites](handoff/validation/pressure-alert-2026-11-07/README.md).
+O histórico do boot atual tinha 227 pontos schema 2, com duração mediana de
+67,62 ms e p95 de 1.785,23 ms para a fase de leitura; é parede, não CPU. O
+poll da GUI era 2 s e passa a 5 s no código, sem alterar o gravador de 15 s,
+seus tetos ou fsync. O aviso de capacidade começa em 85% de 4 MiB/boot ou
+32 MiB totais, sem rotação nem descarte.
+
+Novo alerta de PSI usa somente dados já coletados, exige fonte `ok`, idade
+≤15 s e pressão em avg60 confirmada ao longo de 15 s sem lacuna >20 s.
+Memória ≥5%, I/O ≥10% ou CPU ≥25% mostram um aviso de bandeja por tipo a
+cada 5 min, com origens simultâneas reunidas, horário, idade e orientação
+manual. Isso não atribui causa do reset nem reduz a carga automaticamente.
+Sem bandeja, a aba Disco
+continua mostrando PSI; apresentação proativa alternativa segue pendente.
+
+QA: `./dev check` teve headless 1.289 aprovados/2 ignorados, mas Qt sofreu
+segfault nativo no teardown de teste, sem aprovação nessa tentativa. O teste
+novo que duplicava a ligação de objetos foi removido; os 49 testes dos
+módulos Qt envolvidos passaram e `./dev test` completo passou com 1.674
+aprovados/2 ignorados. Após o ajuste final de texto e agrupamento de fontes,
+19 testes focados headless e 30 Qt passaram; a suíte completa não foi
+repetida. Janela própria no KDE/Wayland real abriu Disco e
+orientação com estado sintético, sem efeitos no host; não certifica entrega
+de notificação real. A GUI residente não foi reiniciada; a nova frequência
+e o aviso serão ativados na próxima abertura normal. Persistem retenção segura,
+cobertura antes da GUI e evidência física/externa dos resets; ver roadmap.
+
 ## Novo corte às 09:11 e preservação GitHub — 07/11/2026
 
 Registro e regra de continuidade em `7159418`, enviado à branch do PR #3.
