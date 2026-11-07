@@ -1,6 +1,6 @@
 [project]
 name = "folego"
-version = "0.2.0b4"
+version = "0.2.0b7"
 description = "Resource diagnostics and reversible manual actions for Linux and KDE Plasma"
 readme = "README.md"
 license = "MIT"
@@ -20,6 +20,7 @@ dev = ["pytest", "hypothesis"]
 
 [project.scripts]
 folego = "folego.cli:main"
+folego-agent-hook = "folego.agent_hook:main"
 
 [build-system]
 requires = ["setuptools==84.0.0"]

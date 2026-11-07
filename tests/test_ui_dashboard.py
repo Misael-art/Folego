@@ -32,10 +32,35 @@ def panel(qapp):
     return DashboardTab(on_jump=jumps.append), jumps
 
 
-def test_the_headline_repeats_the_title_signal(panel):
+def test_the_headline_keeps_the_verdict_without_mixing_resource_values(panel):
     view, jumps = panel
     view.show_snapshot(snap(psi10=14.0))
     assert "🔴" in view.headline.text()
+    assert view.headline.text().startswith('FÔLEGO ')
+    assert 'GB' not in view.headline.text()
+
+
+def test_hero_summary_aligns_values_and_clears_them_when_health_expires(panel):
+    from folego.ui.title_signal import TitleSignal
+    view, _ = panel
+    view.show_snapshot(snap(total_kb=8 * 1024**2, available_kb=3 * 1024**2,
+                            self_rss_kb=128 * 1024))
+    assert {key: label.text() for key, label in view.summary_values.items()} == {
+        'available': '3,0 GB', 'used': '5,0 GB de 8,0 GB', 'application': '128 MB'}
+    assert 'Disponível: 3,0 GB' in view.diagnostic_text()
+    view.invalidate_health(TitleSignal('unknown', '⚪', 'Leitura antiga; aguarde a próxima amostra'))
+    assert all(label.text() == '—' for label in view.summary_values.values())
+    assert 'Leitura antiga' in view.hero_alert.text()
+
+
+def test_pressure_risk_is_visible_in_central_without_tray(panel):
+    view, _ = panel
+    view.show_snapshot(snap(), pressure_status=({"kind": "cpu", "state": "high", "value": 31.4},))
+    assert "Espera sustentada de CPU" in view.hero_alert.text()
+    view.show_snapshot(snap(), pressure_status=({"kind": "cpu", "state": "unknown", "value": None},))
+    assert "risco ainda não foi reavaliado" in view.hero_alert.text()
+    view.show_snapshot(snap(), pressure_status=())
+    assert "PSI de CPU" not in view.hero_alert.text()
 
 
 def test_suggestions_land_in_order_with_their_own_jump_target(panel):
@@ -67,6 +92,16 @@ def test_the_last_operation_is_shown_verbatim_and_never_invented(panel):
     view.show_snapshot(snap(), last_operation="17/10 12:00:00 · disk.quarantine · sucesso")
     assert "disk.quarantine · sucesso" in view.last_operation.text()
     assert view.last_operation.text().startswith("última operação:")
+    assert view.operation_title.text() == "Movimentação para quarentena"
+    assert view.operation_meta.text() == "Sucesso · 17/10 12:00:00"
+    assert view.technical_details.isHidden()
+    assert "disk.quarantine · sucesso" in view.diagnostic_text()
+    view.details_button.click()
+    assert not view.technical_details.isHidden()
+    view.show_operation("histórico ilegível — mutações não comprovadas")
+    assert view.operation_title.text() == "Última operação"
+    assert "histórico ilegível" in view.operation_meta.text()
+    assert view.operation_reason.isHidden()
 
 
 def test_clicking_a_suggestion_only_asks_to_change_tab(panel):

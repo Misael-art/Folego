@@ -162,11 +162,10 @@ class AccessibilityTab(QWidget):
         self.native_controls.setLayout(controls)
         self.native_controls.setVisible(False)
         settings = QGridLayout()
-        settings.addWidget(self.verify_button, 0, 0)
-        settings.addWidget(self.capture_button, 0, 1)
-        settings.addWidget(self.auto_button, 1, 0)
+        settings.addWidget(self.capture_button, 0, 0)
+        settings.addWidget(self.auto_button, 0, 1)
         settings.addWidget(self.install_button, 1, 1)
-        settings.addWidget(self.rearm_button, 2, 0, 1, 2)
+        settings.addWidget(self.rearm_button, 1, 0)
         for button in (self.verify_button, self.capture_button, self.auto_button, self.install_button):
             button.setMinimumHeight(38)
         content = QWidget()
@@ -183,7 +182,6 @@ class AccessibilityTab(QWidget):
         scroll.setWidget(content)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
-        layout.addWidget(self.enable_all_button)
         layout.addWidget(self.status)
         self.keyboard_test = QLineEdit()
         self.keyboard_test.setPlaceholderText("Campo opcional para testar o teclado; o texto não é registrado")
@@ -191,7 +189,11 @@ class AccessibilityTab(QWidget):
         self.keyboard_test.setInputMethodHints(Qt.InputMethodHint.ImhNoPredictiveText | Qt.InputMethodHint.ImhSensitiveData)
         self.keyboard_test.setVisible(False)
         layout.addWidget(self.keyboard_test)
-        layout.addWidget(self.summary)
+        verification = QHBoxLayout()
+        verification.addWidget(self.summary, 1)
+        verification.addWidget(self.verify_button)
+        verification.addWidget(self.enable_all_button)
+        layout.addLayout(verification)
         layout.addWidget(scroll)
         self.scroll = scroll
         layout.addWidget(self.native_controls)
@@ -274,6 +276,9 @@ class AccessibilityTab(QWidget):
                 if row["state"] == "observed" and proof and proof["ready"] and proof.get("context") == context:
                     card.setText("Habilitado no sistema · teste físico pendente")
                     card.set_state("ready")
+                elif row["key"] in report.get("desktop_profiles", {}):
+                    card.setText(row["detail"])
+                    card.set_state("attention" if row["state"] != "observed" else "neutral")
                 elif proof or row["state"] in ("degraded", "unknown", "unavailable", "unsupported", "not-observed"):
                     card.setText(f"{WORDS.get(row['state'], 'Desconhecido')} · clique para tentar reparar")
                     card.set_state("attention")
@@ -287,8 +292,8 @@ class AccessibilityTab(QWidget):
         self.auto_button.setText("Desabilitar automação de entrada" if enabled else "Habilitar automação de entrada")
         self.install_button.setEnabled(not self._busy)
         blockers = report.get("blockers", [])
-        self.providers.setText("Monitor automático aguardando: " + "; ".join(blockers) +
-                               "\nReparo manual: clique em uma capacidade; conflitos ativos serão verificados." if blockers else
+        self.providers.setText("Entrada KWin aguardando: " + "; ".join(blockers) +
+                               "\nSteam/microfone têm guarda independente, indicada nos cartões." if blockers else
                                "Backend nativo disponível conforme capacidades; sem responsável externo bloqueando.")
         alerts = report.get("alerts", [])
         if isinstance(alerts, list) and all(isinstance(value, str) for value in alerts):

@@ -66,6 +66,26 @@ def test_the_window_fits_the_required_sizes(window, qapp, size):
         assert tab.minimumSizeHint().width() <= size[0], window.tabs.tabText(index)
 
 
+@pytest.mark.parametrize("transparency,edge_alpha", [(0, 255), (50, 128)])
+def test_central_window_has_actual_transparent_rounded_corners(window, qapp,
+                                                                transparency, edge_alpha):
+    from folego.ui import theme
+    previous_key, previous_transparency = theme.TOKENS.key, theme.TOKENS.transparency
+    try:
+        theme.apply_theme(qapp, 'snes-us', transparency=transparency)
+        window.resize(900, 600)
+        window.show()
+        qapp.processEvents()
+        image = window.grab().toImage()
+        for x, y in ((0, 0), (image.width() - 1, 0),
+                     (0, image.height() - 1), (image.width() - 1, image.height() - 1)):
+            assert image.pixelColor(x, y).alpha() < 32
+        assert abs(image.pixelColor(image.width() // 2, 2).alpha() - edge_alpha) <= 2
+        assert window.windowOpacity() == 1
+    finally:
+        theme.apply_theme(qapp, previous_key, transparency=previous_transparency)
+
+
 def test_custom_controls_have_accessible_names(window):
     assert window.dashboard.resources.accessibleName()
     assert window.dashboard.copy_button.accessibleName()
@@ -96,7 +116,7 @@ def test_critical_runtime_and_browser_group_still_fit_800_pixels(window, qapp):
     window.show()
     qapp.processEvents()
     assert window.width() == 800
-    assert "Runtime da sessão crítico" in window.dashboard.headline.text()
+    assert "Runtime da sessão crítico" in window.dashboard.hero_alert.text()
     assert window.minimumSizeHint().width() <= 800
 
 

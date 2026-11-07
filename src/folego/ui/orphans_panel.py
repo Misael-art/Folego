@@ -41,6 +41,7 @@ class OrphansPanel(QWidget):
         self.tree.setColumnCount(5)
         self.tree.setHeaderLabels(["pid", "app", "RAM (RSS est.)", "ocioso", "estado"])
         self.tree.setSelectionMode(self.tree.SelectionMode.SingleSelection)
+        self.tree.hide()
         self.status_label = QLabel("Aguardando observações: órfão comprovado exige "
                                    "pai morto, CPU parada e tempo olhando.")
         self.status_label.setWordWrap(True)
@@ -63,6 +64,8 @@ class OrphansPanel(QWidget):
         self.term_button = QPushButton("Encerrar selecionado (SIGTERM)")
         self.force_button = QPushButton("Forçar sobreviventes (SIGKILL)")
         self.group_picker = QComboBox()
+        self.group_picker.setMinimumContentsLength(16)
+        self.group_picker.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.group_picker.setEnabled(False)
         self.group_picker.currentIndexChanged.connect(self._group_choice_changed)
         self.group_button = QPushButton("Encerrar grupo")
@@ -71,6 +74,10 @@ class OrphansPanel(QWidget):
         self.group_button.clicked.connect(self.group_clicked)
         self.force_button.setEnabled(False)
         self.group_button.setEnabled(False)
+        self.term_button.setEnabled(False)
+        self.tree.itemSelectionChanged.connect(
+            lambda: self.term_button.setEnabled(self._selected_pid() is not None
+                                                and not self._action_blocked()))
 
         buttons = QGridLayout()
         buttons.addWidget(self.term_button, 0, 0)
@@ -78,11 +85,15 @@ class OrphansPanel(QWidget):
         buttons.addWidget(self.group_picker, 1, 0)
         buttons.addWidget(self.group_button, 1, 1)
         layout = QVBoxLayout()
-        layout.addWidget(self.tree)
+        title = QLabel("Processos possivelmente abandonados")
+        title.setObjectName("section")
+        layout.addWidget(title)
+        layout.addWidget(self.status_label)
         layout.addWidget(self.investigation_label)
         layout.addWidget(self.protections_label)
-        layout.addWidget(self.status_label)
+        layout.addWidget(self.tree, 1)
         layout.addLayout(buttons)
+        layout.addStretch(1)
         self.setLayout(layout)
 
     # ------------------------------------------------------------------ listing
@@ -162,6 +173,7 @@ class OrphansPanel(QWidget):
                                if previous.get(c.pid) == c.starttime]
         self._survivors_from_group = previous_group if self._survivors else False
         self._sync_tree()
+        self.tree.setVisible(bool(self._candidates))
         if keep is not None:
             for row, c in enumerate(self._candidates):
                 if c.pid == keep:
@@ -181,8 +193,8 @@ class OrphansPanel(QWidget):
                 "confirmação.")
         else:
             self.status_label.setText(
-                "Sem órfãos: todo processo observado tem pai vivo, consome CPU ou "
-                "está na lista protegida.")
+                "Nenhum candidato confirmado nesta leitura. A identificação exige "
+                "observações de ociosidade e verificação das proteções.")
         self.force_button.setEnabled(bool(self._survivors) and
                                      self._survivors_sigterm)
 
@@ -432,7 +444,7 @@ class OrphansPanel(QWidget):
                 if response.get("outcome") == "desconhecido":
                     self._unknown(response)
                     return
-                self.term_button.setEnabled(True)
+                self.term_button.setEnabled(self._selected_pid() is not None)
                 self.group_button.setEnabled(bool(self._groups))
                 if not items:
                     self.status_label.setText(str(response.get("reason", "nenhum sinal comprovado")))

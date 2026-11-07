@@ -23,7 +23,8 @@ aplicações trabalhando ao mesmo tempo.
 As ações de recursos são manuais e passam por confirmação e verificações de
 proteção. **O executor automático de recursos permanece desligado.** A supervisão
 de entrada tem uma política própria, opcional, para reabilitar dispositivos
-identificados no KWin. O projeto está em desenvolvimento; os limites de validação
+identificados no KWin e restaurar perfis conhecidos de trackpad/microfone no
+Steam Deck. O projeto está em desenvolvimento; os limites de validação
 estão descritos abaixo.
 
 <div align="center">
@@ -36,26 +37,38 @@ estão descritos abaixo.
 
 ## O que você pode fazer
 
+[Histórico e decisões de design](docs/DESIGN.md) reúne os mockups, revisões,
+regras de adaptação e evidências de cada superfície.
+
 | Recurso | Para que serve |
 |---|---|
 | **Visão geral** | Acompanhar RAM, CPU, swap/zram, tmpfs e bateria, com alertas de pressão e indicação de dados ausentes ou antigos. |
 | **Diagnóstico de temporários** | Identificar os maiores consumidores, processos que mantêm arquivos abertos e caminhos oficiais de encerramento quando conhecidos. |
+| **Saúde do host** | Acompanhar calor, pressão de CPU/I/O, avisos NTFS, contadores Btrfs, units de usuário instáveis e boots registrados; orientar proteção e reparo manual sem executar fsck nem desligar serviços alheios. |
 | **Quarentena e recuperação** | Revisar ações de disco e tmpfs, com cópia verificada e recuperação nos fluxos suportados. |
 | **Proteção de sessões** | Registrar trabalhos que devem continuar ativos e revisar candidatos sem tratar nome, idade ou CPU baixa como autorização. |
 | **Ajustes reversíveis** | Revisar ajustes suportados, como opções de segundo plano do navegador, com preservação do estado anterior. |
 | **Widget e bandeja** | Consultar o estado em uma janela compacta e retornar à central. No Plasma/Wayland, a regra opcional do KWin exige confirmação. |
 | **CLI independente de Qt** | Investigar o ambiente e consultar operações diretamente pelo terminal. |
-| **Entrada e acessibilidade** | Observar teclado, ponteiro, trackpads, toque, controles e áudio; solicitar reparo de entrada ou manter um monitor residente opcional, sem depender do PhaseZero. |
+| **Entrada e acessibilidade** | Observar teclado, ponteiro, trackpads, toque, controles e áudio; solicitar reparo de entrada ou manter um monitor residente opcional. No Deck, distingue dispositivo presente de perfil Steam/áudio errado e restaura apenas o perfil previamente confirmado, sem depender do PhaseZero. |
 | **Opções e continuidade** | Iniciar com a sessão por padrão, desativar quando quiser, consultar operações pelo código e acompanhar temporários próprios preservados. |
+| **Economia da tela e agentes** | Ativar um temporizador reversível da tela interna, preservar jogos/dock e pedir alívio cooperativo aos agentes participantes. [Contrato e limites](docs/ENERGIA-E-AGENTES.md). |
 
+Quando o sensor informa limites térmicos, a área Disco distingue aviso a 5 °C
+do limite passivo, urgência ao atingi-lo e limite crítico do equipamento. Com a
+bandeja disponível, o Fôlego avisa sem repetir a cada leitura. O alerta não
+reduz a carga nem suspende agentes por conta própria.
+
+O **mini horizontal** reúne estado, CPU, temperatura com fonte e RAM em uma
+faixa flutuante de uma linha. A alça pontilhada move a faixa; **Expandir** abre
+o compacto, a grade abre a Central e a seta lista diretamente todos os formatos.
 O **modo compacto** tem 280 px de largura e recursos em duas linhas. O ícone de
-grade abre a **Central**; a seta ao lado reúne **Ocultar widget**, **Sair do
-Fôlego** e **Contas e cotas de IA**. **Voltar** retorna ao widget mantendo a aba e o
-monitoramento. A saída também fica na bandeja. As duas interfaces dispensam
-botões de minimizar, maximizar e fechar.
-Ao voltar da Central, **Voltar** abre o widget flutuante. O menu **Posição do
-widget**, disponível na Central e no widget, permite escolher diretamente o
-flutuante, a lateral esquerda, a lateral direita ou a barra superior.
+grade abre a **Central**; a seta ao lado reúne os cinco formatos,
+**Contas e cotas de IA**, **Ocultar widget** e **Sair do Fôlego**. **Modo widget**, na Central, retorna ao
+flutuante mantendo o monitoramento. A saída também fica na bandeja. As duas
+interfaces dispensam botões de minimizar, maximizar e fechar.
+O menu **Posição do widget**, na Central, e o seletor do widget permitem escolher
+diretamente mini, compacto, lateral esquerda, lateral direita ou barra superior.
 Passe o mouse pela borda esquerda, direita ou superior do widget para revelar a
 faixa de encaixe. A seta leva, respectivamente, à barra lateral direita,
 lateral esquerda ou horizontal superior. A seta na borda da barra retorna ao
@@ -79,7 +92,10 @@ Os atalhos coloridos aparecem em duas linhas iguais ao passar o mouse pelo
 widget e se recolhem ao sair. **Copiar, Colar e Print** ficam abaixo de
 **Selecionar tudo, Apagar tudo e Prompts**. O ícone de teclado no cabeçalho abre
 na parte inferior; somente sua seta abre no topo. CPU e Tmp ficam alinhados,
-com a temperatura do host em °C à direita da CPU (sensor indisponível: **— °C**).
+com a temperatura do host em °C e a rotação do cooler em RPM lado a lado na
+terceira linha (sensor indisponível: **— °C** ou **— RPM**). Quando só existe a
+zona térmica do sistema, a leitura mostra **ACPI** para não sugerir que mede
+diretamente a CPU.
 **Tmp** indica a ocupação dos temporários em memória. A altura
 pode crescer para preservar alertas e mensagens. [Uso, configuração de contas,
 dependências e limites](docs/COMPACTO.md).
@@ -91,11 +107,13 @@ cada minuto. A estimativa restante aparece quando o sistema informa tempo ou
 energia e consumo compatíveis. Ela varia conforme o uso. Os avisos seguem a
 preferência de sons em **opções**.
 
-A biblioteca oferece 12 prompts de desenvolvimento: escolha um título para copiar e cole no
+A biblioteca oferece 13 prompts de desenvolvimento: escolha um título para copiar e cole no
 agente desejado. O teclado virtual preserva o foco do campo de destino no KWin.
 O seletor organiza os títulos em seis blocos com faixas laterais coloridas,
 cabeçalhos horizontais e ícones de copiar. O painel tem até 480 × 540 px,
 com rolagem e rodapé fixo para **Janelas, Edição, Terminal e Custom**.
+Os três primeiros modelos seguem diagnóstico, implantação item a item e
+continuação do trabalho a partir da passagem existente.
 **Design e mockups para aprovação** copia o prompt integral de Product Design
 fornecido pelo usuário, para propor e revisar visuais antes da implementação.
 O mesmo menu inclui dez atalhos padrão em **Janelas**, **Edição** e **Terminal**:
@@ -127,12 +145,12 @@ contas usam um fundo contínuo, com os elementos internos transparentes.
 O alvo é **Linux**, com KDE Plasma para a integração completa com o desktop.
 O wrapper gerencia Python **3.14.7**, uv e dependências fixadas em `uv.lock`.
 Não é necessário ativar um ambiente virtual ou instalar pacotes Python globalmente.
-A [prévia 0.2.0b4](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b4)
+A [prévia 0.2.0b7](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b7)
 oferece fonte completa, wheel, sdist e SHA256SUMS. A fonte completa inclui o wrapper
 e o lockfile; os pacotes Python exigem Python 3.14 e a dependência GUI opcional.
 
 ```bash
-git clone --branch v0.2.0b4 https://github.com/Misael-art/Folego.git
+git clone --branch v0.2.0b7 https://github.com/Misael-art/Folego.git
 cd Folego
 ./dev setup
 ./dev gui
@@ -182,7 +200,51 @@ Estas consultas não limpam arquivos nem encerram processos:
 ./dev run automation status --json
 ./dev run accessibility status --json
 ./dev run startup status --json
+./dev run disk health --json
+./dev run disk guide ntfs
+./dev run disk recovery /dev/mmcblk0p1 --json
+./dev run disk timeline --json
 ```
+
+**Saúde do host** aparece na Central e no início da aba Disco. A temperatura e
+a pressão vêm da coleta de recursos; integridade, units e boots são consultados
+separadamente a cada cinco minutos enquanto o Fôlego monitora. A CLI consulta
+sob demanda, sem alterar o host. A GUI guarda um pequeno ponto de comparação
+dos contadores Btrfs em seu estado XDG; o primeiro valor é histórico de idade
+desconhecida, e uma falha nesse estado não é tratada como contador zerado.
+Avisos NTFS são buscados em janela limitada do journal, incluindo o número de
+índices identificados, sem percorrer o volume. Enquanto a GUI monitora, uma
+amostra privada e limitada de RAM, swap, PSI, temperatura e maior CPU é gravada
+a cada 15 segundos para investigar o período anterior a um reinício, incluindo
+estado da bateria do Deck e presença observada de alimentação externa; a CLI
+`disk timeline` lê até 80 amostras recentes, ou de um boot preservado com
+`--boot-id`. O histórico possui limites de
+4 MiB por boot e 32 MiB no total; ao atingir o limite, a gravação para e o
+registro existente é preservado. A falha de gravação aparece na Central, e
+capacidade a partir de 85% do limite aparece na aba Disco e na CLI. A leitura
+principal da GUI ocorre a cada 5 segundos; o alerta de pressão usa o PSI já
+coletado, exige leituras sustentadas e limita avisos na bandeja a um por tipo
+de pressão a cada 5 minutos. O histórico registra também as médias PSI de
+60 segundos, em porcentagem, para explicar avisos após um reinício. O alerta
+recomenda reduzir tarefas pelo aplicativo responsável e não altera processos.
+O plano para
+continuidade e dossiês está no [roadmap de resiliência](docs/ROADMAP-RESILIENCIA-HOST.md).
+`disk recovery` só verifica identidade da
+origem, montagem, acesso bruto, ferramenta e destino independente com espaço
+para imagem integral e margem. A checagem não abre o dispositivo nem concede
+autorização futura: todos os pontos devem ser revalidados antes de qualquer
+cópia ou reparo.
+Sem permissão, sensor ou histórico, a interface mostra **desconhecido**. As
+orientações não executam `ntfsfix`, `btrfs scrub`, `btrfs check --repair`,
+parada de serviços ou reinício do host. Consulte também [os limites e o
+mockup](docs/handoff/validation/host-guard-2026-11-05/README.md).
+
+Para NTFS danificado, a [documentação do NTFS-3G](https://github.com/tuxera/ntfs-3g/blob/edge/ntfsprogs/ntfsfix.8.in)
+limita `ntfsfix` a algumas inconsistências fundamentais. A cópia de resgate
+retomável pode usar [GNU ddrescue](https://www.gnu.org/software/ddrescue/manual/ddrescue_manual.html)
+quando houver destino independente suficiente e o volume puder ser desmontado
+sem interromper consumidores desconhecidos. A pré-checagem do Fôlego não cria
+essa cópia; a fonte original não é reparada automaticamente.
 
 Para acompanhar um comando seu como sessão protegida:
 

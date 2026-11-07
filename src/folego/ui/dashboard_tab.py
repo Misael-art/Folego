@@ -11,6 +11,8 @@ requests out. This widget measures nothing and mutates nothing on purpose: the
 rules live in ``core.suggestions``, so the same verdicts are testable without a
 display and reusable by the tray tooltip.
 """
+import re
+
 from PySide6.QtCore import QRectF, Qt, Slot
 from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen
 from PySide6.QtWidgets import (QFrame, QGridLayout, QHBoxLayout, QLabel, QProgressBar,
@@ -25,6 +27,16 @@ from ..core.suggestions import suggest
 LEVEL_EMOJI = {"critico": "🔴", "alto": "🟠", "medio": "🟡"}
 TARGET_LABEL = {"memoria": "desempenho", "ajustes": "ajustes",
                 "orfaos": "órfãos", "disco": "disco", "tmpfs": "temporários"}
+OPERATION_LABEL = {
+    "performance.close": "Encerramento de aplicativo",
+    "disk.quarantine": "Movimentação para quarentena",
+    "disk.restore": "Restauração do disco",
+    "disk.purge": "Exclusão definitiva",
+    "tmpfs.release": "Liberação de temporários",
+    "tmpfs.restore": "Restauração de temporários",
+    "tmpfs.expire": "Expiração de temporários retidos",
+}
+HISTORY_STAMP = re.compile(r"\d{2}/\d{2} \d{2}:\d{2}:\d{2}|data inválida")
 
 
 VERDICT = {health.GREEN: ("Saudável", 'ok'), health.YELLOW: ("Atenção", 'warning'),
@@ -204,6 +216,28 @@ class DashboardTab(QWidget):
         self.headline = QLabel("Aguardando primeira leitura…")
         self.headline.setObjectName("headline")
         self.headline.setWordWrap(True)
+        self.summary_values = {}
+        summary = QGridLayout()
+        summary.setContentsMargins(0, 0, 0, 0)
+        summary.setHorizontalSpacing(12)
+        summary.setVerticalSpacing(4)
+        for row, (key, caption) in enumerate((('available', 'Disponível'),
+                                              ('used', 'Em uso'),
+                                              ('application', 'Aplicativo'))):
+            label = QLabel(caption)
+            label.setObjectName('why')
+            value = QLabel('—')
+            value.setObjectName('summaryValue')
+            value.setWordWrap(True)
+            value.setAccessibleName(caption)
+            self.summary_values[key] = value
+            summary.addWidget(label, row, 0)
+            summary.addWidget(value, row, 1)
+        summary.setColumnStretch(1, 1)
+        self.hero_alert = QLabel('')
+        self.hero_alert.setObjectName('why')
+        self.hero_alert.setWordWrap(True)
+        self.hero_alert.hide()
         self.details = QLabel("")
         self.details.setWordWrap(True)
         self.resources = QLabel("saúde por recurso: aguardando a primeira amostra.")
@@ -213,7 +247,15 @@ class DashboardTab(QWidget):
         self.last_operation = QLabel("última operação: ainda não consultada.")
         self.last_operation.setObjectName("quality")
         self.last_operation.setWordWrap(True)
+        self.last_operation.setTextFormat(Qt.TextFormat.PlainText)
         self.last_operation.setAccessibleName("Última operação registrada")
+        self.operation_title = QLabel("Última operação")
+        self.operation_title.setObjectName("section")
+        self.operation_meta = QLabel("Aguardando leitura do histórico.")
+        self.operation_reason = QLabel()
+        for label in (self.operation_title, self.operation_meta, self.operation_reason):
+            label.setTextFormat(Qt.TextFormat.PlainText)
+            label.setWordWrap(True)
         self.automation_status = QLabel(
             "automação: estado ainda não lido; execução real desligada.")
         self.automation_status.setObjectName("quality")
@@ -229,6 +271,13 @@ class DashboardTab(QWidget):
         self.input_button = QPushButton("Ver entradas")
         self.input_button.setAccessibleName("Abrir monitor de entrada e reparo de acessibilidade")
         self.input_button.clicked.connect(lambda: self._jump("accessibility"))
+        self.host_status = QLabel("Saúde do host: aguardando verificação.")
+        self.host_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.host_status.setWordWrap(True)
+        self.host_status.setAccessibleName("Saúde do host e integridade dos volumes")
+        self.host_button = QPushButton("Ver saúde")
+        self.host_button.setAccessibleName("Abrir os detalhes de saúde do host na aba Disco")
+        self.host_button.clicked.connect(lambda: self._jump("disco"))
         self.copy_button = QPushButton("Copiar diagnóstico")
         self.copy_button.setAccessibleName(
             "Copiar um diagnóstico legível, sem comandos nem credenciais")
@@ -252,10 +301,12 @@ class DashboardTab(QWidget):
         hero_text.setSpacing(6)
         hero_text.addStretch(1)
         hero_text.addWidget(self.headline)
+        hero_text.addLayout(summary)
         self.verdict_line = QLabel("")
         self.verdict_line.setObjectName("why")
         self.verdict_line.setWordWrap(True)
         hero_text.addWidget(self.verdict_line)
+        hero_text.addWidget(self.hero_alert)
         hero_text.addWidget(self.primary_button, 0, Qt.AlignmentFlag.AlignLeft)
         hero_text.addStretch(1)
         self.widget_button = QPushButton("⧉  Modo widget")
@@ -289,12 +340,28 @@ class DashboardTab(QWidget):
         activity = QFrame()
         activity.setObjectName("card")
         activity_layout = QVBoxLayout(activity)
-        for widget in (self.last_operation, self.automation_status, self.resources, self.details):
+        for widget in (self.operation_title, self.operation_meta, self.operation_reason):
             activity_layout.addWidget(widget)
+        self.operation_reason.hide()
+        host_row = QHBoxLayout()
+        host_row.addWidget(self.host_status, 1)
+        host_row.addWidget(self.host_button)
+        activity_layout.addLayout(host_row)
         input_row = QHBoxLayout()
         input_row.addWidget(self.input_status, 1)
         input_row.addWidget(self.input_button)
         activity_layout.addLayout(input_row)
+        self.technical_details = QWidget()
+        detail_layout = QVBoxLayout(self.technical_details)
+        detail_layout.setContentsMargins(0, 0, 0, 0)
+        for widget in (self.last_operation, self.automation_status, self.resources, self.details):
+            detail_layout.addWidget(widget)
+        self.technical_details.hide()
+        self.details_button = QPushButton("Ver detalhes técnicos")
+        self.details_button.setCheckable(True)
+        self.details_button.toggled.connect(self._toggle_technical_details)
+        activity_layout.addWidget(self.details_button, 0, Qt.AlignmentFlag.AlignLeft)
+        activity_layout.addWidget(self.technical_details)
         footer = QHBoxLayout()
         footer.addWidget(self.status, 1)
         footer.addWidget(self.copy_button, 0)
@@ -322,20 +389,37 @@ class DashboardTab(QWidget):
 
     def show_snapshot(self, snapshot, *, orphan_count: int = 0,
                       thumbnails_kb: int | None = None,
-                      extra_notes=(), signal=None, last_operation: str = ""):
+                      extra_notes=(), pressure_status=(), signal=None,
+                      last_operation: str = ""):
         signal = signal or title_signal.compute(snapshot, self._thresholds)
-        self.headline.setText(signal.text)
+        verdict = VERDICT.get(signal.level, VERDICT[health.UNKNOWN])[0]
+        heading = 'Coleta indisponível' if signal.level == health.UNKNOWN else verdict
+        self.headline.setText(f'FÔLEGO {signal.emoji} · {heading}')
+        self.headline.setToolTip(signal.text)
+        self._show_summary(snapshot)
+        notices = [reason.message for reason in signal.report.reasons
+                   if reason.code in ('runtime_critical', 'tmpfs_inodes_exhausted', 'snapshot_stale')] if signal.report else []
+        if signal.level == health.UNKNOWN and not notices:
+            notices.append(signal.text)
+        pressure_names = {"cpu": "CPU", "memory": "memória", "io": "disco/I/O"}
+        for item in pressure_status:
+            name = pressure_names.get(item.get("kind"), "recurso")
+            if item.get("state") == "high":
+                notices.append(f"Espera sustentada de {name}: PSI 60 s em {item['value']}%. Revise as tarefas na aba Disco.")
+            elif item.get("state") == "unknown":
+                notices.append(f"PSI de {name} indisponível após alerta; o risco ainda não foi reavaliado.")
+        self.hero_alert.setText('\n'.join(dict.fromkeys(notices)))
+        self.hero_alert.setVisible(bool(notices))
         self.details.setText(self._details(snapshot))
         headroom = headroom_pct(snapshot)
         self.gauge.set_state(headroom, signal.level)
-        verdict = VERDICT.get(signal.level, VERDICT[health.UNKNOWN])[0]
         self.verdict_line.setText(
             f"{verdict}: menor folga {headroom}% entre memória, swap e temporários." if headroom is not None
             else f"{verdict}: aguardando dados de memória, swap e temporários.")
         self._show_cards(snapshot)
         self.resources.setText(self._resources(snapshot))
         if last_operation:
-            self.last_operation.setText(f"última operação: {last_operation}")
+            self.show_operation(last_operation)
         self._sync_rows(suggest(snapshot, orphan_count=orphan_count,
                                 thumbnails_kb=thumbnails_kb))
         self._show_empty_state(signal, unavailable=bool(snapshot.errors))
@@ -357,6 +441,25 @@ class DashboardTab(QWidget):
         notes.extend(extra_notes)
         self.status.setText(" · ".join(notes))
 
+    def show_operation(self, text: str):
+        self.last_operation.setText(f"última operação: {text}")
+        fields = text.split(" · ", 2)
+        if len(fields) != 3 or not HISTORY_STAMP.fullmatch(fields[0]):
+            self.operation_title.setText("Última operação")
+            self.operation_meta.setText(text)
+            self.operation_reason.hide()
+            return
+        stamp, action, result = fields
+        outcome, _, reason = result.partition(" — ")
+        self.operation_title.setText(OPERATION_LABEL.get(action, action))
+        self.operation_meta.setText(f"{outcome.capitalize()} · {stamp}")
+        self.operation_reason.setText(reason)
+        self.operation_reason.setVisible(bool(reason))
+
+    def _toggle_technical_details(self, expanded: bool):
+        self.technical_details.setVisible(expanded)
+        self.details_button.setText("Ocultar detalhes técnicos" if expanded else "Ver detalhes técnicos")
+
     def _show_empty_state(self, signal, *, unavailable=False):
         if not self.rows:
             if signal.level == health.GREEN and not unavailable:
@@ -372,7 +475,12 @@ class DashboardTab(QWidget):
             self.primary_button.setText(button)
 
     def invalidate_health(self, signal):
-        self.headline.setText(signal.text)
+        self.headline.setText('FÔLEGO ⚪ · Coleta indisponível')
+        self.headline.setToolTip(signal.text)
+        for value in self.summary_values.values():
+            value.setText('—')
+        self.hero_alert.setText(signal.text)
+        self.hero_alert.show()
         self.resources.setText("saúde não comprovada; aguardando nova amostra")
         self.gauge.set_state(None, health.UNKNOWN)
         self.verdict_line.setText("Saúde não comprovada; aguardando nova amostra.")
@@ -380,6 +488,18 @@ class DashboardTab(QWidget):
             card.set_value(None, "ok", "aguardando nova amostra")
         self._sync_rows(())
         self._show_empty_state(signal, unavailable=True)
+
+    def _show_summary(self, snapshot):
+        values = self.summary_values
+        if snapshot.mem is None or snapshot.mem.mem_total_kb <= 0:
+            for label in values.values():
+                label.setText('—')
+            return
+        total, available = snapshot.mem.mem_total_kb, snapshot.mem.mem_available_kb
+        gb = lambda value: title_signal.fmt1(value / title_signal.MB) + ' GB'
+        values['available'].setText(gb(available))
+        values['used'].setText(f'{gb(total - available)} de {gb(total)}')
+        values['application'].setText(f'{snapshot.self_rss_kb // title_signal.KB} MB')
 
     def _show_cards(self, snapshot) -> None:
         cards, t = self.cards, self._thresholds
@@ -495,9 +615,39 @@ class DashboardTab(QWidget):
     def diagnostic_text(self) -> str:
         """Sanitized copy: verdicts and counts, never commands or credentials."""
         return "\n".join(text for text in (
-            self.headline.text(), self.details.text(), self.resources.text(),
-            self.last_operation.text(), self.automation_status.text(), self.input_status.text(),
+            self.headline.text(),
+            *(f'{label.accessibleName()}: {label.text()}' for label in self.summary_values.values()),
+            self.hero_alert.text(), self.details.text(), self.resources.text(),
+            self.last_operation.text(), self.automation_status.text(),
+            self.host_status.text(), self.input_status.text(),
             self.status.text()) if text)
+
+    def show_host_report(self, report: dict):
+        alerts = 0
+        ntfs = report.get("ntfs", {})
+        if ntfs.get("quality") in ("ok", "partial") and ntfs.get("count_10m", 0) > 0:
+            alerts += 1
+        if report.get("services", {}).get("items"):
+            alerts += 1
+        for disk in report.get("btrfs", []):
+            delta = disk.get("recent_delta") or disk.get("delta")
+            if delta and any(delta.values()):
+                alerts += 1
+                break
+        unknown = (report.get("btrfs_quality") != "ok" or
+                   report.get("baseline_quality") != "ok" or
+                   ntfs.get("quality") not in ("ok", "partial") or
+                   report.get("services", {}).get("quality") != "ok")
+        if alerts:
+            self.host_status.setText(f"Saúde do host: {alerts} "
+                                     f"{'item para revisar' if alerts == 1 else 'itens para revisar'}.")
+        elif unknown:
+            self.host_status.setText("Saúde do host: leitura parcial ou desconhecida.")
+        else:
+            self.host_status.setText("Saúde do host: sem novos avisos nesta consulta; integridade não comprovada.")
+
+    def show_host_error(self, message: str):
+        self.host_status.setText(f"Saúde do host: verificação indisponível ({message[:120]}).")
 
     def copy_diagnostic(self):
         clipboard = QGuiApplication.clipboard()
@@ -523,6 +673,13 @@ class DashboardTab(QWidget):
         if snapshot.cpu_busy_frac is not None:
             parts.append(f"cpu {snapshot.cpu_busy_frac * 100:.0f}% de "
                          f"{snapshot.cpu_count} cpu(s)")
+        if snapshot.temperature_c is not None:
+            source = "ACPI" if snapshot.temperature_sensor == "acpitz" else snapshot.temperature_sensor
+            parts.append(f"{source or 'sensor térmico'} {snapshot.temperature_c:g} °C")
+            if snapshot.thermal_passive_c is not None:
+                parts.append(f"limite passivo {snapshot.thermal_passive_c:g} °C")
+        parts.append(f"cooler {snapshot.fan_rpm} RPM" if snapshot.fan_rpm is not None
+                     else "cooler RPM indisponível")
         if snapshot.zram is not None:
             parts.append("zram usado "
                          f"{title_signal.fmt1(snapshot.zram.mem_used_total_kb / title_signal.KB)} MB"
@@ -540,6 +697,10 @@ class DashboardTab(QWidget):
             if snapshot.pressure_memory.full_avg10 is not None:
                 parts.append(f"psi/full "
                              f"{snapshot.pressure_memory.full_avg10:.1f}".replace(".", ","))
+        if snapshot.pressure_cpu:
+            parts.append(f"psi/cpu avg60 {snapshot.pressure_cpu.some_avg60:.1f}".replace(".", ","))
+        if snapshot.pressure_io:
+            parts.append(f"psi/io avg60 {snapshot.pressure_io.some_avg60:.1f}".replace(".", ","))
         if snapshot.load:
             parts.append(f"load 1m {snapshot.load.one:.2f}".replace(".", ","))
         if snapshot.apps:

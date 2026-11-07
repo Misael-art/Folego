@@ -5,6 +5,14 @@ e `docs/NOVO-HOST.md`. Esses arquivos descrevem a situação atual; os registros
 de 17/18 de outubro preservam o histórico e não devem ser lidos como aceite total.
 Este projeto não depende do HOME, disco, venv, serviços ou skills do host anterior.
 
+<!-- BEGIN HOST RESOURCE CHECK -->
+## Capacidade do host antes de operações pesadas
+
+- Antes de builds, testes longos, instalações, extrações, cópias grandes ou VMs, meça carga de CPU, RAM disponível, atividade de swap, pressão de I/O e espaço livre no destino e nos temporários. Confira os processos concorrentes e estime o pico de RAM, o volume de entrada e saída e o paralelismo da sua ação.
+- Inspecione processos concorrentes por RSS e comando completo; uma lista truncada ou ordenada apenas por CPU pode ocultar um build com prioridade baixa. Se calor estiver perto do trip passivo informado pelo próprio sensor, não inicie outra carga pesada até reavaliar.
+- Prossiga quando houver margem para a carga prevista. Se houver pressão sustentada ou pouca margem, espere e meça de novo ou reduza o lote e os jobs. Em host com histórico de reinícios sob pressão de RAM ou disco, reserve margem maior e reavalie durante a execução. Se a pressão aumentar, pause trabalho próprio quando for seguro e preserve os processos das outras tarefas.
+<!-- END HOST RESOURCE CHECK -->
+
 ## Ambiente e verificação
 
 - Linux, Python 3.14.7 e Qt/PySide6. Use `./dev`, que instala ferramentas em
@@ -98,11 +106,12 @@ permanecem.
 - Política comum: [../AGENTS.md](../AGENTS.md), especialmente autonomia, testes, GitHub e recursos (§§5–10); raiz/branch em [registro central](../.workspace/projects.json). A orientação atual de raiz única substitui recomendações históricas de criar worktrees/clones por tarefa; os contratos técnicos e gates deste projeto permanecem obrigatórios. Em outro host, preserve este mesmo método em um único checkout registrado, sem recriar caminhos antigos.
 - Antes de implementar, leia `README.md`, `docs/HANDOFF.md` e `docs/DIAGNOSTICO-2026-10-24.md`, identifique causa, owner, dependências e aceite. Procure a solução oficial existente e integre nela; não introduza soluções concorrentes, aliases ambíguos ou refatorações fora do pedido. Neste host, a única raiz é `/home/misael/Projects/Folego`.
 - Execute o lote até implementar, testar, revisar e preservar a continuidade. Resolva decisões reversíveis pelo contexto; não pare em planos nem peça confirmação para editar/testar o que já está autorizado. Comunique descobertas, bloqueios e entrega, sem narrar cada comando ou pequeno avanço.
-- Antes de operações pesadas, confira espaço do destino, RAM e carga; estime saídas e retenção. Reutilize ferramentas/ambientes compatíveis, limite jobs e encerre somente processos temporários próprios. Não mate trabalhos alheios, limpe caches compartilhados ou apague evidência para obter um gate verde.
+- Planeje a retenção das saídas. Reutilize ferramentas/ambientes compatíveis, limite jobs e encerre somente processos temporários próprios. Não mate trabalhos alheios, limpe caches compartilhados ou apague evidência para obter um gate verde.
 - Ferramentas, Python e ambientes ficam em `.dev/`; QA em `.scratch/dev-tests/`, com limites do wrapper. Reutilize `./dev`; rode `./dev check` sequencialmente quando pertinente. Preserve a distinção GUI/headless.
 - Faça os checks pertinentes a toda alteração; para documentos, revise diff, referências e coerência. Para código, cubra comportamento/regressão e execute os gates aplicáveis, sem desativá-los. Para alterações de GUI/launcher, percorra o fluxo no KDE/Wayland real disponível, em sessão própria. Qt offscreen valida contratos, sem aprovar o compositor, arraste físico ou soak de duas horas. Teste efeitos somente em filhos/árvores próprios; automação do produto permanece desligada.
 - Reutilize a autenticação válida e os helpers existentes. Nunca peça senha/token no chat, copie sessões ou grave credenciais em código/log. Se faltar acesso indispensável, solicite uma única ação pelo fluxo oficial, preserve o estado e avance no trabalho independente; não repita permissões já concedidas.
 - Confira remoto, PRs e checks do SHA antes do lote e ao publicar; reutilize o PR da mesma branch/objetivo. Revise arquivos explícitos, segredos e tamanho, faça commit/push do incremento autorizado e confirme o SHA remoto. Sem stage global de resgates, push forçado, merge de pesquisas ou publicação de dados privados. Não faça polling contínuo de CI.
+- Neste host com resets abruptos, nenhum incremento revisável pode depender apenas do disco local: após gates, confirme o commit no GitHub e registre o SHA e o estado dos checks na passagem. Dados que não pertencem ao Git exigem recuperação independente antes de eventual reinstalação.
 - PR cabe ao incremento revisável; release somente a marco elegível com versão/artefatos/notas e gates completos, dentro da autorização de publicação vigente. Não gerar release por manutenção destas regras. Preserve limites de merge/deploy e falhas preexistentes; acesso autenticado não amplia autorização.
 - Fontes e receitas ficam no Git; bancos, ROMs, assets privados, SDKs, builds, caches e pacotes de resgate seguem owner/destino próprios e recuperação verificável. `.gitignore` não é backup. Novo arquivo acima de 10 MiB exige revisão; downloads acima de 70 MB são manuais, inclusive o pacote dividido, com origem/tamanho/hash/destino preparados.
 - Ao fechar, mantenha apenas os gerados necessários e atualize o handoff existente com SHA, testes no host, limites de validação, bloqueio e próximo passo. Não declare produto pronto quando faltar evidência do alvo real, nem deixe um único exemplar de trabalho útil sem proteção identificada.

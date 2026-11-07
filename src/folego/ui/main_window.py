@@ -13,10 +13,10 @@ import json
 import sys
 from concurrent.futures import Future
 
-from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QGuiApplication, QKeySequence, QPainter, QPainterPath, QShortcut
+from PySide6.QtCore import QRectF, QSize, QTimer, Qt
 from PySide6.QtWidgets import (QMainWindow, QStyle, QStyleOptionTab, QStylePainter, QTabBar,
-                              QTabWidget, QFrame, QHBoxLayout, QLabel, QPushButton,
+                              QTabWidget, QFrame, QHBoxLayout, QLabel,
                               QToolButton, QMenu)
 
 from . import desktop_caps, title_signal
@@ -33,9 +33,13 @@ from .accessibility_tab import AccessibilityTab
 from .options_tab import OptionsTab
 from .custom_prompts_tab import CustomPromptsTab
 from .ai_monitor import AIMonitor
-from .theme import set_control_icon, prepare_surface, paint_surface
+from .desktop_shortcuts import DesktopController
+from .screen_energy import ScreenEnergy
+from .theme import TOKENS, _background_color, set_control_icon, prepare_surface
 from ..core import health
 from ..core.battery_alerts import BatteryAlertTracker
+from ..core.host_guard import PressureAlertTracker, ThermalTracker
+from ..core.agent_pressure import PressureBackend
 from ..core.exclusions import ExclusionError, ExclusionList
 from ..core.orphans import OrphanTracker, active_investigation, group_targets
 from ..core.sessions import SessionError, SessionRegistry
@@ -90,7 +94,13 @@ class NavigationHeader(QFrame):
 
 class MainWindow(QMainWindow):
     def paintEvent(self, event):
-        paint_surface(self)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()).adjusted(.5, .5, -.5, -.5),
+                            TOKENS.radius * 2, TOKENS.radius * 2)
+        painter.fillPath(path, _background_color(TOKENS.background))
+        painter.end()
         super().paintEvent(event)
 
     def __init__(self, collector_factory=None,
@@ -100,14 +110,22 @@ class MainWindow(QMainWindow):
                  sessions: SessionRegistry | None = None,
                  exclusions: ExclusionList | None = None, journal=None,
                  config_store=None, grant_store=None, compact_factory=None, process_jobs=None,
-                 accessibility_factory=None, startup_defaults=False):
+                 accessibility_factory=None, startup_defaults=False,
+                 host_guard_factory=None):
         super().__init__()
+        self.setObjectName('mainWindow')
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         prepare_surface(self)
+        # Keep the tab's scrollbar clear of the rounded bottom-right window edge.
+        self.setContentsMargins(0, 0, TOKENS.radius * 2, TOKENS.radius * 2)
         self._thresholds = thresholds or title_signal.Thresholds()
         self._journal = journal or Journal()
         self._history_reader = HistoryReader(self._journal)
         self._history_poller = None
+        self._host_guard_poller = None
+        self._host_guard_factory = host_guard_factory
+        self._thermal_tracker = ThermalTracker()
+        self._pressure_alert_tracker = PressureAlertTracker()
         self._history_text = "aguardando leitura do histórico"
         self._config_store = config_store or ConfigStore()
         self._grant_store = grant_store or GrantStore()
@@ -162,6 +180,7 @@ class MainWindow(QMainWindow):
                                     on_force=self._force,
                                     on_group=self._group)
         self.disk = DiskTab(jobs=self._disk_jobs, confirm_fn=confirm_fn)
+        self.disk.host_refresh_requested.connect(self._request_host_guard)
         self._performance_jobs = TuneJobs(parent=self, argv_factory=performance_argv,
                                           timeout_ms=CLOSE_TIMEOUT_MS)
         self.performance = PerformanceTab(jobs=self._performance_jobs, confirm_fn=confirm_fn)
@@ -175,6 +194,31 @@ class MainWindow(QMainWindow):
         self.options = OptionsTab()
         self.options.sound_preview.connect(self.ai_monitor.alerts.preview)
         self.ai_monitor.alerts.feedback.connect(self.options.sound_feedback)
+        self._screen_controller = DesktopController(self, backend=ScreenEnergy())
+        self._screen_controller.payload.connect(self._screen_result)
+        self._screen_controller.failed.connect(self._screen_error)
+        self._screen_controller.busy_changed.connect(self._screen_after_busy)
+        self._pressure_controller = DesktopController(self, backend=PressureBackend())
+        self._pressure_controller.payload.connect(self.options.show_cooperative_state)
+        self._pressure_controller.failed.connect(self.options.cooperative_error)
+        self._pressure_controller.busy_changed.connect(self._pressure_after_busy)
+        self._pressure_next = None
+        self._pressure_last_sent = 0.0
+        self._pressure_last_status = 0.0
+        self._pressure_seen = False
+        self.options.screen_energy_requested.connect(self._screen_energy_request)
+        self.ai_monitor.deliveries_ready.connect(self._screen_delivery_attention)
+        self._screen_delivery_ids = set()
+        self._screen_thermal_level = 0
+        self._screen_wake_pending = False
+        self._screen_reconcile_pending = False
+        self._screen_attention_id = None
+        self._screen_tick_count = 0
+        self._screen_timer = QTimer(self)
+        self._screen_timer.setInterval(5_000)
+        self._screen_timer.timeout.connect(self._screen_energy_tick)
+        QGuiApplication.instance().screenAdded.connect(self._screen_change)
+        QGuiApplication.instance().screenRemoved.connect(self._screen_change)
         self.custom_prompts = CustomPromptsTab()
         self.options.operation_verified.connect(self._operation_verified)
         self._startup_defaults = startup_defaults
@@ -185,22 +229,19 @@ class MainWindow(QMainWindow):
         self.tabs.setObjectName("sidebar")
         self.tabs.setTabPosition(QTabWidget.TabPosition.West)
         for title, attribute in TABS:
-            self.tabs.addTab(getattr(self, attribute), title)
+            self.tabs.addTab(getattr(self, attribute), title.capitalize())
         self.setCentralWidget(self.tabs)
         self.navigation_header = NavigationHeader()
         header = QHBoxLayout(self.navigation_header)
         header.setContentsMargins(12, 8, 12, 8)
-        self.back_button = QPushButton('Voltar')
-        set_control_icon(self.back_button, 'go-previous', QStyle.StandardPixmap.SP_ArrowBack)
-        self.back_button.setAccessibleName('Voltar ao controle flutuante do Fôlego')
-        self.back_button.setToolTip('Voltar ao widget sem encerrar o monitoramento')
-        self.back_button.clicked.connect(self.return_to_compact)
-        header.addWidget(self.back_button)
-        brand = QLabel('Fôlego')
-        brand.setObjectName('section')
-        header.addWidget(brand)
+        self.brand = QLabel('FÔLEGO')
+        self.brand.setObjectName('section')
+        header.addWidget(self.brand)
         header.addStretch(1)
         self.control_button = QToolButton()
+        self.control_button.setObjectName('windowControls')
+        self.control_button.setFixedSize(32, 32)
+        self.control_button.setIconSize(QSize(18, 18))
         set_control_icon(self.control_button, 'application-menu', QStyle.StandardPixmap.SP_TitleBarMenuButton)
         self.control_button.setAccessibleName('Controles do Fôlego')
         self.control_button.setToolTip('Controles do Fôlego')
@@ -208,7 +249,8 @@ class MainWindow(QMainWindow):
         self.control_menu = QMenu(self.control_button)
         self.control_menu.addAction('Sair do Fôlego', self.quit)
         self.widget_position_menu = self.control_menu.addMenu('Posição do widget')
-        for label, mode in (('Widget flutuante', 'compact'), ('Lateral esquerda', 'left'),
+        for label, mode in (('Mini horizontal', 'mini'), ('Widget flutuante', 'compact'),
+                            ('Lateral esquerda', 'left'),
                             ('Lateral direita', 'right'), ('Barra superior', 'top')):
             self.widget_position_menu.addAction(
                 label, lambda checked=False, target=mode: self._show_widget_position(target))
@@ -232,12 +274,15 @@ class MainWindow(QMainWindow):
 
     def start(self):
         self.ai_monitor.start()
+        self._screen_controller.request('reconcile')
+        self._screen_timer.start()
         if self._startup_defaults:
             self.options.start(sync=True)
             self._startup_defaults = False
         self._request_history()
         if self._accessibility_factory:
             self.accessibility.start()
+        self._start_host_guard()
         if self._collector_factory is None or self._poller is not None:
             return
         if not self.tray.install():
@@ -249,10 +294,125 @@ class MainWindow(QMainWindow):
         from .workers import Poller
         collector = self._collector_factory()
         collect_fn = getattr(collector, "collect", None) or collector
-        self._poller = Poller(collect_fn=collect_fn, offload=True)
+        # Host scans can take seconds under concurrent builds. Keep the UI
+        # responsive and leave idle time between scans; the incident recorder
+        # still writes at its own 15 s cadence.
+        self._poller = Poller(collect_fn=collect_fn, interval_s=5.0, offload=True)
         self._poller.snapshot_ready.connect(self.apply_snapshot)
         self._poller.error.connect(self.show_error)
         self._poller.start()
+
+    def _screen_energy_request(self, action):
+        self.options.screen_energy_choice.setEnabled(False)
+        if not self._screen_controller.request(action):
+            self.options.screen_energy_error('Operação de tela em curso; consulte o estado antes de repetir')
+
+    def _screen_energy_tick(self):
+        if self._screen_controller.future is not None or not self.options._screen_energy_state.get('enabled'):
+            return
+        self._screen_tick_count += 1
+        self._screen_controller.request('reconcile' if self._screen_tick_count % 6 == 0 else 'attention')
+
+    def _screen_change(self, *_):
+        if self._quitting or not self.options._screen_energy_state.get('enabled'): return
+        if self._screen_controller.future is None:
+            self._screen_controller.request('reconcile')
+        else:
+            self._screen_reconcile_pending = True
+
+    def _screen_result(self, result):
+        if 'enabled' in result:
+            self.options.show_screen_energy(result)
+        attention_id = result.get('attention_id')
+        if attention_id and attention_id != self._screen_attention_id:
+            self._screen_attention_id = attention_id
+            self._wake_screen()
+
+    def _screen_error(self, message):
+        self.options.screen_energy_error(message)
+        if self._screen_controller.action != 'status':
+            QTimer.singleShot(0, lambda: self._screen_controller.request('status'))
+
+    def _wake_screen(self):
+        if not self.options._screen_energy_state.get('enabled'): return
+        if self._screen_controller.future is None:
+            self._screen_controller.request('wake')
+        else:
+            self._screen_wake_pending = True
+
+    def _screen_after_busy(self, busy):
+        if busy: return
+        if self._screen_reconcile_pending:
+            self._screen_reconcile_pending = False
+            self._screen_controller.request('reconcile')
+        elif self._screen_wake_pending:
+            self._screen_wake_pending = False
+            self._wake_screen()
+
+    def _screen_delivery_attention(self, rows):
+        ids = {(item.get('session'), item.get('event'))
+               for row in rows if isinstance(row, dict)
+               for item in row.get('pending', ()) if isinstance(item, dict)
+               and item.get('session') and item.get('event')}
+        if ids - self._screen_delivery_ids:
+            self._wake_screen()
+        self._screen_delivery_ids = ids
+
+    def _pressure_request(self, action, value=None):
+        if self._pressure_controller.future is None:
+            self._pressure_controller.request(action, value)
+        else:
+            self._pressure_next = (action, value)
+
+    def _pressure_after_busy(self, busy):
+        if not busy and self._pressure_next is not None:
+            action, value = self._pressure_next
+            self._pressure_next = None
+            self._pressure_controller.request(action, value)
+
+    def _observe_cooperative_pressure(self, level):
+        now = time.monotonic()
+        if level:
+            if level != self._screen_thermal_level or now - self._pressure_last_sent >= 45:
+                self._pressure_request('publish', 'critical' if level == 2 else 'danger')
+                self._pressure_last_sent = now
+                self._pressure_last_status = now
+            elif now - self._pressure_last_status >= 15:
+                self._pressure_request('status')
+                self._pressure_last_status = now
+        elif self._screen_thermal_level or not self._pressure_seen:
+            self._pressure_request('clear')
+        self._pressure_seen = True
+
+    def _start_host_guard(self):
+        if self._host_guard_factory is None or self._host_guard_poller is not None:
+            return
+        from .workers import Poller
+        observer = self._host_guard_factory()
+        self._host_guard_poller = Poller(observer.observe, interval_s=300,
+                                         offload=True, parent=self)
+        self._host_guard_poller.snapshot_ready.connect(self._show_host_report)
+        self._host_guard_poller.error.connect(self._show_host_error)
+        self._host_guard_poller.start()
+        self._host_guard_poller.request()
+
+    def _request_host_guard(self):
+        if self._paused:
+            self.disk.show_host_error("monitoramento pausado")
+        elif self._host_guard_poller is None:
+            self.disk.show_host_error("observador não iniciado")
+        else:
+            self._host_guard_poller.request()
+
+    def _show_host_report(self, report: dict):
+        if self._paused:
+            return
+        self.disk.show_host_report(report)
+        self.dashboard.show_host_report(report)
+
+    def _show_host_error(self, message: str):
+        self.disk.show_host_error(message)
+        self.dashboard.show_host_error(message)
 
     def _show_accessibility(self, report):
         words = {"observed": "configuração observada", "degraded": "revisão necessária",
@@ -308,6 +468,7 @@ class MainWindow(QMainWindow):
 
     def show_error(self, message: str):
         self._collection_error = message
+        self.disk.show_thermal({"state": "unknown", "reason": f"falha de coleta: {message}"})
         self.dashboard.status.setText(f"⚠ última falha de coleta: {message}")
         self._refresh_freshness()
 
@@ -358,6 +519,18 @@ class MainWindow(QMainWindow):
         signal = title_signal.compute(snapshot, self._thresholds,
                                       engine=self._health)
         self._last_snapshot = snapshot
+        thermal = self._thermal_tracker.observe(snapshot)
+        self.disk.show_thermal(thermal)
+        self.tray.show_thermal(thermal)
+        if not self._paused:
+            pressure_alert = self._pressure_alert_tracker.observe(snapshot)
+            if pressure_alert:
+                self.tray.show_pressure_alert(pressure_alert)
+        level = {'danger': 1, 'critical': 2}.get(thermal.get('state'), 0)
+        self._observe_cooperative_pressure(level)
+        if level > self._screen_thermal_level:
+            self._wake_screen()
+        self._screen_thermal_level = level
         self._last_signal = signal
         self.setWindowTitle(signal.text)
         # Uma leitura só das sessões/exclusões por amostra: os predicados são
@@ -375,8 +548,11 @@ class MainWindow(QMainWindow):
         self.dashboard.show_snapshot(
             snapshot, orphan_count=len(candidates),
             thumbnails_kb=self.disk.thumbnails_kb, extra_notes=notes,
+            pressure_status=(self._pressure_alert_tracker.visible_status()
+                             if not self._paused else ()),
             signal=signal, last_operation=self._last_operation_text())
-        self.tmpfs.show_volumes(snapshot.tmpfs, ts=snapshot.ts)
+        self.tmpfs.show_volumes(snapshot.tmpfs, ts=snapshot.ts,
+                               quality=snapshot.source("tmpfs").status)
         if self.tray.tray is not None:
             self.tray.show_snapshot(snapshot, signal=signal)
         if self._compact is not None:
@@ -406,7 +582,7 @@ class MainWindow(QMainWindow):
 
     def _apply_history(self, text):
         self._history_text = text
-        self.dashboard.last_operation.setText(text)
+        self.dashboard.show_operation(text)
         if self._compact is not None:
             self._compact.set_operation(text)
 
@@ -509,10 +685,6 @@ class MainWindow(QMainWindow):
         self._offer_kwin_rule()
         return self.hide_window()
 
-    def return_to_compact(self):
-        self.show_compact(mode='compact')
-        self.hide_window()
-
     def _offer_kwin_rule(self) -> None:
         """No Wayland do Plasma, só uma regra do KWin mantém o widget por cima; pergunta uma vez."""
         from . import kwin_rule
@@ -580,6 +752,10 @@ class MainWindow(QMainWindow):
         self._paused = True
         if self._poller is not None:
             self._poller.pause()
+        if self._host_guard_poller is not None:
+            self._host_guard_poller.pause()
+        self.disk.show_thermal({"state": "unknown", "reason": "monitoramento pausado"})
+        self._show_host_error("monitoramento pausado; última verificação não é atual")
         if self._compact is not None:
             self._compact.set_paused(True)
         self.tray.set_paused(True)
@@ -591,6 +767,8 @@ class MainWindow(QMainWindow):
         self._paused = False
         if self._poller is not None:
             self._poller.resume()
+        if self._host_guard_poller is not None:
+            self._host_guard_poller.resume()
         if self._compact is not None:
             self._compact.set_paused(False)
         self.tray.set_paused(False)
@@ -685,10 +863,15 @@ class MainWindow(QMainWindow):
             return
         if self._quitting or self.tray.tray is None:
             self._freshness_timer.stop()
+            self._screen_timer.stop()
+            self._screen_controller.close()
+            self._pressure_controller.close()
             if self._poller is not None:
                 self._poller.stop()
             if self._history_poller is not None:
                 self._history_poller.stop()
+            if self._host_guard_poller is not None:
+                self._host_guard_poller.stop()
             self.performance.shutdown()
             self._performance_jobs.shutdown()
             self._jobs.shutdown()

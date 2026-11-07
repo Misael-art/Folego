@@ -208,6 +208,10 @@ class PerformanceTab(QWidget):
         auto_row.addWidget(self.resume_button)
         layout.addLayout(auto_row)
         layout.addLayout(self.cards)
+        observed_title = QLabel("Aplicativos observados")
+        observed_title.setObjectName("section")
+        layout.addWidget(observed_title)
+        layout.addWidget(self.table, 1)
         self.bridges_title = QLabel("Pontes MCP")
         self.bridges_title.setObjectName("cardTitle")
         self.bridge_rows = QVBoxLayout()
@@ -216,8 +220,10 @@ class PerformanceTab(QWidget):
         layout.addLayout(self.bridge_rows)
         self.bridges = ()
         self.bridge_buttons = {}
+        rules_title = QLabel("Regras de fechamento")
+        rules_title.setObjectName("section")
+        layout.addWidget(rules_title)
         layout.addLayout(self.rules)
-        layout.addWidget(self.table, 1)
 
     def _path(self):
         return self._rules_path or paths.performance_rules_path()
@@ -482,5 +488,5 @@ class PerformanceTab(QWidget):
                     item = QTableWidgetItem()
                     self.table.setItem(row, col, item)
                 item.setText(text)
-                item.setToolTip(group.unit if col == 1 else "")
+                item.setToolTip(group.unit if col == 1 else text if col == len(COLUMNS) - 1 else "")
             self.table.item(row, 0).setForeground(QColor(getattr(TOKENS, token)))

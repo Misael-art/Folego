@@ -2,7 +2,7 @@ from pathlib import Path
 
 from folego.core.battery_alerts import BatteryAlertTracker, battery_band, remaining_text
 from folego.core.snapshot import BatteryInfo
-from folego.core.sysfs import read_battery
+from folego.core.sysfs import read_battery, read_external_power
 from folego.core.collector import MetricsCollector
 from folego.core.notification_tones import pcm
 
@@ -20,7 +20,7 @@ def test_battery_reading_and_eta_from_kernel_values(tmp_path):
     path = supply(tmp_path, percent='49', energy_now='12000000', power_now='6000000')
     battery, quality = read_battery(tmp_path)
     assert quality.status == 'ok'
-    assert battery == BatteryInfo(49, 'Discharging', 7200)
+    assert battery == BatteryInfo(49, 'Discharging', 7200, power_uw=6_000_000)
     (path / 'time_to_empty_avg').write_text('3600')
     assert read_battery(tmp_path)[0].remaining_s == 3600
     (path / 'time_to_empty_avg').write_text('not-a-number')
@@ -29,6 +29,24 @@ def test_battery_reading_and_eta_from_kernel_values(tmp_path):
     (path / 'charge_now').write_text('900000')
     (path / 'current_now').write_text('450000')
     assert read_battery(tmp_path)[0].remaining_s == 7200
+
+
+def test_battery_electrical_values_keep_kernel_units_and_unknowns(tmp_path):
+    path = supply(tmp_path, percent='62', status='Charging',
+                  voltage_now='8176000', current_now='1752000')
+    observed, quality = read_battery(tmp_path)
+    assert quality.status == 'ok'
+    assert observed == BatteryInfo(62, 'Charging', voltage_uv=8_176_000,
+                                   current_ua=1_752_000)
+    assert observed.power_uw is None  # no inferred watts or discharge direction
+    (path / 'power_now').write_text('14323552')
+    assert read_battery(tmp_path)[0].power_uw == 14_323_552
+    (path / 'voltage_now').write_text('unreadable')
+    (path / 'current_now').write_text('-7')
+    (path / 'power_now').write_text('100000000000000')
+    observed, quality = read_battery(tmp_path)
+    assert quality.status == 'ok' and observed.percent == 62
+    assert (observed.voltage_uv, observed.current_ua, observed.power_uw) == (None, None, None)
 
 
 def test_battery_fail_closed_and_charging_has_no_discharge_eta(tmp_path):
@@ -51,10 +69,36 @@ def test_battery_fail_closed_and_charging_has_no_discharge_eta(tmp_path):
 def test_collector_publishes_battery_quality(fake_proc, tmp_path):
     from fixtures_proc import build_proc
     build_proc(fake_proc, pids=[])
-    supply(tmp_path, percent='25', time_to_empty_now='1200')
+    supply(tmp_path, percent='25', time_to_empty_now='1200',
+           voltage_now='7600000', current_now='900000')
     snapshot = MetricsCollector(proc_root=fake_proc, sys_root=tmp_path).collect()
-    assert snapshot.battery == BatteryInfo(25, 'Discharging', 1200)
+    assert snapshot.battery == BatteryInfo(25, 'Discharging', 1200,
+                                           voltage_uv=7_600_000, current_ua=900_000)
     assert snapshot.source('battery').status == 'ok'
+
+
+def test_system_battery_ignores_peripheral_and_reports_external_power(fake_proc, tmp_path):
+    from fixtures_proc import build_proc
+    build_proc(fake_proc, pids=[])
+    supply(tmp_path, percent='90')
+    peripheral = tmp_path / 'class/power_supply/hidpp_battery_1'
+    peripheral.mkdir()
+    (peripheral / 'type').write_text('Battery')
+    (peripheral / 'scope').write_text('Device')
+    adapter = tmp_path / 'class/power_supply/ACAD'
+    adapter.mkdir()
+    (adapter / 'type').write_text('Mains')
+    (adapter / 'online').write_text('0')
+    snapshot = MetricsCollector(proc_root=fake_proc, sys_root=tmp_path).collect()
+    assert snapshot.battery == BatteryInfo(90, 'Discharging')
+    assert snapshot.source('battery').status == 'ok'
+    assert snapshot.external_power_online is False
+    assert snapshot.source('external_power').status == 'ok'
+    (adapter / 'online').write_text('1')
+    assert read_external_power(tmp_path)[0] is True
+    (adapter / 'online').write_text('unknown')
+    assert read_external_power(tmp_path)[1].status == 'error'
+    assert read_external_power(tmp_path)[0] is None
 
 
 def test_thresholds_cross_once_and_critical_repeats_every_minute():

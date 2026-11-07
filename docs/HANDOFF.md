@@ -1,4 +1,902 @@
-# Passagem para o próximo agente — atualizada em 04/11/2026
+# Passagem para o próximo agente — atualizada em 07/11/2026
+
+## Prévia 0.2.0b7: avisos e observação passiva — 07/11/2026
+
+O incremento da branch do PR #3 mantém a coleta de recursos a cada 5 s e o
+gravador de 15 s, sem outro daemon nem varredura rápida. A Central passa a
+mostrar pressão PSI sustentada mesmo sem bandeja. Se a leitura se perde após
+um alerta, aparece como desconhecida até nova avaliação; uma leitura baixa
+válida limpa o aviso. O inventário de serviços acrescenta uma consulta única
+de até 2 s no observador lento de 5 min, com cinco units nomeadas e owner
+explícito, sem reiniciar nenhuma. Units inativas e desabilitadas são apenas
+observadas. Falta de resposta torna a qualidade parcial. Um único ACK privado
+por pedido cooperativo confirma recebimento por hook opt-in do Codex, nunca
+redução efetiva de carga. Pedidos preservam ID até perto da expiração e a
+interface distingue publicação, recebimento e efeito não comprovado.
+
+QA antes do ajuste final de qualidade do inventário: 15 testes focados sem Qt,
+71 Qt; `./dev check` passou com **1292 passed, 2 skipped** headless e
+**1678 passed, 2 skipped** Qt. Suites sequenciais, HOME/XDG e temporários
+privados em disco. A zona `acpitz` chegou a 89 °C durante QA e retornou a
+75 °C; memória disponível permaneceu acima de 7 GiB, sem pressão sustentada.
+O ensaio de CLI real `./dev run disk health --json` levou **108,71 ms** na
+observação propriamente dita, sem contar bootstrap; encontrou cinco units
+nomeadas legíveis, serviço `sddm-wallpaper.service` em falha (owner ainda
+desconhecido), Btrfs sem delta, nenhum aviso NTFS recente e 242 KiB do teto
+de 4 MiB no histórico do boot. O custo não representa tendência de horas.
+O primeiro bootstrap falhou por um temporário `kdotool` que desapareceu durante
+`du`; repetição somente leitura passou. Isso merece revisão do bootstrap,
+sem apagar temporários compartilhados para mascarar a corrida.
+
+Publicação verificada: commit de produto
+`e15ddef66e5f685bb48b4819fd49ef21d0f0a1a2` no [PR #3](https://github.com/Misael-art/Folego/pull/3),
+que permanece draft e sem merge. Os seis jobs do PR passaram; os três jobs da
+[tag anotada v0.2.0b7](https://github.com/Misael-art/Folego/actions/runs/42388916502)
+também passaram nesse SHA. A [prévia pública 0.2.0b7](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b7)
+contém fonte completa, wheel, sdist e `SHA256SUMS`. Os quatro arquivos foram
+baixados de volta; os três pacotes passaram na verificação SHA-256 com o
+`SHA256SUMS` público idêntico ao local. Hashes e ambiente descartável do wheel
+estão em `.scratch/release-b7-20261107`.
+
+A instalação do checkout canônico foi atualizada para 0.2.0b7 pelo `./dev` e
+somente `app-folego@autostart.service` foi reiniciado. A unit ficou ativa no
+PID **465224**, sem erro no journal; KWin encontrou a janela de 900×593 px e
+ela ficou ativa. Depois de quatro minutos, o processo tinha ~132 MiB RSS e
+11 s de CPU acumulada (~4,6% de um núcleo, incluindo a abertura). São uma
+amostra curta e métrica do processo inteiro, não o custo isolado da coleta.
+O histórico do mesmo boot continuou crescendo; três pontos recentes tinham
+intervalos de ~20 s, leitura de 91–140 ms, fonte completa e bateria a 30% em
+descarga. Esse intervalo real deve continuar sendo observado, sem aumentar a
+frequência de polling somente para aproximar o alvo nominal de 15 s.
+
+Continuam sem aceite: retenção que descarte amostras com prova de identidade e
+integridade, boot antes da GUI/pstore, redução causal da carga após ACK,
+validação física do aviso/energia/dock e guia de recuperação de disco com
+pré-checagem de cópia. Não executar reparo ou provocar pressão para cobrir
+essas lacunas. PhaseZero mantém boot/pstore; SteamZero mantém Gamescope/GPU.
+
+## Pressão sustentada e folga da coleta — 07/11/2026
+
+Incrementos de código `e6bdd59` e `a6b2b2f` na branch do PR #3. A validação do
+texto/agrupamento do alerta passou em 19 testes focados sem Qt e 30 com Qt;
+os 49 testes dos módulos de interface passaram após a guarda de pausa.
+Depois de persistir `avg60` no histórico, 19 testes focados sem Qt e 17 Qt
+passaram. `git diff --check` passou; a suíte completa anterior aprovou o
+mesmo restante do produto antes desse acréscimo localizado.
+
+Revisão do monitor passivo em
+[evidência e limites](handoff/validation/pressure-alert-2026-11-07/README.md).
+O histórico do boot atual tinha 227 pontos schema 2, com duração mediana de
+67,62 ms e p95 de 1.785,23 ms para a fase de leitura; é parede, não CPU. O
+poll da GUI era 2 s e passa a 5 s no código, sem alterar o gravador de 15 s,
+seus tetos ou fsync. O aviso de capacidade começa em 85% de 4 MiB/boot ou
+32 MiB totais, sem rotação nem descarte.
+As médias PSI de 60 s passam a integrar a mesma linha privada e o dossiê
+de boot, com pequeno aumento de bytes por amostra.
+
+Novo alerta de PSI usa somente dados já coletados, exige fonte `ok`, idade
+≤15 s e pressão em avg60 confirmada ao longo de 15 s sem lacuna >20 s.
+Memória ≥5%, I/O ≥10% ou CPU ≥25% mostram um aviso de bandeja por tipo a
+cada 5 min, com origens simultâneas reunidas, horário, idade e orientação
+manual. Isso não atribui causa do reset nem reduz a carga automaticamente.
+Sem bandeja, a aba Disco
+continua mostrando PSI; apresentação proativa alternativa segue pendente.
+
+QA: `./dev check` teve headless 1.289 aprovados/2 ignorados, mas Qt sofreu
+segfault nativo no teardown de teste, sem aprovação nessa tentativa. O teste
+novo que duplicava a ligação de objetos foi removido; os 49 testes dos
+módulos Qt envolvidos passaram e `./dev test` completo passou com 1.674
+aprovados/2 ignorados. Após o ajuste final de texto e agrupamento de fontes,
+19 testes focados headless e 30 Qt passaram; a suíte completa não foi
+repetida. Janela própria no KDE/Wayland real abriu Disco e
+orientação com estado sintético, sem efeitos no host; não certifica entrega
+de notificação real. A GUI residente não foi reiniciada; a nova frequência
+e o aviso serão ativados na próxima abertura normal. Persistem retenção segura,
+cobertura antes da GUI e evidência física/externa dos resets; ver roadmap.
+
+## Novo corte às 09:11 e preservação GitHub — 07/11/2026
+
+Registro e regra de continuidade em `7159418`, enviado à branch do PR #3.
+Revisão de diferenças e `git diff --check` passaram; não se repetiu suíte
+pesada após o reset para não criar pressão. O código do monitor já estava no
+remoto em `df83a6a`, com checks headless, Qt e CLI aprovados.
+
+O boot `5f684953-1eae-46d7-b025-0f5a29887a69` terminou sem registro de
+desligamento normal. [Investigação do episódio](handoff/validation/reset-2026-11-07-0911.md):
+houve um build RetroDevStudio com pico de 3,4 GiB sobreposto à QA do Fôlego;
+às 09:07:59, `acpitz` marcou 100 °C, zram cresceu e PSI memória/I/O subiu.
+Às 09:11:26, última amostra, havia ACPI 98 °C e bateria 68% descarregando,
+mas RAM ainda disponível e PSI memória/I/O baixo. Journal prossegue até
+09:11:31 sem panic, OOM, erro NVMe ou motivo térmico conclusivo. Btrfs não
+teve delta novo. O mecanismo do reset permanece **indeterminado**; revisar
+concorrência de cargas e preservar trabalho antes de ensaios adicionais.
+
+Nove objetos Git locais ficaram vazios após o corte. O HEAD `df83a6a` já
+estava no PR #3 do GitHub com checks aprovados; os objetos foram restaurados
+individualmente de cópia bare verificada do remoto. `git fsck` local passa e
+o checkout voltou a ler o HEAD. A alteração preexistente de `AGENTS.md` foi
+revisada e preservada neste incremento, com reforço explícito de capacidade e
+publicação no GitHub; nenhum stage global ou reset foi usado.
+O usuário pediu que **todos os agentes neste projeto preservem cada incremento
+revisável no GitHub**, além do desenvolvimento limpo: commit pequeno, push,
+confirmação do SHA remoto e checks, sem incluir dados privados. A regra também
+foi fixada na memória A em `_rules/folego-github-preservation-20261107.md`.
+Dados fora do Git precisam de backup independente antes de eventual formatação.
+Uma formatação do NVMe não é correção comprovada para este reset.
+
+No novo boot, a GUI já iniciou com schema 2 e está registrando eletricidade
+da bateria e duração da coleta; não houve novo corte com essa qualidade de
+amostra. SMART atual exigiria acesso privilegiado e não foi lido; pstore e
+flags de detecção pertencem ao PhaseZero. Não fazer scrub/reparo pesado no
+volume ativo para tentar reproduzir o problema.
+
+## Dossiê leve de reinícios — 07/11/2026
+
+Incremento `1fb220f` na branch/PR #3. O observador lento do Fôlego agora
+reconcilia até três boots encerrados com a última amostra privada de cada boot
+e o último evento **retido** no journal. A leitura é limitada a 64 KiB e 80
+amostras por boot, com cache dos boots anteriores durante a vida do observador.
+O boot atual só usa o próprio ID. Ausência, janela ilegível, schema antigo sem
+proveniência e registros incompletos são estados distintos; nenhum significa
+host saudável. A distância amostra→journal usa monotônico quando disponível e
+marca o relógio civil como menos confiável nos registros antigos. O resumo
+aparece em `disk health`, no cartão Disco e em **Copiar dados**. O observador
+informa a duração da consulta. Não há novo daemon, escrita, rotação, reparo,
+SMART ou sondagem periódica Bluetooth/DRM.
+
+No host real, os boots com amostra tiveram 7 s e 11 s até os últimos eventos
+retidos; o boot de cerca de 14 s segue sem qualquer amostra. Isso não data o
+reset nem estabelece sua causa. Duas consultas do mesmo observador mediram
+67,27/25,15 ms de parede e 11,89/4,45 ms de CPU do processo Python; falta
+medição prolongada que isole também subprocessos. O cartão abriu em um
+processo próprio no KDE/Wayland real, exibiu o resumo e encerrou sem efeito.
+A GUI residente não foi reiniciada: ela carregará este incremento na próxima
+abertura normal; o CLI já usa o novo código.
+
+QA final: `./dev check` sequencial, **1286 passed, 2 skipped** headless e
+**1670 passed, 2 skipped** Qt offscreen; `git diff --check` passou. Os testes
+focados cobrem boot sem arquivo, schema antigo, janela de 64 KiB, linha
+interrompida, intervalo monotônico e integração do observador. As áreas de QA
+criadas nesta rodada foram preservadas, sem limpar caches. `AGENTS.md` já
+modificado antes desta tarefa não foi incluído. Evidência e limites em
+[coleta passiva](handoff/validation/passive-energy-2026-11-07/README.md).
+Permanecem pendentes: cobertura antes da GUI, retenção segura perto dos 4 MiB
+por boot, pstore/journal completo com PhaseZero e correlação GPU com SteamZero.
+SMART continua sem helper autorizado; não introduzir privilégio periódico.
+
+## Energia, calor e pressão nos resets: coleta passiva — 07/11/2026
+
+Incremento `02f586b` na branch/PR #3. A cronologia por boot ID e a distinção
+entre leitura histórica e host atual estão em
+[evidência e limites](handoff/validation/passive-energy-2026-11-07/README.md).
+Nos cortes de 06/11, a última amostra do primeiro tinha ACPI 97 °C e
+compilação; o boot de ~14 s não iniciou a GUI Fôlego; a última do terceiro
+tinha ACPI 83 °C, PSI
+CPU 41,63% e eventos Bluetooth posteriores à última amostra. O ledger não
+registrou operação Fôlego na janela 23:23–23:55. Btrfs permanece sem delta no
+boot atual e a cápsula SMART anterior não mostrou erro de mídia. Nenhuma dessas
+observações identifica a causa; desconexão do carregador foi voluntária.
+
+O mesmo gravador de ~15 s agora preserva tensão/corrente/potência da bateria
+quando o kernel as expõe, com µV/µA/µW, sem inferir potência ou direção. Schema
+2 acrescenta milissegundos, monotônico por boot, duração da fase de leitura e
+qualidade esparsa das fontes. Campos ausentes são `null`; schema antigo continua
+legível sem ganho retroativo de qualidade. Limites de 4 MiB por boot/32 MiB no
+total e fsync limitado não mudaram. O CLI mostra as novas medidas. A GUI
+residente não foi reiniciada; a gravação nova começa na próxima abertura normal.
+
+Medida de 20 s no boot atual, sem separar efeitos de outras tarefas: supervisor
+de entrada 3,24%, serviço de desempenho 1,35% e GUI 7,90% de um núcleo. A GUI
+inclui renderização, portanto isso não isola o coletor nem prova causa do reset.
+Uma consulta limitada ao journal Bluetooth/DRM sem entradas levou ~11 ms;
+polling adicional não foi adotado porque poderia perder os segundos finais e
+duplicaria o journal PhaseZero. SMART segue sem sondagem periódica privilegiada. Owner
+PhaseZero mantém ICC/journal/pstore; SteamZero investiga GPU/Gamescope.
+
+QA: 48 testes headless focados passaram; `./dev check` sequencial final:
+**1282 passed, 2 skipped** headless e **1666 passed, 2 skipped** Qt offscreen;
+`git diff --check` passou. Leitura CLI do histórico real schema 1 e consulta
+somente leitura do observador de disco confirmaram compatibilidade e baseline
+Btrfs estável; testes de coleta usaram sysfs/arquivos descartáveis. Não houve
+validação de queda física de tensão, calor no corte ou recuperação pós-reset.
+Áreas de QA concluídas/falhas foram movidas para retenção revisada, sem apagar
+evidência. `AGENTS.md` preexistente não integra este incremento. Próximo passo:
+dossiê pós-boot com lacunas explícitas e retenção segura antes do limite de
+4 MiB por boot, em coordenação com os owners do journal e SMART.
+
+## Faixa mínima flutuante e navegação entre visualizações — 07/11/2026
+
+Incremento de interface `710197bd8ca6590c2d598eff83feae11b10cfa10` na
+branch registrada, para o PR #3. A nova faixa **Mini horizontal** mede
+384 × 46 px lógicos e usa a janela, o coletor e os dados do widget existente.
+Mostra estado por palavra e cor, CPU agregada, temperatura com identificação
+da fonte e RAM. Leitura antiga/ausente vira `—`. Calor próximo dos limites,
+limite crítico e bateria crítica em descarga afetam também o estado breve;
+mensagens de falha de posicionamento ficam visíveis como **Aviso**, com texto
+completo no tooltip. A alça pontilhada move a faixa; **Expandir** leva ao
+compacto, a grade abre a Central e o seletor oferece os cinco formatos em um
+nível, com marca no atual. O mesmo seletor existe nos demais widgets; a Central
+também oferece Mini em **Posição do widget**. O
+[mockup e os critérios](handoff/validation/mini-widget-2026-11-07/README.md)
+explicam a hierarquia e os limites do formato.
+
+QA após a última alteração: `./dev check` sequencial com **1280 passed,
+2 skipped** headless e **1664 passed, 2 skipped** Qt offscreen; `git diff
+--check` passou. Testes focados cobrem navegação mini/compacto/laterais/topo/
+Central, retorno à aba anterior, arraste e posição salva em X11, dados antigos,
+calor/bateria críticos e confirmação de geometria no caminho Wayland. No
+KDE/Wayland real, um processo de QA do próprio Fôlego abriu a faixa em uma
+linha, exibiu o estado crítico sem corte e confirmou com o KWin a colocação
+384 × 46 e a volta ao compacto; capturas estão em
+`.scratch/dev-tests-reviewed/mini-widget-20261107/`. Não houve arraste físico
+com o dedo/mouse nem teste de várias horas. A GUI residente não foi reiniciada:
+o modo aparecerá na próxima abertura normal, sem interromper a sessão atual.
+As áreas de QA interrompidas e concluídas foram revisadas e preservadas em
+`.scratch/dev-tests-reviewed/`; nenhuma evidência ou cache compartilhado foi
+apagado. A alteração preexistente de `AGENTS.md` não integra este incremento.
+
+## Roadmap de resiliência e primeiro incremento — 07/11/2026
+
+O pedido é melhorar o **Fôlego**, sem alterar serviços de PhaseZero,
+SteamZero, RetroFE ou do sistema. Os sinais dos resets de 06/11 não comprovam
+uma causa única: ACPI 97 °C e `rustc` perto de um, boot gráfico de ~14 s com
+abortos de `kscreen-doctor`, e ACPI 83 °C/PSI CPU alto com eventos Bluetooth
+HCI no seguinte. O SD ausente descarta sua sobrecarga como explicação suficiente
+para os episódios posteriores. O [roadmap de resiliência](ROADMAP-RESILIENCIA-HOST.md)
+registra evidência, apresentação e prioridades para histórico contínuo com
+retenção segura, dossiê pós-boot, alertas, serviços externos observados, saúde
+da própria coleta, alívio cooperativo e economia de energia.
+
+Primeiro incremento `64aa566` na branch/PR #3: o parser de bateria agora exclui baterias
+de periféricos com `scope=Device`; a alimentação externa é observada
+separadamente. A amostra de 15 s guarda bateria/estado/energia externa somente
+com fonte válida. Falha do gravador aparece na qualidade da amostra na Central;
+capacidade próxima do limite aparece na aba Disco e CLI. O limite segue em
+4 MiB por boot/32 MiB total, sem descartar automaticamente evidência. Dados
+antigos continuam legíveis com campos novos ausentes. No hardware real,
+`BAT1` foi lida em 82%, descarregando, `ACAD` offline; a bateria HIDPP do
+periférico foi ignorada. A GUI em execução (iniciada antes desta alteração)
+não foi reiniciada: o novo comportamento residente entra na próxima abertura
+normal, sem interromper a sessão do usuário.
+
+QA: 15 testes headless e 16 Qt focados passaram; o caso adicional de histórico
+antigo consta dos gates completos. `./dev check` sequencial:
+**1280 passed, 2 skipped** headless e **1660 passed, 2 skipped** Qt offscreen;
+`git diff --check` passou. O cartão foi aberto por ~400 ms em processo Qt
+isolado no KDE/Wayland real e a captura revisada em
+`.scratch/dev-tests-reviewed/resilience-20261107/host-health-wayland.png`;
+isso não testa reinício físico, persistência por horas nem o compositor da GUI
+residente. A tentativa inicial de QA foi bloqueada pelo limite de 20 áreas;
+quatro áreas encerradas, sem referência em docs, foram **movidas e preservadas**
+em `.scratch/dev-tests-reviewed/resilience-20261107/` para liberar os gates.
+Nenhum cache compartilhado foi limpo e nenhum serviço externo foi tocado.
+Próximo passo: política de retenção segura e dossiê de boot, com teste de
+incidente em fontes descartáveis antes de qualquer retenção automática.
+
+## Recuperação de perfis do trackpad e microfone — 06/11/2026
+
+Incremento de código `117cf1f35457a530b1804d053cf4dab9f96de9f5`, na branch
+registrada e no PR #3. No episódio das 17:06, a enumeração do controle e da
+placa de som fez ambos os cartões parecerem saudáveis, embora a Steam estivesse
+no perfil `RetroFE Steam Deck Gamepad` sem saídas mouse/teclado e a placa acp5x
+em `Pro Audio`. O PhaseZero também tinha uma preferência de headset ausente.
+A operação antiga e incerta de toque, junto ao guardião PhaseZero ativo,
+bloqueava a política KWin inteira. Sua causa original de troca de perfis não
+foi demonstrada; a correção manual informada pelo usuário restaurou Desktop e
+`HiFi (Mic, Speaker)`, com teste físico de trackpad e áudio relatado pelo usuário.
+
+O monitor residente agora consulta o perfil real da Steam e o perfil/fonte
+PipeWire, separa essas duas guardas do bloqueio antigo KWin e só repara a falha
+exata após duas observações. Aprende a referência saudável em duas leituras;
+grava intenção antes do efeito, revalida boot, KWin, Steam, jogo/lease,
+template, placa e preferência PhaseZero, e verifica o resultado. Não retira
+mute, troca fonte padrão, reinicia áudio/Steam ou mexe em perfil de jogo.
+Preferência PhaseZero divergente, entrada externa, API Steam desconhecida e
+resultado incerto bloqueiam a ação. O limite é três tentativas por hora e
+120 s entre elas, com disjuntor persistente. CLI `profile-reconcile`,
+`profile-rearm` e `profile-capture` fornecem recuperação manual do estado.
+Contrato e limites em [ACESSIBILIDADE.md](ACESSIBILIDADE.md).
+
+Host atual às 18:04 -03: `folego-accessibility.service` reiniciado uma vez,
+`active/running`, PID 240787, escopo novo no status. Após duas observações,
+política `enabled=true` registrou as referências de `touchpad` e `microphone`;
+zero tentativas e nenhum disjuntor. Steam indica Desktop com mouse/teclado,
+PipeWire indica `HiFi (Mic, Speaker)` e `mic-biglinux`. A unit da GUI própria
+também foi recarregada, PID 244046. Na sessão KDE/Wayland real, os cartões
+mostraram “guarda automática ativa” e o aviso antigo KWin separado. Nenhum
+perfil foi degradado artificialmente, nenhuma sessão foi reiniciada e não houve
+teste de efeito automático no hardware defeituoso. Uma recorrência natural
+permitirá conferir o reparo no hardware, seguido de teste físico de gesto/voz.
+
+Complemento no responsável opcional: PhaseZero commit
+`154225b3e4b7dcf4a21331e297eefe893a08b588`, PR #132 draft, impede que seu
+watcher substitua a preferência interna saudável por `pro-audio` com os
+controles do microfone desligados ou por headset indisponível. Isso fecha a
+janela de três segundos em que ele poderia salvar a falha antes da coleta do
+Fôlego. O serviço PhaseZero foi recarregado, PID 307531, com preferência
+`HiFi (Mic, Speaker)` e `mic-biglinux` preservadas. O Fôlego continua
+independente: se o PhaseZero não estiver presente, usa sua própria referência.
+O PR PhaseZero inclui commits anteriores da branch de continuidade; tentativa
+de publicar branch isolada foi bloqueada pela guarda oficial e não foi forçada.
+
+Validação: 13 testes focados da guarda; `./dev check` final com **1276 passed,
+2 skipped** no núcleo e **1655 passed, 2 skipped** na GUI Qt offscreen, em
+áreas privadas, sequenciais. O wrapper recusou uma tentativa intermediária da
+GUI ao chegar ao limite de 20 áreas de QA; após revisar e remover somente as
+áreas descartáveis desta tarefa, o gate completo passou. A checagem de diff
+passou. CI do novo SHA ainda precisa ser conferido após push; sem merge/release.
+Preservar a alteração preexistente de `AGENTS.md`, que não integra este commit.
+
+## Economia de tela e pedido cooperativo — 06/11/2026
+
+Incremento integrado no commit `5544fd157fc3ebfd4e6ce0be0dafd08f91926ff6`
+da branch registrada e do PR #3.
+**Opções → Economia da tela · Steam Deck** começa desligada. Ao ativar, guarda
+antes os seis valores anteriores do PowerDevil, usa 120 s na bateria e 180 s
+na tomada, e reverte somente valores ainda sob controle do Fôlego. Consulta
+KScreen/KWin por worker; fullscreen, monitor externo e leitura desconhecida
+pausam o temporizador. Um monitor externo ativo permite desativar apenas o
+painel eDP, com intenção persistente, verificação posterior e recuperação do
+painel quando o externo desaparece. Entrega confirmada, calor urgente/crítico
+e evento de revisão/encerramento do hook pedem que KScreen reacenda a tela.
+O [contrato e os limites](ENERGIA-E-AGENTES.md) descrevem dependências e
+comportamento. Não há suspensão da sessão, ajuste de brilho/perfil ou sinal a
+processos.
+
+O pedido térmico cooperativo usa arquivo de sessão privado com ID, boot e
+validade de 90 s; o hook `folego-agent-hook` apenas entrega contexto ao Codex.
+Ele não confirma que o agente reduziu a carga. O `hooks.json` do usuário neste
+host foi preservado e acrescido dos eventos `PreToolUse`, `PermissionRequest`
+e `Stop`, com backup privado anterior. Os novos hooks **dependem da revisão de
+confiança do Codex em `/hooks`**; não foi simulada essa confiança. Outros
+agentes ainda não têm canal suportado de alívio.
+
+Teste focado: 14 casos Qt de opções/tela e 3 casos headless do pedido/hook;
+após corrigir o encerramento dos dois backends, 48 casos focados de janela,
+dock, alerta e ciclo de vida passaram. Uma tentativa completa anterior teve
+**1263 passed, 2 skipped** no núcleo e falhou na GUI ao fechar backends sem
+`close`; seu log está preservado em `.scratch/dev-tests-reviewed`. A repetição
+com a correção passou: **1263 passed, 2 skipped** no núcleo e **1640 passed,
+2 skipped** Qt offscreen. HOME/XDG e temporários privados, sem efeitos no host.
+O KDE/Wayland real confirmou a opção no topo da aba e o ciclo curto de ativar,
+reconciliar, pedir `DPMS on` e restaurar PowerDevil. A opção observou a inibição
+de ociosidade já mantida por outro aplicativo, sem forçar a tela a apagar.
+O arquivo de intenção foi removido após restauração e o painel eDP permaneceu
+`on`. Captura própria preservada em
+`.scratch/dev-tests-reviewed/screen-energy-options-wayland-final-20261106.png`.
+Sem dock físico conectado, o remapeamento real das janelas, hotplug e autonomia
+em bateria seguem sem certificação; o teste de dock usa topologia descartável.
+O gate final da versão `0.2.0b6`, após reduzir a sondagem de tela cheia para
+30 segundos e usar o sinal imediato do Qt no hotplug, passou com **1263 passed,
+2 skipped** no núcleo e **1641 passed, 2 skipped** Qt offscreen. Os 43 casos
+focados de tela e ciclo de vida também passaram. A mudança reduz consultas em
+bateria e mantém recuperação imediata quando o Qt informa remoção de monitor.
+
+Publicação: seis jobs de produto do PR #3 passaram nesse SHA; os três jobs da
+[tag v0.2.0b6](https://github.com/Misael-art/Folego/actions/runs/42242294738)
+também passaram. A [prévia pública](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b6)
+foi publicada em 06/11/2026 às 15:24:06 UTC, com tag anotada nesse commit.
+Fonte completa, wheel, sdist e `SHA256SUMS` foram baixados de volta e conferidos
+byte a byte contra os artefatos locais. O wheel instalado em venvs descartáveis
+passou CLI sem Qt, `doctor` e preservação do estado ao remover a GUI. O pacote
+inclui o entrypoint `folego-agent-hook`; o fonte completo inclui `dev` e
+`uv.lock`. Arquivos locais e relatório de instalação em
+`.scratch/release-b6-20261106`.
+
+| Asset público | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `Folego-0.2.0b6-source.tar.gz` | 21.799.335 | `0e3e7dfab4ed76903b6871ed5b24b3555d8a80673f42f8612b5c2f9a6ac530d4` |
+| `folego-0.2.0b6-py3-none-any.whl` | 487.807 | `ad52de9cbf257c268714a41e5bf38e4cd6c43d8ca211049e3f6f8c6ad06a6326` |
+| `folego-0.2.0b6.tar.gz` | 680.006 | `1a2b8b64ab72be6872e58e6cffa258413ea7baa0d79c30853c33db4c76b47a71` |
+| `SHA256SUMS` | 281 | `ea328431c238a56c4af6f721695be794204cbfddc994f03a0c9a6cccab0a732f` |
+
+O serviço existente `app-folego@autostart.service` foi reiniciado uma vez após
+o push do código: PID **1424153**, `active/running`, `Result=success`, sem avisos
+no journal recente. Tela interna `eDP-1` permaneceu `on` e a preferência da
+economia está desligada. O arquivo de pedido cooperativo não existia em
+temperatura normal. A tag permanece no commit de produto; este registro
+documental posterior avança apenas a branch do PR. **Sem merge.**
+
+## Alerta térmico e alívio cooperativo proposto — 06/11/2026
+
+O canal cooperativo descrito nesta seção era uma proposta naquele commit;
+consulte a implementação e os limites atuais na seção anterior.
+
+Incremento integrado no commit `228366ba2866cd8f7bed90f101b9ec5e096a7daf`.
+O card de temperatura da aba Disco agora acompanha os limiares da avaliação
+geral e distingue a leitura atual do pico recente. No sensor ACPI deste host,
+95–99 °C pede atenção, 100–104 °C pede redução imediata da carga e a partir de
+105 °C aparece o limite crítico informado pelo equipamento. Esses valores são
+derivados dos limites da própria zona; sem leitura válida/fresca ou sem limite
+compatível, não se presume segurança. O card mostra os limites passivo e crítico
+separadamente. A bandeja, quando disponível, emite avisos distintos ao subir de
+faixa, com repetição limitada, apenas para calor atual. Não houve ajuste de
+cooler, pausa de agente nem efeito automático no host.
+
+Testes focados: **30 passed** no núcleo e **15 passed** na GUI; o primeiro
+`./dev check` sequencial passou com **1260 passed, 2 skipped** headless e
+**1632 passed, 2 skipped** Qt offscreen. Após acrescentar recusa explícita de
+qualidade inválida da fonte, o teste focado final do núcleo passou (**5 passed**).
+Uma repetição do `./dev check` passou no headless (**1260 passed, 2 skipped**),
+mas teve três falhas em testes de tempo/geometria do widget compacto, sem
+alteração nesse componente. A suíte isolada do widget passou (**41 passed**) e
+uma repetição completa de `./dev test` passou (**1632 passed, 2 skipped**).
+Os registros da falha e dos testes verdes foram preservados; não houve
+afrouxamento de teste. QA em HOME/XDG privados e áreas preservadas de
+`.scratch/dev-tests-reviewed`.
+Janela própria no KDE/Wayland real mostrou o card de urgência vermelho e os
+limites legíveis em 900 × 650; captura
+`.scratch/dev-tests-reviewed/thermal-alert-wayland-20261106/card-themed.png`.
+Essa prova visual não certifica a entrega da notificação pelo compositor; os
+dados da janela foram sintéticos. A observação física posterior está abaixo.
+Após o push, a unit de sessão `app-folego@autostart.service`, que executa este
+checkout, foi reiniciada uma vez para carregar o código. O processo anterior
+encerrou ordenadamente e a unit voltou `active/running`, `Result=success`, PID
+128602 às 06:17:40 -03. Não foi gerado calor artificial no host.
+
+Verificação somente leitura em 06/11, após mais de quatro horas de execução:
+o mesmo processo seguia ativo, a bandeja estava registrada no Plasma e o
+histórico do Fôlego tinha 997 amostras desde 06:17:43. O sensor físico `acpitz`
+alcançou ao menos 95 °C em 15 amostras e 100 °C às 09:32:55; nenhuma amostra
+chegou a 105 °C. Isso confirma leitura real nas faixas de atenção e urgência,
+sem provocar aquecimento. O histórico não registra envio nem apresentação das
+notificações pelo compositor, portanto a entrega visual não está certificada.
+O controle cooperativo dos agentes continua apenas proposto.
+
+O desenho de alívio cooperativo está em `docs/DESIGN.md`: pedido local com ID,
+boot, prazo, confirmação e disjuntor para agentes que optarem por participar.
+Cada owner reduziria paralelismo ou pausaria o próprio trabalho após checkpoint;
+ausência de confirmação permanece desconhecida. Não há API de controle de
+Codex/Qoder integrada nem autorização para congelar cgroups, sinalizar processos
+arbitrários ou alterar a unit/scope misto da interface e do agente. Próximo:
+confirmar com os owners um canal suportado de pedido/ACK e projetar opt-in e
+reconciliação antes de acrescentar qualquer executor.
+
+## Recuperação NTFS pelo Linux e registro de incidentes — 05/11/2026
+
+Incremento integrado no commit `e051952e4e0bbe0fdaf13bf48a5e17e3b60766f9`.
+O pedido de recuperação real do cartão foi autorizado, mas a pré-checagem
+somente leitura ainda bloqueia qualquer efeito: `/dev/mmcblk0p1`, UUID
+`58D14C064972BE55`, está montado `rw` em `/mnt/sdcard`; não há outro disco
+persistente conectado, o NVMe oferece apenas cerca de 124 GiB livres para um
+volume NTFS com cerca de 285 GiB ocupados, a conta não tem leitura bruta sem
+autenticação e `ddrescue` não está instalado. Uma imagem integral da partição
+exige **538.345.104.998 bytes livres** com a margem adotada pelo plano. Nenhuma
+desmontagem, correção, scrub ou cópia do cartão ocorreu. O processo
+`lowntfs-3g` PID 3504 confirma a origem `/dev/mmcblk0p1` dos avisos; três
+inodes de índices se repetiram no boot atual. Isso confirma erro de metadados
+NTFS, mas não a causa do reinício nem uma falha física específica.
+
+O Fôlego agora orienta uma recuperação Linux: preservar dados, criar imagem
+retomável do volume desmontado, investigar/corrigir somente cópias e restaurar
+após verificação. A aba Disco agrupa os inodes de índice distintos visíveis no
+journal limitado, sem percorrer o SD. `disk recovery` faz pré-checagem de
+identidade, montagem, leitura bruta, ferramenta, ancestral físico e espaço do
+destino; não cria imagem nem autoriza um efeito futuro. `disk timeline` lê
+amostras privadas de RAM, swap, PSI, temperatura e maior CPU que o worker da
+GUI grava a cada 15 s, até 4 MiB por boot e 32 MiB no total. Sem GUI ativa,
+fonte válida ou espaço no histórico, o dado fica ausente/desconhecido; não se
+infere estabilidade. A escrita fica no estado XDG do Fôlego, nunca no cartão.
+`disk timeline --boot-id <ID>` consulta amostras de um boot preservado mesmo
+depois de avançar o histórico recente; ID inválido é recusado.
+
+Validação em HOME/XDG e QA privados: testes focados de núcleo **8 passed**;
+teste GUI focado **5 passed**; `./dev check` sequencial **1259 passed, 2 skipped**
+headless e **1630 passed, 2 skipped** Qt offscreen. A primeira tentativa ampla
+teve uma falha na simulação de permissão do destino, corrigida sem afrouxar o
+guard; o registro dela foi preservado em `.scratch/dev-tests-reviewed`.
+Após a consulta por boot e a recusa de eventos malformados, as suítes finais
+repetiram **1260 passed, 2 skipped** com `./dev test-headless` e
+**1631 passed, 2 skipped** com `./dev test`. Nenhum gate foi afrouxado.
+`disk recovery /dev/mmcblk0p1 --destination /home/misael/Projects/Folego --json`
+retornou `can_image=false` com quatro bloqueios: origem montada, leitura bruta,
+ferramenta ausente e espaço insuficiente. Próximo: obter destino externo
+persistente independente com ao menos 539 GB livres, identificar consumidores,
+autenticar pelo fluxo oficial e instalar a ferramenta necessária pelo método
+revisado. Revalidar tudo antes de copiar; não reparar o original antes de cópia
+certificada. A verificação visual KDE/Wayland e o registro do monitor real
+foram realizados após reabrir somente `app-folego@autostart.service`. Após o
+commit, a unit foi reiniciada para carregar a correção final: PID **536652**,
+`active/running`, `Result=success`; `disk timeline --json` leu 58 amostras do
+boot atual. O fluxo real Central → Disco →
+Verificar agora mostrou três índices NTFS, o contador Btrfs estável e a última
+amostra local com horário curto. O histórico incluiu um pico ACPI de 94 °C
+durante um `rustc` de outra tarefa e, após o último restart, 97 °C às 19:54:35.
+Uma leitura direta do sensor indicou 80 °C às 19:54:49, com pressão de memória
+e I/O baixa; a relação com os reinícios anteriores permanece desconhecida. A
+captura foi inspecionada no KDE/Wayland pela ferramenta de desktop; não há
+aceite de duração longa. Em uma imagem NTFS descartável de 32 MiB na área de
+QA revisada, `mkntfs -F -Q`, `ntfsfix --no-action` e
+`ntfsresize --check --no-action` terminaram com código 0; esse ensaio não
+certifica a recuperação dos índices corrompidos do cartão.
+
+## Travamento observado em 05/11/2026 e correção da leitura de boots
+
+Investigação somente leitura do host, sem reproduzir o travamento. O `last -x`
+marca o boot iniciado às 04:42 como interrompido antes do seguinte, às 16:03;
+o journal desse boot só reteve mensagens de 14:56 a **15:18:46**. Não há pedido
+de desligamento no recorte final. A máquina ainda emitia logs às 15:18:46;
+o intervalo até 16:03 não revela quando deixou de responder nem quem a
+reiniciou. Os boots seguintes terminaram de modo **ordenado**: às 16:16:01 o
+`systemd-logind` registrou pressão curta da tecla de energia e às 17:29:29 o
+`sddm` recebeu `PowerOff` do greeter. `last -x` confirmou os dois shutdowns.
+
+No boot interrompido, `plasmashell` abortou às 15:01, 15:03, 15:08 e 15:12;
+três relançamentos relataram falha de inicialização do plugin Qt, sem core
+disponível. O diário continuou ativo depois disso, então essas falhas explicam
+instabilidade visual, mas não comprovam o colapso do kernel. Entre 15:00 e
+15:18, o `lowntfs-3g` emitiu 319 avisos de fixup e 319 de índice corrompido
+no cartão `/dev/mmcblk0p1` montado em `/mnt/sdcard`. O `systemd-swap` expandiu
+o pool com `zram2` às 15:04, usou backing `/dev/loop12` e registrou writeback
+de 32.707 páginas frias às 15:18:19. São correlações temporais, sem prova
+causal. No journal retido não há OOM, panic, lockup ou erro de controlador
+NVMe/MMC na janela final. O Btrfs seguiu com `corruption_errs=6741` e os
+contadores de leitura, escrita, flush e geração em zero, sem delta novo.
+
+Os boots anteriores usavam `nowatchdog` e `nosoftlockup` em `/etc/default/grub`,
+o que reduz a chance de um travamento gerar uma pilha útil. O boot atual usa
+`quiet splash steamzero.gamemode=1` e registrou o NMI watchdog habilitado;
+essa diferença também impede comparação controlada de estabilidade. Acesso
+sem privilégio não permitiu ler `/sys/fs/pstore` nem SMART do NVMe. Não houve
+alteração de boot, swap, serviços, mounts, nem tentativa de reparo. Próximo:
+preservar os dados insubstituíveis do SD, obter SMART/pstore por autenticação
+oficial se disponível e observar um novo episódio com registro persistente de
+temperatura, PSI, swap e I/O, sem provocar carga para reproduzi-lo.
+
+O monitor de boots do Fôlego foi corrigido em `11923d2`: procurar só nas últimas 40 linhas
+classificava os dois desligamentos limpos como inconclusivos, pois o ruído de
+shutdown escondia o evento. Agora consulta o evento específico do `logind`
+em cada boot; ausência permanece inconclusiva. A consulta real passou a
+mostrar **1 boot inconclusivo e 2 com desligamento registrado**. Teste focado
+passou em HOME/XDG privados. `./dev check` sequencial: **1255 passed, 2 skipped**
+sem Qt em 26,44 s; **1626 passed, 2 skipped** Qt offscreen em 106,36 s. As
+árvores de QA concluídas foram preservadas em `.scratch/dev-tests-reviewed`.
+A prova de desligamento não atribui causa ao boot inconclusivo.
+
+## Saúde do host e guarda preventiva — 05/11/2026
+
+O incremento `59c5ff5` na branch canônica e no PR #3 acrescenta monitoramento
+passivo, integrado à Central, ao início da aba Disco e à CLI (`disk health` e
+`disk guide`). O [mockup e a validação visual](handoff/validation/host-guard-2026-11-05/README.md)
+precederam a implementação. A Central resume itens para revisar e leva à aba
+Disco; a aba apresenta temperatura atual/pico em quatro minutos, limite do
+mesmo sensor, RPM quando disponível, PSI CPU/I/O, avisos NTFS em dez minutos,
+contadores e diferenças Btrfs, units de usuário em falha ou reinício, e quatro
+boots registrados. O botão Orientação só explica um próximo passo manual.
+Verificar agora usa o worker de cinco minutos; Copiar dados copia o diagnóstico
+observado. Nenhum reparo, scrub, fsck, sinal, ajuste de ventoinha ou reinício de
+serviço/host foi acrescentado.
+
+`./dev check` passou sequencialmente: **1254 passed, 2 skipped** sem Qt em
+23,41 s; **1625 passed, 2 skipped** Qt offscreen em 114,94 s. Python 3.14.7,
+HOME/XDG privados, QA em `.scratch/dev-tests-reviewed/host-guard-20261105-*`.
+Os seis jobs de produto do PR #3 passaram no SHA `609ab45`; o revisor
+automático foi pulado.
+O teste focado final da GUI passou; os recibos de janela própria KDE/Wayland
+clara/escura confirmam navegação Central → Disco, ausência de rolagem horizontal
+em 800 × 600, abertura da orientação e acesso à análise antiga por rolagem.
+Dados dessa prova visual são sintéticos e não medem o dispositivo físico.
+
+A consulta real somente leitura `./dev run disk health --json` em 05/11 às
+06:03 -03 observou ACPI 78 °C com limite passivo 100 °C, RPM indisponível,
+PSI CPU 3,65% e I/O 0% em 60 s, 12 avisos NTFS em dez minutos com `/mnt/sdcard`
+como candidato, e 6.741 erros de corrupção acumulados no Btrfs sem baseline
+do Fôlego para datar a diferença. Os três boots anteriores do diário não
+mostraram encerramento nas últimas 40 mensagens de cada um; **a causa é
+desconhecida**. `codex-quota-panel.service` não estava na lista de units em
+falha/ativação nessa consulta; isso não prova correção, e o owner continua o
+SteamZero. O Fôlego não percorre nem repara o volume NTFS, e um único mount
+`fuseblk` é apenas candidato. Journal, sensores e baseline ausentes aparecem
+como desconhecidos, sem inferência de saúde. Leitor de tela, tacômetro físico,
+integridade dos dados e duração longa ainda não foram certificados. Próximo:
+observar o painel por horas reais e correlacionar novos eventos com evidência
+do owner de cada recurso. Após o push, a unit gráfica existente foi reiniciada
+com owner/cgroup conferidos: novo PID **427632**, `active/running`,
+`Result=success`. A primeira coleta criou o baseline Btrfs no estado XDG do
+usuário com modo 0600. Entrada e Desempenho continuaram `active/running` nos
+PIDs **4233** e **4236**. A prova de pixels permanece a das janelas próprias;
+o serviço residente ainda não tem evidência de uso prolongado.
+
+## Prévia v0.2.0b5 e registro de design — 05/11/2026
+
+A rodada entregou as melhorias da auditoria de `8033b0f` e a documentação
+consolidada. A apresentação pertence a `src/folego/ui`, na branch
+`codex/prompt-implantation-20261104` e no [PR #3](https://github.com/Misael-art/Folego/pull/3).
+O incremento `9d67aa3` usa os componentes Qt, o snapshot e o posicionamento
+KWin existentes. `02ea5d6` sincroniza os testes de remapeamento com a exposição
+da janela. O PR é draft e depende do #2. No #2, um job Qt da revisão documental
+posterior da b4 está cancelado, com o outro job Qt verde. O CI do SHA da b5 é
+independente desses resultados.
+
+O widget lateral mantém cabeçalho e gaveta de ações fora da área rolável.
+O conteúdo cabe horizontalmente mesmo com trilho e a última cota fica
+acessível por rolagem. O topo tem 120 px a partir de 900 px úteis, com a
+marca e a folga em uma coluna, quatro cotas em faixa própria, leituras
+agrupadas e controles à direita. Ao remapear, a confirmação só lê geometria
+depois que o Qt expõe a janela própria. O fade usa animação com vida própria,
+separada do efeito gráfico substituído durante as transições.
+
+Atividade recente separa ação, resultado e horário, com detalhes expansíveis
+e diagnóstico integral. Disco, Temporários e Órfãos mostram os estados antes
+das tabelas. Desempenho prioriza apps observados, Acessibilidade aproxima
+verificação e estado, Opções agrupa preferências e recuperação, e Prompts
+quebra títulos longos em até duas linhas, com dica integral.
+O [registro de design](DESIGN.md) reúne conceitos, mockups e revisões com
+detalhes técnicos, evidências e propostas ainda em aberto.
+
+- **Local.** 228 focados na revisão intermediária, 15 regressões de encaixe
+  no código final e `./dev check` final com **1250 passed, 2 skipped** sem Qt
+  e **1616 passed, 2 skipped** Qt offscreen. Python 3.14.7 e HOME/XDG privados.
+  A primeira suíte completa falhou em dois testes de exposição do widget.
+  As tentativas de validação com falhas foram preservadas integralmente
+  em `.scratch/dev-tests-reviewed` e não integram as contagens finais.
+- **Compositor.** [19 casos KDE/Wayland em janela própria](handoff/validation/design-b5-2026-11-05/README.md).
+  Central em 900 × 620 na saída widescreen. Encaixes na área útil 948 × 593,
+  laterais 112 × 593 e topo 948 × 120, quatro cotas com badges, atalhos
+  recolhíveis e retorno. O teste de topo mediu rolagem zero com atalhos
+  abertos. As capturas offscreen complementam o ensaio em 800 × 600.
+- **Host.** A GUI PID 4173 saiu pelo item da própria bandeja, com owner e
+  identidade conferidos. `./dev setup` instalou a fonte `0.2.0b5` e a unit
+  gráfica existente iniciou em PID **155844**, `active/running`,
+  `Result=success`, com janela confirmada pelo KWin. Entrada e Desempenho
+  mantiveram os PIDs 4233 e 4236. A prova de pixels pertence às janelas de QA.
+- **Distribuição.** O SHA `02ea5d650cbd535406359d58507ebf8d0baf40c8`
+  passou nos seis jobs de produto do PR, com revisor automático skipped.
+  O fonte arquivado conferiu 941 blobs do Git, o wheel 159 arquivos do pacote,
+  e os metadados de wheel/sdist conferiram a versão b5. O teste de instalação
+  em ambientes descartáveis confirmou CLI sem Qt e preservação do estado
+  ao remover a GUI. Artefatos locais em `.scratch/release-b5-ilmYqx`.
+
+A [prévia pública v0.2.0b5](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b5)
+foi publicada em 05/11/2026 às 08:21:56 UTC. A tag anotada e a página da
+release apontam para `02ea5d650cbd535406359d58507ebf8d0baf40c8`.
+Os [três jobs da tag](https://github.com/Misael-art/Folego/actions/runs/41993576302)
+passaram antes da publicação. Os quatro downloads públicos foram conferidos
+contra os arquivos locais. O primeiro push da branch usou `HEAD` e foi
+recusado pelo guard. O refspec da branch registrada passou pelo guard, assim
+como a tag aprovada no registro central. O PR mantém a base #2.
+
+| Arquivo | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `Folego-0.2.0b5-source.tar.gz` | 19.694.640 | `29ab7245f0636d9079cf930e7c1ffac4c31c96835eb4398ab99b9a98f8adf923` |
+| `folego-0.2.0b5-py3-none-any.whl` | 457.029 | `e170d83a4a249e539bccc6bd31c1039ede3ee305ed3e2dd8aba5fe19ef0f0928` |
+| `folego-0.2.0b5.tar.gz` | 640.463 | `3ef2d88786b89920c5a296242ecda7ebf42315135d014a53e756466d9ce3d83a` |
+| `SHA256SUMS` | 281 | `03c2c827b656dde83cbd24c9c0dd35610204005e5dbcdbea540d4a50d3c4f86b` |
+
+Próximo incremento de design: validar toque, leitor de tela e escalas físicas
+adicionais. A documentação registra como propostas a largura dos caminhos
+longos e a densidade de tabelas com conteúdo realista. O aceite de bateria
+física, tacômetro em hardware compatível e uso prolongado continua separado.
+
+## Texto do quadro superior organizado — 05/11/2026
+
+O pedido mencionava um quadro sem nova captura; foi solicitado esclarecimento
+e, sem resposta durante a janela de trabalho, adotado explicitamente o quadro
+superior da última captura. Owner: `ui/dashboard_tab.py`, na branch/PR #3
+atuais. Aceite: separar estado geral dos valores de memória/app, manter alertas
+e ação recomendada visíveis, preservar a cópia do diagnóstico e limpar os
+valores quando a saúde perde validade, com layout ainda compatível com 800 × 600.
+
+`af3da6f` troca a frase grande por título FÔLEGO + estado e três linhas
+alinhadas: Disponível, Em uso e Aplicativo. Explicação, alertas e ação têm
+espaços próprios. O sinal integral permanece no tooltip; a cópia recebe as
+linhas em texto simples. Os widgets continuam apresentando dados do snapshot,
+sem nova coleta ou efeitos de recursos. O fixture Wayland passou a declarar
+as fontes sintéticas de memória/swap para exibir um resumo coerente.
+
+`./dev test tests/test_ui_dashboard.py tests/test_ui_layout.py
+tests/test_ui_main_window_tabs.py tests/test_ui_console_themes.py
+tests/test_ui_transparency.py -q`: **103 passed** na execução final. Uma falha
+anterior de coleta ausente foi corrigida mantendo "Coleta indisponível";
+o teste de retorno ao widget foi sincronizado com a solicitação enfileirada
+e o sinal de término, mantendo a exigência da duração de 260 ms. Houve uma
+tentativa intermediária com importação incorreta no teste, corrigida. Logs
+dessas falhas foram retidos em `.scratch/dev-tests-reviewed/hero-text-*` e
+não contam como gates aprovados. O [recibo e capturas Wayland](handoff/validation/hero-summary-2026-11-05/README.md)
+passaram nos oito temas em janela própria; a prova não certifica todas as
+escalas físicas nem leitor de tela.
+
+O SHA `af3da6f` passou nos seis jobs de produto do PR #3; revisor automático
+skipped. A GUI antiga PID 94795 saiu pelo próprio item Sair do Fôlego da
+bandeja, após revalidar o owner D-Bus. A unit ficou inativa com sucesso;
+`./dev setup` sincronizou a fonte e a unit existente iniciou novamente em
+PID 226852, `active/running`, `Result=success`. Os monitores de entrada e
+desempenho mantiveram os PIDs 4501/4502. A nova instância usa o entrypoint do
+ambiente gerenciado; o resultado visual medido em pixels é da janela QA,
+não uma introspecção do processo residente. Próximo: uso normal do resumo
+na Central e revisão do PR empilhado após #2. A tag b4 permanece anterior.
+
+## Cooler junto à temperatura — 04/11/2026
+
+Pedido: monitorar o cooler e mostrar RPM junto à temperatura; o usuário viu
+CPU e cooler com apresentação estranha. Owner: `core/sysfs.py` →
+`core/collector.py`/`Snapshot` → `ui/compact.py`, na branch canônica e PR #3.
+O coletor lê `fan*_input` do hwmon, prioriza rótulo CPU, ignora GPU/disco e
+mantém ausência/valor inválido como desconhecido; zero RPM é leitura válida.
+Nenhum controle de ventoinha é acionado. O widget flutuante usa uma terceira
+linha de duas colunas para ACPI/temperatura e RPM, sem encostar no percentual
+de CPU; laterais e topo também exibem a rotação perto da temperatura.
+
+Neste host, `/sys/class/hwmon` e `sensors` mostram somente temperatura `acpitz`
+para o sistema, além de GPU/NVMe; não há `fan*_input` nem sensor específico da
+CPU. O percentual CPU vem de `/proc/stat`, a leitura ACPI é explicitamente
+rotulada e não comprova a temperatura da CPU. O cooler aparece **— RPM**, com
+tooltip de indisponibilidade. A [captura Wayland própria](handoff/validation/cooler-monitor-2026-11-04/README.md)
+mostra CPU 44%, ACPI 83 °C e — RPM sem quebra ou sobreposição; a janela QA foi
+fechada pelo próprio aplicativo. Após o push, a instância residente antiga
+PID 4436, confirmada na unit própria, saiu por **Sair do Fôlego** da sua
+bandeja. A unit chegou a `inactive/dead`, `Result=success`, e foi iniciada
+novamente em PID 94795, `active/running`, usando o entrypoint deste checkout.
+Os monitores de entrada/desempenho mantiveram PIDs 4501/4502. A aparência
+medida por pixels é da janela QA; a revisão carregada na residente é inferida
+da reinicialização após o bootstrap do ambiente, não consultada dentro dela.
+
+`./dev test tests/test_temperature.py tests/test_ui_compact.py -q`: **44 passed**.
+`./dev check` sequencial, Python 3.14.7 gerenciado, HOME/XDG privados:
+**1250 passed, 2 skipped** headless; **1612 passed, 2 skipped** Qt offscreen.
+O hardware real não oferece RPM para aceite físico; os testes do sensor usam
+sysfs descartável. Uma primeira rodada de UI falhou por quebra da tabela,
+foi corrigida e está retida em `.scratch/dev-tests-reviewed`. Três execuções
+antigas concluídas foram movidas integralmente à mesma área, sem exclusão,
+para liberar slots de QA.
+
+Código/evidência estão no commit `16fd251`. Uma corrida de stage chegou a
+misturar o incremento com `ui/orphans_panel.py` num commit transitório;
+o ajuste alheio ficou isolado em `d1fd7a6` e o código do cooler no commit acima.
+O diff, a captura e os testes desta tarefa foram revisados. O PR #3 no SHA
+`d39ace0` passou nos seis jobs de produto do CI; o revisor automático foi
+skipped. Próximo: validar a rotação física numa máquina que exporte tacômetro
+e revisar o PR empilhado após #2, sem merge ou release nesta tarefa.
+
+## Controles modernos e navegação da Central — 05/11/2026
+
+Pedidos integrados: modernizar a rolagem e revisar controles destoantes; dar
+folga igual aos botões laterais, usar inicial maiúscula nos rótulos, marca
+FÔLEGO e retirar Voltar do cabeçalho. Owner: checkout canônico, branch
+`codex/prompt-implantation-20261104`, PR #3 empilhado sobre #2. Dependências:
+tema central Qt e navegação já existente para o widget. Aceite: 6 px dos dois
+lados das abas, marca em caixa alta, retorno por Modo widget/menu funcional,
+rolagem vertical/horizontal utilizável e estilos coerentes nos oito temas.
+
+Código em `cb5f16b`: uma receita global para barras de rolagem, com área de
+12 px e polegar arredondado de 6 px que ganha destaque no hover/pressão; as
+receitas locais de prompts e widget foram removidas. Medidores têm trilho e
+preenchimento em cápsula, seletores usam chevrons vetoriais de contraste
+claro/escuro e o menu da janela tem alvo de 32 × 32. As abas mostram Central,
+Ajustes etc., com margens laterais iguais. A marca visual é FÔLEGO, inclusive
+no compacto e na chamada da Central; os identificadores/captions usados pelo
+KWin foram preservados. O botão Voltar e seu callback exclusivo saíram;
+Modo widget e o menu Posição do widget mantêm a navegação.
+
+Os **111 testes focados** finais passaram em `./dev test` (abas, dashboard,
+layout, temas, transparência, hover e prompts), incluindo arraste e teclado
+nas barras e os caminhos de retorno após remover Voltar. O
+[ensaio KDE/Wayland e a revisão visual](handoff/validation/modern-controls-2026-11-04/README.md)
+passaram em janela/HOME/XDG próprios nos oito temas, com captura atual da
+Central sem Voltar. Abertura de seletores e do menu final foi nativa; seleção
+no popup usa eventos Qt locais. O roteiro agora reconfere posição KWin antes
+do clique e aguarda o clamp do widget. Tentativas anteriores que falharam
+nessa entrada/saída ficaram preservadas e não contam como jornadas aprovadas.
+
+Uma tentativa local de `./dev check` anterior ao último ajuste aprovou 1247
+testes headless, mas perdeu o processo Qt antes do recibo final. O log parcial
+e o registro de interrupção permanecem em `.scratch/dev-tests-reviewed`;
+não declarar essa tentativa como gate completo. O CI do SHA publicado é a
+verificação integral. Os seis jobs de produto da revisão conjunta `d39ace0`
+passaram no GitHub; o revisor automático foi skipped. As execuções de
+`d1fd7a6` foram canceladas pelo avanço da mesma branch e não são contadas
+como aprovadas separadamente.
+
+O primeiro CI de `cb5f16b` encontrou uma regressão real no Ubuntu: o seletor
+com nome longo de grupo de processos exigia largura de 826 px. `d1fd7a6`
+limita sua dica de conteúdo para permitir encolhimento sem perder a lista de
+escolha. Os 46 testes de layout/abas passaram depois disso; o limite de
+800 px no teste existente foi preservado. Um commit local temporário incluiu
+por engano os arquivos que a outra atividade havia acabado de preparar;
+antes de publicar, ele foi dividido com preservação do working tree e do
+stage alheio. O commit enviado contém só as duas linhas do seletor. Nenhum
+histórico remoto foi reescrito.
+
+Preservação: outra atividade tratou CPU/temperatura/cooler em
+README, COMPACTO, collector, snapshot, sysfs, compacto e testes correspondentes.
+Esses hunks foram preservados fora de `cb5f16b`/`d1fd7a6`; o stage do compacto e dos
+documentos foi seletivo. O owner registrou esse trabalho separadamente em
+`16fd251` e `d39ace0`. Suítes locais dessa outra atividade não foram
+interrompidas nem rodadas em paralelo com a verificação focada deste lote.
+A GUI antiga PID 4436 foi preservada neste lote para não disputar a atualização
+do host. A outra atividade concluiu a troca: a unit existente agora está
+`active/running`, `Result=success`, PID 94795, iniciada às 00:02:42 de 05/11,
+depois das alterações visuais. O KWin confirmou seu widget 280 × 253. A nova
+instância usa o ambiente gerenciado do checkout atualizado; a prova de pixels
+do cabeçalho/abas continua sendo a janela QA própria. Próximo: inspecionar a
+Central residente pelo uso normal e revisar o PR #3 após #2.
+
+## Cantos reais da Central — 04/11/2026
+
+Pedido: a janela aberta da Central continuava quadrada, conforme captura do
+usuário. Owner: checkout canônico `codex/prompt-implantation-20261104`, PR #3
+empilhado sobre #2. Dependências: pintura Qt da `MainWindow`, alfa da janela
+sem moldura no KWin e barra de rolagem da Central. Aceite: quatro cantos com
+alfa real inferior a 32, borda central opaca ou com a transparência escolhida,
+controles preservados e fluxo Central/widget funcional.
+
+O tema preenchia todo `QMainWindow` como retângulo. `43d95bb` deu à janela
+principal um seletor próprio, removeu esse preenchimento retangular e pinta o
+fundo em um caminho arredondado com a cor/alfa do tema. O primeiro teste
+focado ainda encontrou o canto inferior direito opaco: a barra de rolagem
+chegava até ele. A janela passou a reservar 12 px à direita e embaixo para
+manter essa barra dentro do contorno. A execução falha ficou preservada em
+`.scratch/dev-tests-reviewed/central-rounded-first-failed-20261104` e não
+conta como gate aprovado.
+
+Depois do ajuste, `./dev test tests/test_ui_layout.py -q` passou com **9 testes**,
+incluindo quatro cantos em fundos opaco e 50% transparente. `./dev check`
+sequencial, Python 3.14.7 gerenciado, HOME/XDG privados: **1247 passed,
+2 skipped** sem Qt e **1604 passed, 2 skipped** Qt offscreen. O
+[recibo KDE/Wayland](handoff/validation/central-rounded-2026-11-04/README.md)
+passou em janela própria: quatro cantos transparentes, frame/cliente 900 × 620,
+volta ao widget e encaixes. Captura e JSON são sintéticos e versionados. O CI
+do SHA `43d95bb` aprovou os seis jobs de produto do PR #3; revisor automático
+skipped. `git diff --check` limpo.
+
+Host: a GUI antiga PID 214646 tinha apenas o widget próprio mapeado. Depois de
+confirmar bandeja `folego` no mesmo PID e item habilitado **Sair do Fôlego**,
+ela saiu pelo evento DBusMenu; a unit existente ficou `inactive/dead`,
+`Result=success`, sem sinal manual. `./dev setup` sincronizou o ambiente e a
+unit `app-folego@autostart.service` iniciou novamente em PID **312387**,
+`active/running`, `Result=success`. O KWin mostra a Central dessa instância em
+`(1779,230)`, 900 × 620. Os monitores de entrada e desempenho permaneceram
+nos PIDs 6654/6657. A nova instância usa o entrypoint do ambiente sincronizado
+com o checkout corrigido; não houve consulta do módulo dentro do processo. A
+medição de alfa foi feita na janela QA própria, não diretamente nos pixels da
+residente. Nenhum outro serviço ou processo foi interrompido.
+
+PR #3 segue draft e empilhado; b4 publicada permanece na tag anterior. Próximo:
+inspeção visual pelo usuário na Central residente e revisão do PR após #2.
+Outras escalas físicas e leitor de tela continuam com aceite próprio.
+
+## Prompt de implantação entre diagnóstico e continuação — 04/11/2026
+
+Pedido: incluir no menu **Prompts** o roteiro genérico de implantação escrito
+nesta sessão, como segundo modelo, sem substituir o modelo existente de melhoria
+pontual. Owner: catálogo único `core/development_prompts.py`; a GUI deriva dele
+ordem, texto copiado e contagem. A ordem agora é **Diagnosticar o estado real do
+projeto → Implantar o diagnóstico item a item → Continuar de onde o agente
+anterior parou**; o menu tem 13 modelos. O novo texto orienta a reconferir o
+diagnóstico, coordenar agentes em checkout único, concluir cada incremento com
+regressão, gates, handoff, commit, push e PR, e preservar aceites físicos ou
+incertos como pendências explícitas. O preâmbulo comum de autorização continua
+aplicado; selecionar um título apenas copia, sem executar o pedido.
+
+Base: `7293222`, branch b4 e PR #2 draft, ainda sem merge. Esta alteração usa
+branch própria empilhada, `codex/prompt-implantation-20261104`; o PR dela deve
+ter a branch b4 como base até que o PR #2 seja integrado. Testes focados
+`./dev test tests/test_development_prompts.py tests/test_ui_prompt_panel.py -q`:
+**7 passed**, Python 3.14.7 gerenciado, Qt offscreen, HOME/XDG privados.
+`./dev test-headless tests/test_development_prompts.py -q`: **3 passed**, sem
+Qt. Em sessão KDE/Wayland, painel próprio 480 × 540 mostrou 13 modelos e os
+três primeiros na ordem correta; captura em
+`.scratch/dev-tests-reviewed/prompt-implantation-20261104/prompt-panel.png`.
+O ensaio Wayland verificou apresentação, não clique físico nem área de
+transferência de outro aplicativo. A seleção/cópia integral foi exercitada no
+teste Qt. Os 20 workspaces de QA ocupam o orçamento atual do wrapper; não
+foram apagados para repetir as suítes completas. CI do PR é o gate completo.
+
+O commit `92ecf9f` foi publicado na branch própria e abriu o
+[PR #3](https://github.com/Misael-art/Folego/pull/3) como draft, com base na
+branch do PR #2. O SHA `92ecf9f6b7c22ab8d8039ac5e11042b16c9f89f8`
+passou nos seis jobs de produto do CI (dois núcleo/CLI, dois contratos CLI e
+dois Qt offscreen); um revisor automático foi skipped. A GUI residente antiga
+PID 6584 saiu pelo item **Sair do Fôlego** de sua própria bandeja, com
+`Result=success`. `./dev setup` reconfirmou o ambiente b4 e a unit existente
+`app-folego@autostart.service` foi iniciada novamente: PID 214646,
+`active/running`, executando o launcher da raiz canônica. O ambiente GUI
+carrega os 13 modelos na ordem aprovada. Não houve alteração de outros
+serviços, sessão física, tag ou assets da prévia b4.
+
+Próximo: conferir o painel pelo uso físico da instância residente; o ensaio
+Wayland isolado já aprovou a apresentação, e os testes Qt aprovaram a cópia.
+Revisar o PR #3 após o PR #2, sem promover a b4 a release estável por isso.
 
 ## Prévia v0.2.0b4 publicada — 04/11/2026
 

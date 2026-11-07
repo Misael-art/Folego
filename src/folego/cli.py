@@ -297,15 +297,17 @@ def build_parser() -> argparse.ArgumentParser:
     lease_run = access_sub.add_parser("lease-run", help="inicia aplicação cooperante sob propriedade durável de entrada")
     lease_run.add_argument("--provider", required=True)
     lease_run.add_argument("argv", nargs=argparse.REMAINDER)
-    for name in ("status", "plan", "transitions", "enable", "disable", "capture", "rearm", "install", "repair", "reconcile", "watch", "lease", "lease-reconcile"):
+    for name in ("status", "plan", "transitions", "enable", "disable", "capture", "rearm", "install", "repair", "reconcile", "watch", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
         command = access_sub.add_parser(name)
         command.add_argument("--json", action="store_true")
-        if name in ("enable", "disable", "capture", "rearm", "install", "repair", "lease", "lease-reconcile"):
+        if name in ("enable", "disable", "capture", "rearm", "install", "repair", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
             command.add_argument("--confirmar", action="store_true")
         if name == "repair":
             command.add_argument("--plan", required=True, help="plano imutável devolvido por plan --json")
-        if name == "reconcile":
+        if name in ("reconcile", "profile-reconcile"):
             command.add_argument("operation_id")
+        if name in ("profile-rearm", "profile-capture"):
+            command.add_argument("profile", choices=("touchpad", "microphone"))
         if name == "lease-reconcile":
             command.add_argument("lease_id")
         if name == "watch":
@@ -319,6 +321,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     disk = commands.add_parser("disk", help="higiene de disco (dry-run primeiro)")
     disk_sub = disk.add_subparsers(dest="sub", required=True)
+
+    health = disk_sub.add_parser("health", help="integridade e riscos do host (somente leitura)")
+    health.add_argument("--json", action="store_true", help="saída para máquinas")
+    guide = disk_sub.add_parser("guide", help="orientação manual para um risco; não repara")
+    guide.add_argument("issue", choices=("thermal", "pressure", "ntfs", "btrfs", "service", "reboot"))
+    guide.add_argument("--json", action="store_true", help="saída para máquinas")
+    recovery = disk_sub.add_parser("recovery", help="pré-checagem NTFS para cópia de resgate; não repara")
+    recovery.add_argument("source", help="dispositivo NTFS, por exemplo /dev/mmcblk0p1")
+    recovery.add_argument("--destination", help="diretório persistente para a imagem integral")
+    recovery.add_argument("--json", action="store_true", help="saída para máquinas")
+    timeline = disk_sub.add_parser("timeline", help="amostras locais antes de incidentes (somente leitura)")
+    timeline.add_argument("--json", action="store_true", help="saída para máquinas")
+    timeline.add_argument("--boot-id", help="consultar um boot específico preservado")
 
     plan = disk_sub.add_parser("plan", help="dry-run: o que poderia ser liberado (nada muda)")
     plan.add_argument("--json", action="store_true", help="saída para máquinas")
@@ -902,6 +917,10 @@ def _cmd_tmp(args) -> int:
 
 
 _HANDLERS = {
+    "health": lambda args: _cmd_host_health(args),
+    "guide": lambda args: _cmd_host_guide(args),
+    "recovery": lambda args: _cmd_ntfs_recovery(args),
+    "timeline": lambda args: _cmd_host_timeline(args),
     "plan": _cmd_plan,
     "quarantine": _cmd_quarantine,
     "restore": _cmd_restore,
@@ -909,6 +928,116 @@ _HANDLERS = {
     "list": _cmd_list,
     "tmp": _cmd_tmp,
 }
+
+
+def _cmd_host_health(args) -> int:
+    from .adapters.host_guard import HostObserver
+    from .core.collector import MetricsCollector
+    from .core.host_guard import ThermalTracker
+    report = HostObserver(record=False).observe()
+    report["thermal"] = ThermalTracker().observe(MetricsCollector().collect())
+    if args.json:
+        _emit_machine({"ok": True, "outcome": "observado", **report})
+    else:
+        thermal = report["thermal"]
+        print("Saúde do host — somente leitura")
+        print(f"Temperatura: {thermal['sensor'] or 'fonte desconhecida'} "
+              f"{thermal['current_c'] if thermal['current_c'] is not None else '—'} °C")
+        for row in report["btrfs"]:
+            print(f"Btrfs {row['id']}: "
+                  + (f"corrupção {row['counters']['corruption_errs']}; tendência {row['trend']}"
+                     if row['quality'] == 'ok' else f"desconhecido: {row['reason']}"))
+        ntfs = report["ntfs"]
+        print(f"NTFS: {ntfs.get('count_10m', '—')} aviso(s) em 10 min; "
+              f"qualidade {ntfs['quality']}")
+        for row in report["services"]["items"]:
+            print(f"Serviço: {row['unit']} · reinícios {row.get('restarts', '—')}")
+        print(f"Boot anterior: {report['boots'].get('previous_end', 'desconhecido')} "
+              f"({report['boots'].get('reason', '')})")
+        items = report['boots'].get('items', [])
+        if len(items) >= 2:
+            evidence = items[-2].get('timeline', {})
+            last = evidence.get('last')
+            if last:
+                print(f"Última amostra daquele boot: {last['at']} · "
+                      f"qualidade {evidence['quality']} · "
+                      f"janela recente {evidence['recent_samples']} amostra(s)")
+                if items[-2].get('sample_to_journal_s') is not None:
+                    print(f"Até o último registro retido no journal: "
+                          f"{items[-2]['sample_to_journal_s']:g} s "
+                          f"({items[-2].get('gap_clock', 'relógio desconhecido')}; "
+                          "o fim real do boot pode não ter sido registrado)")
+            else:
+                print(f"Amostras daquele boot: {evidence.get('quality', 'desconhecido')} "
+                      f"({evidence.get('reason', 'sem evidência local')})")
+        print(f"Custo desta observação: {report['observer_duration_ms']:.1f} ms")
+        print("Orientações: folego disk guide thermal|pressure|ntfs|btrfs|service|reboot")
+    return EXIT_OK
+
+
+def _cmd_host_guide(args) -> int:
+    from .core.host_guard import GUIDES
+    title, guidance = GUIDES[args.issue]
+    if args.json:
+        _emit_machine({"ok": True, "outcome": "orientacao", "issue": args.issue,
+                       "title": title, "guidance": guidance, "effect": "none"})
+    else:
+        print(f"{title}\n\n{guidance}")
+    return EXIT_OK
+
+
+def _cmd_ntfs_recovery(args) -> int:
+    from .adapters.ntfs_recovery import assess_ntfs_recovery
+    report = assess_ntfs_recovery(args.source, args.destination)
+    if args.json:
+        _emit_machine({"ok": True, "outcome": "avaliado", "effect": "none", **report})
+    else:
+        print("Recuperação NTFS — pré-checagem, nada alterado")
+        print(f"Origem: {report['source']} · UUID {report['source_uuid'] or 'desconhecido'}")
+        if report["required_free_bytes"] is not None:
+            print(f"Espaço exigido no destino: {report['required_free_bytes']:,} bytes")
+        for blocker in report["blockers"]:
+            print(f"  · {blocker}")
+        if report["can_image"]:
+            print("Condições observadas para planejar a imagem; revalidar no ato da execução.")
+    return EXIT_OK
+
+
+def _cmd_host_timeline(args) -> int:
+    from .adapters.host_timeline import read_timeline
+    try:
+        active_boot_id = (Path(paths.proc_root()) /
+                          "sys/kernel/random/boot_id").read_text().strip()
+    except OSError:
+        active_boot_id = None
+    report = read_timeline(limit=80, boot_id=args.boot_id,
+                           active_boot_id=active_boot_id or None)
+    if args.json:
+        _emit_machine({"ok": report["quality"] == "ok", "outcome": "observado",
+                       "effect": "none", **report})
+    else:
+        print(f"Histórico local: {report['quality']} · {report['reason'] or 'amostras recentes'}")
+        capacity = report.get("capacity") or {}
+        if capacity.get("near_limit"):
+            print("Aviso: histórico próximo do limite; novas amostras podem parar. "
+                  "Os registros existentes foram preservados.")
+        for row in report["samples"][-10:]:
+            battery = (f" · bateria {row['battery_percent']}% ({row['battery_status']})"
+                       if row.get("battery_percent") is not None else "")
+            electrical = ""
+            if row.get("battery_voltage_uv") is not None:
+                electrical += f" · {row['battery_voltage_uv'] / 1_000_000:.3f} V"
+            if row.get("battery_current_ua") is not None:
+                electrical += f" · corrente |{row['battery_current_ua'] / 1_000_000:.3f}| A"
+            if row.get("battery_power_uw") is not None:
+                electrical += f" · potência {row['battery_power_uw'] / 1_000_000:.2f} W"
+            external = (f" · energia externa {'sim' if row['external_power_online'] else 'não'}"
+                        if row.get("external_power_online") is not None else "")
+            print(f"  {row['at']} · RAM {row['mem_available_kb']} KiB · "
+                  f"PSI memória {row['psi_mem_avg10']}% · "
+                  f"PSI I/O {row['psi_io_avg10']}% · "
+                  f"temperatura {row['temperature_c']} °C{battery}{electrical}{external}")
+    return EXIT_OK
 
 
 def _emit_machine(payload: dict) -> None:
@@ -2585,6 +2714,18 @@ def _cmd_accessibility(args):
             result = watch(supervisor=supervisor, interval=args.interval, cycles=args.cycles)
         elif args.sub == "reconcile":
             result = supervisor.reconcile(args.operation_id)
+        elif args.sub == "profile-reconcile":
+            if supervisor.profile_guard is None:
+                raise ValueError("supervisão de perfis indisponível")
+            result = supervisor.profile_guard.reconcile(args.operation_id, confirmed=args.confirmar)
+        elif args.sub == "profile-rearm":
+            if supervisor.profile_guard is None:
+                raise ValueError("supervisão de perfis indisponível")
+            result = supervisor.profile_guard.rearm(args.profile, confirmed=args.confirmar)
+        elif args.sub == "profile-capture":
+            if supervisor.profile_guard is None:
+                raise ValueError("supervisão de perfis indisponível")
+            result = supervisor.profile_guard.capture(args.profile, confirmed=args.confirmar)
         elif args.sub == "repair":
             result = supervisor.repair(ActionPlan.from_dict(json.loads(args.plan)), confirm=args.confirmar)
         else:

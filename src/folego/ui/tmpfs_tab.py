@@ -19,7 +19,7 @@ from ..actions.disk.planner import fmt_bytes
 from ..actions.tmpfs import trend
 
 JSON_ACTIONS = ("plan", "ledger", "release", "restore", "expire", "recover", "diagnose", "runtime-size")
-SAMPLES_KEPT = 600  # 20 min de poller de 2 s; a janela do ETA é de 15 min
+SAMPLES_KEPT = 600  # limite de memória; a janela efetiva do ETA é de 15 min
 PENDING = "ainda não analisado — use Atualizar plano."
 LOADING = "consultando o tmpfs (dry-run, nada é movido)…"
 VOLUME_COLUMNS = (("path", "volume"), ("fs_type", "tipo"), ("total", "total"),
@@ -65,6 +65,7 @@ def _table(columns):
     table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
     table.verticalHeader().setVisible(False)
     table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+    table.hide()
     return table
 
 
@@ -78,6 +79,7 @@ def _fill(table, columns, rows, *, action=None, label=""):
     callback continuar correto sem reconectar o sinal a cada atualização.
     """
     table.setRowCount(len(rows))
+    table.setVisible(bool(rows))
     buttons = []
     for position, row in enumerate(rows):
         for column, (key, _) in enumerate(columns):
@@ -131,7 +133,7 @@ class TmpfsTab(QWidget):
         self.release_buttons: list[QPushButton] = []
         self.restore_buttons: list[QPushButton] = []
 
-        self.pressure = QLabel("nenhum volume da watch-list montado")
+        self.pressure = QLabel("Aguardando a primeira leitura de volumes.")
         self.pressure.setWordWrap(True)
         self.volume_table = _table(VOLUME_COLUMNS)
         self.summary = QLabel(PENDING)
@@ -153,7 +155,6 @@ class TmpfsTab(QWidget):
         self.recover_button.setToolTip(
             "nenhuma entrada staging no ledger: não há liberação inacabada")
         bar = QHBoxLayout()
-        bar.addWidget(self.refresh_button)
         bar.addWidget(self.expire_button)
         bar.addWidget(self.recover_button)
         bar.addStretch(1)
@@ -178,15 +179,24 @@ class TmpfsTab(QWidget):
         runtime_bar.addWidget(self.runtime_reconcile)
 
         layout = QVBoxLayout(self)
-        for widget in (self.pressure, self.diagnosis, self.volume_table, self.summary, self.plan_table,
-                       self.budget_label, self.ledger_table, self.status):
+        volume_title = QLabel("Volumes em memória")
+        plan_title = QLabel("Plano de liberação")
+        ledger_title = QLabel("Itens retidos")
+        for title in (volume_title, plan_title, ledger_title):
+            title.setObjectName("section")
+        for widget in (volume_title, self.pressure, self.diagnosis, self.volume_table,
+                       plan_title, self.summary):
+            layout.addWidget(widget)
+        layout.addWidget(self.refresh_button, 0, Qt.AlignmentFlag.AlignLeft)
+        for widget in (self.plan_table, ledger_title, self.budget_label, self.ledger_table, self.status):
             layout.addWidget(widget)
         layout.addLayout(runtime_bar)
         layout.addLayout(bar)
+        layout.addStretch(1)
 
     # -------------------------------------------------------------------- leitura
 
-    def show_volumes(self, volumes, ts=None):
+    def show_volumes(self, volumes, ts=None, *, quality="ok"):
         """O poller traz tuplas planas; a aba só formata e lembra das amostras."""
         ts = time.time() if ts is None else ts
         self.volume_rows = []
@@ -216,7 +226,8 @@ class TmpfsTab(QWidget):
                 f"{volume.path}: {volume.error}" for volume in unknown))
             return
         if not self.volume_rows:
-            self.pressure.setText("nenhum volume da watch-list montado")
+            self.pressure.setText("Nenhum volume monitorado está montado." if quality == "ok"
+                                  else "Coleta de volumes indisponível ou incompleta.")
             return
         worst = self.volume_rows[0]
         lotar = "" if worst["eta"] == "—" else f" · lota em {worst['eta']}"
@@ -354,6 +365,7 @@ class TmpfsTab(QWidget):
             self._plan_ok = False
             self.plan_rows, self.release_buttons = [], []
             self.plan_table.setRowCount(0)
+            self.plan_table.hide()
             self.summary.setText("sem plano")
             self.status.setText(f"não foi possível planejar: {reason}")
             self._preserve_uncertain()
@@ -363,11 +375,12 @@ class TmpfsTab(QWidget):
                          [self._plan_row(i) for i in protected]
         self.release_buttons = _fill(self.plan_table, PLAN_COLUMNS, self.plan_rows,
                                      action=self.release_clicked, label="Liberar")
+        inconsistente = payload["scanned_entries"] != len(candidates) + len(protected)
         self.summary.setText(
             f"liberáveis {fmt_bytes(payload['total_bytes'])} em {len(candidates)} "
             f"item(ns) · protegidos {len(protected)} · lidos "
-            f"{payload['scanned_entries']} · impressão {payload['digest'][:16]}")
-        inconsistente = payload["scanned_entries"] != len(candidates) + len(protected)
+            f"{payload['scanned_entries']} · impressão {payload['digest'][:16]}"
+            if self.plan_rows or inconsistente else "Nenhum item encontrado no escopo analisado.")
         self._plan_ok = not inconsistente
         # R07: a interface não oferece uma ação que o executor já sabe bloquear —
         # item protegido e plano inconsistente desabilitam o botão, com o motivo.
@@ -394,6 +407,7 @@ class TmpfsTab(QWidget):
             self.budget, self.victims = {}, []
             self.ledger_rows, self.restore_buttons = [], []
             self.ledger_table.setRowCount(0)
+            self.ledger_table.hide()
             self.recover_button.setEnabled(False)
             self.recover_button.setToolTip(
                 "sem leitura do ledger: não há como provar uma liberação inacabada")

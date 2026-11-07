@@ -129,6 +129,45 @@ def test_tray_route_exists_before_the_first_collection_arrives():
     assert "aguardando primeira leitura" in tray.tray.tooltips[-1]
 
 
+def test_thermal_alert_escalates_without_repeating_every_poll(monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr("folego.ui.tray.time.monotonic", lambda: clock[0])
+    tray, _ = build()
+    tray.install()
+    def sample(state, value):
+        return {"state": state, "current_c": value, "sensor": "acpitz"}
+    tray.show_thermal(sample("unknown", None))
+    tray.show_thermal(sample("high", 95))
+    tray.show_thermal(sample("high", 96))
+    tray.show_thermal(sample("danger", 100))
+    tray.show_thermal(sample("critical", 105))
+    assert len(tray.tray.messages) == 3
+    assert "reduza a carga" in tray.tray.messages[1][0]
+    assert "limite térmico crítico" in tray.tray.messages[2][0]
+    clock[0] += 60
+    tray.show_thermal(sample("critical", 105))
+    assert len(tray.tray.messages) == 4
+
+
+def test_pressure_alert_explains_source_window_and_manual_action():
+    tray, _ = build()
+    tray.install()
+    tray.show_pressure_alert({"kind": "cpu", "value": 31.4,
+                              "sample_at": "2026-11-07T12:00:00-03:00",
+                              "age_s": 0.3})
+    title, body = tray.tray.messages[-1]
+    assert "pressão sustentada" in title
+    assert "PSI de espera em 60 s: CPU 31.4%" in body
+    assert "2026-11-07T12:00:00-03:00" in body
+    assert "há 0.3 s" in body
+    assert "pelo aplicativo responsável" in body
+    tray.show_pressure_alert({"kind": "memory", "value": 6,
+                              "also": [{"kind": "io", "value": 12},
+                                       {"kind": "cpu", "value": 30}],
+                              "sample_at": "2026-11-07T12:01:00-03:00"})
+    assert "memória 6%; disco/I/O 12%; CPU 30%" in tray.tray.messages[-1][1]
+
+
 def test_the_tray_menu_offers_only_viewing_actions():
     tray, window = build()
     tray.install()

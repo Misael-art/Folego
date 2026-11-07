@@ -37,7 +37,22 @@ def main() -> int:
         app.setDesktopFileName("folego")
         apply_theme(app)
         from .actions.accessibility import Supervisor
-        win = MainWindow(collector_factory=MetricsCollector, accessibility_factory=Supervisor, startup_defaults=True)
+        from .adapters.host_guard import HostObserver
+        from .adapters.host_timeline import HostTimelineRecorder, record_snapshot
+
+        def resource_collector():
+            collector = MetricsCollector()
+            recorder = HostTimelineRecorder()
+
+            def collect():
+                snapshot = collector.collect()
+                return record_snapshot(recorder, snapshot)
+
+            return collect
+
+        win = MainWindow(collector_factory=resource_collector, accessibility_factory=Supervisor,
+                         startup_defaults=True,
+                         host_guard_factory=lambda: HostObserver(record=True))
         win.show()
         win.start()
         try:

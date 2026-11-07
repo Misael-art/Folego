@@ -1,12 +1,13 @@
-"""Input supervision independent of any third-party project or graphical window.
+"""Input supervision independent of a graphical window or external executor.
 
-Native repair is deliberately additive: enable one identified KWin device. No
-grabs, key/audio capture, driver resets, profile replacement or process signals.
+KWin recovery remains additive. The separately budgeted Deck profile guard
+may restore only previously observed Steam/microphone desktop profiles.
 """
 import json
 import math
 import os
 from pathlib import Path
+import re
 import stat
 import time
 import uuid
@@ -105,7 +106,7 @@ class Store:
     def read(self):
         value = read_object(self.path)
         if value is None:
-            return {"schema": SCHEMA, "enabled": False, "baseline": {}, "attempts": [], "circuit": ""}
+            value = {"schema": SCHEMA, "enabled": False, "baseline": {}, "attempts": [], "circuit": ""}
         if (type(value.get("enabled")) is not bool or not isinstance(value.get("baseline"), dict)
                 or len(value["baseline"]) > 128
                 or not isinstance(value.get("attempts"), list) or len(value["attempts"]) > 64
@@ -120,6 +121,33 @@ class Store:
                     or not math.isfinite(attempt["ts"]) or attempt["ts"] <= 0
                     or not isinstance(attempt.get("operation_id"), str)):
                 raise ValueError("histórico de tentativas inválido")
+        value.setdefault("profile_baseline", {})
+        value.setdefault("profile_attempts", [])
+        value.setdefault("profile_circuit", {})
+        if (not isinstance(value["profile_baseline"], dict)
+                or not isinstance(value["profile_attempts"], list) or len(value["profile_attempts"]) > 64
+                or not isinstance(value["profile_circuit"], dict)
+                or any(key not in ("touchpad", "microphone") for key in (*value["profile_baseline"], *value["profile_circuit"]))):
+            raise ValueError("política de perfis desconhecida; automação bloqueada")
+        for key, baseline in value["profile_baseline"].items():
+            if (not isinstance(baseline, dict) or
+                    (key == "touchpad" and (baseline.get("type") != 4 or
+                     baseline.get("url") != "template://retrofe_steamdeck_desktop.vdf" or
+                     not isinstance(baseline.get("template_sha256"), str) or
+                     not re.fullmatch(r"[0-9a-f]{64}", baseline["template_sha256"]))) or
+                    (key == "microphone" and (not isinstance(baseline.get("card"), str) or
+                     not baseline["card"].endswith("-platform-acp5x_mach.0") or
+                     baseline.get("profile") != "HiFi (Mic, Speaker)" or
+                     baseline.get("default") not in ("mic-biglinux", "internal")))):
+                raise ValueError("baseline de perfil desconhecido; preservado")
+        for key, reason in value["profile_circuit"].items():
+            if not isinstance(reason, str) or len(reason) > 250:
+                raise ValueError("disjuntor de perfil desconhecido")
+        for attempt in value["profile_attempts"]:
+            if (not isinstance(attempt, dict) or attempt.get("key") not in ("touchpad", "microphone")
+                    or type(attempt.get("ts")) not in (int, float) or not math.isfinite(attempt["ts"])
+                    or attempt["ts"] <= 0 or not isinstance(attempt.get("operation_id"), str)):
+                raise ValueError("histórico de perfis desconhecido")
         return value
 
     def save(self, value):
@@ -371,15 +399,28 @@ def unresolved(journal):
 
 
 class Supervisor:
-    def __init__(self, *, native=None, store=None, coordinator=None, now=time.time):
+    def __init__(self, *, native=None, store=None, coordinator=None, now=time.time,
+                 profile_guard=None):
         self.native, self.store = native or NativeInput(), store or Store()
         self.coordinator, self.now = coordinator or Coordinator(), now
+        if profile_guard is None and native is None:
+            from .deck_profile_guard import DeckProfileGuard
+            profile_guard = DeckProfileGuard(store=self.store, coordinator=self.coordinator, now=now)
+        self.profile_guard = profile_guard
+        if self.profile_guard is not None:
+            self.profile_guard.bind_native(self.native)
         from ..orchestration.history import PendingReader
         self._pending_reader = PendingReader(self.coordinator.journal)
         self._wait_since = None
 
     def inspect(self):
         report = self.native.collect()
+        if self.profile_guard is not None:
+            try:
+                self.profile_guard.annotate(report)
+            except (OSError, ValueError) as exc:
+                report["desktop_profiles"] = {}
+                report["blockers"].append("perfis de desktop não comprovados: " + str(exc)[:160])
         report["plans"] = []
         try:
             report["blockers"].extend(lease_blockers(self.store.root))
@@ -391,12 +432,44 @@ class Supervisor:
                     raise ValueError("diário ausente após tentativas registradas; efeitos desconhecidos")
             report["policy"] = {key: policy[key] for key in ("enabled", "circuit")}
             report["baseline_count"] = len(policy["baseline"])
-            self._pending_reader.ids()  # A partial/corrupt view never authorizes effects.
-            report["pending_operations"] = [key for key, (action, _) in self._pending_reader.pending.items()
-                                             if action.startswith("accessibility.")]
-            if report["pending_operations"]:
-                report["blockers"].append("operação desconhecida; verificar antes de repetir")
-            report["plans"] = [plan.to_dict() for plan in plans(report)]
+            if self.profile_guard is not None:
+                report["profile_guard"] = {"enabled": policy["enabled"],
+                    "baseline": list(policy["profile_baseline"]),
+                    "circuit": dict(policy["profile_circuit"])}
+                for card in report["cards"]:
+                    key = card.get("key")
+                    if key not in report.get("desktop_profiles", {}):
+                        continue
+                    if card["state"] == "observed":
+                        suffix = ("guarda automática ativa" if key in policy["profile_baseline"] else
+                                  "aprendendo referência saudável") if policy["enabled"] else "guarda automática desligada"
+                    elif card["state"] != "degraded":
+                        suffix = "sem reparo automático com estado desconhecido"
+                    elif not policy["enabled"]:
+                        suffix = "recuperação automática desabilitada"
+                    elif key not in policy["profile_baseline"]:
+                        suffix = "sem referência saudável; correção automática bloqueada"
+                    elif policy["profile_circuit"].get(key):
+                        suffix = "reparo suspenso: " + policy["profile_circuit"][key]
+                    else:
+                        identity = report["desktop_profiles"][key].get("identity")
+                        if identity is None:
+                            suffix = "identidade de perfil não comprovada"
+                        else:
+                            reason = self.profile_guard._blocker(key, report["desktop_profiles"][key], report)
+                            suffix = reason or "recuperação automática após nova confirmação"
+                    card["detail"] += "; " + suffix
+            try:
+                self._pending_reader.ids()  # A partial/corrupt view never authorizes effects.
+                report["pending_operations"] = [key for key, (action, _) in self._pending_reader.pending.items()
+                                                 if action.startswith("accessibility.")]
+                if report["pending_operations"]:
+                    report["blockers"].append("operação desconhecida; verificar antes de repetir")
+                report["plans"] = [plan.to_dict() for plan in plans(report)]
+            except (OSError, ValueError) as exc:
+                report["pending_operations"] = []
+                report["pending_known"] = False
+                report["blockers"].append(str(exc))
         except (OSError, ValueError, ProbeError) as exc:
             report.update(policy={"enabled": False, "circuit": "estado ilegível"}, pending_operations=[])
             report["blockers"].append(str(exc))
@@ -535,6 +608,10 @@ class Supervisor:
             archive_released_leases(self.store.root)
         report = self.inspect()
         self.last_report = report
+        if self.profile_guard is not None:
+            profile_result = self.profile_guard.tick(report)
+            if profile_result is not None:
+                return profile_result
         policy = self.store.read()
         if not policy["enabled"] or policy["circuit"] or report["blockers"]:
             return {"ok": True, "state": "waiting" if report["blockers"] else "paused",

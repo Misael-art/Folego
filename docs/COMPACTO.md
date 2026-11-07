@@ -1,12 +1,28 @@
 # Widget, sessões de IA e atalhos
 
+## Mini horizontal
+
+A faixa mínima flutuante ocupa **384 × 46 px lógicos** em uma linha: alça de
+arraste, estado com palavra e cor, CPU agregada, temperatura com origem e uso de
+RAM. Uma leitura ausente ou antiga mostra `—`; `ACPI` não é chamada de
+temperatura direta da CPU. O botão **Expandir** abre o compacto de 280 px, a
+grade abre a Central e a seta abre diretamente os cinco formatos, com marca no
+atual. Todas as barras e o compacto oferecem o mesmo seletor, e a Central
+oferece **Mini horizontal** em **Posição do widget**. A área de arraste não
+executa ações. O hover não abre atalhos nessa faixa; avisos completos e cotas
+continuam no compacto e na Central. Calor no limite do sensor e bateria crítica
+em descarga aparecem também no estado breve, com detalhes ao passar o ponteiro.
+O [mockup e critérios](handoff/validation/mini-widget-2026-11-07/README.md)
+registram a hierarquia e as transições.
+
 O widget tem 280 px de largura em pixels lógicos do desktop. Recursos ficam em
 duas linhas; alertas completos e mensagens podem aumentar a altura. O ícone de
 grade abre a **Central** e recolhe o widget. A seta ao lado abre os controles;
 o ícone de teclado e sua seta são um grupo separado para abrir o teclado embaixo
-ou no topo. **Voltar**, no topo da central,
-retorna ao controle flutuante sem perder a aba, os campos em edição ou parar o
-monitoramento. As duas interfaces dispensam minimizar, maximizar e fechar.
+ou no topo. **Modo widget**, na Central, retorna ao controle flutuante sem
+parar o monitoramento. Em outras abas, use **Posição do widget → Widget
+flutuante** ou **Mini horizontal** no menu do cabeçalho; a aba e os campos em edição são preservados.
+As duas interfaces dispensam minimizar, maximizar e fechar.
 Para encerrar, use a seta da Central → **Sair do Fôlego** ou a bandeja. **Ocultar widget**,
 no mesmo menu, mantém um caminho de retorno: sem bandeja e com a central
 oculta, ela é reaberta antes de ocultar o widget. O cabeçalho da central permite
@@ -21,16 +37,17 @@ Ao passar o mouse pela borda esquerda do widget, uma faixa em dois tons mais
 escuros revela a seta para a barra direita. A borda direita abre a barra
 esquerda; a borda superior abre a barra horizontal no topo. A seta da borda
 externa de cada lateral, ou do centro da borda superior, retorna aos 280 px do
-compacto. Os controles, leitura de
-recursos e cotas são os mesmos componentes nas quatro formas. As laterais têm
+compacto. O seletor de visualizações em cada formato também leva diretamente
+às outras quatro superfícies. Os controles, leitura de
+recursos e cotas são os mesmos componentes nas quatro formas completas. As laterais têm
 112–128 unidades lógicas de largura: o indicador principal fica centralizado,
 seguido do estado, métricas, espaço livre, pausa e cotas confirmadas em coluna.
 As métricas se alinham à borda correspondente; os cantos da janela são
 recortados de forma arredondada.
 As seis ações coloridas aparecem ao entrar com o ponteiro e se recolhem após
 sair, nas três barras como no compacto. Nas laterais, formam uma coluna na base;
-a área de leitura rola independentemente quando as cotas e avisos excedem a
-altura útil. A barra superior tem 132 unidades lógicas de altura a partir de
+a área de leitura rola entre o cabeçalho fixo e os atalhos quando as cotas e
+avisos excedem a altura útil. A barra superior tem 120 unidades lógicas de altura a partir de
 900 unidades de largura: Fôlego e o indicador de folga começam à esquerda,
 seguidos pelas cotas confirmadas, métricas e o grupo de teclado/menu na ponta
 direita, com Pausar abaixo desses dois controles. Ações expandidas formam uma
@@ -44,9 +61,9 @@ Fôlego pede ao KWin para posicionar **somente sua própria janela** e verifica
 a posição antes de concluir; o conteúdo reaparece suavemente após a confirmação.
 Ao reabrir uma barra depois de visitar a Central, o Fôlego confirma novamente
 o encaixe: a regra inicial do KWin para o widget flutuante pode ter reposicionado
-a mesma janela. **Voltar** na Central abre o widget flutuante. O menu **Posição
-do widget** na Central e no widget oferece também as duas laterais e o topo,
-sem depender da alça de borda estar visível.
+a mesma janela. **Modo widget** na Central abre o widget flutuante. O menu **Posição
+do widget** na Central e o seletor direto no widget oferecem mini, compacto,
+as duas laterais e o topo, sem depender da alça de borda estar visível.
 O flutuante preserva a posição quando ela cabe na área útil; se a altura mudou,
 ajusta apenas o necessário para manter a janela inteira acessível. Uma mudança
 tardia do KWin na barra é conferida por leitura da geometria, com número limitado
@@ -353,12 +370,21 @@ de cima para baixo em 140 ms; ao sair, aguarda 200 ms antes de recolher. Menus
 abertos preservam a área durante a escolha. O teclado fica sempre no cabeçalho:
 ícone para abrir embaixo e seta para abrir no topo.
 
-As métricas mostram RAM e Swap à esquerda, CPU e Tmp alinhados à direita e a
-temperatura em °C à direita da CPU. **Tmp** é a ocupação dos temporários em
+As métricas mostram RAM e Swap à esquerda, CPU e Tmp alinhados à direita. No
+widget flutuante, a terceira linha põe temperatura e RPM lado a lado; na barra
+superior ficam juntos à direita da CPU.
+**Tmp** é a ocupação dos temporários em
 memória, não a temperatura. A coleta lê sensores CPU/SoC em sysfs; se ausentes,
 aceita o sensor de sistema ACPI, identificado no tooltip. Não usa temperatura
 de GPU/disco como temperatura do host. Ausente/ilegível resulta em **— °C**.
-A leitura acontece no coletor, fora do loop gráfico, sem alterar ventoinhas.
+Quando a fonte é `acpitz`, a tela mostra **ACPI**: essa zona não comprova a
+temperatura específica da CPU. O percentual **CPU** é uso agregado dos núcleos,
+medido separadamente a partir de `/proc/stat`.
+O RPM vem do tacômetro `fan*_input` em sysfs: o sensor rotulado CPU tem
+preferência, seguido do primeiro ventilador do host. Sensores de GPU e disco
+não entram nessa leitura. Zero é uma leitura válida de ventoinha parada;
+ausência ou valor inválido aparece como **— RPM**. O tooltip identifica o sensor.
+As leituras acontecem no coletor, fora do loop gráfico, sem alterar ventoinhas.
 
 **Copiar** solicita a cópia da seleção do aplicativo em foco. **Colar** solicita
 a colagem nele. Usam os atalhos alternativos de edição Ctrl+Insert e Shift+Insert;
@@ -366,14 +392,15 @@ assim, copiar nunca envia Ctrl+C para interromper um trabalho no terminal. O
 aplicativo de destino precisa aceitar esses atalhos. O Fôlego não lê nem grava
 o conteúdo da área de transferência ou as teclas em logs.
 
-**Prompts** abre uma lista de 12 títulos: diagnóstico real, continuidade,
-implementação, investigação de erro, revisão, testes, desempenho, segurança,
+**Prompts** abre uma lista de 13 títulos: diagnóstico real, implantação do
+diagnóstico item a item, continuidade, implementação de melhoria,
+investigação de erro, revisão, testes, desempenho, segurança,
 usabilidade, design com mockups, passagem de contexto e prontidão para PR/distribuição. Escolher um
 copia seu texto para a área de transferência; depois cole no agente desejado.
 Não cola, executa ou envia pedidos automaticamente. Os textos são genéricos,
 respeitam as instruções e autorizações do projeto e pedem evidências verificáveis.
 
-O seletor usa seis blocos: **Diagnóstico e continuidade**, **Desenvolvimento e
+O seletor usa seis blocos: **Diagnóstico, implantação e continuidade**, **Desenvolvimento e
 correção**, **Qualidade e segurança**, **Desempenho**, **Design e experiência**
 e **Documentação e entrega**. Cada bloco tem faixa lateral colorida, título
 horizontal e linhas clicáveis com ícone de copiar; clicar em qualquer ponto da

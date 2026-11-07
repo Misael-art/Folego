@@ -23,10 +23,13 @@ def options_argv(action, target, confirm):
 class OptionsTab(QWidget):
     operation_verified = Signal(object)
     sound_preview = Signal(str)
+    screen_energy_requested = Signal(str)
     def __init__(self, *, jobs=None):
         super().__init__()
         self._stopped = False
         self._desktop_options = False
+        self._screen_energy_state = {'enabled': False, 'message': 'Verificando o Plasma.'}
+        self._cooperative_message = 'Pedido cooperativo: aguardando leitura térmica.'
         self._sound_message = 'Sons distintos por agente; alerta em 20%, fim da franquia e reposição confirmada.'
         self.jobs = jobs or TuneJobs(parent=self, argv_factory=options_argv, timeout_ms=30000)
         self.choice = QCheckBox("Iniciar Fôlego automaticamente com a sessão")
@@ -75,8 +78,18 @@ class OptionsTab(QWidget):
         box.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         self.settings_box = box
         self.build_theme_options()
-        for widget in (self.choice, text, self.status, self.verify, self.pending, self.operation_id, self.reconcile, self.cancel, self.operation_status, self.retention, self.retain, self.retained_runs, self.recover_run_button):
-            box.addWidget(widget)
+        for title, controls in (
+            ("Início com a sessão", (self.choice, text, self.status, self.verify)),
+            ("Operações pendentes", (self.pending, self.operation_id, self.reconcile, self.cancel,
+                                     self.operation_status)),
+            ("Temporários do Fôlego", (self.retention, self.retain, self.retained_runs,
+                                       self.recover_run_button)),
+        ):
+            group = QGroupBox(title)
+            group_layout = QVBoxLayout(group)
+            for widget in controls:
+                group_layout.addWidget(widget)
+            box.addWidget(group)
         box.addStretch(1)
         area.setWidget(content)
         outer.addWidget(area)
@@ -206,6 +219,55 @@ class OptionsTab(QWidget):
         preview.addWidget(self.sound_kind, 1); preview.addWidget(self.test_sound)
         layout.addLayout(preview); layout.addWidget(self.sound_status)
         self.settings_box.insertWidget(1, group)
+        screen_group = QGroupBox('Economia da tela · Steam Deck')
+        screen_layout = QVBoxLayout(screen_group)
+        self.screen_energy_choice = QCheckBox('Apagar a tela interna após inatividade')
+        self.screen_energy_choice.setAccessibleName('Economia da tela interna, desligada até ativar')
+        self.screen_energy_choice.setEnabled(False)
+        self.screen_energy_choice.clicked.connect(
+            lambda checked: self.screen_energy_requested.emit('enable' if checked else 'disable'))
+        self.screen_energy_status = QLabel('Verificando o Plasma; economia desligada até ativar.')
+        self.screen_energy_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.screen_energy_status.setWordWrap(True)
+        screen_hint = QLabel('Na bateria: 2 minutos. Na tomada sem dock: 3 minutos. '
+                             'Movimento, uma entrega confirmada ou alerta térmico reacende a tela. '
+                             'Jogo em tela cheia pausa a economia. Com monitor externo ativo, '
+                             'o Plasma desloca as janelas e o Fôlego desativa só a tela interna. '
+                             'O Plasma pode manter '
+                             'a tela acesa quando outro aplicativo inibe a ociosidade.')
+        screen_hint.setWordWrap(True)
+        screen_layout.addWidget(self.screen_energy_choice)
+        screen_layout.addWidget(self.screen_energy_status)
+        screen_layout.addWidget(screen_hint)
+        self.settings_box.insertWidget(0, screen_group)
+        self.show_screen_energy(self._screen_energy_state)
+        self.cooperative_status = QLabel(self._cooperative_message)
+        self.cooperative_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.cooperative_status.setWordWrap(True)
+        screen_layout.addWidget(self.cooperative_status)
+
+    def show_screen_energy(self, state):
+        self._screen_energy_state = state
+        if self._stopped or not self._desktop_options: return
+        from PySide6.QtCore import QSignalBlocker
+        with QSignalBlocker(self.screen_energy_choice):
+            self.screen_energy_choice.setChecked(bool(state.get('enabled')))
+        self.screen_energy_choice.setEnabled(bool(state.get('enabled')) or not state.get('unknown', False))
+        self.screen_energy_status.setText(state.get('message', 'Estado da tela desconhecido'))
+
+    def screen_energy_error(self, message):
+        self._screen_energy_state = {'enabled': False, 'unknown': True, 'message': message}
+        if self._stopped or not self._desktop_options: return
+        self.screen_energy_choice.setEnabled(False)
+        self.screen_energy_status.setText(message)
+
+    def show_cooperative_state(self, state):
+        self._cooperative_message = state.get('message', 'Pedido cooperativo sem confirmação')
+        if self._desktop_options: self.cooperative_status.setText(self._cooperative_message)
+
+    def cooperative_error(self, message):
+        self._cooperative_message = 'Pedido cooperativo indisponível: ' + message
+        if self._desktop_options: self.cooperative_status.setText(self._cooperative_message)
 
     def sound_feedback(self, message):
         if self._stopped: return

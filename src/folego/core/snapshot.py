@@ -144,6 +144,10 @@ class BatteryInfo:
     percent: int
     status: str
     remaining_s: int | None = None
+    # Kernel power_supply values are magnitudes, not signed net system draw.
+    voltage_uv: int | None = None
+    current_ua: int | None = None
+    power_uw: int | None = None
 
 
 @dataclass(frozen=True)
@@ -174,7 +178,12 @@ class Snapshot:
     boot_id: str = ""
     temperature_c: float | None = None
     temperature_sensor: str = ""
+    fan_rpm: int | None = None
+    fan_sensor: str = ""
+    thermal_passive_c: float | None = None
+    thermal_critical_c: float | None = None
     battery: BatteryInfo | None = None
+    external_power_online: bool | None = None
 
     @property
     def ts_iso(self) -> str:

@@ -130,8 +130,14 @@ class MetricsCollector:
             add("self_rss", OK)
 
         temperature, sensor = sysfs.read_temperature(self._sys())
+        fan_rpm, fan_sensor = sysfs.read_fan_speed(self._sys())
+        passive, critical = sysfs.read_thermal_trips(self._sys(), sensor)
+        add("temperature", OK if temperature is not None else MISSING,
+            "sensor térmico indisponível" if temperature is None else sensor)
         battery, battery_quality = sysfs.read_battery(self._sys())
         add("battery", battery_quality.status, battery_quality.detail)
+        external_power, power_quality = sysfs.read_external_power(self._sys())
+        add("external_power", power_quality.status, power_quality.detail)
         finished = self.clock()
         elapsed = (None if self._prev_mono is None
                    else max(0.0, finished - self._prev_mono))
@@ -158,7 +164,12 @@ class MetricsCollector:
         return Snapshot(
             temperature_c=temperature,
             temperature_sensor=sensor,
+            fan_rpm=fan_rpm,
+            fan_sensor=fan_sensor,
+            thermal_passive_c=passive,
+            thermal_critical_c=critical,
             battery=battery,
+            external_power_online=external_power,
             boot_id=boot_id,
             ts=self.wall_clock(),
             mem=mem,

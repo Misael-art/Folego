@@ -83,7 +83,7 @@ def watch(*, supervisor=None, interval=10, cycles=None):
                         {"schema": 1, "checked_at": time.time(), "result": result,
                          "owner": {"pid": os.getpid(), "boot_id": read_boot_id(),
                                    "start_ticks": int(Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19])},
-                         "effects_scope": "enable-baseline-input-only"})
+                         "effects_scope": "enable-baseline-input-and-deck-profiles"})
             count += 1
             if cycles is None or count < cycles:
                 time.sleep(max(1, interval - (time.monotonic() - started)))

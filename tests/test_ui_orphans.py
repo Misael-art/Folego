@@ -166,7 +166,8 @@ def test_no_candidates_is_said_out_loud(panel):
     widget.show_candidates([])
 
     assert widget.rows() == []
-    assert "sem órfãos" in widget.status().lower()
+    assert "nenhum candidato confirmado" in widget.status().lower()
+    assert widget.tree.isHidden()
 
 
 def test_the_group_button_names_the_family_and_its_yield(panel):
@@ -252,14 +253,15 @@ def test_the_last_group_disappearing_clears_the_button(panel):
 
 
 def test_candidates_appearing_update_the_stale_status_text(panel):
-    """R05: o rodapé não pode continuar dizendo "sem órfãos" com linhas na tabela."""
+    """R05: a mensagem de lista vazia sai quando aparecem candidatos."""
     widget = panel["make"]()
     widget.show_candidates([])
-    assert "sem órfãos" in widget.status().lower()
+    assert "nenhum candidato confirmado" in widget.status().lower()
 
     widget.show_candidates([cand()])
 
-    assert "sem órfãos" not in widget.status().lower()
+    assert "nenhum candidato confirmado" not in widget.status().lower()
+    assert not widget.tree.isHidden()
     assert "possivelmente abandonado" in widget.status().lower()
 
 
