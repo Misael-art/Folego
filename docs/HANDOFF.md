@@ -38,11 +38,15 @@ Uma consulta real somente leitura com a regra corrigida (`./dev run orphans
 valida a classificação atual, não uma prova de ociosidade de cinco minutos.
 A GUI foi recarregada somente pela unit existente, agora PID 667345,
 `active/running`, `ExecMainStatus=0`, `NRestarts=0`; Steam permaneceu ativo.
-Confirmar o painel após cinco minutos de observação contínua antes de afirmar
-que o aviso residente desapareceu. [PR #4](https://github.com/Misael-art/Folego/pull/4)
-aberto para revisão, sem merge nem release; publicar o presente registro no
-mesmo PR. A interface em Qt offscreen e a consulta CLI não provam recuperação
-de memória, uso físico do Steam ou segurança de encerramento automático.
+Às 13:51:09, após 5 min 31 s com a nova instância ativa, a árvore de
+acessibilidade da janela KDE mostrava “Nenhum candidato confirmado nesta
+leitura”; o Steam e os três PIDs originais continuavam vivos, e ambas as units
+estavam `active/running` sem reinício por falha. PSI de CPU em 10 s era 0,51%,
+memória e I/O em 10 s eram 0%, uma leitura pontual sem inferência causal.
+[PR #4](https://github.com/Misael-art/Folego/pull/4) aberto para revisão, sem
+merge nem release. A interface em Qt offscreen e a consulta CLI não provam
+recuperação de memória, uso físico do Steam ou segurança de encerramento
+automático.
 
 ## Integração em main — 07/11/2026
 
