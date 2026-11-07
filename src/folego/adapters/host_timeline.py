@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import stat
@@ -11,11 +12,13 @@ from datetime import datetime
 from pathlib import Path
 
 from .. import paths
-from ..core.snapshot import ERROR, OK, Snapshot, SourceQuality
+from ..core.snapshot import ERROR, MISSING, OK, PARTIAL, Snapshot, SourceQuality
 
 _BOOT_ID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
 _PER_BOOT_LIMIT = 4 * 1024 * 1024
 _TOTAL_LIMIT = 32 * 1024 * 1024
+_SOURCES = ("meminfo", "swaps", "pressure_memory", "pressure_io", "pressure_cpu",
+            "temperature", "battery", "external_power", "processes")
 
 
 def _sample(snapshot: Snapshot) -> dict:
@@ -33,8 +36,21 @@ def _sample(snapshot: Snapshot) -> dict:
             process = max(candidates, key=lambda p: p.cpu_frac)
             top = {"pid": process.pid, "starttime": process.starttime,
                    "name": process.comm[:80], "cpu_core_percent": round(process.cpu_frac, 1)}
-    return {"boot_id": snapshot.boot_id,
-            "at": datetime.fromtimestamp(snapshot.ts).astimezone().isoformat(timespec="seconds"),
+    battery = snapshot.battery if snapshot.source("battery").status == OK else None
+    issues = {}
+    for name in _SOURCES:
+        status = snapshot.source(name).status
+        if status != OK:
+            issues[name] = status
+    return {"schema": 2, "boot_id": snapshot.boot_id,
+            "at": datetime.fromtimestamp(snapshot.ts).astimezone().isoformat(timespec="milliseconds"),
+            "mono_ns": (round(snapshot.mono * 1_000_000_000)
+                        if math.isfinite(snapshot.mono) and snapshot.mono > 0 else None),
+            "collector_read_ms": (round(snapshot.duration_s * 1000, 2)
+                                  if math.isfinite(snapshot.duration_s) and snapshot.duration_s > 0 else None),
+            # Sparse: in schema 2, an unlisted source is OK. Old schema has
+            # no quality proof at all. This saves space at the fixed 4 MiB cap.
+            "source_issues": issues,
             "mem_available_kb": mem.mem_available_kb if mem else None,
             "swap_used_kb": snapshot.swap_used_kb if snapshot.source("swaps").status == OK else None,
             "psi_mem_avg10": pressure_mem.some_avg10 if pressure_mem else None,
@@ -42,11 +58,13 @@ def _sample(snapshot: Snapshot) -> dict:
             "psi_cpu_avg10": pressure_cpu.some_avg10 if pressure_cpu else None,
             "temperature_c": (snapshot.temperature_c
                               if snapshot.source("temperature").status == OK else None),
-            "temperature_sensor": snapshot.temperature_sensor or None,
-            "battery_percent": (snapshot.battery.percent
-                                if snapshot.source("battery").status == OK and snapshot.battery else None),
-            "battery_status": (snapshot.battery.status
-                               if snapshot.source("battery").status == OK and snapshot.battery else None),
+            "temperature_sensor": ((snapshot.temperature_sensor or None)
+                                   if snapshot.source("temperature").status == OK else None),
+            "battery_percent": battery.percent if battery else None,
+            "battery_status": battery.status if battery else None,
+            "battery_voltage_uv": battery.voltage_uv if battery else None,
+            "battery_current_ua": battery.current_ua if battery else None,
+            "battery_power_uw": battery.power_uw if battery else None,
             "external_power_online": (snapshot.external_power_online
                                       if snapshot.source("external_power").status == OK else None),
             "top_cpu": top}
@@ -134,7 +152,30 @@ def _valid_sample(row: object) -> bool:
         stamp = datetime.fromisoformat(at)
     except ValueError:
         return False
-    return stamp.tzinfo is not None
+    if stamp.tzinfo is None:
+        return False
+    schema = row.get("schema", 1)
+    if schema == 1:
+        return True  # historical lines predate source quality and monotonic time
+    if schema != 2:
+        return False
+    statuses = row.get("source_issues")
+    if (not isinstance(statuses, dict) or not set(statuses) <= set(_SOURCES)
+            or any(value not in (PARTIAL, MISSING, ERROR)
+                   for value in statuses.values())):
+        return False
+    mono_ns = row.get("mono_ns")
+    if mono_ns is not None and (type(mono_ns) is not int or mono_ns <= 0):
+        return False
+    for name in ("battery_voltage_uv", "battery_current_ua", "battery_power_uw"):
+        value = row.get(name)
+        if value is not None and (type(value) is not int or value < 0):
+            return False
+    if statuses.get("battery", OK) != OK and any(row.get(name) is not None for name in
+            ("battery_percent", "battery_status", "battery_voltage_uv",
+             "battery_current_ua", "battery_power_uw")):
+        return False
+    return True
 
 
 def read_timeline(directory: Path | None = None, *, limit: int = 80,
@@ -186,7 +227,7 @@ def read_timeline(directory: Path | None = None, *, limit: int = 80,
                     except ValueError:
                         malformed += 1
                         continue
-                    if not _valid_sample(row):
+                    if not _valid_sample(row) or row["boot_id"] != path.stem:
                         malformed += 1
                         continue
                     recent.append(row)

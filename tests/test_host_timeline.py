@@ -64,7 +64,9 @@ def test_timeline_marks_corruption_unknown_and_keeps_existing_bytes(tmp_path):
 def test_timeline_energy_requires_valid_sources_and_preserves_old_schema(tmp_path):
     folder = tmp_path / "timeline"
     recorder = HostTimelineRecorder(folder)
-    sample = replace(_snapshot(100), battery=BatteryInfo(90, 'Discharging'),
+    sample = replace(_snapshot(100), battery=BatteryInfo(
+                         90, 'Discharging', voltage_uv=7_694_000,
+                         current_ua=1_628_000), duration_s=.042,
                      external_power_online=False,
                      sources=_snapshot(100).sources +
                      (SourceQuality('battery', OK), SourceQuality('external_power', OK)))
@@ -73,14 +75,44 @@ def test_timeline_energy_requires_valid_sources_and_preserves_old_schema(tmp_pat
     row = read_timeline(folder)['samples'][-1]
     assert row['battery_percent'] == 90
     assert row['battery_status'] == 'Discharging'
+    assert row['battery_voltage_uv'] == 7_694_000
+    assert row['battery_current_ua'] == 1_628_000
+    assert row['battery_power_uw'] is None
     assert row['external_power_online'] is False
+    assert row['schema'] == 2 and row['mono_ns'] == 100_000_000_000
+    assert row['collector_read_ms'] == 42
+    assert 'battery' not in row['source_issues']
+    assert 'external_power' not in row['source_issues']
     unknown = replace(sample, mono=115, sources=_snapshot(115).sources)
     record_snapshot(recorder, unknown)
     row = read_timeline(folder)['samples'][-1]
     assert row['battery_percent'] is None
+    assert row['battery_voltage_uv'] is None
     assert row['external_power_online'] is None
+    assert row['source_issues']['battery'] == 'missing'
+    assert row['source_issues']['external_power'] == 'missing'
     old = {'boot_id': BOOT, 'at': row['at']}
     assert host_timeline._valid_sample(old)
+    with (folder / f'{BOOT}.jsonl').open('a') as stream:
+        stream.write(json.dumps(old) + '\n')
+    historical = read_timeline(folder)['samples'][-1]
+    assert historical == old  # no electrical or source-quality proof invented
+
+
+def test_timeline_rejects_new_schema_with_wrong_boot_or_electrical_quality(tmp_path):
+    folder = tmp_path / 'timeline'
+    HostTimelineRecorder(folder).record(_snapshot(100))
+    path = folder / f'{BOOT}.jsonl'
+    original = json.loads(path.read_text())
+    mismatched = dict(original, boot_id='c325bc6f-a6f8-4093-8b2d-5c10008de2e5')
+    bad_power = dict(original, battery_voltage_uv=8_000_000)
+    unknown_schema = dict(original, schema=99)
+    path.write_text('\n'.join(json.dumps(row) for row in
+                      (original, mismatched, bad_power, unknown_schema)) + '\n')
+    report = read_timeline(folder)
+    assert report['quality'] == 'partial'
+    assert len(report['samples']) == 1
+    assert '3 amostra(s) ilegível(is)' in report['reason']
 
 
 def test_timeline_limit_is_visible_and_write_failure_reaches_snapshot(tmp_path, monkeypatch):

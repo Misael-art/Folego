@@ -54,6 +54,11 @@ def read_battery(root: Path) -> tuple[BatteryInfo | None, SourceQuality]:
         status = ''
     if percent is None or status not in ('Charging', 'Discharging', 'Full', 'Not charging'):
         return None, SourceQuality('battery', ERROR, 'percentual ou estado da bateria inválido')
+    # Keep the kernel ABI units. A missing or malformed optional value is
+    # unknown; do not derive power from current and voltage or infer direction.
+    voltage = _battery_int(path / 'voltage_now', minimum=100_000, maximum=100_000_000)
+    current = _battery_int(path / 'current_now', maximum=100_000_000)
+    power = _battery_int(path / 'power_now', maximum=1_000_000_000)
     remaining = None
     if status == 'Discharging':
         for name in ('time_to_empty_avg', 'time_to_empty_now'):
@@ -61,15 +66,14 @@ def read_battery(root: Path) -> tuple[BatteryInfo | None, SourceQuality]:
             if remaining is not None:
                 break
         if remaining is None:
-            for available, rate in (('energy_now', 'power_now'), ('charge_now', 'current_now')):
+            for available, draw in (('energy_now', power), ('charge_now', current)):
                 amount = _battery_int(path / available)
-                draw = _battery_int(path / rate, minimum=1)
-                if amount is not None and draw is not None:
+                if amount is not None and draw is not None and draw > 0:
                     estimate = round(amount * 3600 / draw)
                     if 0 < estimate <= 7 * 86400:
                         remaining = estimate
                         break
-    return BatteryInfo(percent, status, remaining), SourceQuality('battery', OK)
+    return BatteryInfo(percent, status, remaining, voltage, current, power), SourceQuality('battery', OK)
 
 
 def read_external_power(root: Path) -> tuple[bool | None, SourceQuality]:

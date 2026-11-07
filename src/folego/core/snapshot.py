@@ -144,6 +144,10 @@ class BatteryInfo:
     percent: int
     status: str
     remaining_s: int | None = None
+    # Kernel power_supply values are magnitudes, not signed net system draw.
+    voltage_uv: int | None = None
+    current_ua: int | None = None
+    power_uw: int | None = None
 
 
 @dataclass(frozen=True)

@@ -1007,12 +1007,19 @@ def _cmd_host_timeline(args) -> int:
         for row in report["samples"][-10:]:
             battery = (f" · bateria {row['battery_percent']}% ({row['battery_status']})"
                        if row.get("battery_percent") is not None else "")
+            electrical = ""
+            if row.get("battery_voltage_uv") is not None:
+                electrical += f" · {row['battery_voltage_uv'] / 1_000_000:.3f} V"
+            if row.get("battery_current_ua") is not None:
+                electrical += f" · corrente |{row['battery_current_ua'] / 1_000_000:.3f}| A"
+            if row.get("battery_power_uw") is not None:
+                electrical += f" · potência {row['battery_power_uw'] / 1_000_000:.2f} W"
             external = (f" · energia externa {'sim' if row['external_power_online'] else 'não'}"
                         if row.get("external_power_online") is not None else "")
             print(f"  {row['at']} · RAM {row['mem_available_kb']} KiB · "
                   f"PSI memória {row['psi_mem_avg10']}% · "
                   f"PSI I/O {row['psi_io_avg10']}% · "
-                  f"temperatura {row['temperature_c']} °C{battery}{external}")
+                  f"temperatura {row['temperature_c']} °C{battery}{electrical}{external}")
     return EXIT_OK
 
 
