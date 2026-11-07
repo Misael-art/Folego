@@ -1,5 +1,58 @@
 # Passagem para o próximo agente — atualizada em 07/11/2026
 
+## Qualidade visual da mini horizontal — 07/11/2026
+
+O usuário pediu separação entre CPU, temperatura e RAM e criticidade por
+métrica, com a diretriz **qualidade visual nos mínimos detalhes**. A correção
+de ditado enfatizou qualidade visual. Owner da apresentação é
+`ui/compact.py`; o incremento `ba24c055c885df08b806624b60edc1fadfcd800f`
+está no [PR #5](https://github.com/Misael-art/Folego/pull/5), branch
+`codex/mini-visual-quality-20261107`, apoiada no PR #4 para conservar a
+proteção dos helpers do Steam. Os seis jobs de produto desse SHA passaram
+no GitHub; revisores automáticos ficaram skipped.
+
+A faixa mantém 384 × 46 px lógicos. Cada leitura tem uma célula com fundo do
+tema, raio de 6 px, rótulo discreto acima do valor e separação de 6 px.
+CPU reutiliza o classificador da Central com 75%/95%; RAM segue as frações de
+folga configuradas no monitor; temperatura usa os limites e a margem do
+mesmo sensor. Cor, dica e descrição acessível identificam o estado. Fonte
+parcial, valor antigo ou pausa retiram o valor e a cor. Temperatura medida
+sem limite declarado conserva a leitura e usa apresentação neutra.
+
+O [registro de design](DESIGN.md) e o [guia do compacto](COMPACTO.md) receberam
+os critérios. A diretriz foi gravada e relida no AI Memory do projeto em
+`_rules/qualidade-visual-nos-minimos-detalhes.md`, página
+`01a1b718-0be9-7261-9fef-a715a61cc584`.
+
+Validação local com Python 3.14.7, HOME/XDG privados e suites sequenciais.
+O foco de compacto, temas e hover passou em 69 testes. `./dev check` final
+passou em **1299 testes sem Qt e 1689 Qt offscreen**, com dois skips por
+perfil. A revisão final do diff e das referências passou. O preflight
+observou RAM disponível entre 5,6 e 6,6 GiB, pressão de memória baixa e
+temperatura ACPI entre 72 e 83 °C para um limite passivo de 100 °C. Os
+processos concorrentes foram inspecionados sem interrompê-los.
+
+O [ensaio KDE/Wayland](handoff/validation/mini-visual-quality-2026-11-07/README.md)
+passou em 48 cenários de janela própria, oito temas e seis estados. Células
+e controles ficaram dentro da faixa, com a geometria confirmada pelo KWin.
+Dados de demonstração, áudio isolado e capturas próprias. A primeira captura
+de demonstração omitira a fonte de processos e mostrava estado geral crítico;
+a fonte sintética foi completada e as capturas finais foram regeneradas.
+Toque, arraste físico e outras escalas permanecem com aceite próprio.
+
+A GUI anterior PID 667345 saiu pelo item da própria bandeja após conferir
+owner, PID e início do processo. `./dev setup` sincronizou o ambiente e a
+unit gráfica existente voltou em PID **925658**, active/running,
+Result=success, com a Central aberta. Entrada e Desempenho mantiveram os
+PIDs 3817 e 3825. O novo formato fica no seletor **Mini horizontal**.
+As capturas de pixels pertencem ao processo QA. O backend de captura geral
+do Computer Use estava indisponível no KDE desta sessão.
+
+Próximo passo é revisar o PR #5 após o #4 e observar o uso normal da mini.
+As áreas de testes desta tarefa foram retidas em
+`.scratch/dev-tests-reviewed/`, incluindo o diretório
+`mini-visual-quality-20261107-lHpFbu`.
+
 ## Falso alerta de três órfãos do Steam — 07/11/2026
 
 A janela residente avisava sobre PIDs 5988 (`steamwebhelper`), 3942 e 5286

@@ -332,9 +332,10 @@ def test_mini_bar_is_one_line_and_every_form_has_a_direct_route(qapp):
     assert view._dock_mode == 'mini'
     assert (view.width(), view.height()) == (MINI_WIDTH, MINI_HEIGHT)
     assert view.mini_bar.isVisible() and not view.body_widget.isVisible()
-    assert view.mini_cpu.text() == 'CPU 18%'
-    assert view.mini_temperature.text() == 'ACPI 81 °C'
-    assert view.mini_memory.text().startswith('RAM ')
+    assert view.mini_cpu.text() == '18%'
+    assert view.mini_temperature.text() == '81 °C'
+    assert view.mini_temperature_caption.text() == 'ACPI'
+    assert view.mini_memory.text().endswith('%')
     assert view.layout_actions['mini'].isChecked()
     hot = replace(sample, temperature_c=105, thermal_passive_c=100,
                   thermal_critical_c=105)
@@ -360,6 +361,10 @@ def test_mini_bar_is_one_line_and_every_form_has_a_direct_route(qapp):
     positions = [control.mapTo(view, QPoint(0, 0)).x() for control in controls]
     assert positions == sorted(positions)
     assert positions[-1] + view.navigation_group.width() <= view.width()
+    cells = [label.parentWidget() for label in
+             (view.mini_cpu, view.mini_temperature, view.mini_memory)]
+    for left, right in zip(cells, cells[1:]):
+        assert left.mapTo(view, QPoint(left.width(), 0)).x() + 4 <= right.mapTo(view, QPoint(0, 0)).x()
     for mode in ('right', 'left', 'top', 'mini'):
         view.layout_actions[mode].trigger()
         QTest.qWait(320)
@@ -396,14 +401,60 @@ def test_mini_bar_hides_stale_values_and_wayland_requests_confirmed_move(qapp, m
                      sources=(SourceQuality('meminfo', 'ok'), SourceQuality('cpu', 'ok'),
                               SourceQuality('temperature', 'ok')))
     view.show_snapshot(sample)
-    assert view.mini_cpu.text() == 'CPU —'
+    assert view.mini_cpu.text() == '—'
     assert view.mini_temperature.text() == '— °C'
-    assert view.mini_memory.text() == 'RAM —'
+    assert view.mini_memory.text() == '—'
+    assert all(label.property('level') == 'muted' for label in
+               (view.mini_cpu, view.mini_temperature, view.mini_memory))
     view.set_dock_mode('right')
     assert requested[-1][0] == 'widget-geometry'
     view._capture_result({'operation': 'widget-geometry', 'geometry': (100, 100, MINI_WIDTH, MINI_HEIGHT)})
     assert requested[-1][0] == 'widget-place'
     view.force_close()
+
+
+@pytest.mark.parametrize('cpu,available,temperature,expected', (
+    (.18, .34, 81, ('ok', 'ok', 'ok')),
+    (.75, .19, 95, ('warning', 'warning', 'warning')),
+    (.95, .09, 100, ('danger', 'danger', 'danger')),
+    (.99, .34, 81, ('danger', 'ok', 'ok')),
+))
+def test_mini_metrics_show_independent_criticality_and_pause_clears_colors(
+        qapp, cpu, available, temperature, expected):
+    from dataclasses import replace
+    from folego.ui.theme import THEMES, TOKENS, apply_theme
+    view, _ = make(qapp)
+    sample = replace(snap(total_kb=16_000_000, available_kb=int(available * 16_000_000)),
+                     mono=time.monotonic(), cpu_busy_frac=cpu,
+                     temperature_c=temperature, temperature_sensor='acpitz',
+                     thermal_passive_c=100, thermal_critical_c=105,
+                     sources=tuple(SourceQuality(k, 'ok') for k in
+                                   ('meminfo', 'cpu', 'temperature')))
+    labels = (view.mini_cpu, view.mini_memory, view.mini_temperature)
+    previous = TOKENS.key
+    try:
+        for key in ('snes-us', 'ps2'):
+            apply_theme(qapp, key)
+            view.show_snapshot(sample)
+            assert tuple(label.property('level') for label in labels) == expected
+            for label, role in zip(labels, expected):
+                assert getattr(THEMES[key].tokens, role) in label.styleSheet()
+                assert label.accessibleName() and label.accessibleDescription()
+            view.set_paused(True)
+            assert all(label.property('level') == 'muted' for label in labels)
+            assert all('Crítico' not in label.toolTip() for label in labels)
+            view.set_paused(False)
+        unknown_limit = replace(sample, thermal_passive_c=None, thermal_critical_c=None)
+        view.show_snapshot(unknown_limit)
+        assert view.mini_temperature.property('level') == 'muted'
+        assert str(round(temperature)) in view.mini_temperature.text()
+        partial = replace(sample, sources=tuple(SourceQuality(k, 'partial') for k in
+                                                ('meminfo', 'cpu', 'temperature')))
+        view.show_snapshot(partial)
+        assert all(label.property('level') == 'muted' for label in labels)
+    finally:
+        view.force_close()
+        apply_theme(qapp, previous)
 
 
 def test_mini_grip_moves_only_its_window_and_saves_position(qapp):

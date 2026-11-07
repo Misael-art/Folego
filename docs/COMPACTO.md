@@ -15,6 +15,14 @@ em descarga aparecem também no estado breve, com detalhes ao passar o ponteiro.
 O [mockup e critérios](handoff/validation/mini-widget-2026-11-07/README.md)
 registram a hierarquia e as transições.
 
+Cada métrica tem uma célula arredondada com rótulo discreto acima do valor.
+O valor usa verde, âmbar ou vermelho conforme sua própria criticidade, com
+descrição acessível e dica de estado. CPU segue os limiares de 75% e 95%
+da Central. RAM segue a folga configurada no monitor. Temperatura usa os
+limites informados pelo sensor e fica neutra quando esses limites faltam.
+Pausa, coleta parcial e leitura antiga retiram os valores e suas cores.
+A diretriz é [qualidade visual nos mínimos detalhes](DESIGN.md).
+
 O widget tem 280 px de largura em pixels lógicos do desktop. Recursos ficam em
 duas linhas; alertas completos e mensagens podem aumentar a altura. O ícone de
 grade abre a **Central** e recolhe o widget. A seta ao lado abre os controles;
