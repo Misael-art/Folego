@@ -1,5 +1,36 @@
 # Passagem para o próximo agente — atualizada em 07/11/2026
 
+## Novo corte às 09:11 e preservação GitHub — 07/11/2026
+
+O boot `5f684953-1eae-46d7-b025-0f5a29887a69` terminou sem registro de
+desligamento normal. [Investigação do episódio](handoff/validation/reset-2026-11-07-0911.md):
+houve um build RetroDevStudio com pico de 3,4 GiB sobreposto à QA do Fôlego;
+às 09:07:59, `acpitz` marcou 100 °C, zram cresceu e PSI memória/I/O subiu.
+Às 09:11:26, última amostra, havia ACPI 98 °C e bateria 68% descarregando,
+mas RAM ainda disponível e PSI memória/I/O baixo. Journal prossegue até
+09:11:31 sem panic, OOM, erro NVMe ou motivo térmico conclusivo. Btrfs não
+teve delta novo. O mecanismo do reset permanece **indeterminado**; revisar
+concorrência de cargas e preservar trabalho antes de ensaios adicionais.
+
+Nove objetos Git locais ficaram vazios após o corte. O HEAD `df83a6a` já
+estava no PR #3 do GitHub com checks aprovados; os objetos foram restaurados
+individualmente de cópia bare verificada do remoto. `git fsck` local passa e
+o checkout voltou a ler o HEAD. A alteração preexistente de `AGENTS.md` foi
+revisada e preservada neste incremento, com reforço explícito de capacidade e
+publicação no GitHub; nenhum stage global ou reset foi usado.
+O usuário pediu que **todos os agentes neste projeto preservem cada incremento
+revisável no GitHub**, além do desenvolvimento limpo: commit pequeno, push,
+confirmação do SHA remoto e checks, sem incluir dados privados. A regra também
+foi fixada na memória A em `_rules/folego-github-preservation-20261107.md`.
+Dados fora do Git precisam de backup independente antes de eventual formatação.
+Uma formatação do NVMe não é correção comprovada para este reset.
+
+No novo boot, a GUI já iniciou com schema 2 e está registrando eletricidade
+da bateria e duração da coleta; não houve novo corte com essa qualidade de
+amostra. SMART atual exigiria acesso privilegiado e não foi lido; pstore e
+flags de detecção pertencem ao PhaseZero. Não fazer scrub/reparo pesado no
+volume ativo para tentar reproduzir o problema.
+
 ## Dossiê leve de reinícios — 07/11/2026
 
 Incremento `1fb220f` na branch/PR #3. O observador lento do Fôlego agora

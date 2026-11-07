@@ -17,6 +17,13 @@ alterá-los. O diagnóstico de reinício abrupto permanece **indeterminado**.
   contador Btrfs de corrupção acumulada era 6741, sem aumento observado; os
   demais contadores e o NVMe SMART não indicavam erro novo. `unsafe_shutdowns`
   é acumulado, não traz data de cada episódio.
+- Em 07/11 às 09:11 houve novo corte. Build RetroDevStudio e QA Fôlego se
+  sobrepuseram; `acpitz` marcou 100 °C com PSI memória/I/O alto durante essa
+  janela. Na última amostra, ~3 minutos depois, ACPI 98 °C, bateria 68% em
+  descarga, RAM disponível e PSI memória/I/O baixo. Nove objetos Git locais
+  ficaram vazios, recuperados do SHA remoto; Btrfs sem delta novo. Isso torna
+  a concorrência de cargas um risco observado, sem provar a causa física do
+  reset. [Cronologia e recuperação](handoff/validation/reset-2026-11-07-0911.md).
 - O histórico de 15 segundos só existe com a GUI monitorando. Um boot que
   termina antes de ela abrir não pode ser coberto por esse mecanismo. O journal
   perdeu o final de alguns boots; pstore está sem backend e os detectores de
