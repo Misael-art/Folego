@@ -2,7 +2,7 @@ from pathlib import Path
 
 from folego.core.battery_alerts import BatteryAlertTracker, battery_band, remaining_text
 from folego.core.snapshot import BatteryInfo
-from folego.core.sysfs import read_battery
+from folego.core.sysfs import read_battery, read_external_power
 from folego.core.collector import MetricsCollector
 from folego.core.notification_tones import pcm
 
@@ -55,6 +55,30 @@ def test_collector_publishes_battery_quality(fake_proc, tmp_path):
     snapshot = MetricsCollector(proc_root=fake_proc, sys_root=tmp_path).collect()
     assert snapshot.battery == BatteryInfo(25, 'Discharging', 1200)
     assert snapshot.source('battery').status == 'ok'
+
+
+def test_system_battery_ignores_peripheral_and_reports_external_power(fake_proc, tmp_path):
+    from fixtures_proc import build_proc
+    build_proc(fake_proc, pids=[])
+    supply(tmp_path, percent='90')
+    peripheral = tmp_path / 'class/power_supply/hidpp_battery_1'
+    peripheral.mkdir()
+    (peripheral / 'type').write_text('Battery')
+    (peripheral / 'scope').write_text('Device')
+    adapter = tmp_path / 'class/power_supply/ACAD'
+    adapter.mkdir()
+    (adapter / 'type').write_text('Mains')
+    (adapter / 'online').write_text('0')
+    snapshot = MetricsCollector(proc_root=fake_proc, sys_root=tmp_path).collect()
+    assert snapshot.battery == BatteryInfo(90, 'Discharging')
+    assert snapshot.source('battery').status == 'ok'
+    assert snapshot.external_power_online is False
+    assert snapshot.source('external_power').status == 'ok'
+    (adapter / 'online').write_text('1')
+    assert read_external_power(tmp_path)[0] is True
+    (adapter / 'online').write_text('unknown')
+    assert read_external_power(tmp_path)[1].status == 'error'
+    assert read_external_power(tmp_path)[0] is None
 
 
 def test_thresholds_cross_once_and_critical_repeats_every_minute():

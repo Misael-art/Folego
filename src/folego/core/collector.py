@@ -136,6 +136,8 @@ class MetricsCollector:
             "sensor térmico indisponível" if temperature is None else sensor)
         battery, battery_quality = sysfs.read_battery(self._sys())
         add("battery", battery_quality.status, battery_quality.detail)
+        external_power, power_quality = sysfs.read_external_power(self._sys())
+        add("external_power", power_quality.status, power_quality.detail)
         finished = self.clock()
         elapsed = (None if self._prev_mono is None
                    else max(0.0, finished - self._prev_mono))
@@ -167,6 +169,7 @@ class MetricsCollector:
             thermal_passive_c=passive,
             thermal_critical_c=critical,
             battery=battery,
+            external_power_online=external_power,
             boot_id=boot_id,
             ts=self.wall_clock(),
             mem=mem,

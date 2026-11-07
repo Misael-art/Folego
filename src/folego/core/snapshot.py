@@ -179,6 +179,7 @@ class Snapshot:
     thermal_passive_c: float | None = None
     thermal_critical_c: float | None = None
     battery: BatteryInfo | None = None
+    external_power_online: bool | None = None
 
     @property
     def ts_iso(self) -> str:

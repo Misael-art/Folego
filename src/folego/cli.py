@@ -988,17 +988,31 @@ def _cmd_ntfs_recovery(args) -> int:
 
 def _cmd_host_timeline(args) -> int:
     from .adapters.host_timeline import read_timeline
-    report = read_timeline(limit=80, boot_id=args.boot_id)
+    try:
+        active_boot_id = (Path(paths.proc_root()) /
+                          "sys/kernel/random/boot_id").read_text().strip()
+    except OSError:
+        active_boot_id = None
+    report = read_timeline(limit=80, boot_id=args.boot_id,
+                           active_boot_id=active_boot_id or None)
     if args.json:
         _emit_machine({"ok": report["quality"] == "ok", "outcome": "observado",
                        "effect": "none", **report})
     else:
         print(f"Histórico local: {report['quality']} · {report['reason'] or 'amostras recentes'}")
+        capacity = report.get("capacity") or {}
+        if capacity.get("near_limit"):
+            print("Aviso: histórico próximo do limite; novas amostras podem parar. "
+                  "Os registros existentes foram preservados.")
         for row in report["samples"][-10:]:
+            battery = (f" · bateria {row['battery_percent']}% ({row['battery_status']})"
+                       if row.get("battery_percent") is not None else "")
+            external = (f" · energia externa {'sim' if row['external_power_online'] else 'não'}"
+                        if row.get("external_power_online") is not None else "")
             print(f"  {row['at']} · RAM {row['mem_available_kb']} KiB · "
                   f"PSI memória {row['psi_mem_avg10']}% · "
                   f"PSI I/O {row['psi_io_avg10']}% · "
-                  f"temperatura {row['temperature_c']} °C")
+                  f"temperatura {row['temperature_c']} °C{battery}{external}")
     return EXIT_OK
 
 

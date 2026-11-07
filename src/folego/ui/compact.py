@@ -991,7 +991,8 @@ class CompactWindow(QWidget):
                     (volume.inodes_total > 0 and volume.inodes_avail == 0)):
                 alerts.append("Runtime crítico — aplicativos podem não abrir")
         degraded = [item.name for item in snapshot.sources
-                    if item.status != "ok" and not (item.name == 'battery' and item.status == 'missing')]
+                    if item.status != "ok" and not (item.name in ('battery', 'external_power')
+                                                    and item.status == 'missing')]
         if degraded:
             alerts.append("Coleta parcial: " + ", ".join(degraded[:3]))
         if signal.level == "unknown":

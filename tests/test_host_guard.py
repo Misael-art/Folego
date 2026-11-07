@@ -3,9 +3,12 @@ import json
 import time
 
 from folego.adapters.host_guard import HostObserver, _boots, _ntfs_events
+from folego.adapters.host_timeline import HostTimelineRecorder
 from folego.core.host_guard import ThermalTracker
 from folego.core.snapshot import ERROR, MemInfo, Snapshot, SourceQuality
 from folego.core.sysfs import read_thermal_trips
+
+BOOT = "167c36b6-b7ae-4097-877b-3ab2a96d8b88"
 
 
 def _host(tmp_path, *, mounts=1):
@@ -13,7 +16,7 @@ def _host(tmp_path, *, mounts=1):
     sys = tmp_path / "sys"
     (proc / "self").mkdir(parents=True)
     (proc / "sys/kernel/random").mkdir(parents=True)
-    (proc / "sys/kernel/random/boot_id").write_text("boot-1\n")
+    (proc / "sys/kernel/random/boot_id").write_text(BOOT + "\n")
     lines = ["36 25 0:28 / / rw - btrfs /dev/nvme0n1p2 rw"]
     lines.extend(f"40 25 0:30 / /mnt/card{i} rw - fuseblk /dev/mmcblk{i}p1 rw"
                  for i in range(mounts))
@@ -81,6 +84,21 @@ def test_corrupt_baseline_is_preserved_and_ambiguous_ntfs_is_not_attributed(tmp_
     assert result["btrfs"][0]["delta"] is None
     assert result["ntfs"]["mount"] is None
     assert state.read_bytes() == before
+
+
+def test_stale_timeline_keeps_capacity_and_reports_missing_interval(tmp_path):
+    proc, sys, _ = _host(tmp_path)
+    folder = tmp_path / 'timeline'
+    HostTimelineRecorder(folder).record(Snapshot(
+        ts=1_700_000_000, mono=100, boot_id=BOOT, mem=None, swap_used_kb=0,
+        swap_total_kb=0, pressure_memory=None, pressure_io=None,
+        pressure_cpu=None, load=None, apps=(), self_rss_kb=0))
+    result = HostObserver(proc_root=proc, sys_root=sys, timeline_dir=folder,
+                          state_path=tmp_path / 'state.json', run=_run,
+                          clock=lambda: 1_700_000_300).observe()
+    assert result['timeline']['quality'] == 'stale'
+    assert result['timeline']['last_boot_id'] == BOOT
+    assert result['timeline']['capacity']['active_boot_bytes'] > 0
 
 
 def test_malformed_ntfs_journal_does_not_create_a_safe_count():

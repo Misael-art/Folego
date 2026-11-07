@@ -38,7 +38,7 @@ def main() -> int:
         apply_theme(app)
         from .actions.accessibility import Supervisor
         from .adapters.host_guard import HostObserver
-        from .adapters.host_timeline import HostTimelineRecorder
+        from .adapters.host_timeline import HostTimelineRecorder, record_snapshot
 
         def resource_collector():
             collector = MetricsCollector()
@@ -46,8 +46,7 @@ def main() -> int:
 
             def collect():
                 snapshot = collector.collect()
-                recorder.record(snapshot)
-                return snapshot
+                return record_snapshot(recorder, snapshot)
 
             return collect
 

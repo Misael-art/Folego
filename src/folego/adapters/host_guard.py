@@ -333,17 +333,20 @@ class HostObserver:
                                                         self.record, now, boot_id)
         ntfs = _ntfs_events(run, mounts if not mounts_problem else [])
         services = _services(run)
-        timeline = read_timeline(self.timeline_dir, limit=1)
+        timeline = read_timeline(self.timeline_dir, limit=1,
+                                 active_boot_id=boot_id or None)
         last_sample = timeline["samples"][-1] if timeline["samples"] else None
         if last_sample and last_sample.get("boot_id") == boot_id:
             try:
                 age = now - datetime.fromisoformat(last_sample["at"]).timestamp()
                 if age > 120 or age < -30:
                     timeline = {"quality": "stale", "reason": "última amostra antiga",
-                                "samples": timeline["samples"]}
+                                "samples": timeline["samples"],
+                                "capacity": timeline["capacity"]}
             except (ValueError, TypeError):
                 timeline = {"quality": "unknown", "reason": "horário inválido",
-                            "samples": timeline["samples"]}
+                            "samples": timeline["samples"],
+                            "capacity": timeline["capacity"]}
         if self._boot_cache is None or self._boot_cache[0] != boot_id:
             self._boot_cache = (boot_id, _boots(run))
         return {"observed_at": datetime.fromtimestamp(now).astimezone().isoformat(timespec="seconds"),
@@ -355,5 +358,6 @@ class HostObserver:
                 "baseline_reason": baseline_problem,
                 "ntfs": ntfs, "services": services, "boots": self._boot_cache[1],
                 "timeline": {"quality": timeline["quality"], "reason": timeline["reason"],
+                             "capacity": timeline["capacity"],
                              "last_at": last_sample["at"] if last_sample else None,
                              "last_boot_id": last_sample["boot_id"] if last_sample else None}}

@@ -88,6 +88,17 @@ def test_host_guard_unknown_replaces_old_warning(qapp):
     win.quit()
 
 
+def test_host_guard_shows_timeline_capacity_without_claiming_cause(qapp):
+    win = MainWindow()
+    report = _report()
+    report['timeline']['capacity'] = {'near_limit': True, 'at_limit': False}
+    win.disk.show_host_report(report)
+    text = win.disk.host_health.rows['reboot'].text()
+    assert 'histórico perto do limite' in text
+    assert 'causa desconhecida' in text
+    win.quit()
+
+
 def test_btrfs_absolute_count_survives_missing_baseline(qapp):
     win = MainWindow()
     report = _report()

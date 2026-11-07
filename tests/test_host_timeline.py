@@ -3,8 +3,9 @@ import json
 import stat
 from dataclasses import replace
 
-from folego.adapters.host_timeline import HostTimelineRecorder, read_timeline
-from folego.core.snapshot import MemInfo, OK, Pressure, Snapshot, SourceQuality
+from folego.adapters import host_timeline
+from folego.adapters.host_timeline import HostTimelineRecorder, read_timeline, record_snapshot
+from folego.core.snapshot import BatteryInfo, MemInfo, OK, Pressure, Snapshot, SourceQuality
 
 BOOT = "167c36b6-b7ae-4097-877b-3ab2a96d8b88"
 
@@ -58,3 +59,42 @@ def test_timeline_marks_corruption_unknown_and_keeps_existing_bytes(tmp_path):
     recorder.record(missing)
     latest = json.loads(path.read_text().splitlines()[-1])
     assert latest["mem_available_kb"] is None
+
+
+def test_timeline_energy_requires_valid_sources_and_preserves_old_schema(tmp_path):
+    folder = tmp_path / "timeline"
+    recorder = HostTimelineRecorder(folder)
+    sample = replace(_snapshot(100), battery=BatteryInfo(90, 'Discharging'),
+                     external_power_online=False,
+                     sources=_snapshot(100).sources +
+                     (SourceQuality('battery', OK), SourceQuality('external_power', OK)))
+    observed = record_snapshot(recorder, sample)
+    assert observed.source('host_timeline').status == 'ok'
+    row = read_timeline(folder)['samples'][-1]
+    assert row['battery_percent'] == 90
+    assert row['battery_status'] == 'Discharging'
+    assert row['external_power_online'] is False
+    unknown = replace(sample, mono=115, sources=_snapshot(115).sources)
+    record_snapshot(recorder, unknown)
+    row = read_timeline(folder)['samples'][-1]
+    assert row['battery_percent'] is None
+    assert row['external_power_online'] is None
+    old = {'boot_id': BOOT, 'at': row['at']}
+    assert host_timeline._valid_sample(old)
+
+
+def test_timeline_limit_is_visible_and_write_failure_reaches_snapshot(tmp_path, monkeypatch):
+    folder = tmp_path / "timeline"
+    recorder = HostTimelineRecorder(folder)
+    recorder.record(_snapshot(100))
+    path = folder / f"{BOOT}.jsonl"
+    original = path.read_bytes()
+    monkeypatch.setattr(host_timeline, '_PER_BOOT_LIMIT', len(original))
+    report = read_timeline(folder, active_boot_id=BOOT)
+    assert report['quality'] == 'ok'
+    assert report['capacity']['at_limit'] is True
+    assert report['capacity']['near_limit'] is True
+    observed = record_snapshot(recorder, _snapshot(115))
+    assert observed.source('host_timeline').status == 'error'
+    assert 'cheio' in observed.source('host_timeline').detail
+    assert path.read_bytes() == original

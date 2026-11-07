@@ -248,6 +248,9 @@ class HostHealthPanel(QWidget):
             boot_text += " · amostras locais incompletas"
         elif timeline.get("quality") in ("missing", "unknown", "stale"):
             boot_text += " · amostras locais indisponíveis"
+        capacity = timeline.get("capacity") or {}
+        if capacity.get("near_limit"):
+            boot_text += " · histórico perto do limite; gravação pode parar"
         self.rows["reboot"].setText(boot_text)
 
     def show_thermal(self, thermal: dict):

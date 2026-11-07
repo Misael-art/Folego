@@ -6,11 +6,12 @@ import os
 import re
 import stat
 from collections import deque
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
 from .. import paths
-from ..core.snapshot import OK, Snapshot
+from ..core.snapshot import ERROR, OK, Snapshot, SourceQuality
 
 _BOOT_ID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
 _PER_BOOT_LIMIT = 4 * 1024 * 1024
@@ -42,6 +43,12 @@ def _sample(snapshot: Snapshot) -> dict:
             "temperature_c": (snapshot.temperature_c
                               if snapshot.source("temperature").status == OK else None),
             "temperature_sensor": snapshot.temperature_sensor or None,
+            "battery_percent": (snapshot.battery.percent
+                                if snapshot.source("battery").status == OK and snapshot.battery else None),
+            "battery_status": (snapshot.battery.status
+                               if snapshot.source("battery").status == OK and snapshot.battery else None),
+            "external_power_online": (snapshot.external_power_online
+                                      if snapshot.source("external_power").status == OK else None),
             "top_cpu": top}
 
 
@@ -77,11 +84,11 @@ class HostTimelineRecorder:
                 if entry.is_symlink() or not entry.is_file():
                     raise ValueError("entrada de histórico inesperada")
                 size += entry.stat().st_size
-            if size >= _TOTAL_LIMIT:
-                raise ValueError("limite de 32 MiB de histórico alcançado")
             path = self.directory / f"{snapshot.boot_id}.jsonl"
             item = _sample(snapshot)
             raw = (json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\n").encode()
+            if size + len(raw) > _TOTAL_LIMIT:
+                raise ValueError("limite de 32 MiB de histórico alcançado")
             flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
             fd = os.open(path, flags, 0o600)
             try:
@@ -107,6 +114,14 @@ class HostTimelineRecorder:
         self.last_error = ""
 
 
+def record_snapshot(recorder: HostTimelineRecorder, snapshot: Snapshot) -> Snapshot:
+    """Expose recorder failure to the normal resource UI without hiding metrics."""
+    recorder.record(snapshot)
+    quality = SourceQuality("host_timeline", ERROR if recorder.last_error else OK,
+                            recorder.last_error, snapshot.mono)
+    return replace(snapshot, sources=snapshot.sources + (quality,))
+
+
 def _valid_sample(row: object) -> bool:
     if not isinstance(row, dict):
         return False
@@ -123,20 +138,36 @@ def _valid_sample(row: object) -> bool:
 
 
 def read_timeline(directory: Path | None = None, *, limit: int = 80,
-                  boot_id: str | None = None) -> dict:
+                  boot_id: str | None = None,
+                  active_boot_id: str | None = None) -> dict:
     """Read the most recent bounded samples; unknown data is never zero."""
     folder = Path(directory) if directory else paths.host_timeline_dir()
     try:
         if boot_id is not None and not _BOOT_ID.fullmatch(boot_id):
             raise ValueError("boot ID inválido")
+        if active_boot_id is not None and not _BOOT_ID.fullmatch(active_boot_id):
+            raise ValueError("boot ID atual inválido")
         if folder.is_symlink() or not folder.is_dir():
-            return {"quality": "missing", "reason": "histórico ausente", "samples": []}
+            return {"quality": "missing", "reason": "histórico ausente", "samples": [],
+                    "capacity": None}
         info = folder.stat()
         if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
             raise ValueError("diretório de histórico não é privado")
         entries = list(folder.iterdir())
         if len(entries) > 64 or any(p.is_symlink() or not p.is_file() for p in entries):
             raise ValueError("inventário de histórico inválido")
+        sizes = {p.name: p.stat().st_size for p in entries}
+        total_bytes = sum(sizes.values())
+        active_bytes = (sizes.get(f"{active_boot_id}.jsonl")
+                        if active_boot_id is not None else None)
+        capacity = {"total_bytes": total_bytes, "total_limit_bytes": _TOTAL_LIMIT,
+                    "active_boot_bytes": active_bytes,
+                    "per_boot_limit_bytes": _PER_BOOT_LIMIT,
+                    "at_limit": (total_bytes >= _TOTAL_LIMIT or
+                                 active_bytes is not None and active_bytes >= _PER_BOOT_LIMIT),
+                    "near_limit": (total_bytes > _TOTAL_LIMIT - 2048 or
+                                   active_bytes is not None and
+                                   active_bytes > _PER_BOOT_LIMIT - 2048)}
         files = [p for p in entries if p.name.endswith(".jsonl")]
         if boot_id is not None:
             files = [p for p in files if p.name == f"{boot_id}.jsonl"]
@@ -163,6 +194,8 @@ def read_timeline(directory: Path | None = None, *, limit: int = 80,
         quality = "partial" if malformed else "ok" if samples else "missing"
         reason = (f"{malformed} amostra(s) ilegível(is) preservada(s)" if malformed
                   else "" if samples else "histórico vazio")
-        return {"quality": quality, "reason": reason, "samples": samples}
+        return {"quality": quality, "reason": reason, "samples": samples,
+                "capacity": capacity}
     except (OSError, ValueError, UnicodeError, TypeError) as exc:
-        return {"quality": "unknown", "reason": str(exc), "samples": []}
+        return {"quality": "unknown", "reason": str(exc), "samples": [],
+                "capacity": None}

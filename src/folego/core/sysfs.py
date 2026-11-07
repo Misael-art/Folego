@@ -31,6 +31,16 @@ def read_battery(root: Path) -> tuple[BatteryInfo | None, SourceQuality]:
         except OSError:
             return None, SourceQuality('battery', ERROR, 'tipo da fonte ilegível')
         if kind == 'Battery':
+            try:
+                scope = (entry / 'scope').read_text().strip()
+            except FileNotFoundError:
+                scope = 'System'
+            except OSError:
+                return None, SourceQuality('battery', ERROR, 'escopo da bateria ilegível')
+            if scope not in ('System', 'Device'):
+                return None, SourceQuality('battery', ERROR, 'escopo da bateria desconhecido')
+            if scope == 'Device':
+                continue
             batteries.append(entry)
     if not batteries:
         return None, SourceQuality('battery', MISSING, 'equipamento sem bateria observada')
@@ -60,6 +70,45 @@ def read_battery(root: Path) -> tuple[BatteryInfo | None, SourceQuality]:
                         remaining = estimate
                         break
     return BatteryInfo(percent, status, remaining), SourceQuality('battery', OK)
+
+
+def read_external_power(root: Path) -> tuple[bool | None, SourceQuality]:
+    """Observe system power inputs; unknown or conflicting sources stay unknown."""
+    supply = root / 'class/power_supply'
+    try:
+        entries = list(supply.iterdir())
+    except FileNotFoundError:
+        return None, SourceQuality('external_power', MISSING, 'sem fontes de energia')
+    except OSError:
+        return None, SourceQuality('external_power', ERROR, 'inventário de energia ilegível')
+    if len(entries) > 64:
+        return None, SourceQuality('external_power', ERROR, 'inventário de energia excede o limite')
+    observed = []
+    for entry in entries:
+        try:
+            kind = (entry / 'type').read_text().strip()
+        except OSError:
+            return None, SourceQuality('external_power', ERROR, 'tipo da fonte ilegível')
+        if kind not in ('Mains', 'USB', 'USB_C', 'USB_PD', 'USB_DCP',
+                        'USB_CDP', 'USB_ACA', 'Wireless'):
+            continue
+        try:
+            scope = (entry / 'scope').read_text().strip()
+        except FileNotFoundError:
+            scope = 'System'
+        except OSError:
+            return None, SourceQuality('external_power', ERROR, 'escopo da fonte ilegível')
+        if scope not in ('System', 'Device'):
+            return None, SourceQuality('external_power', ERROR, 'escopo da fonte desconhecido')
+        if scope == 'Device':
+            continue
+        online = _battery_int(entry / 'online', maximum=1)
+        if online is None:
+            return None, SourceQuality('external_power', ERROR, 'estado da fonte ilegível')
+        observed.append(bool(online))
+    if not observed:
+        return None, SourceQuality('external_power', MISSING, 'fonte externa não observada')
+    return any(observed), SourceQuality('external_power', OK)
 
 
 def read_temperature(root: Path) -> tuple[float | None, str]:
