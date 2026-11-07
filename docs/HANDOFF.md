@@ -2,6 +2,11 @@
 
 ## Novo corte às 09:11 e preservação GitHub — 07/11/2026
 
+Registro e regra de continuidade em `7159418`, enviado à branch do PR #3.
+Revisão de diferenças e `git diff --check` passaram; não se repetiu suíte
+pesada após o reset para não criar pressão. O código do monitor já estava no
+remoto em `df83a6a`, com checks headless, Qt e CLI aprovados.
+
 O boot `5f684953-1eae-46d7-b025-0f5a29887a69` terminou sem registro de
 desligamento normal. [Investigação do episódio](handoff/validation/reset-2026-11-07-0911.md):
 houve um build RetroDevStudio com pico de 3,4 GiB sobreposto à QA do Fôlego;
