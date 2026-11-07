@@ -1,4 +1,537 @@
-# Passagem para o próximo agente — atualizada em 03/11/2026
+# Passagem para o próximo agente — atualizada em 04/11/2026
+
+## Prévia v0.2.0b4 publicada — 04/11/2026
+
+Pedido explícito desta rodada: resolver a continuidade e publicar a versão mais
+atual. Owner: checkout canônico `codex/compact-header-quota-20261103`. O GitHub
+não tinha essa branch; ela foi criada pelo fluxo de referência do GitHub a
+partir do `main` integrado `3eabb6b`, conferida e avançada por push normal.
+O guard de conteúdo aprovou todos os objetos enviados. O [PR #2](https://github.com/Misael-art/Folego/pull/2)
+está aberto como draft, com base `main`; não houve merge.
+
+O guard administrativo de tag em `.workspace/workspace.py` exigia apenas
+`version.json`, ausente neste projeto. Ele agora lê `pyproject.toml` quando
+`version.json` não existe; continua exigindo tag anotada, versão correspondente,
+SHA aprovado no registro e commit já publicado na branch registrada. Os 19
+testes descartáveis de `.workspace/test_workspace.py` passaram. O registro
+central fixou `refs/tags/v0.2.0b4` em
+`cc0f8133f66bc437ff839780c3d13207d70110d0` antes do push da tag.
+
+O primeiro CI do PR falhou no Qt offscreen: no Ubuntu, as seis ações coloridas
+mediam de 88 a 91 px apesar das colunas iguais. `cc0f813` deixa a grade
+distribuir a largura, independente da dica de tamanho de cada botão. O teste
+focado passou. Depois da correção, `./dev check` no código final passou:
+**1247 passed, 2 skipped** headless e **1602 passed, 2 skipped** Qt offscreen,
+com Python 3.14.7 gerenciado e HOME/XDG privados. O ensaio KDE/Wayland final,
+em janela própria, aprovou topo `(0,0,948,132)`, laterais `112 × 593`, ações
+recolhíveis, retorno flutuante e retorno da Central ao topo; recibo em
+`.scratch/dev-tests-reviewed/release-b4-native-20261104/result.json`. As duas
+execuções CI do PR no SHA final passaram com seis jobs de produto; o CI da tag
+passou com três jobs. As falhas anteriores seguem registradas no GitHub e não
+contam como aprovação do SHA final.
+
+A tag anotada remota `v0.2.0b4` aponta para `cc0f813`; o campo de destino da
+[release b4](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b4) também
+foi fixado nesse SHA. Ela é uma **prerelease**. Os pacotes de
+`.scratch/release-b4-current` foram regenerados do SHA da tag: 916 blobs do
+arquivo fonte conferidos contra o Git, 157 arquivos de `folego/` no wheel
+idênticos aos fontes, metadados b4 em wheel/sdist e CLI do wheel aprovado em
+venv isolada. Os quatro downloads públicos foram conferidos por tamanho e
+SHA-256; `SHA256SUMS` público é idêntico ao local:
+
+| Asset | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `Folego-0.2.0b4-source.tar.gz` | 18.924.007 | `c547f11db1a75d806531804a702a59a20cb9072fbbee4f92feec4eb88ec56916` |
+| `folego-0.2.0b4-py3-none-any.whl` | 451.029 | `12b97d5d23a84a0fcc22116a21ff174d7b7a1725f5a9ab9600632eac15f9fb4b` |
+| `folego-0.2.0b4.tar.gz` | 634.228 | `cb78d63e665fc040d72e795d95016eb14c1809f828d8ba00064839c3a1173197` |
+| `SHA256SUMS` | 281 | `9463998dfa242c4150aa544d414f77b9e5637eb9d2f9a21269bb3e4799d984ef` |
+
+A GUI residente do host permaneceu ativa no PID 1674038; não foi reiniciada
+por este lote de publicação. Limites: HD/widescreen e outras escalas físicas,
+leitor de tela, cruzamento e áudio real de limiares da bateria e observação
+longa ainda não têm aceite. O PR permanece draft; revisão e eventual merge são
+passos separados. Próximo incremento: validar essas experiências no alvo real
+sem perturbar trabalhos em execução. A versão b4 publicada é prévia, não
+declaração de estabilidade.
+
+## Barra fora da tela ao voltar da Central — 04/11/2026
+
+Incidente reportado pelo usuário na instância residente: a barra superior
+948 × 132 reaparecia em `(604, 368)` na área útil `(0, 0, 948, 593)`, fora do
+topo e com a alça de retorno fora da tela. A regra própria `folego-widget` do
+KWin ainda tinha `position=604,368`, `positionrule=3`; ao remapear a mesma
+janela após visitar a Central, o compositor reaplicava essa posição inicial.
+O código anterior conferia apenas se o alvo calculado tinha mudado, então não
+reposicionava a barra. Owner: checkout canônico na branch
+`codex/compact-header-quota-20261103`. Dependências: controlador de posição
+KWin já usado pelo produto e geometria da área útil Qt. Aceite: reabrir o topo
+em `(0,0,948,132)`, poder escolher laterais e flutuante pela Central, não perder
+clique durante conferência de posição, e deixar o flutuante inteiro na tela.
+
+Commits locais: `b2d189f` reconcilia o encaixe ao exibir a janela e acrescenta
+o menu **Posição do widget** na Central e no widget; **Voltar** na Central abre
+o flutuante. `7645b26` corrige o booleano enviado por `QAction.triggered` ao
+abrir o widget pela bandeja, detectado na primeira instalação do host.
+`8f7a42e` confere a posição flutuante com o KWin, limita a janela à área útil
+quando sua altura muda e, após remapear uma barra, verifica mudanças tardias
+do compositor antes de considerar a posição estável. As correções tardias são
+limitadas e ocorrem somente após uma leitura confirmada de divergência. A
+escolha de lateral feita durante a conferência é preservada.
+
+Teste focado final `./dev test tests/test_ui_compact.py
+tests/test_ui_main_window_tabs.py tests/test_ui_hover_actions.py -q` passou;
+após o último ajuste de limpeza de estado, `./dev test tests/test_ui_compact.py
+-q` passou. `./dev check` com Python 3.14.7 gerenciado, HOME/XDG privados e
+suítes sequenciais: **1247 passed, 2 skipped** headless;
+**1602 passed, 2 skipped** Qt offscreen. `git diff --check` limpo.
+[Recibo e capturas KDE/Wayland](handoff/validation/dock-remap-2026-11-04/README.md)
+confirmam topo 948 × 132 ao voltar da Central, laterais 112 × 593, menu da
+Central para esquerda e retorno flutuante. Tentativas nativas intermediárias
+encontraram corrida com a conferência de geometria e reposicionamento tardio;
+foram preservadas em `.scratch/dev-tests-reviewed`, não somadas ao aceite.
+
+Host: a GUI original PID 1163759 era a unit transitória do launcher. Ela foi
+encerrada pelo item **Sair do Fôlego** da sua própria bandeja, sem sinal manual.
+Uma abertura por `gtk-launch` caiu no escopo do Codex; essa instância temporária
+foi encerrada pelo mesmo item, e a aplicação passou a ser iniciada pela unit
+existente `app-folego@autostart.service`. A primeira tentativa nessa unit
+exibiu a falha do booleano da bandeja; depois da correção, o PID 1591351 foi
+encerrado pelo próprio menu. `./dev setup` sincronizou a revisão final e a
+unit foi iniciada novamente: PID **1674038**, `active/running`, `Result=success`.
+O item da bandeja abriu o widget flutuante; KWin confirmou `(604,331)`,
+280 × 256,3, inteiro na área útil 948 × 593. A Central foi ocultada pelo menu
+da própria aplicação e o widget ficou visível. Os monitores de entrada e
+desempenho permaneceram ativos nos PIDs 6593/6597. Nenhum outro processo ou
+serviço foi interrompido.
+
+Limites: a instância residente final teve a abertura flutuante conferida no
+KWin; os cliques de encaixe/retorno da revisão final foram exercitados na
+janela de QA própria, não na instância residente. HD, widescreen e outras
+escalas no compositor físico seguem sem aceite. O remoto não contém esta
+branch nem PR. O push normal de `8f7a42e` foi recusado pelo guard local:
+“criação, exclusão ou destino de branch fora da continuidade registrada”. Não
+contornar o guard. Próximo owner: criar a branch remota pelo fluxo oficial,
+conferir base/SHA, enviar por push normal, abrir/reutilizar PR e aguardar os
+checks. Release depende dos gates e artefatos do SHA elegível; pacotes b4
+locais são de revisão anterior.
+
+## Monitoramento de bateria — 04/11/2026
+
+Pedido autorizado: percentual por cor (verde, amarelo, laranja, vermelho),
+toques nas passagens de 75%, 50% e 25%, aviso recorrente a cada minuto em 10%
+ou menos e estimativa de tempo restante quando comprovável. Owner: checkout
+canônico, branch `codex/compact-header-quota-20261103`. Dependências: leitura
+somente de `/sys/class/power_supply`, coletor existente, worker de avisos e
+componentes do widget/Central. Critérios de aceite: leitura inválida/antiga
+não mostra percentual nem produz aviso; descarregamento cruza uma faixa de
+cada vez, sem repetição acidental; barra superior conserva 132 unidades com
+quatro cotas e laterais conservam rolagem/ações acessíveis.
+
+Código nos commits locais `ca93ef3` e `e00b86a`: `BatteryInfo` no snapshot,
+leitura da ABI do kernel com qualidade de fonte, estimativa nativa ou por
+energia/potência (ou carga/corrente), estado puro de limiares e quatro melodias
+curtas no worker de áudio existente. O percentual do widget fica verde de
+51–100 (inclusive 75), amarelo de 26–50, laranja de 11–25, vermelho até 10.
+O primeiro valor de descarga acima de 10 estabelece referência silenciosa;
+em 10 ou menos há aviso inicial e depois a cada 60 s de observação válida.
+Carregamento, leitura perdida ou pausa não emitem sons de descarga. A Central
+mostra o valor em texto e a estimativa quando há dados. As opções permitem
+testar os quatro toques e o interruptor de som existente também os governa.
+Fonte da semântica de `capacity`, `status`, energia/carga e tempo:
+[documentação da classe power_supply do Linux](https://cdn.kernel.org/doc/html/latest/power/power_supply_class.html).
+
+Validação focada final: `./dev test tests/test_ui_main_window_tabs.py
+tests/test_ui_compact.py tests/test_battery.py -q` passou. `./dev check`
+final, Python 3.14.7 gerenciado, HOME/XDG privados e suítes sequenciais:
+**1247 passed, 2 skipped** headless; **1594 passed, 2 skipped** Qt offscreen.
+`git diff --check` limpo. A primeira tentativa do gate falhou porque o teste
+antigo esperava exatamente sete melodias; a asserção foi atualizada para exigir
+que todas as 11 sejam distintas, curtas e suavizadas. Essa tentativa não conta
+como aprovada. [Recibo e capturas KDE/Wayland](handoff/validation/battery-2026-11-04/README.md)
+confirmam laterais 112 × 593 e topo 948 × 132 com percentual/estimativa
+sintéticos, quatro cotas e ações recolhíveis. A primeira tentativa nativa
+detectou 17 unidades excedentes no topo; após colocar a bateria junto das
+métricas, a repetição integral passou com `scroll_max=0`. A falha foi preservada.
+
+O leitor real deste host retornou `ok`, estado `Not charging` e sem estimativa;
+portanto os cruzamentos de limiares e a acústica não foram observados numa
+descarga real. Não há prova nativa de HD/widescreen, outras escalas, leitor de
+tela ou horas de monitoramento. Múltiplas baterias ficam em estado desconhecido
+até haver uma regra de agregação comprovada. `./dev setup` sincronizou o
+ambiente GUI; a GUI residente já estava `inactive/dead` e assim permaneceu.
+Os monitores de entrada/desempenho permaneceram ativos nos PIDs 6593/6597;
+nenhum recurso do usuário foi alterado para criar uma descarga de teste.
+
+O remoto segue sem a branch e sem PR desta linha. O push normal de `ca93ef3`
+foi recusado pelo guard local: “criação, exclusão ou destino de branch fora da
+continuidade registrada”. Não contornar o guard. Próximo owner: resolver a
+criação da branch remota pelo fluxo oficial, conferir base/SHA, enviar os commits
+por push normal, abrir/reutilizar PR e aguardar gates remotos. Release depende
+de versão, artefatos e notas do SHA elegível e autorização vigente; os pacotes
+b4 locais são de SHA anterior e não representam esta revisão. A GUI residente
+pode ser aberta pelo usuário para verificar o monitoramento real; não foi
+reiniciada durante a QA para preservar o estado encontrado.
+
+## Barra superior fina e ações recolhíveis — 04/11/2026
+
+Pedido aprovado após mockup: folga primeiro à esquerda, depois cotas de IA/CLI,
+métricas sem intercalar cotas, teclado/menu na ponta direita com Pausar abaixo;
+seis atalhos coloridos recolhíveis também nas barras esquerda, direita e
+superior. Owner: checkout canônico, branch
+`codex/compact-header-quota-20261103`. Dependências: os mesmos componentes Qt,
+observações de cota e geometria KWin existentes; nenhum novo grant ou efeito
+de recurso. Aceite: topo mais baixo sem corte de quatro cotas com badges,
+atalhos revelados/recolhidos por hover nos três encaixes e retorno funcional.
+
+Em largura útil a partir de 900, a barra superior tem 132 unidades lógicas de
+altura (antes 190 em 948). O cabeçalho, indicador principal, cotas, leituras e
+três controles à direita são reorganizados numa faixa compacta; as margens
+internas do medidor e das métricas são reduzidas só nesse modo. A alça de
+retorno fica no centro da borda superior, estável durante a animação dos
+atalhos. Os seis botões começam recolhidos em qualquer encaixe, abrem em 140 ms
+ao entrar com o ponteiro e se recolhem após sair; nas laterais, o conteúdo
+continua rolando separadamente dos botões. Larguras abaixo de 900 mantêm o
+arranjo superior em duas linhas e 190 unidades de altura.
+
+Validação da fonte: `./dev test tests/test_ui_compact.py
+tests/test_ui_hover_actions.py -q` **35 passed**. `./dev check` final com Python
+3.14.7, HOME/XDG privados e perfis sequenciais: **1242 passed, 2 skipped**
+headless; **1586 passed, 2 skipped** Qt offscreen. `git diff --check` limpo.
+Testes Qt simulam áreas úteis de 948 × 593, 1920 × 1080 e 2560 × 1080.
+[Recibo e capturas KDE/Wayland](handoff/validation/top-hover-2026-11-04/README.md)
+confirmam 948 × 132 no topo, quatro cotas com badges sem rolagem mesmo com
+atalhos abertos, hover físico de entrada/saída nas três barras e retorno ao
+compacto. As tentativas nativas anteriores pararam por sobreposição do Plasma
+ao alvo do ponteiro e pela alça superior que mudava de posição; foram
+preservadas e não contam como aceites. Uma suíte focada falhou por observações
+reais sobrepondo dados sintéticos após reexibição da faixa; o teste passou a
+isolar o coletor sintético e o gate final passou. O primeiro teste da altura
+de 130 detectou corte; a versão de 132 com margens próprias eliminou a rolagem
+superior de quatro cotas.
+
+Limites: a sessão física só cobre 948 × 593, sem QA de gesto real de scroll
+lateral, outras escalas/monitores, áudio, leitor de tela ou soak. HD/widescreen
+seguem simulados no Qt offscreen. Código, testes, documentação e capturas:
+commit local `a2b2d53`. `./dev setup` sincronizou o ambiente GUI; o entrypoint
+importa `src/folego/ui/compact.py` deste checkout e calcula topo 948 × 132.
+A GUI residente já estava encerrada às 08:33, antes da instalação; não foi
+reiniciada para preservar esse estado. `app-folego@autostart.service` continuou
+`inactive/dead`, `Result=success`, sem outra GUI própria mapeada. Os monitores
+de entrada/desempenho permaneceram ativos nos PIDs 6593/6597; Modo Desempenho
+seguia `paused=false`, sem disjuntor ou falhas, com 21 eventos. A nova GUI foi
+exercitada somente na janela de QA isolada; não há prova visual da instância
+residente desta revisão.
+
+O remoto continua sem a branch `codex/compact-header-quota-20261103` e sem PR.
+O push normal de `a2b2d53` foi recusado pelo guard local por criar branch fora
+da continuidade registrada. Nenhum push, PR, tag, release ou merge ocorreu;
+não contornar o guard. Próximo passo: owner criar a branch remota pelo fluxo
+oficial, conferir base/SHA, push normal, PR/CI; só então avaliar nova versão,
+artefatos/notas e elegibilidade de release. Os pacotes locais b4 anteriores
+não representam esta revisão. Depois validar a barra superior na GUI
+residente e em outras resoluções/fatores de escala físicos.
+
+## Alinhamento, cantos e cotas nas barras — 04/11/2026
+
+Owner: checkout canônico, branch `codex/compact-header-quota-20261103`.
+Dependências: componentes Qt existentes, cotas confirmadas e geometria da
+área útil informada pelo compositor. Aceite do incremento: grip de retorno na
+borda externa de cada lateral, cantos realmente recortados, métricas alinhadas
+na direção da barra, quatro cotas alcançáveis sem serem cobertas pelas ações e
+recomposição do topo para Steam Deck, HD e widescreen.
+
+O grip esquerdo agora fica em `x=0`, o direito em `largura-16`, e ambos terminam
+antes das seis ações fixas. As leituras de RAM, CPU, temperatura, swap, tmpfs e
+espaço livre se alinham à esquerda ou à direita conforme o lado; o scroll fica
+na borda interna. A superfície é pintada dentro de um caminho arredondado e a
+janela recebe máscara com o mesmo raio. O topo usa duas linhas na área útil
+de 948 × 593 e uma linha de informação em larguras a partir de 1200; a área
+de leitura pode rolar, com ações fixas abaixo. Altura do topo curto: 190.
+
+Validação: `./dev test tests/test_ui_compact.py tests/test_ui_ai_quota_rings.py
+tests/test_ui_hover_actions.py tests/test_ui_desktop_shortcuts.py -q`:
+**47 passed**. `./dev check`, Python 3.14.7, HOME/XDG privados, perfis
+sequenciais: **1242 passed, 2 skipped** headless e **1583 passed, 2 skipped**
+Qt offscreen; `git diff --check` limpo. Os testes Qt cobrem as áreas úteis
+948 × 593, 1920 × 1080 e 2560 × 1080 com quatro cotas. [Recibo e capturas
+KDE/Wayland](handoff/validation/dock-adaptive-2026-11-04/README.md) confirmam
+na área real 948 × 593 ambas as laterais 112 × 593, topo 948 × 190, grip na
+borda externa, alfa transparente nos quatro cantos, última cota após rolagem,
+ações sem sobreposição e retorno/saída pelo próprio controle. Uma tentativa
+anterior de `./dev check` falhou porque o teste de tema procurava a cor na
+folha de estilos após a pintura ter passado para o widget; o teste corrigido
+confere o pixel renderizado. Essa tentativa não é gate aprovado.
+
+Limites: HD e widescreen foram simulados no Qt offscreen, sem compositor real
+nessas resoluções. A rolagem foi posicionada por código, sem gesto físico;
+não há novo aceite de leitor de tela, áudio, outros fatores de escala ou uso
+prolongado. Código, documentação e evidência: commit local `4e7be98`.
+
+Instalação no host: `./dev setup` reutilizou o ambiente GUI e o entrypoint
+continua apontando para `src/folego/ui/compact.py` deste checkout. Antes da
+troca, a única janela própria mapeada era o widget à direita, sob
+`app-folego@autostart.service`, PID 84943, UID 1000 e starttime 149690.
+`performance auto-off --json` pausou temporariamente o fechamento automático.
+Após revalidar unit, PID e comando, o item **Sair do Fôlego** da bandeja desse
+processo foi acionado; a unit ficou `inactive/dead`, `Result=success` e o PID
+saiu. A unit própria foi iniciada novamente como PID 270899, `active/running`.
+Pelo menu da bandeja do novo PID, o widget foi exibido e seu controle esquerdo
+foi acionado após validar janela, owner e alvo do ponteiro. O KWin confirmou a
+barra direita em `(836, 0, 112, 593)` (valores lógicos arredondados), como
+antes da troca. Os monitores de entrada/desempenho permaneceram ativos com os
+mesmos PIDs 6593/6597. `performance auto-on --json` restaurou `paused=false`,
+disjuntor vazio, zero falhas e histórico de 17 eventos. Nenhum outro app,
+serviço ou sessão foi parado. A revisão carregada pelo processo é inferida do
+entrypoint e do reinício posterior ao setup; não foi consultada dentro dele.
+
+Próximo passo: publicação da branch, PR e release dependem do guard remoto
+descrito abaixo, sem autorização de merge. O comportamento visual em outros
+monitores e fatores de escala ainda precisa de verificação nativa.
+Após o commit de passagem `28385cb`, `git ls-remote --heads` continuou sem
+essa branch, `gh pr list --head` retornou vazio e o push normal foi recusado
+pelo guard local por criar branch fora da continuidade registrada. Nenhum
+push, PR, tag ou release b4 foi criado; não contornar o guard.
+Prévia local em `.scratch/release-b4-responsive`: wheel e sdist b4 gerados
+offline; os 156 arquivos `folego/` do wheel coincidem byte a byte com as fontes.
+O wheel foi instalado sem dependências numa venv descartável própria e
+`python -I -m folego --help` passou. O arquivo fonte sai de `git archive` do
+commit final; `SHA256SUMS` dos três pacotes foi conferido. Artefatos permanecem
+locais e precisam corresponder ao SHA elegível quando a publicação for possível.
+
+## Refinamento das barras adaptativas — 04/11/2026
+
+Pedido mais recente: a barra encaixada continuava larga e apenas transportava
+o layout compacto. Owner: o checkout canônico, branch
+`codex/compact-header-quota-20261103`. Dependências: layout Qt existente,
+observações de cota já confirmadas e posicionamento do próprio widget via
+KWin; sem novo grant ou efeito sobre recursos. Aceite nesta saída: laterais
+estreitas com indicador principal centralizado, estado/métricas/espaço livre
+em coluna, pausa abaixo da coleta, cotas positivas ordenadas e menores que o
+indicador principal, seis ações individuais na base, cantos arredondados;
+topo organizado na largura útil, retorno funcional e dados sem recorte.
+
+As laterais passaram de 180–220 para 112–128 unidades lógicas conforme a tela.
+O cabeçalho e as métricas se rearranjam para a largura disponível; o indicador
+de saúde mantém 68 unidades e os anéis de cota passam a 42 nas laterais. Ações
+ficam em coluna visível no rodapé, ou numa linha no topo. Espaçamentos,
+tipografia e aviso de espaço livre foram ajustados para caberem junto das
+duas cotas de demonstração na saída menor. A barra de rolagem só aparece se
+o conteúdo exceder a altura. Badges sem entregas ou resgates confirmados não
+reservam altura. O efeito de chegada da cota é removido após a animação, o que
+também permite que a composição aninhada apareça na captura do widget.
+
+Validação: teste focado **38 passed**; `./dev check` final, com Python 3.14.7
+gerenciado e HOME/XDG privados, **1242 passed, 2 skipped** headless e **1574
+passed, 2 skipped** Qt offscreen. [Recibo e capturas KDE/Wayland](handoff/validation/dock-adaptive-2026-11-04/README.md)
+confirmam direita/esquerda 112 × 593, topo 948 × 142, duas cotas inteiras,
+seis ações acessíveis e retorno à posição anterior. Uma tentativa do gate
+combinado foi interrompida após a suíte headless; ela não foi contada como
+aprovada. O primeiro ensaio nativo desta revisão falhou no alvo do ponteiro;
+a repetição integral passou. Outras escalas/saídas, leitor de tela, som real e
+soak permanecem sem aceite. O remoto ainda não contém esta branch nem PR;
+publicação continua sujeita ao guard local descrito abaixo.
+
+Commit de código e evidência: `34ed8d4` (local). A GUI do host estava na unit
+`app-folego@autostart.service`, PID 6531, com apenas o widget próprio mapeado;
+o Modo Desempenho tinha `paused=false`, disjuntor vazio e 17 eventos no histórico.
+`performance auto-off` confirmou a pausa temporária. Após conferir unit, PID,
+UID, comando e starttime 8362, o item **Sair do Fôlego** da bandeja pertencente
+à mesma GUI foi acionado. O PID saiu e a unit ficou `inactive/dead`, com
+`Result=success`; nenhum sinal manual foi enviado. `./dev setup` reutilizou o
+ambiente GUI sem alterar dependências. A unit própria foi reiniciada: PID
+84943, `active/running`, nova bandeja do mesmo PID e widget compacto visível.
+O código instalado no ambiente gerenciado aponta para a fonte desta branch;
+como não houve consulta de revisão dentro do processo, a revisão carregada é
+inferida do início posterior ao setup e do entrypoint, não medida diretamente.
+Os monitores de entrada e desempenho permaneceram ativos nos mesmos PIDs
+6593/6597. `performance auto-on` restaurou `paused=false`, disjuntor vazio e
+17 eventos. O encaixe da borda não persiste entre reinícios, logo o widget
+residente reabriu no modo compacto; a nova barra encaixada foi exercitada na
+janela própria da validação, sem mover o ponteiro da sessão de trabalho para
+reencaixar a instância residente. Nenhum outro serviço, app ou sessão foi parado.
+
+## Prévia b4 instalada no host — 04/11/2026
+
+Pedido explícito: atualizar a aplicação neste host. O checkout estava limpo em
+`221e7ca819f653fa8cd52ee16beb285b334e91e6`; a instalação local já tinha
+metadados `0.2.0b4` nos ambientes GUI/headless, mas os processos residentes
+tinham sido iniciados antes da atualização. Antes da troca, início com a sessão
+estava ativo, `folego-performance.service` tinha `paused=false`, sem disjuntor,
+e histórico com 16 resultados; a revisão `accessibility.activate` para toque
+(`58176bdf86c94e759e43f661630c5ce8`) seguia pendente. GUI e monitores
+próprios tinham PIDs 5889, 5936 e 5944. Carga e espaço foram conferidos; não
+houve instalação global nem alteração de grant.
+
+`performance auto-off --json` confirmou a pausa temporária. O item habilitado
+**Sair do Fôlego** da bandeja DBusMenu foi acionado depois de confirmar que o
+owner da bandeja, PID 5889 e starttime 6295 pertenciam à GUI própria. A unit
+da janela ficou `inactive/dead`, `Result=success`, e o PID desapareceu sem
+sinal manual. Apenas `folego-performance.service` e
+`folego-accessibility.service` foram parados; ambos ficaram inativos e seus
+PIDs antigos saíram. A revisão pendente manteve o mesmo ID.
+
+`./dev setup` sincronizou o ambiente GUI b4 usando o lockfile existente. As
+duas units próprias e depois a unit gerada `app-folego@autostart.service`
+foram iniciadas, sem habilitar nova automação. Na verificação inicial após a troca,
+as três estavam `active/running`, `Result=success`, com PIDs novos 747308
+(entrada), 747571 (desempenho) e 747850 (GUI). Os entrypoints apontam para o
+ambiente gerenciado b4; isto sustenta a inferência de que os processos novos
+carregaram b4, sem uma consulta de versão dentro de cada processo. A bandeja
+registrada pertencia ao PID 747850 e mostrava telemetria atual. Pelo item
+próprio **Mostrar controle compacto**, abriu-se uma superfície KWin
+`Fôlego — widget` de 280 px, sem tocar em outras janelas. `performance auto-on`
+restaurou `paused=false`; disjuntor vazio e histórico ainda com 16 resultados.
+`startup status` permaneceu ativo, unit de entrada active/enabled e
+`effects_authorized=false`. O monitor de entrada ficou em observação, com
+baseline 5 e política de efeito desligada; a revisão durável de toque continua
+pendente. Nenhum outro app, agente ou serviço foi encerrado e a sessão gráfica
+não foi reiniciada.
+
+Observação posterior, que substitui o estado da GUI no parágrafo anterior:
+`app-folego@autostart.service` encerrou às 05:10:14 com código 0 e sem erro no
+jornal; a causa do encerramento não foi observada. Às 05:10:22, o lançador
+`~/.local/share/applications/folego.desktop` iniciou outra instância própria,
+PID 761910, sob a unit transitória
+`app-folego@6e32f6b0ccac441d959b5ba76aabf7bc.service`, que ficou
+`active/running`. Bandeja e superfície `Fôlego — widget` pertencem a esse PID.
+Uma única tentativa de iniciar a unit de autostart depois disso saiu com código
+0 e informou que a instância 761910 já controlava o aplicativo; nenhuma janela
+duplicada foi criada. Os monitores continuam ativos com PIDs 747308/747571.
+Não atribuir a primeira saída a crash ou ação do usuário sem evidência.
+
+Validação: estados do systemd, owner da bandeja, título/geometria nativos da
+janela, metadados b4 nos dois ambientes, preferência de inicialização,
+automação restaurada e ID da revisão foram conferidos no host. O `./dev check`
+de b4 aprovado no lote anterior cobre 1242 testes headless e 1574 Qt, com 2
+skips em cada perfil; não foi repetido para esta troca sem alteração de código.
+Não há novo aceite de clique físico, múltiplas saídas/escalas, áudio real,
+leitor de tela ou soak. A branch remota continua ausente; PR e release b4
+continuam pendentes conforme a seção seguinte.
+
+## Widget encaixável e prévia b4 local — 03/11/2026
+
+Pedido explícito: bordas escuras com seta ao passar o mouse, barra vertical
+direita/esquerda, barra horizontal superior, reorganização dos controles,
+transição suave, testes, commit, PR e release. Owner da implementação: este
+checkout único, branch `codex/compact-header-quota-20261103`, commit
+`18da024` sobre `93906da`. A versão em `pyproject.toml` e `uv.lock` é
+`0.2.0b4`. O commit inclui código, testes, documentação, capturas sintéticas e
+notas da prévia. A GUI residente instalada no host não foi reiniciada.
+
+O widget usa as mesmas seções nas quatro formas. As bordas esquerda/direita e
+superior mostram faixa de dois tons e seta no hover. As laterais ocupam a altura
+útil, ordenam as cotas em coluna, põem o rodapé na base e permitem rolagem; o
+topo ocupa a largura útil em uma ou duas linhas. O cálculo usa
+`availableGeometry()` para respeitar painéis informados pelo desktop. Em X11,
+a geometria anima por 260 ms. No KDE/Wayland, o worker consulta a posição real
+da própria janela pelo KWin, solicita a geometria final uma vez, confirma a
+posição e faz o conteúdo reaparecer suavemente. Falha ou unicidade desconhecida
+bloqueia o encaixe; resultado incerto não dispara repetição automática.
+Retornar restaura a posição original confirmada. O modo não persiste ao reiniciar.
+
+Validação final da fonte b4: `./dev test tests/test_ui_compact.py
+tests/test_desktop_tools.py -q` **30 passed**; `./dev check` com Python 3.14.7,
+HOME/XDG privados e perfis separados: **1242 passed, 2 skipped** headless e
+**1574 passed, 2 skipped** Qt offscreen, diff check aprovado. QA na sessão
+KDE/Wayland real, janela/dados/áudio próprios: direita `(728, 0, 220, 593)`,
+esquerda `(0, 0, 220, 593)`, topo `(0, 0, 948, 118)`, retorno exato a
+`(20, 120, 280, 185)`, temas claro e escuro, saída explícita. [Recibo e
+capturas](handoff/validation/dock-widget-2026-11-03/README.md). A primeira
+tentativa nativa de retorno revelou que o Qt informava `(0, 0)` no Wayland;
+a consulta ao KWin corrigiu o erro, e uma rodada posterior passou. Duas
+tentativas anteriores de `./dev check` falharam em testes sem interface fora do
+incremento (prazo variável do backup e resultado intermitente da supervisão de
+entrada); seus workspaces `run-aep92j_i` e `run-f5v8r38f` foram preservados e
+não contam como gates verdes. O teste de entrada passou isolado, as duas suítes
+passaram completas separadamente e o `./dev check` final passou sem mudar
+limites. Workspaces concluídos e revisados foram movidos integralmente para
+`.scratch/dev-tests-reviewed` para respeitar o teto; nenhum payload foi apagado.
+
+Prévia local: `.dev/bin/uv lock --offline` avançou só a versão do pacote;
+`.dev/bin/uv build --offline --out-dir .scratch/release-b4` gerou wheel e sdist.
+Os **156** arquivos de `folego/` no wheel correspondem byte a byte aos fontes.
+O wheel foi instalado sem dependências numa venv descartável própria, e
+`python -I -m folego --help` e metadados `0.2.0b4` passaram. Os artefatos
+ficam em `.scratch/release-b4`, fora do Git. O arquivo fonte completo de um
+commit exato foi gerado por `git archive`, com 989 entradas e sem `.dev` ou
+`.scratch`; `SHA256SUMS` passou para os três pacotes. O arquivo fonte e os
+hashes precisam ser regenerados do SHA desta passagem antes da publicação.
+A tag e a conferência remota dependem da branch publicada; nenhuma tag foi
+criada agora.
+
+Publicação pendente: em 03/11 a branch remota ainda não existia. O guard
+`/home/misael/Projects/.workspace/workspace.py prepush` recusa criar branch
+remota por push. `git push -u origin codex/compact-header-quota-20261103`
+foi recusado novamente após os commits locais, sem publicar dados. O owner
+precisa criar no GitHub a branch
+`codex/compact-header-quota-20261103` a partir do `main` integrado; então
+confirmar base/SHA, fazer push normal, abrir PR, conferir CI, criar tag da
+revisão elegível e publicar a prerelease b4 com os artefatos e notas preparados.
+Não contornar o guard nem presumir PR/CI/release publicados. A release foi
+autorizada pelo usuário neste lote, mas ainda não aconteceu. Sem merge
+autorizado. Aceites físicos, outras escalas/saídas e soak continuam abertos;
+o Qt offscreen e a sessão de QA não os substituem.
+
+## Cabeçalho compacto e cotas disponíveis — 03/11/2026
+
+O PR #1 foi integrado antes deste lote: `main` local/remoto estava limpo em
+`3eabb6bb8d783a458fa1694bb911c71ab95dbd9f`. O novo incremento está na
+mesma raiz canônica, branch `codex/compact-header-quota-20261103`, commit de
+código `c3274fec9950d450a93abfd954637b515ea94426`. A GUI b3 residente no
+host não foi reiniciada nem substituída; a mudança foi exercitada numa janela
+própria com dados sintéticos, sem interromper supervisores ou agentes.
+O commit de passagem é `2508ecc4cc638d025aa451c55c21ac675d7b3af5`.
+O working tree estava limpo após os dois commits.
+
+O cabeçalho do widget de 280 px tem marca em Noto Sans, teclado e seta unidos,
+e ícone da Central com seta para ocultar, sair e consultar todas as contas.
+A faixa mostra somente cotas positivas confirmadas, da maior porcentagem
+disponível para a menor; empate tem ordem estável. A conta padrão é usada quando
+elegível, senão aparece uma conta verificada do provedor, com clique e painel
+coerentes. Zero e desconhecido ficam fora da faixa, mas continuam distintos no
+menu. Expiração retira o indicador imediatamente; uma nova cota entra com
+animação curta quando o estilo Qt permite. Reabrir o widget não repete a
+descoberta. O som existente de reposição só toca numa transição confirmada pelo
+monitor; primeira leitura, falha e data de reset vencida não o disparam.
+
+Validação final do código: `./dev check` com Python 3.14.7 gerenciado, perfis
+separados e HOME/XDG privados: **1241 passed, 2 skipped** headless e **1570
+passed, 2 skipped** Qt offscreen. Teste focado de ordenação, conta alternativa,
+retorno e animação: **7 passed** após a última revisão do teste. QA em
+KDE/Wayland real, janela e HOME/XDG/áudio próprios: oito casos aprovados,
+incluindo Central/Voltar, três combinações de tema/transparência, ocultação e
+retorno de cota, hover e clique nativos no indicador, e saída pelo menu.
+[Captura e recibo](handoff/validation/compact-header-quota-2026-11-03/README.md).
+O cliente de IA foi interceptado em memória; nenhum som real nem conta pessoal
+foi usado como fixture.
+
+A primeira tentativa visual falhou no clique do menu após o widget crescer sob
+o ponteiro; registro em `.scratch/dev-tests/run-header-quota-20261103`. A
+segunda passou após estabilizar o drawer antes desse clique. A execução final
+após a última revisão do código também passou, com captura/recibo publicados no
+link acima. Uma execução de
+`./dev check` foi interrompida antes de registrar o resultado Qt quando houve
+uma nova mensagem do usuário; seu workspace `run-2iu_gd3o` permanece preservado
+e não conta como gate. O headless dessa tentativa tinha recibo verde; a suíte
+Qt foi repetida e aprovada. Workspaces concluídos com recibo e runner ausente
+foram movidos integralmente a `.scratch/dev-tests-reviewed` para respeitar o
+teto de 20, sem apagar payloads nem alterar limites.
+
+Limites: a captura e o Qt offscreen não certificam leitor de tela, clique físico
+em todos os monitores/escalas, áudio real nem uso prolongado. Os aceites de
+entrada, retenção de temporários e Modo Desempenho abaixo seguem abertos.
+Publicação pendente: `git push -u origin codex/compact-header-quota-20261103`
+foi recusado pelo guard `.workspace/workspace.py prepush`, que bloqueia criar
+branches remotas por push mesmo após registrar a branch de continuidade. A
+branch remota ainda não existe; nenhum PR ou CI deste incremento foi criado ou
+observado. Os commits e a evidência estão preservados localmente. O owner deve
+criar a branch remota de mesmo nome a partir do `main` integrado, pelo fluxo
+oficial do GitHub; depois confirmar SHA/base, enviar os commits sem forçar,
+abrir o PR e observar os checks.
+Após integração, reiniciar o
+Fôlego pelo fluxo do próprio aplicativo para testar a nova faixa com contas
+reais, sem usar credenciais como fixtures nem presumir que uma data de reset
+confirma cota. Não gerar release por este ajuste visual isolado.
 
 ## Instalação no host e aceites ainda pendentes — 03/11/2026
 
@@ -34,7 +567,7 @@ da bandeja/superfícies não substituem os aceites seguintes:
 | Entrada física e acessibilidade | Supervisor atual em `waiting`, backend KWin, baseline 5, dois bloqueios, zero erro e zero operação ativa na consulta; uma revisão durável `accessibility.activate` segue pendente. Toque FTS3528 não estava disponível; reconciliar o ID, sem repetição cega, e testar toque/leitor de tela com hardware e sessão própria. |
 | Desktop e interação | Central/Desempenho/Opções foram vistas anteriormente em janelas próprias Wayland; a GUI b3 registra bandeja e superfícies agora. Faltam arraste e cliques físicos sobre o fluxo atual, login/SDDM, logout, suspend/resume, dock, Steam e Orca em janela de QA que não interrompa trabalho. |
 | Modo Desempenho | Regras automáticas e unit ficaram como antes da instalação. Os 225 s de observação anterior não provam horas reais; fazer soak contínuo da fonte b3 com orçamento, duração e alvos descartáveis próprios, incluindo foco, áudio, downloads, arquivos de projeto, agentes, carência e disjuntor. |
-| Gate local | A última suíte completa local verde antecede o texto/versão b3. A repetição de `test_backup.py::test_roundtrip_property` excedeu o deadline de 200 ms sob carga; falha e workspace foram preservados. Os 20 workspaces de QA bloqueiam novo `./dev check` sem revisão; CI do commit/tag da prévia b3 passou. Não elevar limites nem apagar evidência para obter verde. |
+| Gate local | O gate histórico da b3 teve uma falha de deadline preservada; o novo incremento passou `./dev check` com 1241/1570 testes aprovados (2 skips por perfil) após revisão manual e preservação integral dos workspaces concluídos. O CI deste novo SHA ainda precisa ser observado após push. |
 
 Próximo: executar esses aceites no alvo apropriado, preservando o diário e as
 políticas atuais. A prévia publicada não é aceite físico ou produto estável.
@@ -45,7 +578,8 @@ Pedido explícito de release: `pyproject.toml` e `uv.lock` avançaram juntos par
 `0.2.0b3`; commit/tag `172bbc1f5837fbcd3c7e00ec614738e52dda7397`.
 [Release v0.2.0b3](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b3)
 publicada em 03/11/2026 19:37:39 UTC como **prerelease**, com o PR #1 ainda
-draft e sem merge. A versão b2 e sua tag permanecem imutáveis. O CI do commit
+draft e sem merge **naquele momento**; o PR foi integrado posteriormente em
+`main` no SHA `3eabb6b`. A versão b2 e sua tag permanecem imutáveis. O CI do commit
 teve seis jobs de produto aprovados. Na referência da tag, nove checks success
 (incluindo os do PR e os três novos do tag), dois revisores skipped e nenhum
 check ativo ou falho na consulta final.

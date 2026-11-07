@@ -146,26 +146,42 @@ class DesktopTools:
             return "Selecione a região na ferramenta de captura"
         if action == 'capture-status':
             return dict(operation='capture-status', active=self.capture is not None and self.capture.poll() is None)
-        if action == 'capture-place':
+        if action == 'widget-geometry':
+            return dict(operation='widget-geometry', geometry=self._own_widget_geometry())
+        if action in ('capture-place', 'widget-place'):
             geometry = tuple(value)
             backend = self
             class OwnGeometry:
                 def wait(self, seconds):
                     end = time.monotonic() + seconds
                     while time.monotonic() < end:
-                        windows = backend._call(['kdotool', 'search', '--all', '--pid', str(os.getpid()),
-                                                 '--name', '^Fôlego — widget$']).splitlines()
-                        if len(windows) == 1:
-                            raw = backend._call(['kdotool', 'getwindowgeometry', windows[0]])
-                            numbers = re.search(r'Position:\s*([-0-9.]+),([-0-9.]+)\s+Geometry:\s*([-0-9.]+)x([-0-9.]+)', raw)
-                            if numbers and all(abs(float(actual) - wanted) <= 1 for actual, wanted in zip(numbers.groups(), geometry)):
+                        try:
+                            actual = backend._own_widget_geometry()
+                            if all(abs(observed - wanted) <= 1 for observed, wanted in zip(actual, geometry)):
                                 return True
+                        except (RuntimeError, ValueError):
+                            pass
                         time.sleep(.04)
                     return False
-            return self.position('Fôlego — widget', geometry, confirmation=OwnGeometry())
+            self.position('Fôlego — widget', geometry, confirmation=OwnGeometry())
+            return dict(operation='widget-place', geometry=geometry) if action == 'widget-place' else ''
         if action == "position":
             return self.position(*value)
         raise ValueError("atalho desconhecido")
+
+    def _own_widget_geometry(self):
+        windows = self._call(['kdotool', 'search', '--all', '--pid', str(os.getpid()),
+                              '--name', '^Fôlego — widget$']).splitlines()
+        if len(windows) != 1:
+            raise RuntimeError('Janela própria do widget não identificada de forma única')
+        raw = self._call(['kdotool', 'getwindowgeometry', windows[0]])
+        match = re.search(r'Position:\s*([-0-9.]+),([-0-9.]+)\s+Geometry:\s*([-0-9.]+)x([-0-9.]+)', raw)
+        if match is None:
+            raise RuntimeError('Geometria do widget não confirmada')
+        geometry = tuple(round(float(value)) for value in match.groups())
+        if geometry[2] <= 0 or geometry[3] <= 0:
+            raise RuntimeError('Geometria do widget inválida')
+        return geometry
 
     def show_desktop(self):
         binary = shutil.which('qdbus6')
@@ -217,7 +233,7 @@ class DesktopTools:
             self._call([binary, "org.kde.KWin", "/Scripting/Script" + script,
                         "org.kde.kwin.Script.run"])
             if confirmation is None or not confirmation.wait(3):
-                raise RuntimeError("O compositor não confirmou a posição do teclado")
+                raise RuntimeError("O compositor não confirmou a posição da janela")
         finally:
             self._call([binary, "org.kde.KWin", "/Scripting",
                         "org.kde.kwin.Scripting.unloadScript", name])

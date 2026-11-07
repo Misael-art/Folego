@@ -130,6 +130,8 @@ class MetricsCollector:
             add("self_rss", OK)
 
         temperature, sensor = sysfs.read_temperature(self._sys())
+        battery, battery_quality = sysfs.read_battery(self._sys())
+        add("battery", battery_quality.status, battery_quality.detail)
         finished = self.clock()
         elapsed = (None if self._prev_mono is None
                    else max(0.0, finished - self._prev_mono))
@@ -156,6 +158,7 @@ class MetricsCollector:
         return Snapshot(
             temperature_c=temperature,
             temperature_sensor=sensor,
+            battery=battery,
             boot_id=boot_id,
             ts=self.wall_clock(),
             mem=mem,

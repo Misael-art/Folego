@@ -1,8 +1,9 @@
 """F5 compact control: navigation only, drag never acts, position recoverable."""
 import pytest
+import time
 
-from folego.core.snapshot import MemInfo, Pressure, Snapshot
-from folego.ui.compact import CompactWindow, clamp_position
+from folego.core.snapshot import BatteryInfo, MemInfo, Pressure, Snapshot, SourceQuality
+from folego.ui.compact import CompactWindow, clamp_position, dock_geometry
 from folego.ui.desktop_caps import detect
 
 pytest.importorskip("PySide6")
@@ -59,6 +60,328 @@ def make(qapp, *, caps=None, store=None):
     host = Host()
     view = CompactWindow(host, caps=caps or x11(), store=store or Store("100,100"))
     return view, host
+
+
+def test_dock_geometry_respects_available_screen_and_panels():
+    from PySide6.QtCore import QRect
+    area = QRect(24, 38, 1500, 812)
+    assert dock_geometry('right', area) == QRect(1399, 38, 125, 812)
+    assert dock_geometry('left', area) == QRect(24, 38, 125, 812)
+    assert dock_geometry('top', area) == QRect(24, 38, 1500, 132)
+    assert dock_geometry('top', QRect(0, 0, 948, 593)) == QRect(0, 0, 948, 132)
+    assert dock_geometry('top', QRect(0, 0, 700, 500)) == QRect(0, 0, 700, 190)
+    with pytest.raises(ValueError):
+        dock_geometry('bottom', area)
+
+
+def test_battery_adapts_to_all_widget_positions(qapp):
+    from dataclasses import replace
+    view, _ = make(qapp)
+    sample = replace(snap(), mono=time.monotonic(),
+                     battery=BatteryInfo(25, 'Discharging', 3600),
+                     sources=(SourceQuality('battery', 'ok'),))
+    view.show_compact()
+    for mode in ('compact', 'left', 'right', 'top'):
+        if mode != 'compact':
+            view.set_dock_mode(mode)
+            qapp.processEvents()
+        view.show_snapshot(sample)
+        if mode == 'top':
+            assert not view.battery_label.isVisible()
+            assert '25%' in view.detail_label.text()
+            assert '1h00' in view.detail_label.text()
+        else:
+            assert view.battery_label.isVisible()
+            assert '25%' in view.battery_label.text()
+            assert '1h00' in view.battery_label.text()
+        assert view._battery_band == 'orange'
+    view.show_snapshot(replace(sample, battery=None,
+                               sources=(SourceQuality('battery', 'error'),)))
+    assert not view.battery_label.isVisible()
+    view.show_snapshot(replace(sample, mono=time.monotonic() - 30))
+    assert not view.battery_label.isVisible()
+    view.force_close()
+
+
+def test_dock_reflows_existing_controls_and_returns_to_compact(qapp):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtWidgets import QBoxLayout
+    from PySide6.QtTest import QTest
+    view, _ = make(qapp)
+    view.show_compact()
+    original = view.geometry()
+    for mode in ('right', 'left', 'top'):
+        view.set_dock_mode(mode)
+        QTest.qWait(450)
+        assert view.action_drawer.maximumHeight() == 0
+        view._animate_actions(True)
+        QTest.qWait(180)
+        assert view._dock_mode == mode
+        assert view.geometry() == dock_geometry(mode, view._screen_area())
+        assert view.ai_strip.layout().direction() == (QBoxLayout.Direction.TopToBottom
+            if mode in ('right', 'left') else QBoxLayout.Direction.LeftToRight)
+        assert view.open_button.parent() is not None
+        assert view.pause_button.parent() is not None
+        assert view._handles['back'].isVisible()
+        assert view._handles['back'].geometry().bottom() < view.action_drawer.geometry().top()
+        actions = [view.shortcut_tabs.buttons[key] for key in
+                   ('select_all', 'delete_all', 'prompts', 'copy', 'paste', 'print')]
+        positions = [button.mapTo(view, QPoint(0, 0)) for button in actions]
+        if mode in ('right', 'left'):
+            assert view.width() <= 128
+            assert view._handles['back'].x() == (0 if mode == 'left' else view.width() - 16)
+            assert view.detail_label.alignment() == (Qt.AlignmentFlag.AlignLeft if mode == 'left'
+                                                     else Qt.AlignmentFlag.AlignRight)
+            assert all(positions[i].y() < positions[i + 1].y() for i in range(5))
+            assert view.pause_button.parent() is view.notice_widget
+            assert view.free_label.parent() is view.readings_widget
+            assert view.action_drawer.maximumHeight() >= view.shortcut_tabs.sizeHint().height()
+        else:
+            assert all(abs(point.y() - positions[0].y()) <= 1 for point in positions)
+        assert not view.mask().contains(QPoint(0, 0))
+        assert view.mask().contains(QPoint(view.width() // 2, 0))
+        view.set_dock_mode('compact')
+        QTest.qWait(450)
+        assert view.width() == original.width()
+        assert view._dock_mode == 'compact'
+    view.force_close()
+
+
+def test_wayland_dock_waits_for_confirmed_placement(qapp, monkeypatch):
+    view, _ = make(qapp, caps=wayland())
+    requested = []
+    controller = view.shortcut_tabs.controller
+    monkeypatch.setattr(controller, 'request', lambda action, value=None: requested.append((action, value)) or True)
+    view.show_compact()
+    view.set_dock_mode('right')
+    assert view._dock_pending == 'right'
+    assert requested[-1][0] == 'widget-geometry'
+    view.set_dock_mode('left')
+    assert len(requested) == 1
+    view._capture_result({'operation': 'widget-geometry', 'geometry': (20, 120, 280, 185)})
+    assert requested[-1][0] == 'widget-place'
+    assert view._compact_geometry.topLeft().x() == 20
+    view._capture_result({'operation': 'widget-place', 'geometry': requested[-1][1]})
+    assert view._dock_pending is None
+    view.force_close()
+
+
+def test_wayland_floating_widget_clamps_after_kwin_initial_position(qapp, monkeypatch):
+    from PySide6.QtCore import QRect
+    from PySide6.QtTest import QTest
+    view, _ = make(qapp, caps=wayland())
+    view._screen_area = lambda: QRect(0, 0, 948, 593)
+    view._screens = lambda: ((0, 0, 948, 593),)
+    requested = []
+    monkeypatch.setattr(view.shortcut_tabs.controller, 'request',
+                        lambda action, value=None: requested.append((action, value)) or True)
+    view.show_compact()
+    QTest.qWait(100)
+    assert requested == [('widget-geometry', None)]
+    view._capture_result({'operation': 'widget-geometry',
+                          'geometry': (604, 368, 280, 256)})
+    assert requested[-1] == ('widget-place', (604, 337, 280, 256))
+    view._capture_result({'operation': 'widget-place', 'geometry': requested[-1][1]})
+    assert view._show_clamp_phase is None
+    view.force_close()
+
+
+def test_dock_choice_during_floating_geometry_check_is_kept(qapp, monkeypatch):
+    from PySide6.QtCore import QRect
+    view, _ = make(qapp, caps=wayland())
+    view._screen_area = lambda: QRect(0, 0, 948, 593)
+    view._screens = lambda: ((0, 0, 948, 593),)
+    requested = []
+    monkeypatch.setattr(view.shortcut_tabs.controller, 'request',
+                        lambda action, value=None: requested.append((action, value)) or True)
+    view.show_compact()
+    view._reconcile_compact_after_show()
+    view.set_dock_mode('left')
+    assert view._requested_mode == 'left'
+    view._capture_result({'operation': 'widget-geometry',
+                          'geometry': (604, 368, 280, 256)})
+    qapp.processEvents()
+    assert requested[-1][0] == 'widget-geometry'  # original floating position for return
+    view._capture_result({'operation': 'widget-geometry',
+                          'geometry': (604, 337, 280, 256)})
+    assert requested[-1] == ('widget-place', (0, 0, 112, 593))
+    view._capture_result({'operation': 'widget-place', 'geometry': requested[-1][1]})
+    assert view._dock_mode == 'left' and view._dock_pending is None
+    view.force_close()
+
+
+def test_dock_remap_rechecks_kwin_and_corrects_late_rule(qapp, monkeypatch):
+    from PySide6.QtCore import QRect
+    view, _ = make(qapp, caps=wayland())
+    view._screen_area = lambda: QRect(0, 0, 948, 593)
+    requested = []
+    monkeypatch.setattr(view.shortcut_tabs.controller, 'request',
+                        lambda action, value=None: requested.append((action, value)) or True)
+    view.show()
+    view._dock_mode = 'top'
+    view._dock_verify_attempts = 3
+    view._verify_dock_after_show()
+    assert requested[-1] == ('widget-geometry', None)
+    view._capture_result({'operation': 'widget-geometry',
+                          'geometry': (604, 368, 948, 132)})
+    assert requested[-1] == ('widget-place', (0, 0, 948, 132))
+    view._capture_result({'operation': 'widget-place', 'geometry': requested[-1][1]})
+    assert view._dock_verify_attempts == 2
+    view.force_close()
+
+
+def test_dock_recheck_waits_for_busy_shortcut_controller(qapp, monkeypatch):
+    from PySide6.QtCore import QRect
+    from PySide6.QtTest import QTest
+    view, _ = make(qapp, caps=wayland())
+    view._screen_area = lambda: QRect(0, 0, 948, 593)
+    requested = []
+    controller = view.shortcut_tabs.controller
+    monkeypatch.setattr(controller, 'request',
+                        lambda action, value=None: requested.append((action, value)) or True)
+    view.show()
+    view._dock_mode = 'top'
+    view._dock_verify_attempts = 1
+    controller.future = object()
+    view._verify_dock_after_show()
+    assert view._dock_verify_waits == 1 and not requested
+    controller.future = None
+    QTest.qWait(120)
+    assert requested == [('widget-geometry', None)]
+    view.force_close()
+
+
+def test_docked_widget_reapplies_edge_after_remapping(qapp):
+    from PySide6.QtCore import QRect
+    from PySide6.QtTest import QTest
+    view, _ = make(qapp, caps=x11())
+    area = QRect(0, 0, 948, 593)
+    view._screen_area = lambda: area
+    view.show_compact()
+    view.set_dock_mode('top')
+    QTest.qWait(300)
+    view.hide()
+    view.move(604, 368)  # KWin's floating position rule on remap
+    view.show_compact()
+    qapp.processEvents()
+    assert view.geometry() == dock_geometry('top', area)
+    view.force_close()
+
+
+def test_widget_position_menu_switches_docks_and_floating(qapp):
+    from PySide6.QtCore import QRect
+    from PySide6.QtTest import QTest
+    view, _ = make(qapp, caps=x11())
+    view._screen_area = lambda: QRect(0, 0, 948, 593)
+    view.show_compact()
+    view.set_dock_mode('top')
+    QTest.qWait(300)
+    assert [action.text() for action in view.layout_menu.actions()] == [
+        'Widget flutuante', 'Lateral esquerda', 'Lateral direita', 'Barra superior']
+    view.layout_menu.actions()[1].trigger()
+    QTest.qWait(300)
+    assert view._dock_mode == 'left'
+    assert view.geometry() == dock_geometry('left', view._screen_area())
+    view.layout_menu.actions()[0].trigger()
+    QTest.qWait(300)
+    assert view._dock_mode == 'compact' and view.width() == 280
+    view.force_close()
+
+
+def _four_quotas(view):
+    from folego.core import ai_sessions as ai
+    from PySide6.QtWidgets import QApplication
+    monitor = view.ai_strip.monitor
+    monitor.pause()
+    deadline = time.monotonic() + 2
+    while monitor.poller._inflight or monitor.delivery_poller._inflight:
+        monitor.poller.drain()
+        monitor.delivery_poller.drain()
+        QApplication.processEvents()
+        assert time.monotonic() < deadline
+        time.sleep(.01)
+    now = time.time()
+    items = []
+    for provider, remaining in (('codex', 90), ('web', 70), ('claude', 50), ('grok', 30)):
+        item = ai.unknown(provider, label='Conta QA')
+        item.update(account_id=provider + '-qa', default=True, observed_at=now,
+                    windows=[ai.quota_window('Sessão QA', 100 - remaining, now + 3600, now)])
+        items.append(item)
+    deliveries = [dict(provider=item['provider'], count=1, pending=[])
+                  for item in items]
+    monitor.poller._collect = lambda: items
+    monitor.delivery_poller._collect = lambda: deliveries
+    view.ai_strip.set_items(items)
+    view.ai_strip.set_deliveries(deliveries)
+
+
+@pytest.mark.parametrize('width,height', ((948, 593), (1920, 1080), (2560, 1080)))
+@pytest.mark.parametrize('mode', ('left', 'right'))
+def test_side_dock_reaches_all_quotas_above_fixed_actions(qapp, width, height, mode):
+    from PySide6.QtCore import QPoint, QRect
+    from PySide6.QtTest import QTest
+    view, _ = make(qapp)
+    view._screen_area = lambda: QRect(0, 0, width, height)
+    view.show_compact()
+    view.show_snapshot(snap())
+    _four_quotas(view)
+    view.set_dock_mode(mode)
+    QTest.qWait(450)
+    view._animate_actions(True)
+    QTest.qWait(180)
+    scroll = view.dock_scroll.verticalScrollBar()
+    assert view.geometry() == dock_geometry(mode, QRect(0, 0, width, height))
+    assert view.dock_scroll.geometry().bottom() < view.action_drawer.geometry().top()
+    assert all(column.isVisible() for column in view.ai_strip.columns.values())
+    if height == 593:
+        assert scroll.maximum() > 0
+    scroll.setValue(scroll.maximum())
+    qapp.processEvents()
+    last = view.ai_strip.columns['grok']
+    top = last.mapTo(view.dock_scroll.viewport(), QPoint(0, 0)).y()
+    assert top >= 0
+    assert top + last.height() <= view.dock_scroll.viewport().height()
+    assert view._handles['back'].x() == (0 if mode == 'left' else view.width() - 16)
+    view.force_close()
+
+
+@pytest.mark.parametrize('width,height', ((948, 593), (1920, 1080), (2560, 1080)))
+def test_top_dock_keeps_four_quotas_and_actions_inside_view(qapp, width, height):
+    from PySide6.QtCore import QPoint, QRect
+    from PySide6.QtTest import QTest
+    view, _ = make(qapp)
+    view._screen_area = lambda: QRect(0, 0, width, height)
+    view.show_compact()
+    view.show_snapshot(snap())
+    _four_quotas(view)
+    view.set_dock_mode('top')
+    QTest.qWait(450)
+    assert view.action_drawer.maximumHeight() == 0
+    view._animate_actions(True)
+    QTest.qWait(180)
+    assert view.geometry() == dock_geometry('top', QRect(0, 0, width, height))
+    assert view.dock_scroll.geometry().bottom() < view.action_drawer.geometry().top()
+    if width >= 900:
+        assert view.dock_scroll.verticalScrollBar().maximum() == 0
+    assert all(column.isVisible() for column in view.ai_strip.columns.values())
+    viewport = view.dock_scroll.viewport()
+    for column in view.ai_strip.columns.values():
+        position = column.mapTo(viewport, QPoint(0, 0))
+        left = position.x()
+        assert left >= 0 and left + column.width() <= viewport.width()
+        assert position.y() >= 0 and position.y() + column.height() <= viewport.height()
+    assert view._handles['back'].geometry().bottom() < view.action_drawer.y()
+    if width >= 900:
+        gauge_x = view.gauge_widget.mapTo(view, QPoint(0, 0)).x()
+        quota_x = view.ai_strip.mapTo(view, QPoint(0, 0)).x()
+        metrics_x = view.readings_widget.mapTo(view, QPoint(0, 0)).x()
+        pause_x = view.pause_button.mapTo(view, QPoint(0, 0)).x()
+        assert gauge_x < quota_x < metrics_x < pause_x
+        assert view.brand.mapTo(view, QPoint(0, 0)).x() < quota_x
+        assert view.pause_button.mapTo(view, QPoint(0, 0)).y() > view.keyboard_group.y()
+        assert view.pause_button.mapTo(view, QPoint(0, 0)).y() - view.keyboard_group.y() < 40
+        assert pause_x + view.pause_button.width() <= view.width()
+    view.force_close()
 
 
 # --------------------------------------------------------------------- capabilities
@@ -239,9 +562,22 @@ def test_the_widget_button_returns_to_the_central_window_and_folds_itself(qapp):
 
 def test_widget_header_uses_navigation_and_control_menu_instead_of_window_buttons(qapp):
     view,host=make(qapp)
-    assert view.open_button.text()=='Central'
+    assert view.open_button.text()=='' and not view.open_button.icon().isNull()
+    assert view.open_button.accessibleName()=='Abrir a central do Fôlego'
     assert not hasattr(view,'hide_button') and not hasattr(view,'quit_button')
-    assert [a.text() for a in view.control_menu.actions()]==['Ocultar widget','Sair do Fôlego']
+    assert [a.text() for a in view.control_menu.actions()]==[
+        'Ocultar widget','Sair do Fôlego','Contas e cotas de IA','Posição do widget']
+    view._refresh_accounts_menu()
+    assert len(view.accounts_menu.actions())==4
+    assert all('sem confirmação' in action.text() for action in view.accounts_menu.actions())
+    from folego.core import ai_sessions as ai
+    import time
+    item=ai.unknown('codex')
+    item['reset_credits']=dict(available=2,observed_at=time.time())
+    view.ai_strip.set_items([item])
+    view._refresh_accounts_menu()
+    assert '2 tickets' in view.accounts_menu.actions()[0].text()
+    assert not view.ai_strip.columns['codex'].isVisible()
     view.quit_action.trigger()
     assert host.quits==1
 

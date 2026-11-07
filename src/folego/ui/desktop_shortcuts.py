@@ -5,13 +5,29 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot, ClassInfo, QPoint
-from PySide6.QtGui import QGuiApplication, QIcon
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QStyle,
+from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot, ClassInfo, QPoint, QRectF, QSize
+from PySide6.QtGui import QGuiApplication, QIcon, QPainter, QPen, QColor, QPixmap
+from PySide6.QtWidgets import (QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QStyle,
                               QVBoxLayout, QWidget, QMenu, QWidgetAction, QSizePolicy)
 
 from ..adapters.desktop_tools import DesktopTools
-from .theme import background, themed_style, TOKENS, set_control_icon, shortcut_style, prepare_surface, paint_surface
+from .theme import background, themed_style, TOKENS, set_control_icon, on_theme_change, shortcut_style, prepare_surface, paint_surface
+
+
+def keyboard_icon():
+    """A small vector keyboard that keeps the same outline in every icon theme."""
+    pixmap = QPixmap(24, 24)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(QPen(QColor(TOKENS.text), 1.6))
+    painter.drawRoundedRect(QRectF(2.5, 5, 19, 14), 2.5, 2.5)
+    for x in (6, 10, 14, 18):
+        for y in (9, 12):
+            painter.drawPoint(x, y)
+    painter.drawLine(7, 16, 17, 16)
+    painter.end()
+    return QIcon(pixmap)
 
 
 def _show_desktop_request():
@@ -276,11 +292,9 @@ class ShortcutTabs(QWidget):
         self.custom_menu = None
         self.controller.payload.connect(self._custom_result)
         self.controller.failed.connect(self._custom_failed)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(3, 0, 3, 0)
-        layout.setSpacing(2)
-        editing = QHBoxLayout()
-        editing.setSpacing(3)
+        self.actions_layout = QGridLayout(self)
+        self.actions_layout.setContentsMargins(3, 0, 3, 0)
+        self.actions_layout.setSpacing(3)
         for index, (action, text) in enumerate((("select_all", "Selecionar tudo"),
                                     ("delete_all", "Apagar tudo"), ("prompts", "Prompts"))):
             button = QPushButton(text)
@@ -291,11 +305,6 @@ class ShortcutTabs(QWidget):
             themed_style(button, lambda slot=index: shortcut_style(slot))
             button.clicked.connect(lambda checked=False, key=action: self.activate(key))
             self.buttons[action] = button
-            editing.addWidget(button, 1)
-        layout.addLayout(editing)
-        row = QHBoxLayout()
-        row.setSpacing(3)
-        layout.addLayout(row)
         for index, (key, title) in enumerate((('copy', 'Copiar'), ('paste', 'Colar'), ('print', 'Print')), 3):
             button = QPushButton(title)
             button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
@@ -307,9 +316,11 @@ class ShortcutTabs(QWidget):
             themed_style(button, lambda slot=index: shortcut_style(slot))
             button.clicked.connect(lambda checked=False, action=key: self.activate(action))
             self.buttons[key] = button
-            row.addWidget(button, 1)
+        self.set_orientation('compact')
         keyboard = QPushButton(self)
-        set_control_icon(keyboard, 'input-keyboard', QStyle.StandardPixmap.SP_ComputerIcon)
+        on_theme_change(keyboard, lambda: keyboard.setIcon(keyboard_icon()))
+        keyboard.setIcon(keyboard_icon())
+        keyboard.setIconSize(QSize(20, 20))
         keyboard.setFixedSize(24, 24)
         keyboard.setStyleSheet('min-height:0;max-height:24px;padding:0;')
         keyboard.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -325,6 +336,24 @@ class ShortcutTabs(QWidget):
         self.top_button.setAccessibleName('Abrir teclado no topo da tela')
         self.top_button.setToolTip('Abrir teclado no topo da tela')
         self.top_button.clicked.connect(lambda: self.open_keyboard('top'))
+
+    def set_orientation(self, mode):
+        """Keep the same actions while adapting their order to the dock."""
+        keys = ('select_all', 'delete_all', 'prompts', 'copy', 'paste', 'print')
+        labels = ('Selecionar tudo', 'Apagar tudo', 'Prompts', 'Copiar', 'Colar', 'Print')
+        for key in keys:
+            self.actions_layout.removeWidget(self.buttons[key])
+        columns = 1 if mode in ('left', 'right') else 6 if mode == 'top' else 3
+        self.actions_layout.setVerticalSpacing(1 if columns == 1 else 3)
+        for index, key in enumerate(keys):
+            button = self.buttons[key]
+            button.setText(('Selecionar', 'Apagar')[index] if columns == 1 and index < 2
+                           else labels[index])
+            # The grid owns the width; native button hints vary with desktop fonts.
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            self.actions_layout.addWidget(button, index // columns, index % columns)
+        for column in range(6):
+            self.actions_layout.setColumnStretch(column, 1 if column < columns else 0)
 
     def activate(self, action):
         if action == "keyboard":

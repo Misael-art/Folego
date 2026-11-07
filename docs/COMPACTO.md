@@ -1,37 +1,91 @@
 # Widget, sessões de IA e atalhos
 
 O widget tem 280 px de largura em pixels lógicos do desktop. Recursos ficam em
-duas linhas; alertas completos e mensagens podem aumentar a altura. **Central**
-abre a janela principal e recolhe o widget. **Voltar**, no topo da central,
+duas linhas; alertas completos e mensagens podem aumentar a altura. O ícone de
+grade abre a **Central** e recolhe o widget. A seta ao lado abre os controles;
+o ícone de teclado e sua seta são um grupo separado para abrir o teclado embaixo
+ou no topo. **Voltar**, no topo da central,
 retorna ao controle flutuante sem perder a aba, os campos em edição ou parar o
 monitoramento. As duas interfaces dispensam minimizar, maximizar e fechar.
-Para encerrar, use **Controles → Sair do Fôlego** ou a bandeja. **Ocultar widget**,
-no menu Controles, mantém um caminho de retorno: sem bandeja e com a central
+Para encerrar, use a seta da Central → **Sair do Fôlego** ou a bandeja. **Ocultar widget**,
+no mesmo menu, mantém um caminho de retorno: sem bandeja e com a central
 oculta, ela é reaberta antes de ocultar o widget. O cabeçalho da central permite
 arrastar a janela. Pausar controla a telemetria de recursos. A consulta de IAs é separada
 e continua enquanto o Fôlego está aberto, inclusive com o widget oculto ou a
 central em primeiro plano. Fechar o aplicativo encerra seus workers e seu próprio
 auxiliar de entrada; um som em andamento conclui a restauração do volume.
 
+## Encaixe nas bordas
+
+Ao passar o mouse pela borda esquerda do widget, uma faixa em dois tons mais
+escuros revela a seta para a barra direita. A borda direita abre a barra
+esquerda; a borda superior abre a barra horizontal no topo. A seta da borda
+externa de cada lateral, ou do centro da borda superior, retorna aos 280 px do
+compacto. Os controles, leitura de
+recursos e cotas são os mesmos componentes nas quatro formas. As laterais têm
+112–128 unidades lógicas de largura: o indicador principal fica centralizado,
+seguido do estado, métricas, espaço livre, pausa e cotas confirmadas em coluna.
+As métricas se alinham à borda correspondente; os cantos da janela são
+recortados de forma arredondada.
+As seis ações coloridas aparecem ao entrar com o ponteiro e se recolhem após
+sair, nas três barras como no compacto. Nas laterais, formam uma coluna na base;
+a área de leitura rola independentemente quando as cotas e avisos excedem a
+altura útil. A barra superior tem 132 unidades lógicas de altura a partir de
+900 unidades de largura: Fôlego e o indicador de folga começam à esquerda,
+seguidos pelas cotas confirmadas, métricas e o grupo de teclado/menu na ponta
+direita, com Pausar abaixo desses dois controles. Ações expandidas formam uma
+linha na base; quatro cotas com badges cabem simultaneamente na área útil de
+948 × 593 do Steam Deck. Em larguras menores, o topo preserva uma composição
+em duas linhas e 190 unidades de altura.
+
+O encaixe usa a área disponível da tela informada pelo Qt para excluir os
+painéis conhecidos. Em X11, a geometria muda em 260 ms. Em KDE/Wayland, o
+Fôlego pede ao KWin para posicionar **somente sua própria janela** e verifica
+a posição antes de concluir; o conteúdo reaparece suavemente após a confirmação.
+Ao reabrir uma barra depois de visitar a Central, o Fôlego confirma novamente
+o encaixe: a regra inicial do KWin para o widget flutuante pode ter reposicionado
+a mesma janela. **Voltar** na Central abre o widget flutuante. O menu **Posição
+do widget** na Central e no widget oferece também as duas laterais e o topo,
+sem depender da alça de borda estar visível.
+O flutuante preserva a posição quando ela cabe na área útil; se a altura mudou,
+ajusta apenas o necessário para manter a janela inteira acessível. Uma mudança
+tardia do KWin na barra é conferida por leitura da geometria, com número limitado
+de correções.
+Se o compositor não confirmar, a interface informa a incerteza e não repete o
+pedido por conta própria. O modo de encaixe vale para a janela atual; uma nova
+abertura inicia no compacto.
+
 ## Sessões de IA
 
-Passe o mouse sobre Codex, Codex Web, Claude ou Grok para abrir o painel de contas.
-A conta padrão aparece primeiro; escolha outra na lista à esquerda. O percentual
-gasto, tickets e referência da assinatura ficam em destaque; cada janela mostra
+O widget mostra somente provedores com cota positiva confirmada, do maior para o
+menor **percentual disponível**. Um empate mantém a ordem Codex, Codex Web,
+Claude e Grok. A conta padrão representa o provedor quando tem cota; se estiver
+zerada ou sem confirmação, a conta elegível com maior percentual aparece em seu
+lugar. Nome acessível, clique e painel se referem à mesma conta. Passe o mouse
+num indicador visível para abrir o painel. Todos os provedores, inclusive os
+ocultos, ficam em **Contas e cotas de IA** na seta da Central. O menu informa
+zero, ausência de confirmação, entregas e tickets separadamente. Se nenhuma
+cota positiva estiver confirmada, a faixa mostra uma mensagem curta. A conta
+padrão aparece primeiro na lista lateral do painel; escolha outra quando quiser.
+O percentual gasto, tickets e referência da assinatura ficam em destaque; cada janela mostra
 seu próprio reset e tempo restante. Detalhes adicionais têm rolagem. Clique fora
 ou use Escape para fechar. O clique direto no indicador abre o cliente da conta
-padrão; **Abrir cliente** no painel usa a conta selecionada.
+exibida; **Abrir cliente** no painel usa a conta selecionada.
 
-Os quatro indicadores usam o mesmo desenho circular do medidor do PhaseZero:
+Os indicadores usam o mesmo desenho circular do medidor do PhaseZero:
 disco colorido de identificação, percentual **disponível** no centro e anel
-externo proporcional à cota da conta padrão. O anel é verde acima de 60%, amarelo
-de 21% a 60% e vermelho até 20%; zero mostra **0** com o anel vazio.
-**?** com anel cinza significa dado desconhecido, vencido ou parcial.
-Uma outra conta não altera o percentual da padrão; seu estado aparece ao selecioná-la.
+externo proporcional à cota da conta exibida. O anel é verde acima de 60%, amarelo
+de 21% a 60% e vermelho até 20%. Zero confirmado e dado desconhecido ou vencido
+saem da faixa, mas preservam estados distintos no menu e no painel. Uma outra
+conta não altera o percentual da padrão enquanto ela tiver cota positiva.
 
 Uma atualização entre percentuais conhecidos move o anel suavemente em 450 ms;
 o número e a descrição acessível mostram o valor atual desde o início.
 Expiração ou falha retiram o percentual imediatamente e cancelam a transição.
+Uma conta que ganha cota durante a observação entra na faixa com transição curta,
+respeitando a preferência de animação do estilo Qt. A reposição confirmada usa
+o aviso sonoro já configurável em Opções; a primeira leitura e a simples passagem
+da data de reset não tocam som.
 Entregas confirmadas para revisitar fazem a borda interna pulsar em ciclos de
 1,8 s, mantendo a contagem separada abaixo. Isso não representa cota ou tickets.
 Sem entregas confirmadas, o pulso para. Todas as animações param com o widget
@@ -71,9 +125,11 @@ quando a fonte daquele provedor informa tickets (atualmente confirmado no Codex)
   mudar a organização invalida uso e perfil anteriores mesmo sem trocar o token.
   A espera por HTTP 429 continua valendo para a mesma credencial durante essa troca.
   Não há rede no loop gráfico.
-- Codex Web e Grok: esta fonte não oferece uma franquia percentual confirmada.
-  Permanecem com **?** e anel cinza. Metadados de assinatura, quando disponíveis, aparecem como
-  tal, separados da reposição de cota. A data de Grok pode ser informada pelo
+- Codex Web e Grok: se suas fontes não oferecerem uma franquia percentual
+  confirmada, ficam no menu de contas, fora da faixa principal. Quando houver
+  observação válida e cota positiva, entram automaticamente. Metadados de
+  assinatura, quando disponíveis, aparecem como tal, separados da reposição de
+  cota. A data de Grok pode ser informada pelo
   usuário; isso não confirma pagamento ou cota. Esses campos continuam
   indisponíveis nas fontes consultadas; não se usam tokens gastos na conversa
   como percentual da franquia do plano.
@@ -201,7 +257,27 @@ primeira sessão legível daquele provedor. Eventos
 repetidos, abrir uma conta e falhas de leitura não repetem os sons. Desligar os
 avisos continua atualizando a referência; religar não reproduz o histórico mudo.
 Conclusões simultâneas do mesmo provedor são agrupadas enquanto aguardam som.
-A fila é limitada às sete identidades sonoras, reproduzidas em sequência.
+A fila mantém no máximo uma instância pendente por identidade sonora, incluindo
+os quatro sons de bateria, e reproduz os avisos em sequência.
+
+## Bateria
+
+O widget e a Central mostram o percentual quando a leitura da bateria é válida.
+No widget, ele fica verde acima de 50%, amarelo de 26% a 50%, laranja de 11% a
+25% e vermelho em 10% ou menos. Em 75%, ainda verde, toca o primeiro aviso de
+queda. Ao cruzar 50% e 25% durante a descarga, os toques ficam mais acentuados.
+Em 10% ou menos, o toque crítico começa na primeira leitura e se repete a cada
+60 segundos de monitoramento válido. Um salto que atravessa várias faixas toca
+apenas o aviso mais urgente. Carregar, pausar ou perder a leitura interrompe a
+repetição. O primeiro valor conhecido acima de 10% estabelece referência sem
+reproduzir avisos antigos.
+
+O tempo restante vem de `time_to_empty_avg`/`time_to_empty_now` do Linux ou é
+estimado com energia e potência (ou carga e corrente) da mesma bateria. Não é
+mostrado quando esses dados faltam, a leitura é antiga ou o estado não é de
+descarga. Equipamentos sem bateria não recebem um percentual fictício; leituras
+inválidas ficam sem valor. Os quatro sons estão na lista **Testar som**, e a
+preferência de sons existente governa também os avisos automáticos de bateria.
 
 **Elevar o volume a pelo menos 85% durante o som e restaurar depois** também vem
 ligado. Se a saída já estiver acima disso, não a reduz. O Fôlego guarda os valores

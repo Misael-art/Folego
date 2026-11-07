@@ -18,6 +18,7 @@ def main():
     parser.add_argument('--background-transparency',action='store_true',help='Verify alpha at 0/50/100 percent in light/dark themes')
     parser.add_argument('--transparency-theme',choices=('snes-us','ps2'),help='Run one transparency palette within the existing QA time budget')
     parser.add_argument('--ai-quota-rings',action='store_true',help='Verify quota rings, animations and account gestures with synthetic observations')
+    parser.add_argument('--dock-modes',action='store_true',help='Verify owned widget placement at both sides and top')
     args=parser.parse_args()
     root=args.state.resolve();root.mkdir(mode=0o700,parents=True,exist_ok=False)
     for key,folder in (('HOME','home'),('XDG_CONFIG_HOME','config'),('XDG_DATA_HOME','data'),
@@ -144,13 +145,14 @@ def main():
             QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)
             wait(lambda:compact.isVisible() and compact.windowHandle().isExposed() and not window.isVisible())
             backend=compact.shortcut_tabs.controller.backend
-            from folego.core.snapshot import Snapshot,MemInfo
+            from folego.core.snapshot import Snapshot,MemInfo,BatteryInfo,SourceQuality
             from folego.core.tmpfs import TmpfsVolume
             compact.show_snapshot(Snapshot(ts=time.time(),mono=time.monotonic(),mem=MemInfo(16*1024**2,6*1024**2),
                 swap_used_kb=1024,swap_total_kb=8192,pressure_memory=None,pressure_io=None,pressure_cpu=None,
                 load=None,apps=(),self_rss_kb=0,cpu_busy_frac=.52,temperature_c=61,temperature_sensor='demonstração',
+                battery=BatteryInfo(25,'Discharging',3600),sources=(SourceQuality('battery','ok'),),
                 tmpfs=(TmpfsVolume('/qa/runtime','tmpfs',100,81,19,is_runtime=True),)))
-            if args.prompt_key or args.standard_shortcuts or args.console_themes or args.background_transparency or args.ai_quota_rings:
+            if args.prompt_key or args.standard_shortcuts or args.console_themes or args.background_transparency or args.ai_quota_rings or args.dock_modes:
                 script=root/'place-owned-widget.js'
                 script.write_text('const w=workspace.windowList().find(w=>w.pid==='+str(os.getpid())+
                     ' && w.caption==="Fôlego — widget");if(w){const g=w.frameGeometry;w.frameGeometry={x:20,y:120,width:g.width,height:g.height};}')
@@ -159,6 +161,164 @@ def main():
                 try:call('qdbus6','org.kde.KWin','/Scripting/Script'+sid,'org.kde.kwin.Script.run')
                 finally:call('qdbus6','org.kde.KWin','/Scripting','org.kde.kwin.Scripting.unloadScript',name)
                 settle=time.monotonic()+.35;wait(lambda:time.monotonic()>=settle)
+            if args.dock_modes:
+                from folego.ui.compact import dock_geometry
+                from folego.core import ai_sessions as ai
+                window.ai_monitor.pause()
+                wait(lambda: not window.ai_monitor.poller._inflight)
+                now=time.time()
+                items=[]
+                for provider,remaining in (('codex',90),('web',None),('claude',69),('grok',None)):
+                    item=ai.unknown(provider,label='Conta QA')
+                    item.update(account_id=provider+'-dock-qa',default=True)
+                    if remaining is not None:
+                        item.update(observed_at=now,windows=[ai.quota_window('Sessão QA',100-remaining,now+3600,now)])
+                    items.append(item)
+                full_items=[]
+                for provider,remaining in (('codex',90),('web',70),('claude',50),('grok',30)):
+                    item=ai.unknown(provider,label='Conta QA')
+                    item.update(account_id=provider+'-dock-full-qa',default=True,observed_at=now,
+                                windows=[ai.quota_window('Sessão QA',100-remaining,now+3600,now)])
+                    full_items.append(item)
+                compact.ai_strip.set_items(items)
+                compact.adjustSize();app.processEvents()
+                def compositor_rect():
+                    own=native('^Fôlego — widget$');assert len(own)==1
+                    raw=call('kdotool','getwindowgeometry',own[0])
+                    match=re.search(r'Position:\s*([-0-9.]+),([-0-9.]+)\s+Geometry:\s*([-0-9.]+)x([-0-9.]+)',raw)
+                    assert match,raw
+                    return tuple(round(float(value)) for value in match.groups())
+                compact_origin=compositor_rect()
+                for mode in ('right','left','top'):
+                    if mode == 'left':apply_theme(app,'ps2')
+                    handle=compact._handles[mode]
+                    pointer_click(handle.mapToGlobal(handle.rect().center()),backend,compact)
+                    wait(lambda:compact._dock_mode==mode and compact._dock_pending is None)
+                    dock_target=dock_geometry(mode,compact.screen().availableGeometry())
+                    actual=compositor_rect()
+                    assert all(abs(a-b)<=1 for a,b in zip(actual,(dock_target.x(),dock_target.y(),dock_target.width(),dock_target.height()))),(mode,actual,dock_target)
+                    assert compact.action_drawer.maximumHeight()==0,(mode,'actions did not start collapsed')
+                    if mode == 'top':
+                        assert not compact.battery_label.isVisible() and '25%' in compact.detail_label.text()
+                    else:
+                        assert compact.battery_label.isVisible() and '25%' in compact.battery_label.text()
+                    compact.ai_strip.set_items(items)
+                    assert compact.ai_strip.visible_providers == {'codex','claude'},(mode,compact.ai_strip.visible_providers)
+                    wait(lambda: all(compact.ai_strip.arrival_animations[p].state()==
+                                     compact.ai_strip.arrival_animations[p].State.Stopped
+                                     for p in ('codex','claude')))
+                    quota_positions=[(provider,compact.ai_strip.columns[provider].isVisible(),
+                                      compact.ai_strip.columns[provider].mapTo(compact,QPoint(0,0)).y(),
+                                      compact.ai_strip.columns[provider].height()) for provider in ('codex','claude')]
+                    assert all(visible and 0<=y<compact.height() for _,visible,y,_ in quota_positions),(mode,quota_positions,compact.ai_strip.geometry().getRect(),compact.card.sizeHint().height())
+                    if mode in ('left','right'):
+                        assert all(y+height<=compact.dock_scroll.viewport().height()
+                                   for _,_,y,height in quota_positions),(mode,quota_positions,compact.dock_scroll.viewport().height())
+                        assert not compact.dock_scroll.verticalScrollBar().isVisible()
+                    records.append(dict(case='quota positions',mode=mode,positions=quota_positions,
+                                        strip=compact.ai_strip.mapTo(compact,QPoint(0,0)).y(),
+                                        strip_size=[compact.ai_strip.width(),compact.ai_strip.height()],
+                                        viewport_height=compact.dock_scroll.viewport().height()))
+                    compact.grab().save(str(root/('dock-'+mode+'-collapsed.png')))
+                    if mode=='top':
+                        binary,_=backend._input()
+                        subprocess.run([binary,'mousemove','--','0','220'],env=backend.env,
+                                       check=True,capture_output=True)
+                        app.processEvents()
+                    hover_y=52 if mode=='top' else min(200,compact.height()//2)
+                    pointer_click(compact.mapToGlobal(QPoint(compact.width()//2,hover_y)),backend,compact,click=False)
+                    wait(lambda:compact.action_drawer.maximumHeight()==compact.shortcut_tabs.sizeHint().height() and
+                                 compact.drawer_animation.state()==compact.drawer_animation.State.Stopped)
+                    actions=[compact.shortcut_tabs.buttons[key] for key in ('select_all','delete_all','prompts','copy','paste','print')]
+                    centers=[button.mapTo(compact,button.rect().center()) for button in actions]
+                    assert all(button.isVisible() and 0<=center.x()<compact.width() and 0<=center.y()<compact.height()
+                               for button,center in zip(actions,centers)),(mode,[(p.x(),p.y()) for p in centers])
+                    if mode in ('left','right'):
+                        assert compact.width()<=128 and all(centers[i].y()<centers[i+1].y() for i in range(5))
+                        assert all(abs(center.x()-compact.width()/2)<17 for center in centers)
+                        assert compact.gauge.width()>compact.ai_strip.buttons['codex'].iconSize().width()
+                        assert compact._handles['back'].x()==(0 if mode=='left' else compact.width()-16)
+                    else:
+                        assert all(abs(centers[i].y()-centers[0].y())<3 for i in range(1,6))
+                        assert (compact.gauge_widget.x()<compact.ai_strip.x()<compact.readings_widget.x()<
+                                compact.pause_button.mapTo(compact.card,QPoint(0,0)).x())
+                        assert (compact.pause_button.mapTo(compact,QPoint(0,0)).y()>
+                                compact.keyboard_group.mapTo(compact,QPoint(0,0)).y())
+                        assert compact.height()<190
+                    image=compact.grab().toImage()
+                    assert all(image.pixelColor(x,y).alpha()<32 for x,y in
+                               ((0,0),(image.width()-1,0),(0,image.height()-1),
+                                (image.width()-1,image.height()-1))),(mode,'square image corners')
+                    image.save(str(root/('dock-'+mode+'.png')))
+                    compact.ai_strip.grab().save(str(root/('dock-'+mode+'-quotas.png')))
+                    records.append(dict(case='native dock placement',mode=mode,geometry=actual,
+                                        available=list((compact.screen().availableGeometry().x(),compact.screen().availableGeometry().y(),
+                                                        compact.screen().availableGeometry().width(),compact.screen().availableGeometry().height()))))
+                    compact.ai_strip.set_deliveries([dict(provider=p,count=1,pending=[]) for p in ai.NAMES])
+                    compact.ai_strip.set_items(full_items)
+                    wait(lambda:compact.ai_strip.visible_providers==set(ai.NAMES))
+                    wait(lambda:all(animation.state()==animation.State.Stopped for animation in
+                                    compact.ai_strip.arrival_animations.values()))
+                    scroll=compact.dock_scroll.verticalScrollBar()
+                    if mode=='top':
+                        assert scroll.maximum()==0,('top clipped with four quotas',scroll.maximum())
+                    scroll.setValue(scroll.maximum());app.processEvents()
+                    last=compact.ai_strip.columns['grok']
+                    last_y=last.mapTo(compact.dock_scroll.viewport(),QPoint(0,0)).y()
+                    assert 0<=last_y and last_y+last.height()<=compact.dock_scroll.viewport().height(),(mode,last_y,last.height(),compact.dock_scroll.viewport().height(),scroll.maximum())
+                    assert compact.dock_scroll.geometry().bottom()<compact.action_drawer.geometry().top()
+                    compact.grab().save(str(root/('dock-'+mode+'-scrolled.png')))
+                    records.append(dict(case='all quotas reachable',mode=mode,scroll_max=scroll.maximum(),
+                                        last_quota_y=last_y,actions_top=compact.action_drawer.y()))
+                    compact.ai_strip.set_deliveries([])
+                    compact.ai_strip.set_items(items)
+                    scroll.setValue(0);app.processEvents()
+                    binary,_=backend._input()
+                    leave_delta={'right':(-200,0),'left':(200,0),'top':(0,200)}[mode]
+                    subprocess.run([binary,'mousemove','--',*map(str,leave_delta)],
+                                   env=backend.env,check=True,capture_output=True)
+                    wait(lambda:compact.action_drawer.maximumHeight()==0 and
+                                 compact.drawer_animation.state()==compact.drawer_animation.State.Stopped)
+                    records.append(dict(case='dock actions retract',mode=mode,collapsed=True))
+                    if mode=='top':
+                        QTest.mouseClick(compact.open_button,Qt.MouseButton.LeftButton)
+                        wait(lambda:window.isVisible() and not compact.isVisible())
+                        window.show_compact()  # same dock, remapped after the floating KWin position rule
+                        window.hide_window()
+                        wait(lambda:compact.isVisible() and compact._dock_pending is None and
+                                     compact._dock_verify_attempts==0 and compact._dock_verify_phase is None and
+                                     all(abs(a-b)<=1 for a,b in zip(compositor_rect(),
+                                         (dock_target.x(),dock_target.y(),dock_target.width(),dock_target.height()))))
+                        records.append(dict(case='top restored after full window',geometry=compositor_rect()))
+                    back=compact._handles['back']
+                    assert back.geometry().bottom()<compact.action_drawer.y(),(mode,back.geometry().getRect(),compact.action_drawer.y())
+                    back.hovered=True;back.update();app.processEvents()
+                    compact.grab().save(str(root/('dock-'+mode+'-grip.png')))
+                    pointer_click(back.mapToGlobal(back.rect().center()),backend,compact)
+                    wait(lambda:compact._dock_mode=='compact' and compact._dock_pending is None)
+                    assert compact.width()==280
+                    returned=compositor_rect()
+                    assert all(abs(a-b)<=1 for a,b in zip(returned[:3],compact_origin[:3])),(mode,returned,compact_origin)
+                    assert returned[3]>=compact.card.sizeHint().height() and compact.action_drawer.maximumHeight()==0,(mode,returned,compact.card.sizeHint().height())
+                compact.grab().save(str(root/'dock-return.png'))
+                records.append(dict(case='native dock return',geometry=compositor_rect()))
+                compact.set_dock_mode('top')
+                wait(lambda:compact._dock_mode=='top' and compact._dock_pending is None)
+                QTest.mouseClick(compact.open_button,Qt.MouseButton.LeftButton)
+                wait(lambda:window.isVisible() and not compact.isVisible())
+                window.widget_position_menu.actions()[1].trigger()
+                wait(lambda:compact.isVisible() and compact._dock_mode=='left' and compact._dock_pending is None
+                             and compact._dock_verify_attempts==0 and compact._dock_verify_phase is None)
+                left_target=dock_geometry('left',compact.screen().availableGeometry())
+                assert all(abs(a-b)<=1 for a,b in zip(compositor_rect(),
+                           (left_target.x(),left_target.y(),left_target.width(),left_target.height())))
+                QTest.mouseClick(compact.open_button,Qt.MouseButton.LeftButton)
+                wait(lambda:window.isVisible() and not compact.isVisible())
+                QTest.mouseClick(window.back_button,Qt.MouseButton.LeftButton)
+                wait(lambda:compact.isVisible() and compact._dock_mode=='compact' and compact._dock_pending is None)
+                assert compact.width()==280
+                records.append(dict(case='full window position menu and floating return',geometry=compositor_rect()))
+                apply_theme(app,'snes-us')
             if args.ai_quota_rings:
                 from folego.core import ai_sessions as ai
                 from folego.ui.theme import TOKENS
@@ -186,7 +346,9 @@ def main():
                     compact.grab().save(str(root/(prefix+'-rings-compact.png')))
                     strip.grab().save(str(root/(prefix+'-rings.png')))
                     assert [b.remaining for b in strip.buttons.values()]==[31,None,8,None]
-                    assert all(b.width()>=b.sizeHint().width() for b in strip.buttons.values())
+                    assert [p for p in ai.NAMES if strip.columns[p].isVisible()]==['codex','claude']
+                    assert all(b.width()>=b.sizeHint().width() for p,b in strip.buttons.items()
+                               if strip.columns[p].isVisible())
                     records.append(dict(case='quota rings',theme=key,transparency=transparency,
                                         remaining=[31,None,8,None],width=compact.width()))
                 apply_theme(app,'ps2',transparency=0)
@@ -199,17 +361,12 @@ def main():
                 wait(lambda:31<button.displayed<68)
                 strip.grab().save(str(root/'transition.png'))
                 wait(lambda:button.displayed==68)
-                items[0]['windows'][0]['resets_at']=now-1;strip.render()
-                assert button.remaining is None and button.transition.state()==button.transition.State.Stopped
-                strip.grab().save(str(root/'expired.png'))
-                # Wait for the same hover event used in production to open accounts.
+                # Hover and click still target the account represented by the visible ring.
                 pointer_click(button.mapToGlobal(button.rect().center()),backend,compact,click=False)
                 wait(lambda:strip.account_menu is not None and strip.account_menu.isVisible())
                 assert strip.account_panel.selected=='codex-qa'
                 strip.account_menu.grab().save(str(root/'rings-accounts.png'))
                 strip.account_menu.close();app.processEvents()
-                # Calibration may outlast the tooltip delay. Close that owned
-                # popup before sending a direct native click at the same point.
                 binary,wayland=backend._input();assert wayland
                 subprocess.run([binary,'click','0xC0'],env=backend.env,check=True,capture_output=True)
                 wait(lambda:bool(requests))
@@ -218,6 +375,19 @@ def main():
                 wait(lambda:strip.account_menu is not None and strip.account_menu.isVisible())
                 assert strip.account_panel.selected=='codex-qa'
                 strip.account_menu.close();app.processEvents()
+                items[0]['windows'][0]['resets_at']=now-1;strip.render()
+                assert button.remaining is None and button.transition.state()==button.transition.State.Stopped
+                assert not strip.columns['codex'].isVisible()
+                strip.grab().save(str(root/'expired.png'))
+                strip.details('codex',anchor=compact.control_button)
+                wait(lambda:strip.account_menu is not None and strip.account_menu.isVisible())
+                assert strip.account_panel.selected=='codex-qa'
+                strip.account_menu.close();app.processEvents()
+                items[0]['windows'][0]['resets_at']=now+3600
+                items[0]['windows'][0]['remaining']=60
+                strip.render()
+                assert strip.columns['codex'].isVisible()
+                assert strip.arrival_animations['codex'].state()==strip.arrival_animations['codex'].State.Running
                 compact.hide();app.processEvents()
                 assert strip.delivery_pulse.state()==strip.delivery_pulse.State.Stopped
                 compact.show();wait(lambda:compact.windowHandle().isExposed())
@@ -382,6 +552,8 @@ def main():
             compact.control_button.pressed.connect(lambda:menu_events.append('pressed'))
             compact.control_menu.aboutToShow.connect(lambda:menu_events.append('show'))
             compact.control_menu.aboutToHide.connect(lambda:menu_events.append('hide'))
+            compact._animate_actions(True)
+            wait(lambda:compact.drawer_animation.state()==compact.drawer_animation.State.Stopped)
             pointer_click(compact.control_button.mapToGlobal(compact.control_button.rect().center()),backend,compact)
             wait(compact.control_menu.isVisible)
             compact.control_menu.grab().save(str(root/'controls.png'))
@@ -399,6 +571,11 @@ def main():
                 (root/'hover-failure.json').write_text(json.dumps(dict(height=c.action_drawer.maximumHeight(),
                     delay=c.drawer_delay.isActive(),under_mouse=c.underMouse(),
                     geometry=[c.x(),c.y(),c.width(),c.height()],
+                    dock_mode=c._dock_mode,dock_pending=c._dock_pending,
+                    dock_verify_attempts=c._dock_verify_attempts,dock_verify_phase=c._dock_verify_phase,
+                    requested_mode=c._requested_mode,needs_reconcile=c._needs_show_reconcile,
+                    controller_action=c.shortcut_tabs.controller.action,
+                    controller_busy=c.shortcut_tabs.controller.future is not None,
                     native=call('qdbus6','org.kde.KWin','/KWin','org.kde.KWin.getWindowInfo',surface[0]) if surface else None,
                     popup=popup.windowTitle() if popup else None,
                     popup_visible=popup.isVisible() if popup else None,

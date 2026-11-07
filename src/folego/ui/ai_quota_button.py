@@ -20,6 +20,7 @@ class QuotaButton(QToolButton):
         self.remaining = None
         self.displayed = None
         self.halo = 0.0
+        self.ring_size = 30
         self.setText(label)
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
         self.setIconSize(QSize(30, 30))
@@ -31,6 +32,12 @@ class QuotaButton(QToolButton):
         self.transition.setDuration(450)
         self.transition.setEasingCurve(QEasingCurve.Type.InOutCubic)
         self.transition.valueChanged.connect(self._frame)
+        self._draw_icon()
+
+    def set_presentation(self, vertical):
+        self.ring_size = 42 if vertical else 30
+        self.setIconSize(QSize(self.ring_size, self.ring_size))
+        self.setFixedHeight(61 if vertical else 49)
         self._draw_icon()
 
     def set_remaining(self, value):
@@ -61,7 +68,7 @@ class QuotaButton(QToolButton):
     def _draw_icon(self):
         # Render at the target screen's scale; retain PhaseZero's 64-unit geometry.
         ratio = self.devicePixelRatioF()
-        pixels = math.ceil(30 * ratio)
+        pixels = math.ceil(self.ring_size * ratio)
         pixmap = QPixmap(pixels, pixels)
         pixmap.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap)
@@ -92,7 +99,7 @@ class QuotaButton(QToolButton):
         painter.drawText(QRectF(0, 0, 64, 64), Qt.AlignmentFlag.AlignCenter,
                          '?' if self.remaining is None else str(self.remaining))
         painter.end()
-        pixmap.setDevicePixelRatio(pixels / 30)
+        pixmap.setDevicePixelRatio(pixels / self.ring_size)
         self.setIcon(QIcon(pixmap))
 
     def hideEvent(self, event):

@@ -11,7 +11,7 @@ import pytest
 
 from folego.core.exclusions import ExclusionError
 from folego.core.sessions import ACTIVE, Session, SessionError
-from folego.core.snapshot import AppRSS, MemInfo, Pressure, Snapshot
+from folego.core.snapshot import AppRSS, BatteryInfo, MemInfo, Pressure, Snapshot, SourceQuality
 from folego.orchestration.config import ConfigError
 from folego.ui.compact import CompactWindow
 from folego.ui.main_window import MainWindow
@@ -46,6 +46,20 @@ def test_health_expires_without_another_snapshot_or_journal_read(window, monkeyp
     assert "antiga" in view.windowTitle()
     assert "não comprovada" in view.dashboard.resources.text()
     assert view.dashboard.rows == []
+
+
+def test_paused_widget_hides_stale_battery_without_new_sample(window):
+    import time
+    sampled_at = time.monotonic()
+    window.show_compact()
+    window.apply_snapshot(snap(mono=sampled_at,
+                               battery=BatteryInfo(25, 'Discharging', 3600),
+                               sources=(SourceQuality('battery', 'ok'),)))
+    assert window._compact.battery_label.isVisible()
+    window.pause_watching()
+    window._refresh_freshness(now_mono=sampled_at + 16)
+    assert not window._compact.battery_label.isVisible()
+    window.quit()
 
 
 def test_collection_failure_and_monitoring_pause_remove_old_green_health(window):
@@ -359,9 +373,41 @@ def test_back_returns_to_widget_without_tray_or_losing_current_tab(window,qapp):
     assert window.tabs.currentWidget() is window.options
     window.back_button.click();qapp.processEvents()
     assert window._compact.isVisible() and not window.isVisible() and not poller.stopped
-    assert [a.text() for a in window.control_menu.actions()]==['Sair do Fôlego']
+    assert [a.text() for a in window.control_menu.actions()]==[
+        'Sair do Fôlego', 'Posição do widget']
     window.control_menu.actions()[0].trigger()
     assert poller.stopped
+
+
+def test_back_from_docked_widget_restores_floating_mode(window, qapp):
+    from PySide6.QtCore import QRect
+    from PySide6.QtTest import QTest
+    from folego.ui.desktop_caps import detect
+    window._compact_factory = lambda owner, _: CompactWindow(
+        owner, caps=detect(session_type='x11', platform='xcb', tray=True))
+    window.show()
+    window.show_compact()
+    compact = window._compact
+    compact._screen_area = lambda: QRect(0, 0, 948, 593)
+    compact.set_dock_mode('top')
+    QTest.qWait(350)
+    compact.open_button.click()
+    window.back_button.click()
+    QTest.qWait(350)
+    assert compact.isVisible() and compact._dock_mode == 'compact'
+    assert compact.width() == 280
+    window.quit()
+
+
+def test_tray_action_opens_widget_without_treating_checked_as_mode(window, qapp):
+    window.show()
+    menu = window.tray._menu()
+    next(action for action in menu.actions()
+         if action.text() == 'Mostrar controle compacto').trigger()
+    qapp.processEvents()
+    assert window._compact is not None and window._compact.isVisible()
+    assert window._compact._dock_mode == 'compact'
+    window.quit()
 
 
 def test_the_window_never_detects_tunings_by_itself(window):

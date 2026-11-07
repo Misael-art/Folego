@@ -42,3 +42,28 @@ def test_close_never_signals_an_unowned_daemon():
 
 def test_unknown_action_is_refused():
     with pytest.raises(ValueError): DesktopTools(env={}).perform("reset-input")
+
+
+def test_widget_place_requires_unique_owned_window_and_confirmed_geometry(monkeypatch):
+    tool = DesktopTools(env={})
+    calls = []
+    geometry = (12, 34, 220, 600)
+    def read(argv):
+        calls.append(argv)
+        if argv[:2] == ['kdotool', 'search']:
+            return 'owned-window'
+        if argv[:2] == ['kdotool', 'getwindowgeometry']:
+            return 'Position: 12,34 Geometry: 220x600'
+        raise AssertionError(argv)
+    monkeypatch.setattr(tool, '_call', read)
+    monkeypatch.setattr(tool, 'position', lambda caption, requested, confirmation=None:
+                        confirmation.wait(.1) or (_ for _ in ()).throw(AssertionError('not confirmed')))
+    assert tool.perform('widget-geometry') == {'operation': 'widget-geometry', 'geometry': geometry}
+    assert tool.perform('widget-place', geometry) == {'operation': 'widget-place', 'geometry': geometry}
+    assert any('--pid' in argv and '^Fôlego — widget$' in argv for argv in calls)
+    monkeypatch.setattr(tool, '_call', lambda argv: 'other-window\nowned-window'
+                        if argv[:2] == ['kdotool', 'search'] else read(argv))
+    with pytest.raises(RuntimeError, match='não identificada'):
+        tool.perform('widget-geometry')
+    with pytest.raises(AssertionError, match='not confirmed'):
+        tool.perform('widget-place', geometry)

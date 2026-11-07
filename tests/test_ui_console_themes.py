@@ -48,8 +48,10 @@ def test_live_theme_covers_existing_hidden_and_new_surfaces(qapp, restore_theme)
             qapp.processEvents()
             t = selected.tokens
             assert theme.TOKENS.surface == t.surface
-            for widget in (view, panel, accounts, keyboard):
+            for widget in (panel, accounts, keyboard):
                 assert t.surface in widget.styleSheet()
+            card_image = view.card.grab().toImage()
+            assert card_image.pixelColor(view.card.width() // 2, 4).name() == t.surface.lower()
             assert view.gauge.color == getattr(t, role)
             assert getattr(t, role) in view.status_label.styleSheet()
             assert t.actions[0] in view.shortcut_tabs.buttons['select_all'].styleSheet()

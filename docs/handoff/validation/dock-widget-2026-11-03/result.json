@@ -1,0 +1,104 @@
+{
+  "passed": true,
+  "platform": "wayland",
+  "cases": [
+    {
+      "case": "frameless central",
+      "native_frame_equals_client": true,
+      "compositor_geometry": {
+        "frame": [
+          24,
+          0,
+          900,
+          593.3333333333333
+        ],
+        "client": [
+          24,
+          0,
+          900,
+          593.3333333333333
+        ]
+      },
+      "client_size": [
+        900,
+        593
+      ],
+      "available": [
+        948,
+        593
+      ]
+    },
+    {
+      "case": "back to widget without tray",
+      "workers_active": true
+    },
+    {
+      "case": "return to previous central tab",
+      "tab": "op\u00e7\u00f5es",
+      "workers_active": true
+    },
+    {
+      "case": "native dock placement",
+      "mode": "right",
+      "geometry": [
+        728,
+        0,
+        220,
+        593
+      ],
+      "available": [
+        0,
+        0,
+        948,
+        593
+      ]
+    },
+    {
+      "case": "native dock placement",
+      "mode": "left",
+      "geometry": [
+        0,
+        0,
+        220,
+        593
+      ],
+      "available": [
+        0,
+        0,
+        948,
+        593
+      ]
+    },
+    {
+      "case": "native dock placement",
+      "mode": "top",
+      "geometry": [
+        0,
+        0,
+        948,
+        118
+      ],
+      "available": [
+        0,
+        0,
+        948,
+        593
+      ]
+    },
+    {
+      "case": "native dock return",
+      "geometry": [
+        20,
+        120,
+        280,
+        185
+      ]
+    },
+    {
+      "case": "explicit exit in controls",
+      "workers_stopped": true
+    }
+  ],
+  "errors": [],
+  "scope": "owned Qt windows and compositor metadata; private HOME/XDG/Pulse; no user text or resource effects"
+}

@@ -513,6 +513,13 @@ class DashboardTab(QWidget):
                  f"{title_signal.fmt1(total / title_signal.MB)} GB",
                  f"livre {title_signal.fmt1(avail / title_signal.MB)} GB",
                  f"app {snapshot.self_rss_kb // title_signal.KB} MB"]
+        if (snapshot.battery is not None and snapshot.source('battery').status == 'ok'
+                and not snapshot.is_stale(self._thresholds.stale_after_s)):
+            from ..core.battery_alerts import remaining_text
+            battery = snapshot.battery
+            estimate = remaining_text(battery.remaining_s) if battery.status == 'Discharging' else ''
+            parts.append(f"bateria {battery.percent}%" +
+                         (f" · ~{estimate} restantes" if estimate else ''))
         if snapshot.cpu_busy_frac is not None:
             parts.append(f"cpu {snapshot.cpu_busy_frac * 100:.0f}% de "
                          f"{snapshot.cpu_count} cpu(s)")

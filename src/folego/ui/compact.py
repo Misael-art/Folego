@@ -6,17 +6,105 @@ Wayland placement is compositor-owned; X11 positions are clamped to live screens
 """
 import os
 
-from PySide6.QtCore import QPoint, Qt, QTimer, QPropertyAnimation, QEasingCurve, QEvent
-from PySide6.QtGui import QGuiApplication, QWindow
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
-                               QWidget, QSizePolicy, QApplication)
+from PySide6.QtCore import QPoint, QRect, QRectF, Qt, QTimer, QPropertyAnimation, QEasingCurve, QEvent
+from PySide6.QtGui import QGuiApplication, QWindow, QFont, QPainter, QPainterPath, QPen, QColor, QRegion
+from PySide6.QtWidgets import (QBoxLayout, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
+                               QScrollArea, QVBoxLayout, QWidget, QSizePolicy, QApplication,
+                               QGraphicsOpacityEffect)
 
 from . import title_signal
 from .desktop_caps import detect
-from .theme import background, themed_style, TOKENS, set_control_icon
+from .theme import _background_color, background, themed_style, TOKENS, set_control_icon, on_theme_change
+from .palettes import readable
+from ..core.battery_alerts import battery_band, remaining_text
 
 POSITION_KEY = "compact/position"
 WIDGET_TITLE = "Fôlego — widget"
+DOCK_MODES = ('compact', 'right', 'left', 'top')
+
+
+def dock_geometry(mode: str, area: QRect) -> QRect:
+    """Use only the screen's available area, which excludes known desktop panels."""
+    if mode not in DOCK_MODES[1:] or not area.isValid():
+        raise ValueError('Borda ou tela indisponível')
+    if mode == 'top':
+        height = min(area.height(), 132 if area.width() >= 900 else 190)
+        return QRect(area.left(), area.top(), area.width(), height)
+    width = min(128, max(112, area.width() // 12))
+    width = min(width, area.width())
+    x = area.left() if mode == 'left' else area.right() + 1 - width
+    return QRect(x, area.top(), width, area.height())
+
+
+class DockHandle(QPushButton):
+    """A subtle edge target that reveals two darker tones and an arrow on hover."""
+    def __init__(self, arrow, title, callback, parent):
+        super().__init__(parent)
+        self.arrow = arrow
+        self.hovered = False
+        self.setAccessibleName(title)
+        self.setToolTip(title)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setStyleSheet('QPushButton{background:transparent;border:none;padding:0;min-height:0;min-width:0;}')
+        self.clicked.connect(callback)
+
+    def enterEvent(self, event):
+        self.hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.hovered = False
+        self.update()
+        super().leaveEvent(event)
+
+    def paintEvent(self, event):
+        if not self.hovered:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(1, 1, -1, -1)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(TOKENS.surface).darker(130))
+        painter.drawRoundedRect(rect, 7, 7)
+        painter.setBrush(QColor(TOKENS.surface).darker(160))
+        if self.arrow in ('left', 'right'):
+            x = rect.left() if self.arrow == 'right' else rect.right() - 4
+            painter.drawRect(QRectF(x, rect.top() + 5, 4, rect.height() - 10))
+        else:
+            y = rect.top() if self.arrow == 'down' else rect.bottom() - 4
+            painter.drawRect(QRectF(rect.left() + 5, y, rect.width() - 10, 4))
+        painter.setPen(QPen(QColor(TOKENS.text), 2.2, Qt.PenStyle.SolidLine,
+                            Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        cx, cy = rect.center().x(), rect.center().y()
+        if self.arrow == 'right':
+            painter.drawLine(QPoint(int(cx - 4), int(cy - 5)), QPoint(int(cx + 2), int(cy)))
+            painter.drawLine(QPoint(int(cx + 2), int(cy)), QPoint(int(cx - 4), int(cy + 5)))
+        elif self.arrow == 'left':
+            painter.drawLine(QPoint(int(cx + 4), int(cy - 5)), QPoint(int(cx - 2), int(cy)))
+            painter.drawLine(QPoint(int(cx - 2), int(cy)), QPoint(int(cx + 4), int(cy + 5)))
+        elif self.arrow == 'up':
+            painter.drawLine(QPoint(int(cx - 5), int(cy + 3)), QPoint(int(cx), int(cy - 3)))
+            painter.drawLine(QPoint(int(cx), int(cy - 3)), QPoint(int(cx + 5), int(cy + 3)))
+        else:
+            painter.drawLine(QPoint(int(cx - 5), int(cy - 3)), QPoint(int(cx), int(cy + 3)))
+            painter.drawLine(QPoint(int(cx), int(cy + 3)), QPoint(int(cx + 5), int(cy - 3)))
+        painter.end()
+
+
+class RoundedCard(QFrame):
+    """Paint the surface within the radius, including translucent themes."""
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()).adjusted(.5, .5, -.5, -.5), 12, 12)
+        painter.fillPath(path, _background_color(TOKENS.surface))
+        painter.setPen(QPen(QColor(TOKENS.border), 1))
+        painter.drawPath(path)
+        painter.end()
 
 
 def clamp_position(x: int, y: int, width: int, height: int,
@@ -83,7 +171,7 @@ class CompactWindow(QWidget):
         self.setAccessibleName("Widget do Fôlego")
         self.setFixedWidth(280)
         themed_style(self, lambda: "QWidget {font-size:9pt;}"
-            f"QFrame#widgetCard {{background:{background(TOKENS.surface)};border:1px solid {TOKENS.border};border-radius:12px;}}"
+            "QFrame#widgetCard {background:transparent;border:none;}"
             f"QLabel {{background:transparent;color:{TOKENS.text};}}"
             f"QLabel#quality {{color:{TOKENS.muted};}}"
             f"QPushButton {{background:{background(TOKENS.surface_alt)};color:{TOKENS.text};border:1px solid {TOKENS.border};"
@@ -100,6 +188,11 @@ class CompactWindow(QWidget):
         self.detail_label.setWordWrap(True)
         self.detail_label.setObjectName("quality")
         themed_style(self.detail_label, lambda: f"color:{TOKENS.text};font-weight:500;")
+        self.battery_label = QLabel()
+        self.battery_label.hide()
+        self._battery_band = 'green'
+        self._battery_text = ''
+        themed_style(self.battery_label, self._battery_style)
         self._automation_text = "automação manual · preset equilibrado · nenhum grant ativo"
         self.mode_label = QLabel()
         self.operation_label = QLabel("operação: nenhuma nesta sessão")
@@ -116,13 +209,14 @@ class CompactWindow(QWidget):
         self.free_label = QLabel("RAM sem leitura")
         self.free_label.setObjectName("quality")
         self.free_label.setWordWrap(True)
-        self.open_button = QPushButton('Central')
+        self.open_button = QPushButton()
+        set_control_icon(self.open_button, 'view-grid', QStyle.StandardPixmap.SP_FileDialogContentsView)
         self.open_button.setAccessibleName('Abrir a central do Fôlego')
         self.open_button.setToolTip('Abrir ajustes, prompts e opções do Fôlego')
         self.open_button.clicked.connect(self._open_central)
         from PySide6.QtWidgets import QMenu
         self.control_button = QPushButton()
-        set_control_icon(self.control_button, 'application-menu', QStyle.StandardPixmap.SP_TitleBarMenuButton)
+        set_control_icon(self.control_button, 'go-down', QStyle.StandardPixmap.SP_ArrowDown)
         self.control_button.setAccessibleName('Controles do widget do Fôlego')
         self.control_button.setToolTip('Controles do Fôlego')
         self.control_menu = QMenu(self.control_button)
@@ -135,8 +229,8 @@ class CompactWindow(QWidget):
         self.pause_button.setAccessibleName("Pausar ou retomar a coleta de telemetria")
         self.pause_button.setToolTip("Pausar monitoramento")
         self.pause_button.clicked.connect(self._toggle_pause)
-        self.control_button.setFixedSize(26, 26)
-        self.open_button.setMinimumHeight(26)
+        self.control_button.setFixedSize(20, 28)
+        self.open_button.setFixedSize(30, 28)
         for button in (self.open_button, self.control_button, self.pause_button):
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.gauge = HealthGauge(compact=True)
@@ -144,44 +238,80 @@ class CompactWindow(QWidget):
         gauge_column = QVBoxLayout()
         gauge_column.setSpacing(0)
         gauge_column.addWidget(self.gauge)
-        header = QHBoxLayout()
-        header.setSpacing(4)
-        brand = QLabel("Fôlego")
-        brand.setStyleSheet("font-size:10pt;font-weight:600;")
-        header.addWidget(brand, 1)
-        for button in (self.open_button, self.control_button):
-            header.addWidget(button)
-        body = QHBoxLayout()
+        self.header_widget = QWidget()
+        header = QGridLayout(self.header_widget)
+        header.setContentsMargins(0, 0, 0, 0)
+        header.setSpacing(2)
+        self.header_layout = header
+        self.brand = QLabel("Fôlego")
+        font = QFont('Noto Sans', 11)
+        font.setWeight(QFont.Weight.DemiBold)
+        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, -0.2)
+        self.brand.setFont(font)
+        header.addWidget(self.brand, 0, 0)
+        header.setColumnStretch(0, 1)
+        self.body_widget = QWidget()
+        self.body_layout = QBoxLayout(QBoxLayout.Direction.LeftToRight, self.body_widget)
+        body = self.body_layout
+        body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(10)
-        body.addLayout(gauge_column)
+        gauge_widget = QWidget()
+        gauge_widget.setLayout(gauge_column)
+        self._gauge_margins = gauge_column.contentsMargins()
+        body.addWidget(gauge_widget)
+        self.gauge_widget = gauge_widget
         readings = QVBoxLayout()
+        self.readings_layout = readings
         readings.setSpacing(3)
         readings.addWidget(self.status_label)
         readings.addWidget(self.detail_label)
-        body.addLayout(readings, 1)
+        readings.addWidget(self.battery_label)
+        readings_widget = QWidget()
+        readings_widget.setLayout(readings)
+        self._readings_margins = readings.contentsMargins()
+        body.addWidget(readings_widget, 1)
+        self.readings_widget = readings_widget
         self.ai_strip = AIStrip(self, monitor=getattr(window, 'ai_monitor', None))
-        footer = QHBoxLayout()
+        self.footer_widget = QWidget()
+        footer = QHBoxLayout(self.footer_widget)
+        self.footer_layout = footer
+        footer.setContentsMargins(0, 0, 0, 0)
         footer.addWidget(self.pause_button)
         footer.addStretch(1)
         footer.addWidget(self.free_label)
-        card = QFrame()
-        card.setObjectName("widgetCard")
-        inner = QVBoxLayout(card)
-        inner.setContentsMargins(10, 6, 10, 6)
-        inner.setSpacing(4)
-        inner.addLayout(header)
-        inner.addLayout(body)
-        inner.addWidget(self.alert_label)
+        self.card = RoundedCard()
+        self.card.setObjectName("widgetCard")
+        on_theme_change(self.card, self.card.update)
+        self.inner = QGridLayout(self.card)
+        self.inner.setContentsMargins(10, 6, 10, 6)
+        self.inner.setSpacing(4)
+        self.notice_widget = QWidget()
+        notices = QVBoxLayout(self.notice_widget)
+        self.notices_layout = notices
+        notices.setContentsMargins(0, 0, 0, 0)
+        notices.setSpacing(2)
+        notices.addWidget(self.alert_label)
         self.feedback_label = QLabel()
         self.feedback_label.setWordWrap(True)
         self.feedback_label.setTextFormat(Qt.TextFormat.PlainText)
         self.feedback_label.hide()
-        inner.addWidget(self.feedback_label)
+        notices.addWidget(self.feedback_label)
         self.feedback_timer = QTimer(self)
         self.feedback_timer.setSingleShot(True)
         self.feedback_timer.timeout.connect(self._clear_feedback)
-        inner.addWidget(self.ai_strip)
-        inner.addLayout(footer)
+        self._sections = (self.header_widget, self.body_widget, self.notice_widget,
+                          self.ai_strip, self.footer_widget)
+        self._dock_mode = 'compact'
+        self._dock_pending = None
+        self._dock_target = None
+        self._needs_show_reconcile = False
+        self._requested_mode = None
+        self._needs_compact_clamp = False
+        self._show_clamp_phase = None
+        self._dock_verify_phase = None
+        self._dock_verify_attempts = 0
+        self._dock_verify_waits = 0
+        self._compact_geometry = None
         self._capture_waiting = False
         self._capture_restore = False
         self._keyboard_restore = False
@@ -189,16 +319,68 @@ class CompactWindow(QWidget):
         self.capture_timer.setInterval(350)
         self.capture_timer.timeout.connect(self._capture_status)
         self.shortcut_tabs = ShortcutTabs(self, capture_handler=self._print)
-        header.insertWidget(1, self.shortcut_tabs.buttons['keyboard'])
-        header.insertWidget(2, self.shortcut_tabs.top_button)
+        keyboard_button = self.shortcut_tabs.buttons['keyboard']
+        keyboard_button.setFixedSize(30, 28)
+        self.shortcut_tabs.top_button.setFixedSize(20, 28)
+        for name, controls in (('keyboardGroup', (keyboard_button, self.shortcut_tabs.top_button)),
+                               ('navigationGroup', (self.open_button, self.control_button))):
+            group = QFrame(self)
+            group.setObjectName(name)
+            row = QHBoxLayout(group)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(0)
+            for control in controls:
+                themed_style(control, lambda: f'QPushButton{{background:transparent;color:{TOKENS.text};'
+                             'border:none;border-radius:0;padding:0;min-height:0;}'
+                             f'QPushButton:hover{{background:{background(TOKENS.surface_alt)};}}')
+                row.addWidget(control)
+            themed_style(group, lambda target=name: f'QFrame#{target}{{background:transparent;'
+                         f'border:1px solid {TOKENS.border};border-radius:7px;}}')
+            if name == 'keyboardGroup':
+                self.keyboard_group = group
+                header.addWidget(group, 0, 1)
+            else:
+                self.navigation_group = group
+                header.addWidget(group, 0, 2)
+        self.top_controls = QWidget(self.card)
+        self.top_controls_layout = QGridLayout(self.top_controls)
+        self.top_controls_layout.setContentsMargins(0, 0, 0, 0)
+        self.top_controls_layout.setSpacing(2)
+        self.accounts_menu = self.control_menu.addMenu('Contas e cotas de IA')
+        self.accounts_menu.aboutToShow.connect(self._refresh_accounts_menu)
+        self.layout_menu = self.control_menu.addMenu('Posição do widget')
+        for label, mode in (('Widget flutuante', 'compact'), ('Lateral esquerda', 'left'),
+                            ('Lateral direita', 'right'), ('Barra superior', 'top')):
+            self.layout_menu.addAction(label, lambda checked=False, target=mode: self.set_dock_mode(target))
         self.shortcut_tabs.customize_requested.connect(self._customize_prompts)
         self.shortcut_tabs.controller.feedback.connect(self._shortcut_result)
         self.shortcut_tabs.controller.payload.connect(self._capture_result)
         self.shortcut_tabs.controller.failed.connect(self._capture_failed)
+        self.shortcut_tabs.controller.busy_changed.connect(
+            lambda busy: self._screen_changed() if not busy and self._dock_mode != 'compact' else None)
+        self.shortcut_tabs.controller.busy_changed.connect(
+            lambda busy: self._reconcile_after_show() if not busy else None)
+        self.shortcut_tabs.controller.busy_changed.connect(
+            lambda busy: self._reconcile_compact_after_show() if not busy else None)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        layout.addWidget(card)
+        layout.addWidget(self.card)
+        self.dock_scroll = QScrollArea(self)
+        self.dock_scroll.setWidgetResizable(True)
+        self.dock_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.dock_scroll.setStyleSheet('QScrollArea {background:transparent;border:0;}')
+        self.dock_scroll.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.dock_scroll.viewport().setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.dock_scroll.viewport().setAutoFillBackground(False)
+        self.card.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        themed_style(self.dock_scroll.verticalScrollBar(), lambda:
+            'QScrollBar:vertical{background:transparent;width:5px;margin:3px 0;border:0;}'
+            f'QScrollBar::handle:vertical{{background:{TOKENS.border};border-radius:2px;min-height:24px;}}'
+            'QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}'
+            'QScrollBar::add-page:vertical,QScrollBar::sub-page:vertical{background:transparent;}')
+        self.dock_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.dock_scroll.hide()
         self.action_drawer = QWidget(self)
         self.action_drawer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         drawer = QVBoxLayout(self.action_drawer)
@@ -206,6 +388,7 @@ class CompactWindow(QWidget):
         drawer.addWidget(self.shortcut_tabs)
         self.action_drawer.setMaximumHeight(0)
         layout.addWidget(self.action_drawer)
+        self._arrange_sections('compact')
         self.drawer_animation = QPropertyAnimation(self.action_drawer, b'maximumHeight', self)
         self.drawer_animation.setDuration(140)
         self.drawer_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
@@ -215,12 +398,321 @@ class CompactWindow(QWidget):
         self.drawer_delay.setSingleShot(True)
         self.drawer_delay.setInterval(200)
         self.drawer_delay.timeout.connect(self._collapse_actions)
+        self._handles = {
+            'right': DockHandle('right', 'Encaixar na lateral direita',
+                                lambda: self.set_dock_mode('right'), self),
+            'left': DockHandle('left', 'Encaixar na lateral esquerda',
+                               lambda: self.set_dock_mode('left'), self),
+            'top': DockHandle('up', 'Encaixar na parte superior',
+                              lambda: self.set_dock_mode('top'), self),
+            'back': DockHandle('left', 'Voltar ao widget compacto',
+                               lambda: self.set_dock_mode('compact'), self),
+        }
+        self._place_handles()
         app = QGuiApplication.instance()
         app.installEventFilter(self)
         app.screenRemoved.connect(self._screen_changed)
         app.screenAdded.connect(self._watch_screen)
         for screen in app.screens():
             self._watch_screen(screen)
+
+    def _arrange_sections(self, mode, target_width=None, target_height=None):
+        side = mode in ('left', 'right')
+        slim_top = mode == 'top' and (target_width or self.width()) >= 900
+        short_side = side and (target_height or self.height()) < 700
+        for section in self._sections:
+            self.inner.removeWidget(section)
+        for section in (self.gauge_widget, self.readings_widget, self.pause_button,
+                        self.top_controls):
+            self.inner.removeWidget(section)
+        for row in range(6):
+            self.inner.setRowStretch(row, 0)
+        for column in range(4):
+            self.inner.setColumnStretch(column, 0)
+            self.inner.setColumnMinimumWidth(column, 0)
+        for section in (self.gauge_widget, self.readings_widget):
+            self.body_layout.removeWidget(section)
+        if not slim_top:
+            self.body_layout.addWidget(self.gauge_widget)
+            self.body_layout.addWidget(self.readings_widget)
+        for layout, saved in ((self.gauge_widget.layout(), self._gauge_margins),
+                              (self.readings_layout, self._readings_margins)):
+            margins = (0, 0, 0, 0) if slim_top else (saved.left(), saved.top(),
+                                                    saved.right(), saved.bottom())
+            layout.setContentsMargins(*margins)
+        self.body_layout.setDirection(QBoxLayout.Direction.TopToBottom if side
+                                      else QBoxLayout.Direction.LeftToRight)
+        self.body_layout.setStretch(1, 0 if side else 1)
+        self.ai_strip.layout().setDirection(QBoxLayout.Direction.TopToBottom if side
+                                             else QBoxLayout.Direction.LeftToRight)
+        self.shortcut_tabs.set_orientation(mode)
+        for column in self.ai_strip.columns.values():
+            self.ai_strip.layout().setAlignment(column, Qt.AlignmentFlag.AlignHCenter if side else Qt.AlignmentFlag(0))
+            self.ai_strip.layout().setStretchFactor(column, 0 if side or slim_top else 1)
+        for button in self.ai_strip.buttons.values():
+            button.set_presentation(side)
+        self.header_layout.removeWidget(self.brand)
+        self.header_layout.removeWidget(self.keyboard_group)
+        self.header_layout.removeWidget(self.navigation_group)
+        for section in (self.keyboard_group, self.navigation_group, self.pause_button):
+            self.top_controls_layout.removeWidget(section)
+        keyboard_button = self.shortcut_tabs.buttons['keyboard']
+        for button, width in ((keyboard_button, 24 if side else 30),
+                              (self.shortcut_tabs.top_button, 16 if side else 20),
+                              (self.open_button, 24 if side else 30),
+                              (self.control_button, 16 if side else 20)):
+            button.setFixedSize(width, 25 if side else 28)
+        self.header_layout.setColumnStretch(0, 1)
+        self.header_layout.setColumnStretch(1, 1 if side else 0)
+        if side:
+            self.header_layout.addWidget(self.brand, 0, 0, 1, 2, Qt.AlignmentFlag.AlignHCenter)
+            self.header_layout.addWidget(self.keyboard_group, 1, 0, Qt.AlignmentFlag.AlignHCenter)
+            self.header_layout.addWidget(self.navigation_group, 1, 1, Qt.AlignmentFlag.AlignHCenter)
+        elif slim_top:
+            self.header_layout.addWidget(self.brand, 0, 0)
+            self.top_controls_layout.addWidget(self.keyboard_group, 0, 0)
+            self.top_controls_layout.addWidget(self.navigation_group, 0, 1)
+            self.top_controls_layout.addWidget(self.pause_button, 1, 0, 1, 2,
+                                               Qt.AlignmentFlag.AlignHCenter)
+        else:
+            self.header_layout.addWidget(self.brand, 0, 0)
+            self.header_layout.addWidget(self.keyboard_group, 0, 1)
+            self.header_layout.addWidget(self.navigation_group, 0, 2)
+        self.readings_layout.removeWidget(self.free_label)
+        self.footer_layout.removeWidget(self.free_label)
+        self.notices_layout.removeWidget(self.pause_button)
+        self.footer_layout.removeWidget(self.pause_button)
+        if side:
+            self.readings_layout.addWidget(self.free_label)
+            self.notices_layout.addWidget(self.pause_button)
+        elif slim_top:
+            self.readings_layout.addWidget(self.free_label)
+        else:
+            self.footer_layout.insertWidget(0, self.pause_button)
+            self.footer_layout.addWidget(self.free_label)
+        self.footer_widget.setVisible(not side and not slim_top)
+        self.body_layout.setAlignment(self.gauge_widget, Qt.AlignmentFlag.AlignHCenter if side else Qt.AlignmentFlag(0))
+        for label in (self.status_label, self.alert_label, self.feedback_label):
+            label.setAlignment(Qt.AlignmentFlag.AlignHCenter if side else Qt.AlignmentFlag.AlignLeft)
+        reading_alignment = (Qt.AlignmentFlag.AlignRight if mode == 'right' else
+                             Qt.AlignmentFlag.AlignLeft)
+        self.detail_label.setAlignment(reading_alignment)
+        self.free_label.setAlignment(reading_alignment)
+        for label in (self.detail_label, self.battery_label, self.free_label, self.alert_label):
+            font = QFont(label.font())
+            font.setPointSize(8 if short_side or slim_top else 9)
+            label.setFont(font)
+        self.free_label.setWordWrap(not side and not slim_top)
+        self.battery_label.setWordWrap(side)
+        self.battery_label.setAlignment(reading_alignment)
+        self.pause_button.setMinimumWidth(0)
+        self.pause_button.setMaximumWidth(16777215)
+        if slim_top:
+            self.pause_button.setFixedWidth(100)
+            self.readings_widget.setFixedWidth(min(600, max(320, (target_width or self.width()) // 2 - 80)))
+        else:
+            self.readings_widget.setMinimumWidth(0)
+            self.readings_widget.setMaximumWidth(16777215)
+        self.pause_button.setSizePolicy(QSizePolicy.Policy.Expanding if side else QSizePolicy.Policy.Preferred,
+                                        QSizePolicy.Policy.Preferred)
+        self.battery_label.setVisible(bool(self._battery_text) and mode != 'top')
+        self._render_details()
+        self.ai_strip.empty_label.setWordWrap(True)
+        self.ai_strip.empty_label.setText('Sem cotas confirmadas' if mode in ('left', 'right')
+                                          else 'Sem cotas disponíveis confirmadas')
+        self.inner.setContentsMargins(16 if mode == 'left' else 6, 6,
+                                      16 if mode == 'right' else 6, 2 if mode != 'compact' else 6)
+        self.inner.setSpacing(2 if side else 4)
+        self.dock_scroll.setLayoutDirection(Qt.LayoutDirection.RightToLeft if mode == 'right'
+                                             else Qt.LayoutDirection.LeftToRight)
+        header, body, notices, ai, footer = self._sections
+        if side:
+            for row, section in enumerate((header, body, notices, ai)):
+                self.inner.addWidget(section, row, 0, Qt.AlignmentFlag.AlignTop)
+            self.inner.setRowStretch(4, 1)
+        elif slim_top:
+            self.inner.addWidget(header, 0, 0)
+            self.inner.addWidget(self.gauge_widget, 1, 0, Qt.AlignmentFlag.AlignVCenter)
+            self.inner.addWidget(ai, 1, 1, Qt.AlignmentFlag.AlignVCenter)
+            self.inner.addWidget(self.readings_widget, 1, 2,
+                                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            self.inner.addWidget(self.top_controls, 0, 3, 2, 1,
+                                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+            self.inner.addWidget(notices, 2, 0, 1, 4)
+            self.inner.setColumnMinimumWidth(3, 102)
+            self.inner.setColumnStretch(2, 1)
+        elif mode == 'top':
+            self.inner.addWidget(header, 0, 0, Qt.AlignmentFlag.AlignVCenter)
+            self.inner.addWidget(body, 0, 1, Qt.AlignmentFlag.AlignVCenter)
+            self.inner.addWidget(footer, 0, 2, Qt.AlignmentFlag.AlignVCenter)
+            self.inner.addWidget(ai, 1, 0, 1, 3, Qt.AlignmentFlag.AlignHCenter)
+            self.inner.addWidget(notices, 2, 0, 1, 3)
+            self.inner.setColumnStretch(1, 1)
+        else:
+            for row, section in enumerate(self._sections):
+                self.inner.addWidget(section, row, 0)
+
+    def _place_handles(self):
+        width, height = self.width(), self.height()
+        if self._dock_mode == 'compact':
+            self._handles['right'].setGeometry(0, 42, 16, max(38, height - 84))
+            self._handles['left'].setGeometry(width - 16, 42, 16, max(38, height - 84))
+            self._handles['top'].setGeometry((width - 60) // 2, 0, 60, 15)
+            names = ('right', 'left', 'top')
+        else:
+            handle = self._handles['back']
+            handle.arrow = {'right': 'left', 'left': 'right', 'top': 'down'}[self._dock_mode]
+            content_bottom = height - self.action_drawer.maximumHeight()
+            if self._dock_mode == 'right':
+                handle.setGeometry(width - 16, 42, 16, max(38, content_bottom - 50))
+            elif self._dock_mode == 'left':
+                handle.setGeometry(0, 42, 16, max(38, content_bottom - 50))
+            else:
+                handle.setGeometry((width - 60) // 2, 0, 60, 15)
+            names = ('back',)
+        for name, handle in self._handles.items():
+            if name in names:
+                handle.show()
+                handle.raise_()
+            else:
+                handle.hide()
+                handle.hovered = False
+
+    def _screen_area(self):
+        screen = self.screen() or QGuiApplication.primaryScreen()
+        return screen.availableGeometry() if screen is not None else QRect()
+
+    def _set_card_scroll(self, vertical):
+        layout = self.layout()
+        if vertical and self.card.parent() is not self.dock_scroll:
+            layout.removeWidget(self.card)
+            self.dock_scroll.setWidget(self.card)
+            layout.insertWidget(0, self.dock_scroll)
+            self.dock_scroll.show()
+        elif not vertical and self.card.parent() is self.dock_scroll:
+            layout.removeWidget(self.dock_scroll)
+            self.dock_scroll.takeWidget()
+            layout.insertWidget(0, self.card)
+            self.dock_scroll.hide()
+
+    def set_dock_mode(self, mode):
+        if mode not in DOCK_MODES:
+            raise ValueError('Modo de encaixe desconhecido')
+        if mode == self._dock_mode or self._dock_pending or self._force_close:
+            return
+        if self._show_clamp_phase or self._dock_verify_phase:
+            self._requested_mode = mode
+            self._needs_show_reconcile = True
+            return
+        controller = self.shortcut_tabs.controller
+        if controller.future is not None:
+            self._shortcut_result('Aguarde a solicitação atual antes de encaixar o widget')
+            return
+        if mode != 'compact' and not self._screen_area().isValid():
+            self._shortcut_result('Área útil da tela indisponível')
+            return
+        if self._dock_mode == 'compact' and self._caps.session_type == 'wayland':
+            self._dock_pending = mode
+            if not controller.request('widget-geometry'):
+                self._dock_pending = None
+                self._shortcut_result('Posição atual do widget não confirmada')
+            return
+        self._apply_dock_mode(mode)
+
+    def _apply_dock_mode(self, mode):
+        controller = self.shortcut_tabs.controller
+        if self._dock_mode == 'compact' and self._caps.session_type != 'wayland':
+            self._compact_geometry = QRect(self.x(), self.y(), 280, self.card.sizeHint().height())
+        origin = QRect(self.geometry())
+        target = (self._compact_geometry if mode == 'compact' else
+                  dock_geometry(mode, self._screen_area()))
+        self.drawer_animation.stop()
+        self.action_drawer.setMaximumHeight(0)
+        self._dock_mode = mode
+        self._set_card_scroll(mode != 'compact')
+        self._arrange_sections(mode, target.width(), target.height())
+        self.action_drawer.setMaximumHeight(0)
+        self.setMinimumSize(0, 0)
+        self.setMaximumSize(16777215, 16777215)
+        if mode == 'compact':
+            target = QRect(target.x(), target.y(), 280,
+                           max(target.height(), self.card.sizeHint().height()))
+            x, y = clamp_position(target.x(), target.y(), target.width(), target.height(), self._screens())
+            target.moveTo(x, y)
+            self._needs_compact_clamp = False
+            self._dock_verify_attempts = 0
+        if self._caps.session_type == 'wayland':
+            self.setFixedSize(target.size())
+        else:
+            self.setGeometry(origin)
+        self._place_handles()
+        if self._caps.session_type == 'wayland':
+            if hasattr(self, 'dock_fade'):
+                self.dock_fade.stop()
+                self.dock_fade.deleteLater()
+            self._dock_pending = mode
+            effect = QGraphicsOpacityEffect(self.card)
+            effect.setOpacity(0.55)
+            self.card.setGraphicsEffect(effect)
+            if not controller.request('widget-place', (target.x(), target.y(), target.width(), target.height())):
+                self._dock_pending = None
+                self.card.setGraphicsEffect(None)
+                self._shortcut_result('Posicionamento não iniciado')
+        else:
+            if hasattr(self, 'dock_animation'):
+                self.dock_animation.stop()
+                self.dock_animation.deleteLater()
+            self.dock_animation = QPropertyAnimation(self, b'geometry', self)
+            self.dock_animation.setDuration(260)
+            self.dock_animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
+            self.dock_animation.setStartValue(origin)
+            self.dock_animation.setEndValue(target)
+            self.dock_animation.finished.connect(lambda: self.setFixedSize(target.size())
+                                                 if mode != 'compact' else self.setFixedWidth(280))
+            self.dock_animation.start()
+        self._dock_target = QRect(target) if mode != 'compact' else None
+
+    def _placement_done(self):
+        self._dock_pending = None
+        if self._dock_mode == 'compact':
+            self.setMinimumHeight(0)
+            self.setMaximumHeight(16777215)
+        effect = self.card.graphicsEffect()
+        if isinstance(effect, QGraphicsOpacityEffect):
+            self.dock_fade = QPropertyAnimation(effect, b'opacity', self)
+            self.dock_fade.setDuration(220)
+            self.dock_fade.setEasingCurve(QEasingCurve.Type.OutCubic)
+            self.dock_fade.setStartValue(effect.opacity())
+            self.dock_fade.setEndValue(1.0)
+            self.dock_fade.finished.connect(
+                lambda: self.card.setGraphicsEffect(None)
+                if self.card.graphicsEffect() is effect else None)
+            self.dock_fade.start()
+        if self._needs_show_reconcile:
+            QTimer.singleShot(0, self._reconcile_after_show)
+        if self._dock_mode == 'compact' and self._needs_compact_clamp:
+            QTimer.singleShot(80, self._reconcile_compact_after_show)
+        if self._dock_mode != 'compact' and self._dock_verify_attempts:
+            QTimer.singleShot(180, self._verify_dock_after_show)
+
+    def _refresh_accounts_menu(self):
+        from ..core import ai_sessions
+        self.accounts_menu.clear()
+        for provider, name in ai_sessions.NAMES.items():
+            button = self.ai_strip.buttons[provider]
+            left = button.remaining
+            status = 'sem confirmação' if left is None else f'{left}% disponível'
+            row = next((item for item in self.ai_strip.delivery_items
+                        if item.get('provider') == provider), {})
+            count = row.get('count')
+            extras = [f'{count} entregas' if count != 1 else '1 entrega'] if count else []
+            items = [item for item in self.ai_strip.items if item.get('provider') == provider]
+            tickets = sum(n for item in items if (n := ai_sessions.available_resets(item)) is not None and n > 0)
+            if tickets:
+                extras.append(f'{tickets} tickets')
+            action = self.accounts_menu.addAction(' · '.join([name, status, *extras]))
+            action.triggered.connect(lambda checked=False, p=provider: QTimer.singleShot(
+                0, lambda: self.ai_strip.details(p, anchor=self.control_button)))
 
     def _animate_actions(self, expanded):
         self.drawer_animation.stop()
@@ -230,7 +722,10 @@ class CompactWindow(QWidget):
 
     def _drawer_frame(self, value):
         self.layout().invalidate()
-        self.adjustSize()
+        if self._dock_mode == 'compact':
+            self.adjustSize()
+        else:
+            self._place_handles()
 
     def enterEvent(self, event):
         self.drawer_delay.stop()
@@ -261,7 +756,8 @@ class CompactWindow(QWidget):
         self.feedback_label.setText(message)
         self.feedback_label.show()
         self.feedback_timer.start(7000)
-        self.adjustSize()
+        if self._dock_mode == 'compact':
+            self.adjustSize()
 
     def _customize_prompts(self):
         open_editor = getattr(self._window, 'open_custom_prompts', self._window.raise_to_user)
@@ -300,10 +796,93 @@ class CompactWindow(QWidget):
         if controller.future is None: controller.request('capture-status')
 
     def _capture_result(self, value):
+        if value.get('operation') == 'widget-geometry' and self._dock_verify_phase == 'geometry':
+            self._dock_verify_phase = None
+            if self._requested_mode is not None and self._requested_mode != self._dock_mode:
+                QTimer.singleShot(0, self._reconcile_after_show)
+                return
+            actual = value.get('geometry')
+            if not isinstance(actual, tuple) or len(actual) != 4 or self._dock_mode == 'compact':
+                self._dock_verify_attempts = 0
+                return
+            target = dock_geometry(self._dock_mode, self._screen_area())
+            expected = (target.x(), target.y(), target.width(), target.height())
+            if all(abs(a - b) <= 1 for a, b in zip(actual, expected)):
+                self._dock_verify_attempts = 0
+                return
+            self._dock_verify_attempts -= 1
+            self._dock_verify_phase = 'place'
+            if not self.shortcut_tabs.controller.request('widget-place', expected):
+                self._dock_verify_phase = None
+                self._dock_verify_attempts = 0
+                self._shortcut_result('Encaixe do widget não restaurado')
+            return
+        if value.get('operation') == 'widget-place' and self._dock_verify_phase == 'place':
+            self._dock_verify_phase = None
+            if self._needs_show_reconcile:
+                QTimer.singleShot(0, self._reconcile_after_show)
+            elif self._dock_verify_attempts:
+                QTimer.singleShot(180, self._verify_dock_after_show)
+            return
+        if value.get('operation') == 'widget-geometry' and self._show_clamp_phase == 'geometry':
+            self._show_clamp_phase = None
+            if self._requested_mode is not None and self._requested_mode != self._dock_mode:
+                QTimer.singleShot(0, self._reconcile_after_show)
+                return
+            geometry = value.get('geometry')
+            if (not isinstance(geometry, tuple) or len(geometry) != 4
+                    or self._dock_mode != 'compact' or not self.isVisible()):
+                return
+            x, y, width, height = geometry
+            clamped = clamp_position(x, y, width, height, self._screens())
+            if clamped != (x, y):
+                self._show_clamp_phase = 'place'
+                if not self.shortcut_tabs.controller.request(
+                        'widget-place', (*clamped, width, height)):
+                    self._show_clamp_phase = None
+                    self._shortcut_result('Posição do widget flutuante não restaurada')
+            return
+        if value.get('operation') == 'widget-place' and self._show_clamp_phase == 'place':
+            self._show_clamp_phase = None
+            if self._needs_show_reconcile:
+                QTimer.singleShot(0, self._reconcile_after_show)
+            return
+        if value.get('operation') == 'widget-geometry' and self._dock_pending:
+            geometry = value.get('geometry')
+            if isinstance(geometry, tuple) and len(geometry) == 4:
+                mode, self._dock_pending = self._dock_pending, None
+                self._compact_geometry = QRect(geometry[0], geometry[1], 280,
+                                               self.card.sizeHint().height())
+                self._apply_dock_mode(mode)
+            else:
+                self._dock_pending = None
+                self._shortcut_result('Posição atual do widget não confirmada')
+        if value.get('operation') == 'widget-place' and self._dock_pending:
+            self._placement_done()
         if value.get('operation') == 'capture-status' and not value['active']:
             self._finish_capture()
 
     def _capture_failed(self, _message):
+        if self._dock_verify_phase and self.shortcut_tabs.controller.action in ('widget-geometry', 'widget-place'):
+            self._dock_verify_phase = None
+            self._dock_verify_attempts = 0
+            self._shortcut_result('Posição da barra não confirmada')
+            if self._needs_show_reconcile:
+                QTimer.singleShot(0, self._reconcile_after_show)
+            return
+        if self._show_clamp_phase and self.shortcut_tabs.controller.action in ('widget-geometry', 'widget-place'):
+            self._show_clamp_phase = None
+            self._shortcut_result('Posição do widget flutuante não confirmada')
+            if self._needs_show_reconcile:
+                QTimer.singleShot(0, self._reconcile_after_show)
+            return
+        if self.shortcut_tabs.controller.action == 'widget-geometry' and self._dock_pending:
+            self._dock_pending = None
+            self._shortcut_result('Posição atual do widget não confirmada; encaixe não iniciado')
+        if self.shortcut_tabs.controller.action == 'widget-place' and self._dock_pending:
+            self._dock_pending = None
+            self.card.setGraphicsEffect(None)
+            self._shortcut_result('Posição da barra não confirmada; confira a janela antes de tentar novamente')
         if self.shortcut_tabs.controller.action == 'print': self._finish_capture()
 
     def _finish_capture(self):
@@ -334,7 +913,8 @@ class CompactWindow(QWidget):
 
     def _clear_feedback(self):
         self.feedback_label.hide()
-        self.adjustSize()
+        if self._dock_mode == 'compact':
+            self.adjustSize()
 
     # ------------------------------------------------------------------ reading
 
@@ -361,9 +941,9 @@ class CompactWindow(QWidget):
         measured = [v for v in snapshot.tmpfs if v.quality == "ok" and v.total_bytes]
         temp = f"Tmp {max(v.used_frac for v in measured) * 100:.0f}%" if measured else "Tmp —"
         thermal = '— °C' if snapshot.temperature_c is None else f'{snapshot.temperature_c:.0f} °C'
-        self.detail_label.setText('<table width="100%" cellspacing="0"><tr>'
-            f'<td>{memory}</td><td align="right">{cpu}</td><td align="right">{thermal}</td></tr>'
-            f'<tr><td>{swap}</td><td align="right">{temp}</td><td></td></tr></table>')
+        self._detail_values = memory, cpu, thermal, swap, temp
+        self._render_details()
+        self._show_battery(snapshot)
         self.detail_label.setToolTip('Temperatura do host · ' + (snapshot.temperature_sensor or 'sensor não disponível')
                                      + '\nTmp = ocupação dos temporários em memória')
         alerts = []
@@ -373,7 +953,8 @@ class CompactWindow(QWidget):
             elif volume.is_runtime and (volume.used_frac >= .9 or
                     (volume.inodes_total > 0 and volume.inodes_avail == 0)):
                 alerts.append("Runtime crítico — aplicativos podem não abrir")
-        degraded = [item.name for item in snapshot.sources if item.status != "ok"]
+        degraded = [item.name for item in snapshot.sources
+                    if item.status != "ok" and not (item.name == 'battery' and item.status == 'missing')]
         if degraded:
             alerts.append("Coleta parcial: " + ", ".join(degraded[:3]))
         if signal.level == "unknown":
@@ -381,8 +962,55 @@ class CompactWindow(QWidget):
         self.alert_label.setText("\n".join(alerts))
         self.alert_label.setVisible(bool(alerts))
         self._sync_tooltip()
-        self.adjustSize()
+        if self._dock_mode == 'compact':
+            self.adjustSize()
         self._screen_changed()
+
+    def _render_details(self):
+        if not hasattr(self, '_detail_values'):
+            return
+        memory, cpu, thermal, swap, temp = self._detail_values
+        if self._dock_mode in ('left', 'right'):
+            self.detail_label.setTextFormat(Qt.TextFormat.PlainText)
+            self.detail_label.setText('\n'.join((memory, cpu, thermal, swap, temp)))
+        else:
+            battery = (f'<span style="color:{self._battery_color()};font-weight:700">{self._battery_text}</span>'
+                       if self._dock_mode == 'top' else '')
+            self.detail_label.setTextFormat(Qt.TextFormat.RichText)
+            self.detail_label.setText('<table width="100%" cellspacing="0"><tr>'
+                f'<td>{memory}</td><td align="right">{cpu}</td><td align="right">{thermal}</td></tr>'
+                f'<tr><td>{swap}</td><td align="right">{temp}</td><td align="right">{battery}</td></tr></table>')
+
+    def _battery_color(self):
+        colors = {'green': TOKENS.ok, 'yellow': readable('#e8bd18', (TOKENS.surface, TOKENS.surface_alt)),
+                  'orange': readable('#ef8625', (TOKENS.surface, TOKENS.surface_alt)),
+                  'red': TOKENS.danger}
+        return colors[self._battery_band]
+
+    def _battery_style(self):
+        return f'color:{self._battery_color()};font-weight:700;'
+
+    def _show_battery(self, snapshot, *, now_mono=None):
+        battery = (snapshot.battery if snapshot.source('battery').status == 'ok'
+                   and not snapshot.is_stale(15.0, now_mono) else None)
+        if battery is None:
+            self._battery_text = ''
+            self.battery_label.hide()
+            if self._dock_mode == 'top':
+                self._render_details()
+            return
+        self._battery_band = battery_band(battery.percent)
+        self.battery_label.setStyleSheet(self._battery_style())
+        suffix = {'Charging': ' · carregando', 'Full': ' · cheia',
+                  'Not charging': ' · conectada'}.get(battery.status, '')
+        estimate = remaining_text(battery.remaining_s) if battery.status == 'Discharging' else ''
+        self._battery_text = f'Bat {battery.percent}%{suffix}' + (f' · ~{estimate}' if estimate else '')
+        self.battery_label.setText(self._battery_text)
+        self.battery_label.setToolTip('Bateria · estimativa variável com o consumo' if estimate
+                                     else 'Bateria · tempo restante não disponível')
+        self.battery_label.setVisible(self._dock_mode != 'top')
+        if self._dock_mode == 'top':
+            self._render_details()
 
     def _sync_tooltip(self):
         self.setToolTip("\n".join(text for text in (
@@ -442,7 +1070,7 @@ class CompactWindow(QWidget):
                      for rect in (screen.availableGeometry(),))
 
     def _restore_position(self):
-        if not self._caps.absolute_position:
+        if self._dock_mode != 'compact' or not self._caps.absolute_position:
             return  # the compositor owns placement of the decorated fallback
         raw = self._store.value(POSITION_KEY, "")
         x = y = None
@@ -464,7 +1092,7 @@ class CompactWindow(QWidget):
         self.move(x, y)
 
     def _save_position(self):
-        if not self._caps.absolute_position:
+        if self._dock_mode != 'compact' or not self._caps.absolute_position:
             return
         point = self.pos()
         self._store.setValue(POSITION_KEY, f"{point.x()},{point.y()}")
@@ -472,16 +1100,110 @@ class CompactWindow(QWidget):
         if sync is not None:
             sync()
 
-    def show_compact(self):
+    def show_compact(self, desired_mode=None):
+        if desired_mode is not None and desired_mode not in DOCK_MODES:
+            raise ValueError('Modo de widget desconhecido')
         self._restore_position()
         self.show()
         self.raise_()
+        if self._caps.session_type == 'wayland':
+            self._dock_verify_attempts = 3 if (desired_mode in ('left', 'right', 'top')
+                                                 or desired_mode is None and self._dock_mode != 'compact') else 0
+            self._dock_verify_waits = 0
+        if self._caps.session_type == 'wayland' and desired_mode in (None, 'compact'):
+            self._needs_compact_clamp = True
+            QTimer.singleShot(80, self._reconcile_compact_after_show)
+        if desired_mode is not None:
+            self._requested_mode = desired_mode
+        if self._dock_mode != 'compact' or self._requested_mode is not None:
+            self._needs_show_reconcile = True
+            QTimer.singleShot(0, self._reconcile_after_show)
+
+    def _reconcile_after_show(self):
+        """KWin may reapply the floating position rule when a dock is remapped."""
+        if (not self._needs_show_reconcile or not self.isVisible() or self._force_close
+                or self._dock_pending or self.shortcut_tabs.controller.future is not None):
+            return
+        self._needs_show_reconcile = False
+        requested, self._requested_mode = self._requested_mode, None
+        if requested is not None and requested != self._dock_mode:
+            self.set_dock_mode(requested)
+            return
+        if self._dock_mode == 'compact':
+            return
+        target = dock_geometry(self._dock_mode, self._screen_area())
+        self._dock_target = QRect(target)
+        if self._caps.session_type != 'wayland':
+            self.setGeometry(target)
+            return
+        self._dock_pending = self._dock_mode
+        if not self.shortcut_tabs.controller.request('widget-place',
+                (target.x(), target.y(), target.width(), target.height())):
+            self._dock_pending = None
+            self._dock_verify_attempts = 0
+            self._shortcut_result('Não foi possível restaurar a posição da barra')
+
+    def _verify_dock_after_show(self):
+        if not self._dock_verify_attempts or self._dock_mode == 'compact' or self._force_close:
+            return
+        if (not self.isVisible() or not self._screen_area().isValid()
+                or self._dock_pending or self._dock_verify_phase
+                or self.shortcut_tabs.controller.future is not None):
+            self._dock_verify_waits += 1
+            if self._dock_verify_waits <= 40:
+                QTimer.singleShot(100, self._verify_dock_after_show)
+            else:
+                self._dock_verify_attempts = 0
+                self._shortcut_result('Encaixe sem confirmação após aguardar o controlador')
+            return
+        self._dock_verify_waits = 0
+        self._dock_verify_phase = 'geometry'
+        if not self.shortcut_tabs.controller.request('widget-geometry'):
+            self._dock_verify_phase = None
+            self._dock_verify_attempts = 0
+            self._shortcut_result('Posição da barra não confirmada')
+
+    def _reconcile_compact_after_show(self):
+        if (not self._needs_compact_clamp or not self.isVisible() or self._force_close
+                or self._dock_mode != 'compact' or not self._screen_area().isValid()
+                or self._dock_pending or self._show_clamp_phase
+                or self.shortcut_tabs.controller.future is not None):
+            return
+        self._needs_compact_clamp = False
+        self._show_clamp_phase = 'geometry'
+        if not self.shortcut_tabs.controller.request('widget-geometry'):
+            self._show_clamp_phase = None
+            self._shortcut_result('Posição do widget flutuante não confirmada')
 
     def _watch_screen(self, screen):
         screen.availableGeometryChanged.connect(self._screen_changed)
         self._screen_changed()
 
     def _screen_changed(self, *_args):
+        if self._dock_mode != 'compact':
+            area = self._screen_area()
+            if not area.isValid() or self._dock_pending:
+                return
+            target = dock_geometry(self._dock_mode, area)
+            if self._dock_target == target:
+                return
+            if self._caps.session_type == 'wayland' and self.shortcut_tabs.controller.future is not None:
+                return
+            self._dock_target = QRect(target)
+            self._arrange_sections(self._dock_mode, target.width(), target.height())
+            self.setFixedSize(target.size())
+            if self._caps.session_type == 'wayland':
+                if self.shortcut_tabs.controller.future is None:
+                    self._dock_pending = self._dock_mode
+                    if not self.shortcut_tabs.controller.request('widget-place',
+                            (target.x(), target.y(), target.width(), target.height())):
+                        self._dock_pending = None
+            else:
+                self.move(target.topLeft())
+            return
+        if self.isVisible() and self._caps.session_type == 'wayland':
+            self._needs_compact_clamp = True
+            QTimer.singleShot(80, self._reconcile_compact_after_show)
         if self.isVisible() and self._caps.absolute_position:
             x, y = clamp_position(self.x(), self.y(), self.width(), self.height(), self._screens())
             self.move(x, y)
@@ -505,6 +1227,9 @@ class CompactWindow(QWidget):
     # -------------------------------------------------------------------- events
 
     def mousePressEvent(self, event):
+        if self._dock_mode != 'compact':
+            super().mousePressEvent(event)
+            return
         if not self._caps.absolute_position:
             # Wayland: the compositor moves the window; a press never becomes an act
             handle = self.windowHandle()
@@ -540,6 +1265,14 @@ class CompactWindow(QWidget):
     def mouseDoubleClickEvent(self, event):
         # A double click is not a shortcut for any act.
         event.accept()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()).adjusted(0, 0, -1, -1), 12, 12)
+        self.setMask(QRegion(path.toFillPolygon().toPolygon()))
+        if hasattr(self, '_handles'):
+            self._place_handles()
 
     def hideEvent(self, event):
         self.drawer_delay.stop()

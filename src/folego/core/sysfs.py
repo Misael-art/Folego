@@ -2,7 +2,64 @@
 from pathlib import Path
 
 from .. import paths
-from .snapshot import ZramStat
+from .snapshot import BatteryInfo, SourceQuality, ZramStat, ERROR, MISSING, OK
+
+
+def _battery_int(path: Path, *, minimum=0, maximum=10**12) -> int | None:
+    try:
+        value = int(path.read_text().strip())
+    except (OSError, ValueError):
+        return None
+    return value if minimum <= value <= maximum else None
+
+
+def read_battery(root: Path) -> tuple[BatteryInfo | None, SourceQuality]:
+    """Read the kernel power-supply ABI; never infer a healthy battery from gaps."""
+    supply = root / 'class/power_supply'
+    try:
+        entries = list(supply.iterdir())
+    except FileNotFoundError:
+        return None, SourceQuality('battery', MISSING, 'sem fonte de bateria')
+    except OSError:
+        return None, SourceQuality('battery', ERROR, 'inventário de energia ilegível')
+    if len(entries) > 64:
+        return None, SourceQuality('battery', ERROR, 'inventário de energia excede o limite')
+    batteries = []
+    for entry in entries:
+        try:
+            kind = (entry / 'type').read_text().strip()
+        except OSError:
+            return None, SourceQuality('battery', ERROR, 'tipo da fonte ilegível')
+        if kind == 'Battery':
+            batteries.append(entry)
+    if not batteries:
+        return None, SourceQuality('battery', MISSING, 'equipamento sem bateria observada')
+    if len(batteries) != 1:
+        return None, SourceQuality('battery', ERROR, 'múltiplas baterias sem agregação confiável')
+    path = batteries[0]
+    percent = _battery_int(path / 'capacity', maximum=100)
+    try:
+        status = (path / 'status').read_text().strip()
+    except OSError:
+        status = ''
+    if percent is None or status not in ('Charging', 'Discharging', 'Full', 'Not charging'):
+        return None, SourceQuality('battery', ERROR, 'percentual ou estado da bateria inválido')
+    remaining = None
+    if status == 'Discharging':
+        for name in ('time_to_empty_avg', 'time_to_empty_now'):
+            remaining = _battery_int(path / name, minimum=1, maximum=7 * 86400)
+            if remaining is not None:
+                break
+        if remaining is None:
+            for available, rate in (('energy_now', 'power_now'), ('charge_now', 'current_now')):
+                amount = _battery_int(path / available)
+                draw = _battery_int(path / rate, minimum=1)
+                if amount is not None and draw is not None:
+                    estimate = round(amount * 3600 / draw)
+                    if 0 < estimate <= 7 * 86400:
+                        remaining = estimate
+                        break
+    return BatteryInfo(percent, status, remaining), SourceQuality('battery', OK)
 
 
 def read_temperature(root: Path) -> tuple[float | None, str]:

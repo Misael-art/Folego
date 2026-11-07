@@ -38,7 +38,7 @@ estão descritos abaixo.
 
 | Recurso | Para que serve |
 |---|---|
-| **Visão geral** | Acompanhar RAM, CPU, swap/zram e tmpfs, com alertas de pressão e indicação de dados ausentes ou antigos. |
+| **Visão geral** | Acompanhar RAM, CPU, swap/zram, tmpfs e bateria, com alertas de pressão e indicação de dados ausentes ou antigos. |
 | **Diagnóstico de temporários** | Identificar os maiores consumidores, processos que mantêm arquivos abertos e caminhos oficiais de encerramento quando conhecidos. |
 | **Quarentena e recuperação** | Revisar ações de disco e tmpfs, com cópia verificada e recuperação nos fluxos suportados. |
 | **Proteção de sessões** | Registrar trabalhos que devem continuar ativos e revisar candidatos sem tratar nome, idade ou CPU baixa como autorização. |
@@ -48,17 +48,29 @@ estão descritos abaixo.
 | **Entrada e acessibilidade** | Observar teclado, ponteiro, trackpads, toque, controles e áudio; solicitar reparo de entrada ou manter um monitor residente opcional, sem depender do PhaseZero. |
 | **Opções e continuidade** | Iniciar com a sessão por padrão, desativar quando quiser, consultar operações pelo código e acompanhar temporários próprios preservados. |
 
-O **modo compacto** tem 280 px de largura e recursos em duas linhas. **Central**
-abre a interface principal; **Voltar** retorna ao widget mantendo a aba e o
-monitoramento. A saída fica em **Controles → Sair do Fôlego** ou na bandeja,
-sem botões de minimizar, maximizar e fechar nas duas interfaces.
-A faixa de IAs acompanha Codex, Codex Web, Claude e Grok
-no próprio Fôlego; passe o mouse para abrir o painel na conta padrão e escolha
-outras na lista lateral. Consumo, resets, tickets e referência da assinatura
-ficam separados. Os quatro medidores seguem o padrão circular do PhaseZero:
+O **modo compacto** tem 280 px de largura e recursos em duas linhas. O ícone de
+grade abre a **Central**; a seta ao lado reúne **Ocultar widget**, **Sair do
+Fôlego** e **Contas e cotas de IA**. **Voltar** retorna ao widget mantendo a aba e o
+monitoramento. A saída também fica na bandeja. As duas interfaces dispensam
+botões de minimizar, maximizar e fechar.
+Ao voltar da Central, **Voltar** abre o widget flutuante. O menu **Posição do
+widget**, disponível na Central e no widget, permite escolher diretamente o
+flutuante, a lateral esquerda, a lateral direita ou a barra superior.
+Passe o mouse pela borda esquerda, direita ou superior do widget para revelar a
+faixa de encaixe. A seta leva, respectivamente, à barra lateral direita,
+lateral esquerda ou horizontal superior. A seta na borda da barra retorna ao
+compacto. As barras ocupam a área útil informada pelo desktop, respeitando
+painéis conhecidos; o conteúdo lateral tem rolagem quando necessário.
+A faixa de IAs mostra somente provedores com cota positiva e confirmada,
+ordenados pelo percentual disponível. Contas sem cota ou sem confirmação
+continuam acessíveis em **Contas e cotas de IA**; passe o mouse sobre um medidor
+visível para abrir o painel da conta exibida. Consumo, resets, tickets e
+referência da assinatura ficam separados. Os medidores seguem o padrão circular do PhaseZero:
 disco do provedor, percentual disponível no centro e anel verde/amarelo/vermelho.
-**?** com anel cinza indica cota sem confirmação. O anel faz uma transição suave
-ao receber um novo percentual; entregas para revisitar fazem a borda interna pulsar.
+Uma cota desconhecida não é tratada como zero. O anel faz uma transição suave
+ao receber um novo percentual; uma cota que volta aparece com uma transição curta
+e a reposição confirmada usa o aviso sonoro existente. Entregas para revisitar
+fazem a borda interna pulsar.
 Ao lado das entregas, um **presente verde piscando** mostra as redefinições
 disponíveis confirmadas das contas do provedor. Clique para consultar a conta;
 o resgate continua no cliente de IA.
@@ -71,6 +83,13 @@ com a temperatura do host em °C à direita da CPU (sensor indisponível: **— 
 **Tmp** indica a ocupação dos temporários em memória. A altura
 pode crescer para preservar alertas e mensagens. [Uso, configuração de contas,
 dependências e limites](docs/COMPACTO.md).
+
+Quando o Linux fornece uma bateria válida, o widget mostra o percentual em
+verde, amarelo, laranja ou vermelho conforme a faixa. Ao descarregar, avisa
+com sons nas passagens de 75%, 50% e 25%; em 10% ou menos, repete o aviso a
+cada minuto. A estimativa restante aparece quando o sistema informa tempo ou
+energia e consumo compatíveis. Ela varia conforme o uso. Os avisos seguem a
+preferência de sons em **opções**.
 
 A biblioteca oferece 12 prompts de desenvolvimento: escolha um título para copiar e cole no
 agente desejado. O teclado virtual preserva o foco do campo de destino no KWin.
@@ -101,19 +120,19 @@ fundo)**. A prévia acompanha a barra e a escolha é salva ao soltá-la. Textos,
 ícones, contornos de teclas e indicadores mantêm a opacidade; os painéis de
 contas usam um fundo contínuo, com os elementos internos transparentes.
 
-![Widget compacto do Fôlego com navegação Central e Controles](docs/handoff/validation/navigation-2026-11-01/compact.png)
+![Widget compacto com cabeçalho de ícones e cotas disponíveis](docs/handoff/validation/compact-header-quota-2026-11-03/compact.png)
 
 ## Começar
 
 O alvo é **Linux**, com KDE Plasma para a integração completa com o desktop.
 O wrapper gerencia Python **3.14.7**, uv e dependências fixadas em `uv.lock`.
 Não é necessário ativar um ambiente virtual ou instalar pacotes Python globalmente.
-A [prévia 0.2.0b3](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b3)
+A [prévia 0.2.0b4](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b4)
 oferece fonte completa, wheel, sdist e SHA256SUMS. A fonte completa inclui o wrapper
 e o lockfile; os pacotes Python exigem Python 3.14 e a dependência GUI opcional.
 
 ```bash
-git clone --branch v0.2.0b3 https://github.com/Misael-art/Folego.git
+git clone --branch v0.2.0b4 https://github.com/Misael-art/Folego.git
 cd Folego
 ./dev setup
 ./dev gui

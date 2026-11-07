@@ -35,6 +35,7 @@ from .custom_prompts_tab import CustomPromptsTab
 from .ai_monitor import AIMonitor
 from .theme import set_control_icon, prepare_surface, paint_surface
 from ..core import health
+from ..core.battery_alerts import BatteryAlertTracker
 from ..core.exclusions import ExclusionError, ExclusionList
 from ..core.orphans import OrphanTracker, active_investigation, group_targets
 from ..core.sessions import SessionError, SessionRegistry
@@ -141,6 +142,7 @@ class MainWindow(QMainWindow):
         self._last_signal = None
         self._collection_error = ""
         self.ai_monitor = AIMonitor(self)
+        self._battery_alerts = BatteryAlertTracker()
         self._jobs = jobs if jobs is not None else TuneJobs(parent=self)
         self._disk_jobs = disk_jobs if disk_jobs is not None else TuneJobs(
             parent=self, argv_factory=plan_argv, timeout_ms=DISK_TIMEOUT_MS)
@@ -205,6 +207,11 @@ class MainWindow(QMainWindow):
         self.control_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.control_menu = QMenu(self.control_button)
         self.control_menu.addAction('Sair do Fôlego', self.quit)
+        self.widget_position_menu = self.control_menu.addMenu('Posição do widget')
+        for label, mode in (('Widget flutuante', 'compact'), ('Lateral esquerda', 'left'),
+                            ('Lateral direita', 'right'), ('Barra superior', 'top')):
+            self.widget_position_menu.addAction(
+                label, lambda checked=False, target=mode: self._show_widget_position(target))
         self.control_button.setMenu(self.control_menu)
         header.addWidget(self.control_button)
         self.setMenuWidget(self.navigation_header)
@@ -322,6 +329,11 @@ class MainWindow(QMainWindow):
             signal = title_signal.compute(snapshot, self._thresholds, now_mono=now)
         else:
             return
+        if (self._compact is not None and snapshot is not None
+                and snapshot.is_stale(self._thresholds.stale_after_s, now)):
+            refresh_battery = getattr(self._compact, '_show_battery', None)
+            if refresh_battery is not None:
+                refresh_battery(snapshot, now_mono=now)
         if self._last_signal is not None and signal.text == self._last_signal.text:
             return
         self._last_signal = signal
@@ -338,6 +350,11 @@ class MainWindow(QMainWindow):
     def apply_snapshot(self, snapshot):
         self._request_history()
         self._collection_error = ""
+        cue = self._battery_alerts.observe(
+            snapshot.battery if not snapshot.is_stale(self._thresholds.stale_after_s)
+            and snapshot.source('battery').status == 'ok' else None)
+        if cue:
+            self.ai_monitor.alerts.battery_cue(cue)
         signal = title_signal.compute(snapshot, self._thresholds,
                                       engine=self._health)
         self._last_snapshot = snapshot
@@ -458,7 +475,11 @@ class MainWindow(QMainWindow):
         self.raise_()
         self.activateWindow()
 
-    def show_compact(self):
+    def show_compact(self, mode=None):
+        # QAction.triggered passes its checked bool to Python callables that
+        # accept one positional argument. It is not a dock-mode request.
+        if isinstance(mode, bool):
+            mode = None
         self._request_history()
         if self._compact is None:
             caps = self._caps or desktop_caps.detect(
@@ -476,16 +497,20 @@ class MainWindow(QMainWindow):
         if self._last_snapshot is not None:
             self._compact.show_snapshot(self._last_snapshot,
                                         signal=self._last_signal)
-        self._compact.show_compact()
+        self._compact.show_compact(desired_mode=mode)
+
+    def _show_widget_position(self, mode):
+        self.show_compact(mode=mode)
+        self.hide_window()
 
     def enter_widget_mode(self) -> bool:
         """Modo widget: abre o widget flutuante e recolhe a janela central para a bandeja."""
-        self.show_compact()
+        self.show_compact(mode='compact')
         self._offer_kwin_rule()
         return self.hide_window()
 
     def return_to_compact(self):
-        self.show_compact()
+        self.show_compact(mode='compact')
         self.hide_window()
 
     def _offer_kwin_rule(self) -> None:
