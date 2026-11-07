@@ -25,7 +25,8 @@ bloqueio semanal, pausa, desconhecido e recuperação. Dados sintéticos,
 HOME/XDG privados, áudio isolado e pedidos dos coletores desativados na QA.
 A tela real forneceu área útil de 948 × 593 px lógicos. Células, marcadores e
 controles ficaram dentro da faixa e sem sobreposição. A faixa voltou ao
-compacto e à mini usando o canal de posicionamento existente.
+compacto e à mini usando o canal de posicionamento existente. Ao retirar as
+cotas, encolheu de 676 para 410 px no ensaio final.
 
 | Estado | Claro | Escuro |
 | --- | --- | --- |

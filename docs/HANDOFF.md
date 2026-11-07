@@ -40,7 +40,7 @@ testes controlam também 948/1920/2560 px, sem alegar três monitores físicos.
 `./dev check` final passou com **1306 passed/2 skipped sem Qt em 28,22 s** e
 **1706 passed/2 skipped Qt offscreen em 115,91 s**; diff check aprovado.
 Python 3.14.7 gerenciado, HOME/XDG privados e suites sequenciais. Recibos
-`run-hddrhpmx` e `run-b5qurhyy`. O primeiro
+`run-hddrhpmx` e `run-b5qurhyy`, retidos em `.scratch/dev-tests-reviewed/`. O primeiro
 foco passou em 110 testes e falhou em três fixtures que forneciam uma função
 onde o monitor exige um objeto `collect`; o foco corrigido passou em três
 testes. Tentativas e logs próprios estão preservados em
@@ -58,9 +58,24 @@ acima. Logs dessa falha: `run-py87un01` e `run-cu2fyol_`; foco corrigido:
 o ensaio final confirmou redução de 676 para 410 px ao retirar as cotas.
 Tentativas falhas não foram contadas como gates aprovados.
 
-Publicação e recarga da GUI ainda serão registradas após a conferência do
-SHA remoto. Próximo incremento: observar clique físico dos painéis e uso
-normal da bateria no alvo, sem produzir descarga ou calor como fixture.
+O código foi publicado em `d5945c3711af4d2a294dc204bdf71b466555edb0`,
+com SHA remoto conferido, na mesma branch e no
+[PR #5](https://github.com/Misael-art/Folego/pull/5), ainda sobre o #4.
+Os seis jobs de produto desse SHA passaram no GitHub;
+CodeRabbit/Sourcery ficaram skipped. Não houve merge
+nem release deste incremento.
+
+A GUI PID 925658 saiu por **Sair do Fôlego** na própria bandeja, após
+revalidar owner DBus, PID e início. Saída e unit confirmadas em sucesso antes
+de `./dev setup` e da abertura pela unit existente. Nova GUI **1192556**,
+active/running, Result=success, ExecMainStatus=0, NRestarts=0; o KWin
+reconheceu a janela. Entrada e Desempenho conservaram os PIDs 3817 e 3825.
+Recibo privado: `mini-battery-quotas-20261107/host-update.json`, no diretório
+de QA revisada. O formato continua acessível em **Mini horizontal**.
+
+Próximo incremento: observar clique físico dos painéis e uso normal da
+bateria no alvo, sem produzir descarga ou calor como fixture; esclarecer
+contagem de agentes em execução caso o usuário queira ampliar os lembretes.
 
 ## Qualidade visual da mini horizontal — 07/11/2026
 
