@@ -159,3 +159,22 @@ class Tray:
                   if rank >= 2 else "Revise as tarefas pesadas antes que o calor aumente.")
         notify(title, f"{sensor}: {value:g} °C. {action}")
         self._thermal_alert = (rank, now)
+
+    def show_pressure_alert(self, alert: dict):
+        """One bounded warning prepared from fresh, sustained PSI samples."""
+        notify = getattr(self.tray, "showMessage", None)
+        if notify is None:
+            return
+        labels = {"memory": "memória", "io": "disco/I/O", "cpu": "CPU"}
+        value = alert.get("value")
+        if value is None:
+            return
+        age = alert.get("age_s")
+        age_text = f", há {age:g} s" if age is not None else ""
+        readings = [alert, *alert.get("also", ())]
+        detail = "; ".join(f"{labels.get(item.get('kind'), 'recursos')} "
+                           f"{item['value']:g}%" for item in readings)
+        notify("Fôlego · pressão sustentada",
+               f"PSI de espera em 60 s: {detail} "
+               f"(amostra {alert.get('sample_at') or 'sem horário'}{age_text}). "
+               "Salve o trabalho e reduza tarefas pelo aplicativo responsável.")

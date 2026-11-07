@@ -4,11 +4,65 @@ import time
 
 from folego.adapters.host_guard import HostObserver, _boots, _ntfs_events
 from folego.adapters.host_timeline import HostTimelineRecorder
-from folego.core.host_guard import ThermalTracker
-from folego.core.snapshot import ERROR, MemInfo, Snapshot, SourceQuality
+from folego.core.host_guard import PressureAlertTracker, ThermalTracker
+from folego.core.snapshot import ERROR, OK, MemInfo, Pressure, Snapshot, SourceQuality
 from folego.core.sysfs import read_thermal_trips
 
 BOOT = "167c36b6-b7ae-4097-877b-3ab2a96d8b88"
+
+
+def _pressure_sample(mono, *, cpu=30, memory=None, io=None, status=OK, boot_id=BOOT):
+    sources = [SourceQuality("pressure_cpu", status)]
+    if memory is not None:
+        sources.append(SourceQuality("pressure_memory", OK))
+    if io is not None:
+        sources.append(SourceQuality("pressure_io", OK))
+    return Snapshot(ts=1_700_000_000 + mono, mono=mono, boot_id=boot_id,
+                    mem=None, swap_used_kb=0, swap_total_kb=0,
+                    pressure_memory=Pressure(memory, memory, memory, 0) if memory is not None else None,
+                    pressure_io=Pressure(io, io, io, 0) if io is not None else None,
+                    pressure_cpu=Pressure(cpu, cpu, cpu, 0), load=None,
+                    apps=(), self_rss_kb=0,
+                    sources=tuple(sources))
+
+
+def test_pressure_alert_requires_fresh_continuous_source_and_bounds_repetition():
+    tracker = PressureAlertTracker()
+    assert tracker.observe(_pressure_sample(100), now_mono=100) is None
+    assert tracker.observe(_pressure_sample(110), now_mono=110) is None
+    alert = tracker.observe(_pressure_sample(115), now_mono=115)
+    assert alert["kind"] == "cpu" and alert["source"] == "pressure_cpu"
+    assert alert["value"] == 30 and alert["window_s"] == 60
+    assert tracker.observe(_pressure_sample(120), now_mono=120) is None
+    assert tracker.observe(_pressure_sample(415), now_mono=415) is None  # gap
+    assert tracker.observe(_pressure_sample(430), now_mono=430) is not None
+
+
+def test_pressure_alert_unknown_and_recovery_never_bypass_repeat_limit():
+    tracker = PressureAlertTracker()
+    tracker.observe(_pressure_sample(100), now_mono=100)
+    assert tracker.observe(_pressure_sample(115), now_mono=115)
+    assert tracker.observe(_pressure_sample(130, status=ERROR), now_mono=130) is None
+    assert tracker.observe(_pressure_sample(145), now_mono=145) is None
+    assert tracker.observe(_pressure_sample(160), now_mono=160) is None
+    assert tracker.observe(_pressure_sample(175, cpu=10), now_mono=175) is None
+    assert tracker.observe(_pressure_sample(190, cpu=10), now_mono=190) is None
+    assert tracker.observe(_pressure_sample(205), now_mono=205) is None
+    assert tracker.observe(_pressure_sample(220), now_mono=220) is None
+    assert tracker.observe(_pressure_sample(235), now_mono=260) is None  # stale
+    other = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    assert tracker.observe(_pressure_sample(240, boot_id=other), now_mono=240) is None
+    assert tracker.observe(_pressure_sample(255, boot_id=other), now_mono=255)
+
+
+def test_pressure_alert_combines_simultaneous_sources_without_popup_burst():
+    tracker = PressureAlertTracker()
+    tracker.observe(_pressure_sample(100, memory=6, io=12), now_mono=100)
+    alert = tracker.observe(_pressure_sample(115, memory=6, io=12), now_mono=115)
+    assert alert['kind'] == 'memory'
+    assert alert['also'] == [{'kind': 'io', 'value': 12},
+                             {'kind': 'cpu', 'value': 30}]
+    assert tracker.observe(_pressure_sample(120, memory=6, io=12), now_mono=120) is None
 
 
 def _host(tmp_path, *, mounts=1):

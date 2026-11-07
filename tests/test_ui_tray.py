@@ -149,6 +149,25 @@ def test_thermal_alert_escalates_without_repeating_every_poll(monkeypatch):
     assert len(tray.tray.messages) == 4
 
 
+def test_pressure_alert_explains_source_window_and_manual_action():
+    tray, _ = build()
+    tray.install()
+    tray.show_pressure_alert({"kind": "cpu", "value": 31.4,
+                              "sample_at": "2026-11-07T12:00:00-03:00",
+                              "age_s": 0.3})
+    title, body = tray.tray.messages[-1]
+    assert "pressão sustentada" in title
+    assert "PSI de espera em 60 s: CPU 31.4%" in body
+    assert "2026-11-07T12:00:00-03:00" in body
+    assert "há 0.3 s" in body
+    assert "pelo aplicativo responsável" in body
+    tray.show_pressure_alert({"kind": "memory", "value": 6,
+                              "also": [{"kind": "io", "value": 12},
+                                       {"kind": "cpu", "value": 30}],
+                              "sample_at": "2026-11-07T12:01:00-03:00"})
+    assert "memória 6%; disco/I/O 12%; CPU 30%" in tray.tray.messages[-1][1]
+
+
 def test_the_tray_menu_offers_only_viewing_actions():
     tray, window = build()
     tray.install()

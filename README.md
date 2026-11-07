@@ -221,7 +221,11 @@ estado da bateria do Deck e presença observada de alimentação externa; a CLI
 `--boot-id`. O histórico possui limites de
 4 MiB por boot e 32 MiB no total; ao atingir o limite, a gravação para e o
 registro existente é preservado. A falha de gravação aparece na Central, e
-capacidade próxima do limite aparece na aba Disco e na CLI. O plano para
+capacidade a partir de 85% do limite aparece na aba Disco e na CLI. A leitura
+principal da GUI ocorre a cada 5 segundos; o alerta de pressão usa o PSI já
+coletado, exige leituras sustentadas e limita avisos na bandeja a um por tipo
+de pressão a cada 5 minutos. Ele recomenda reduzir tarefas pelo aplicativo
+responsável e não altera processos. O plano para
 continuidade e dossiês está no [roadmap de resiliência](docs/ROADMAP-RESILIENCIA-HOST.md).
 `disk recovery` só verifica identidade da
 origem, montagem, acesso bruto, ferramenta e destino independente com espaço

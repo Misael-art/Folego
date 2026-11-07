@@ -19,7 +19,7 @@ from ..actions.disk.planner import fmt_bytes
 from ..actions.tmpfs import trend
 
 JSON_ACTIONS = ("plan", "ledger", "release", "restore", "expire", "recover", "diagnose", "runtime-size")
-SAMPLES_KEPT = 600  # 20 min de poller de 2 s; a janela do ETA é de 15 min
+SAMPLES_KEPT = 600  # limite de memória; a janela efetiva do ETA é de 15 min
 PENDING = "ainda não analisado — use Atualizar plano."
 LOADING = "consultando o tmpfs (dry-run, nada é movido)…"
 VOLUME_COLUMNS = (("path", "volume"), ("fs_type", "tipo"), ("total", "total"),

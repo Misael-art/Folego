@@ -133,6 +133,19 @@ def test_timeline_limit_is_visible_and_write_failure_reaches_snapshot(tmp_path, 
     assert path.read_bytes() == original
 
 
+def test_capacity_warns_before_history_stops_without_rotating_any_bytes(tmp_path, monkeypatch):
+    folder = tmp_path / "timeline"
+    recorder = HostTimelineRecorder(folder)
+    recorder.record(_snapshot(100))
+    path = folder / f"{BOOT}.jsonl"
+    original = path.read_bytes()
+    monkeypatch.setattr(host_timeline, '_PER_BOOT_LIMIT', len(original) * 100 // 90)
+    report = read_timeline(folder, active_boot_id=BOOT)
+    assert report['capacity']['near_limit'] is True
+    assert report['capacity']['at_limit'] is False
+    assert path.read_bytes() == original
+
+
 def test_boot_summary_bounds_read_and_marks_absent_boot_unknown(tmp_path):
     folder = tmp_path / 'timeline'
     recorder = HostTimelineRecorder(folder)

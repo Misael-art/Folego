@@ -17,6 +17,7 @@ from ..core.snapshot import ERROR, MISSING, OK, PARTIAL, Snapshot, SourceQuality
 _BOOT_ID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
 _PER_BOOT_LIMIT = 4 * 1024 * 1024
 _TOTAL_LIMIT = 32 * 1024 * 1024
+_CAPACITY_WARNING_PERCENT = 85
 _SOURCES = ("meminfo", "swaps", "pressure_memory", "pressure_io", "pressure_cpu",
             "temperature", "battery", "external_power", "processes")
 
@@ -209,9 +210,9 @@ def read_timeline(directory: Path | None = None, *, limit: int = 80,
                     "per_boot_limit_bytes": _PER_BOOT_LIMIT,
                     "at_limit": (total_bytes >= _TOTAL_LIMIT or
                                  active_bytes is not None and active_bytes >= _PER_BOOT_LIMIT),
-                    "near_limit": (total_bytes > _TOTAL_LIMIT - 2048 or
-                                   active_bytes is not None and
-                                   active_bytes > _PER_BOOT_LIMIT - 2048)}
+                    "near_limit": (total_bytes * 100 >= _TOTAL_LIMIT * _CAPACITY_WARNING_PERCENT or
+                                   active_bytes is not None and active_bytes * 100 >=
+                                   _PER_BOOT_LIMIT * _CAPACITY_WARNING_PERCENT)}
         files = [p for p in entries if p.name.endswith(".jsonl")]
         if boot_id is not None:
             files = [p for p in files if p.name == f"{boot_id}.jsonl"]

@@ -38,7 +38,7 @@ from .screen_energy import ScreenEnergy
 from .theme import TOKENS, _background_color, set_control_icon, prepare_surface
 from ..core import health
 from ..core.battery_alerts import BatteryAlertTracker
-from ..core.host_guard import ThermalTracker
+from ..core.host_guard import PressureAlertTracker, ThermalTracker
 from ..core.agent_pressure import PressureBackend
 from ..core.exclusions import ExclusionError, ExclusionList
 from ..core.orphans import OrphanTracker, active_investigation, group_targets
@@ -125,6 +125,7 @@ class MainWindow(QMainWindow):
         self._host_guard_poller = None
         self._host_guard_factory = host_guard_factory
         self._thermal_tracker = ThermalTracker()
+        self._pressure_alert_tracker = PressureAlertTracker()
         self._history_text = "aguardando leitura do histórico"
         self._config_store = config_store or ConfigStore()
         self._grant_store = grant_store or GrantStore()
@@ -292,7 +293,10 @@ class MainWindow(QMainWindow):
         from .workers import Poller
         collector = self._collector_factory()
         collect_fn = getattr(collector, "collect", None) or collector
-        self._poller = Poller(collect_fn=collect_fn, offload=True)
+        # Host scans can take seconds under concurrent builds. Keep the UI
+        # responsive and leave idle time between scans; the incident recorder
+        # still writes at its own 15 s cadence.
+        self._poller = Poller(collect_fn=collect_fn, interval_s=5.0, offload=True)
         self._poller.snapshot_ready.connect(self.apply_snapshot)
         self._poller.error.connect(self.show_error)
         self._poller.start()
@@ -513,6 +517,10 @@ class MainWindow(QMainWindow):
         thermal = self._thermal_tracker.observe(snapshot)
         self.disk.show_thermal(thermal)
         self.tray.show_thermal(thermal)
+        if not self._paused:
+            pressure_alert = self._pressure_alert_tracker.observe(snapshot)
+            if pressure_alert:
+                self.tray.show_pressure_alert(pressure_alert)
         level = {'danger': 1, 'critical': 2}.get(thermal.get('state'), 0)
         self._observe_cooperative_pressure(level)
         if level > self._screen_thermal_level:
