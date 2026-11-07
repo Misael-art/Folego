@@ -42,8 +42,8 @@ class OrphansPanel(QWidget):
         self.tree.setHeaderLabels(["pid", "app", "RAM (RSS est.)", "ocioso", "estado"])
         self.tree.setSelectionMode(self.tree.SelectionMode.SingleSelection)
         self.tree.hide()
-        self.status_label = QLabel("Aguardando observações: órfão comprovado exige "
-                                   "pai morto, CPU parada e tempo olhando.")
+        self.status_label = QLabel("Aguardando observações: um candidato exige "
+                                   "adoção pelo supervisor e CPU sem avanço por um intervalo.")
         self.status_label.setWordWrap(True)
         # CPU ativa não satisfaz a regra de ociosidade, mas também não prova que
         # o processo é útil. Esta linha é só uma pista para o humano investigar;
@@ -188,9 +188,10 @@ class OrphansPanel(QWidget):
                 f"na lista; o Forçar (SIGKILL) é uma decisão manual.")
         elif self._candidates:
             self.status_label.setText(
-                f"possivelmente abandonado: {len(self._candidates)} processo(s) com "
-                "pai morto, sem CPU e fora da lista protegida — encerrar exige "
-                "confirmação.")
+                f"{len(self._candidates)} processo(s) possivelmente abandonado(s): "
+                "adotados pelo supervisor ou PID 1, sem avanço de CPU e fora "
+                "das proteções. Uso real ainda precisa de revisão; encerrar "
+                "exige confirmação.")
         else:
             self.status_label.setText(
                 "Nenhum candidato confirmado nesta leitura. A identificação exige "

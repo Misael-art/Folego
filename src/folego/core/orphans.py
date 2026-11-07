@@ -34,6 +34,12 @@ PROTECTED_PREFIXES = (
     "ksecretd", "kwallet", "kded",
 )
 
+# Infraestrutura interna do Steam não é um app independente. Os dois loggers
+# podem ser adotados pelo systemd --user enquanto o Steam ainda escreve neles;
+# o crashpad pode trocar de sessão mantendo um pai vivo. Ambos ficaram falsamente
+# elegíveis no Deck em 2026-11-07, apesar da unit Steam Input estar ativa.
+PROTECTED_EXACT = frozenset(("srt-logger", "steamwebhelper"))
+
 KILLABLE_GROUPS = ("edge", "chrome")
 GROUP_LABELS = {"edge": "Microsoft Edge", "chrome": "Google Chrome/Chromium"}
 
@@ -97,7 +103,8 @@ def is_protected(proc: ProcInfo, *, self_pid: int | None = None,
     if proc.pid in ancestor_pids:
         return True
     comm = proc.comm.lower()
-    return any(comm.startswith(prefix) for prefix in PROTECTED_PREFIXES)
+    return comm in PROTECTED_EXACT or any(
+        comm.startswith(prefix) for prefix in PROTECTED_PREFIXES)
 
 
 def ancestor_pids(procs, self_pid: int) -> frozenset[int]:
@@ -189,7 +196,11 @@ def is_adopted(proc: ProcInfo, parent: ProcInfo | None) -> bool:
     """
     if proc.ppid == 1:
         return True
-    if parent is None or parent.session != parent.pid:
+    # Um líder de sessão qualquer pode continuar sendo o pai real: pv-adverb
+    # mantém o crashpad do Steam, embora o filho tenha outra sessão. Só o
+    # gerenciador do usuário comprovado é subreaper reconhecido aqui.
+    if (parent is None or parent.comm != "systemd" or parent.ppid != 1
+            or parent.uid != proc.uid or parent.session != parent.pid):
         return False
     return proc.session != parent.session
 

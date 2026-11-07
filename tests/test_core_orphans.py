@@ -114,6 +114,19 @@ def test_a_process_adopted_by_the_session_supervisor_is_an_orphan():
     assert found[0].ppid == 1855, "the row must say who adopted it"
 
 
+def test_a_live_session_leader_is_not_mistaken_for_an_adopting_supervisor():
+    # Steam's pv-adverb was a live parent of its crashpad handler on the Deck.
+    # The handler's separate, now leaderless session did not mean it was unused.
+    parent = proc_info(5900, comm="pv-adverb", ppid=5273, pgid=5900,
+                       session=5900, uid=1000)
+    child = orphan(ppid=5900, pgid=5987, session=5987,
+                   comm="unlisted-helper")
+    tracker = OrphanTracker(min_idle_s=0.0, uid=1000, self_pid=10)
+    tracker.observe(snapshot_of(parent, child, ts=1_000.0))
+
+    assert tracker.observe(snapshot_of(parent, child, ts=2_000.0)) == ()
+
+
 def test_a_live_app_under_the_supervisor_is_not_offered_while_it_works():
     """Measured on the Deck: the user's MT5 terminal advances CPU (19 ticks/8 s)
     after its wine launcher exits, so it looks adopted — and the frozen-CPU proof
@@ -200,7 +213,8 @@ PROTECTED = ["systemd", "systemd-userd", "plasmashell", "kwin_x11", "pipewire",
              "konsole", "yakuake", "yad", "folego",
              # seen orphaned on the real Deck (census 2026-10-14): a D-Bus-activated
              # session service that respawned nothing and whose loss breaks the wallet
-             "ksecretd", "kwalletd6", "kded5"]
+             "ksecretd", "kwalletd6", "kded5", "srt-logger",
+             "steamwebhelper"]
 
 
 @pytest.mark.parametrize("comm", PROTECTED)
