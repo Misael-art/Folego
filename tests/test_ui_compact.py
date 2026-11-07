@@ -3,7 +3,7 @@ import pytest
 import time
 
 from folego.core.snapshot import BatteryInfo, MemInfo, Pressure, Snapshot, SourceQuality
-from folego.ui.compact import CompactWindow, clamp_position, dock_geometry
+from folego.ui.compact import CompactWindow, MINI_HEIGHT, MINI_WIDTH, clamp_position, dock_geometry
 from folego.ui.desktop_caps import detect
 
 pytest.importorskip("PySide6")
@@ -303,14 +303,137 @@ def test_widget_position_menu_switches_docks_and_floating(qapp):
     view.set_dock_mode('top')
     QTest.qWait(300)
     assert [action.text() for action in view.layout_menu.actions()] == [
-        'Widget flutuante', 'Lateral esquerda', 'Lateral direita', 'Barra superior']
-    view.layout_menu.actions()[1].trigger()
+        'Mini horizontal', 'Widget compacto', 'Lateral esquerda',
+        'Lateral direita', 'Barra superior']
+    view.layout_actions['left'].trigger()
     QTest.qWait(300)
     assert view._dock_mode == 'left'
     assert view.geometry() == dock_geometry('left', view._screen_area())
-    view.layout_menu.actions()[0].trigger()
+    view.layout_actions['compact'].trigger()
     QTest.qWait(300)
     assert view._dock_mode == 'compact' and view.width() == 280
+    view.force_close()
+
+
+def test_mini_bar_is_one_line_and_every_form_has_a_direct_route(qapp):
+    from dataclasses import replace
+    from PySide6.QtCore import QPoint
+    from PySide6.QtTest import QTest
+
+    view, host = make(qapp)
+    sample = replace(snap(), mono=time.monotonic(), cpu_busy_frac=.18,
+                     temperature_c=81, temperature_sensor='acpitz',
+                     sources=(SourceQuality('meminfo', 'ok'), SourceQuality('cpu', 'ok'),
+                              SourceQuality('temperature', 'ok')))
+    view.show_compact()
+    view.show_snapshot(sample)
+    view.layout_actions['mini'].trigger()
+    QTest.qWait(320)
+    assert view._dock_mode == 'mini'
+    assert (view.width(), view.height()) == (MINI_WIDTH, MINI_HEIGHT)
+    assert view.mini_bar.isVisible() and not view.body_widget.isVisible()
+    assert view.mini_cpu.text() == 'CPU 18%'
+    assert view.mini_temperature.text() == 'ACPI 81 °C'
+    assert view.mini_memory.text().startswith('RAM ')
+    assert view.layout_actions['mini'].isChecked()
+    hot = replace(sample, temperature_c=105, thermal_passive_c=100,
+                  thermal_critical_c=105)
+    view.show_snapshot(hot)
+    assert 'Crítico' in view.mini_status.text()
+    assert 'Limite térmico crítico' in view.mini_status.toolTip()
+    low = replace(sample, battery=BatteryInfo(9, 'Discharging'),
+                  sources=sample.sources + (SourceQuality('battery', 'ok'),))
+    view.show_snapshot(low)
+    assert 'Bateria 9%' in view.mini_status.text()
+    view._shortcut_result('Posicionamento não confirmado')
+    assert 'Aviso' in view.mini_status.text()
+    assert 'Posicionamento não confirmado' in view.mini_status.toolTip()
+    view.feedback_timer.stop()
+    view._clear_feedback()
+    assert 'Bateria 9%' in view.mini_status.text()
+    assert all(not handle.isVisible() for handle in view._handles.values())
+    view._animate_actions(True)
+    assert view.action_drawer.maximumHeight() == 0
+    controls = [view.mini_drag, view.mini_status, view.mini_cpu,
+                view.mini_temperature, view.mini_memory, view.mini_expand,
+                view.navigation_group]
+    positions = [control.mapTo(view, QPoint(0, 0)).x() for control in controls]
+    assert positions == sorted(positions)
+    assert positions[-1] + view.navigation_group.width() <= view.width()
+    for mode in ('right', 'left', 'top', 'mini'):
+        view.layout_actions[mode].trigger()
+        QTest.qWait(320)
+        assert view._dock_mode == mode
+        assert view.layout_actions[mode].isChecked()
+    view.mini_expand.click()
+    QTest.qWait(320)
+    assert view._dock_mode == 'compact' and view.width() == 280
+    view.layout_actions['mini'].trigger()
+    QTest.qWait(320)
+    view.open_button.click()
+    assert host.raised == 1 and not view.isVisible()
+    view.force_close()
+
+
+def test_mini_bar_hides_stale_values_and_wayland_requests_confirmed_move(qapp, monkeypatch):
+    from dataclasses import replace
+    from PySide6.QtCore import QRect
+    view, _ = make(qapp, caps=wayland())
+    view._screen_area = lambda: QRect(0, 0, 948, 593)
+    view._screens = lambda: ((0, 0, 948, 593),)
+    requested = []
+    monkeypatch.setattr(view.shortcut_tabs.controller, 'request',
+                        lambda operation, value=None: requested.append((operation, value)) or True)
+    view.show_compact()
+    view.set_dock_mode('mini')
+    assert requested[-1][0] == 'widget-geometry'
+    view._capture_result({'operation': 'widget-geometry', 'geometry': (100, 100, 280, 160)})
+    assert requested[-1] == ('widget-place', (100, 100, MINI_WIDTH, MINI_HEIGHT))
+    view._capture_result({'operation': 'widget-place', 'geometry': requested[-1][1]})
+    assert view._dock_mode == 'mini' and view._dock_pending is None
+    sample = replace(snap(), mono=time.monotonic() - 30, cpu_busy_frac=.99,
+                     temperature_c=100, temperature_sensor='acpitz',
+                     sources=(SourceQuality('meminfo', 'ok'), SourceQuality('cpu', 'ok'),
+                              SourceQuality('temperature', 'ok')))
+    view.show_snapshot(sample)
+    assert view.mini_cpu.text() == 'CPU —'
+    assert view.mini_temperature.text() == '— °C'
+    assert view.mini_memory.text() == 'RAM —'
+    view.set_dock_mode('right')
+    assert requested[-1][0] == 'widget-geometry'
+    view._capture_result({'operation': 'widget-geometry', 'geometry': (100, 100, MINI_WIDTH, MINI_HEIGHT)})
+    assert requested[-1][0] == 'widget-place'
+    view.force_close()
+
+
+def test_mini_grip_moves_only_its_window_and_saves_position(qapp):
+    from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtTest import QTest
+    store = Store('100,100')
+    view, host = make(qapp, store=store)
+    view.show_compact()
+    view.set_dock_mode('mini')
+    QTest.qWait(320)
+    origin = view.pos()
+    local = QPoint(8, 16)
+    start = view.mini_drag.mapToGlobal(local)
+
+    def event(kind, global_point, buttons):
+        return QMouseEvent(kind, QPointF(local), QPointF(global_point),
+                           Qt.MouseButton.LeftButton, buttons,
+                           Qt.KeyboardModifier.NoModifier)
+
+    view.mini_drag.mousePressEvent(event(QEvent.Type.MouseButtonPress, start,
+                                        Qt.MouseButton.LeftButton))
+    moved = start + QPoint(30, 20)
+    view.mini_drag.mouseMoveEvent(event(QEvent.Type.MouseMove, moved,
+                                       Qt.MouseButton.LeftButton))
+    view.mini_drag.mouseReleaseEvent(event(QEvent.Type.MouseButtonRelease, moved,
+                                          Qt.MouseButton.NoButton))
+    assert view.pos() == origin + QPoint(30, 20)
+    assert store.data['compact/position'] == f'{view.x()},{view.y()}'
+    assert host.raised == 0 and host.quits == 0
     view.force_close()
 
 
@@ -602,7 +725,9 @@ def test_widget_header_uses_navigation_and_control_menu_instead_of_window_button
     assert view.open_button.accessibleName()=='Abrir a central do Fôlego'
     assert not hasattr(view,'hide_button') and not hasattr(view,'quit_button')
     assert [a.text() for a in view.control_menu.actions()]==[
-        'Ocultar widget','Sair do Fôlego','Contas e cotas de IA','Posição do widget']
+        'Mini horizontal', 'Widget compacto', 'Lateral esquerda',
+        'Lateral direita', 'Barra superior', 'Abrir Central', '',
+        'Contas e cotas de IA', 'Ocultar widget', 'Sair do Fôlego']
     view._refresh_accounts_menu()
     assert len(view.accounts_menu.actions())==4
     assert all('sem confirmação' in action.text() for action in view.accounts_menu.actions())

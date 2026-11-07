@@ -8,7 +8,8 @@ import os
 
 from PySide6.QtCore import (QPoint, QRect, QRectF, Qt, QTimer, QPropertyAnimation,
                             QVariantAnimation, QEasingCurve, QEvent)
-from PySide6.QtGui import QGuiApplication, QWindow, QFont, QPainter, QPainterPath, QPen, QColor, QRegion
+from PySide6.QtGui import (QActionGroup, QGuiApplication, QWindow, QFont, QPainter,
+                           QPainterPath, QPen, QColor, QRegion)
 from PySide6.QtWidgets import (QBoxLayout, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
                                QScrollArea, QVBoxLayout, QWidget, QSizePolicy, QApplication,
                                QGraphicsOpacityEffect)
@@ -21,14 +22,17 @@ from ..core.battery_alerts import battery_band, remaining_text
 
 POSITION_KEY = "compact/position"
 WIDGET_TITLE = "Fôlego — widget"
-DOCK_MODES = ('compact', 'right', 'left', 'top')
+FLOAT_MODES = ('compact', 'mini')
+DOCK_MODES = (*FLOAT_MODES, 'right', 'left', 'top')
+MINI_WIDTH = 384
+MINI_HEIGHT = 46
 SLIM_TOP_WIDTH = 900
 SLIM_TOP_HEIGHT = 120
 
 
 def dock_geometry(mode: str, area: QRect) -> QRect:
     """Use only the screen's available area, which excludes known desktop panels."""
-    if mode not in DOCK_MODES[1:] or not area.isValid():
+    if mode not in ('right', 'left', 'top') or not area.isValid():
         raise ValueError('Borda ou tela indisponível')
     if mode == 'top':
         height = min(area.height(), SLIM_TOP_HEIGHT if area.width() >= SLIM_TOP_WIDTH else 190)
@@ -94,6 +98,56 @@ class DockHandle(QPushButton):
             painter.drawLine(QPoint(int(cx - 5), int(cy - 3)), QPoint(int(cx), int(cy + 3)))
             painter.drawLine(QPoint(int(cx), int(cy + 3)), QPoint(int(cx + 5), int(cy - 3)))
         painter.end()
+
+
+class MiniDragHandle(QWidget):
+    """A visible grip; only this region starts a compositor move."""
+
+    def __init__(self, owner):
+        super().__init__(owner)
+        self.owner = owner
+        on_theme_change(self, self.update)
+        self.setFixedSize(16, 32)
+        self.setAccessibleName('Arrastar a faixa mínima')
+        self.setToolTip('Arraste para mover a faixa')
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        self._offset = None
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(TOKENS.muted))
+        for x in (5, 11):
+            for y in (10, 16, 22):
+                painter.drawEllipse(QPoint(x, y), 1, 1)
+
+    def mousePressEvent(self, event):
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+        if self.owner._caps.absolute_position:
+            self._offset = event.globalPosition().toPoint() - self.owner.frameGeometry().topLeft()
+        else:
+            surface = self.owner.windowHandle()
+            if surface is not None:
+                surface.startSystemMove()
+        self.setCursor(Qt.CursorShape.ClosedHandCursor)
+        event.accept()
+
+    def mouseMoveEvent(self, event):
+        if self._offset is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            self.owner.move(event.globalPosition().toPoint() - self._offset)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self._offset is not None:
+            self._offset = None
+            self.owner._save_position()
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        event.accept()
 
 
 class RoundedCard(QFrame):
@@ -221,10 +275,8 @@ class CompactWindow(QWidget):
         self.control_button = QPushButton()
         set_control_icon(self.control_button, 'go-down', QStyle.StandardPixmap.SP_ArrowDown)
         self.control_button.setAccessibleName('Controles do widget do Fôlego')
-        self.control_button.setToolTip('Controles do Fôlego')
+        self.control_button.setToolTip('Mudar visualização e outros controles')
         self.control_menu = QMenu(self.control_button)
-        self.hide_action = self.control_menu.addAction('Ocultar widget', self._hide_safely)
-        self.quit_action = self.control_menu.addAction('Sair do Fôlego', self._window.quit)
         self.control_button.clicked.connect(lambda: self.control_menu.popup(
             self.control_button.mapToGlobal(self.control_button.rect().bottomLeft())))
         self.pause_button = QPushButton("Pausar")
@@ -315,6 +367,8 @@ class CompactWindow(QWidget):
         self._dock_verify_attempts = 0
         self._dock_verify_waits = 0
         self._compact_geometry = None
+        self._mini_geometry = None
+        self._mini_latest = None
         self._capture_waiting = False
         self._capture_restore = False
         self._keyboard_restore = False
@@ -349,18 +403,61 @@ class CompactWindow(QWidget):
         self.top_controls_layout = QGridLayout(self.top_controls)
         self.top_controls_layout.setContentsMargins(0, 0, 0, 0)
         self.top_controls_layout.setSpacing(2)
+        self.mini_bar = QWidget(self.card)
+        self.mini_bar.setAccessibleName('Faixa mínima do Fôlego')
+        self.mini_layout = QHBoxLayout(self.mini_bar)
+        self.mini_layout.setContentsMargins(2, 0, 2, 0)
+        self.mini_layout.setSpacing(3)
+        self.mini_drag = MiniDragHandle(self)
+        self.mini_status = QLabel('● Aguardando')
+        self.mini_cpu = QLabel('CPU —')
+        self.mini_temperature = QLabel('— °C')
+        self.mini_memory = QLabel('RAM —')
+        for label in (self.mini_status, self.mini_cpu, self.mini_temperature,
+                      self.mini_memory):
+            label.setTextFormat(Qt.TextFormat.PlainText)
+            label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        self.mini_expand = QPushButton()
+        set_control_icon(self.mini_expand, 'view-restore', QStyle.StandardPixmap.SP_TitleBarNormalButton)
+        self.mini_expand.setFixedSize(32, 32)
+        self.mini_expand.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.mini_expand.setAccessibleName('Expandir para o widget compacto')
+        self.mini_expand.setToolTip('Expandir para o widget compacto')
+        self.mini_expand.clicked.connect(lambda: self.set_dock_mode('compact'))
+        for item in (self.mini_drag, self.mini_status, self.mini_cpu,
+                     self.mini_temperature, self.mini_memory):
+            self.mini_layout.addWidget(item)
+        self.mini_layout.addStretch(1)
+        self.mini_layout.addWidget(self.mini_expand)
+        self.mini_bar.hide()
+        self.layout_menu = QMenu('Visualizações', self.control_button)
+        self.layout_actions = {}
+        self.layout_action_group = QActionGroup(self)
+        self.layout_action_group.setExclusive(True)
+        for label, mode in (('Mini horizontal', 'mini'), ('Widget compacto', 'compact'),
+                            ('Lateral esquerda', 'left'), ('Lateral direita', 'right'),
+                            ('Barra superior', 'top')):
+            action = self.layout_menu.addAction(
+                label, lambda checked=False, target=mode: self.set_dock_mode(target))
+            action.setCheckable(True)
+            self.layout_action_group.addAction(action)
+            self.layout_actions[mode] = action
+        # Put destinations directly in the main menu: one selection from every form.
+        self.control_menu.addActions(self.layout_menu.actions())
+        self.control_menu.addAction('Abrir Central', self._open_central)
+        self.control_menu.addSeparator()
         self.accounts_menu = self.control_menu.addMenu('Contas e cotas de IA')
         self.accounts_menu.aboutToShow.connect(self._refresh_accounts_menu)
-        self.layout_menu = self.control_menu.addMenu('Posição do widget')
-        for label, mode in (('Widget flutuante', 'compact'), ('Lateral esquerda', 'left'),
-                            ('Lateral direita', 'right'), ('Barra superior', 'top')):
-            self.layout_menu.addAction(label, lambda checked=False, target=mode: self.set_dock_mode(target))
+        self.hide_action = self.control_menu.addAction('Ocultar widget', self._hide_safely)
+        self.quit_action = self.control_menu.addAction('Sair do Fôlego', self._window.quit)
+        self.control_menu.aboutToShow.connect(self._sync_layout_actions)
+        self._sync_layout_actions()
         self.shortcut_tabs.customize_requested.connect(self._customize_prompts)
         self.shortcut_tabs.controller.feedback.connect(self._shortcut_result)
         self.shortcut_tabs.controller.payload.connect(self._capture_result)
         self.shortcut_tabs.controller.failed.connect(self._capture_failed)
         self.shortcut_tabs.controller.busy_changed.connect(
-            lambda busy: self._screen_changed() if not busy and self._dock_mode != 'compact' else None)
+            lambda busy: self._screen_changed() if not busy and self._dock_mode not in FLOAT_MODES else None)
         self.shortcut_tabs.controller.busy_changed.connect(
             lambda busy: self._reconcile_after_show() if not busy else None)
         self.shortcut_tabs.controller.busy_changed.connect(
@@ -431,6 +528,8 @@ class CompactWindow(QWidget):
         side = mode in ('left', 'right')
         slim_top = mode == 'top' and (target_width or self.width()) >= SLIM_TOP_WIDTH
         short_side = side and (target_height or self.height()) < 700
+        self.inner.removeWidget(self.mini_bar)
+        self.mini_layout.removeWidget(self.navigation_group)
         for section in self._sections:
             self.inner.removeWidget(section)
             self.side_layout.removeWidget(section)
@@ -474,12 +573,11 @@ class CompactWindow(QWidget):
         keyboard_button = self.shortcut_tabs.buttons['keyboard']
         for button, width in ((keyboard_button, 24 if side else 30),
                               (self.shortcut_tabs.top_button, 16 if side else 20),
-                              (self.open_button, 24 if side else 30),
-                              (self.control_button, 16 if side else 20)):
-            button.setFixedSize(width, 25 if side else 28)
+                              (self.open_button, 32 if mode == 'mini' else 24 if side else 30),
+                              (self.control_button, 32 if mode == 'mini' else 16 if side else 20)):
+            button.setFixedSize(width, 32 if mode == 'mini' else 25 if side else 28)
         self.header_layout.setColumnStretch(0, 1)
         self.header_layout.setColumnStretch(1, 1 if side else 0)
-        self.header_widget.setVisible(not slim_top)
         if side:
             self.header_layout.addWidget(self.brand, 0, 0, 1, 2, Qt.AlignmentFlag.AlignHCenter)
             self.header_layout.addWidget(self.keyboard_group, 1, 0, Qt.AlignmentFlag.AlignHCenter)
@@ -491,6 +589,8 @@ class CompactWindow(QWidget):
             self.top_controls_layout.addWidget(self.navigation_group, 0, 1)
             self.top_controls_layout.addWidget(self.pause_button, 1, 0, 1, 2,
                                                Qt.AlignmentFlag.AlignHCenter)
+        elif mode == 'mini':
+            self.mini_layout.addWidget(self.navigation_group)
         else:
             self.header_layout.addWidget(self.brand, 0, 0)
             self.header_layout.addWidget(self.keyboard_group, 0, 1)
@@ -507,7 +607,7 @@ class CompactWindow(QWidget):
         else:
             self.footer_layout.insertWidget(0, self.pause_button)
             self.footer_layout.addWidget(self.free_label)
-        self.footer_widget.setVisible(not side and not slim_top)
+        self.footer_widget.setVisible(not side and not slim_top and mode != 'mini')
         self.body_layout.setAlignment(self.gauge_widget, Qt.AlignmentFlag.AlignHCenter if side else Qt.AlignmentFlag(0))
         for label in (self.status_label, self.alert_label, self.feedback_label):
             label.setAlignment(Qt.AlignmentFlag.AlignHCenter if side else Qt.AlignmentFlag.AlignLeft)
@@ -532,7 +632,7 @@ class CompactWindow(QWidget):
             self.readings_widget.setMaximumWidth(16777215)
         self.pause_button.setSizePolicy(QSizePolicy.Policy.Expanding if side else QSizePolicy.Policy.Preferred,
                                         QSizePolicy.Policy.Preferred)
-        self.battery_label.setVisible(bool(self._battery_text) and mode != 'top')
+        self.battery_label.setVisible(bool(self._battery_text) and mode not in ('top', 'mini'))
         self._render_details()
         self.ai_strip.empty_label.setWordWrap(True)
         self.ai_strip.empty_label.setText('Sem cotas confirmadas' if mode in ('left', 'right')
@@ -543,7 +643,9 @@ class CompactWindow(QWidget):
         self.dock_scroll.setLayoutDirection(Qt.LayoutDirection.RightToLeft if mode == 'right'
                                              else Qt.LayoutDirection.LeftToRight)
         header, body, notices, ai, footer = self._sections
-        if side:
+        if mode == 'mini':
+            self.inner.addWidget(self.mini_bar, 0, 0)
+        elif side:
             self.inner.addWidget(header, 0, 0)
             self.inner.addWidget(self.dock_scroll, 1, 0)
             self.inner.setRowStretch(1, 1)
@@ -569,10 +671,24 @@ class CompactWindow(QWidget):
         else:
             for row, section in enumerate(self._sections):
                 self.inner.addWidget(section, row, 0)
+        self.mini_bar.setVisible(mode == 'mini')
+        self.header_widget.setVisible(mode != 'mini' and not slim_top)
+        self.body_widget.setVisible(mode != 'mini' and not slim_top)
+        self.notice_widget.setVisible(mode != 'mini')
+        self.ai_strip.setVisible(mode != 'mini')
+        self.gauge_widget.setVisible(mode != 'mini')
+        self.readings_widget.setVisible(mode != 'mini')
+        self.top_controls.setVisible(slim_top)
+
+    def _sync_layout_actions(self):
+        for mode, action in self.layout_actions.items():
+            action.setChecked(mode == self._dock_mode)
 
     def _place_handles(self):
         width, height = self.width(), self.height()
-        if self._dock_mode == 'compact':
+        if self._dock_mode == 'mini':
+            names = ()
+        elif self._dock_mode == 'compact':
             self._handles['right'].setGeometry(0, 42, 16, max(38, height - 84))
             self._handles['left'].setGeometry(width - 16, 42, 16, max(38, height - 84))
             self._handles['top'].setGeometry((width - 60) // 2, 0, 60, 15)
@@ -621,7 +737,7 @@ class CompactWindow(QWidget):
                 scroll.setParent(self.card)
                 self.side_content.show()
         self.card.show()
-        scroll.setVisible(mode != 'compact')
+        scroll.setVisible(mode not in FLOAT_MODES)
 
     def set_dock_mode(self, mode):
         if mode not in DOCK_MODES:
@@ -636,10 +752,10 @@ class CompactWindow(QWidget):
         if controller.future is not None:
             self._shortcut_result('Aguarde a solicitação atual antes de encaixar o widget')
             return
-        if mode != 'compact' and not self._screen_area().isValid():
+        if mode not in FLOAT_MODES and not self._screen_area().isValid():
             self._shortcut_result('Área útil da tela indisponível')
             return
-        if self._dock_mode == 'compact' and self._caps.session_type == 'wayland':
+        if self._dock_mode in FLOAT_MODES and self._caps.session_type == 'wayland':
             self._dock_pending = mode
             if not controller.request('widget-geometry'):
                 self._dock_pending = None
@@ -649,23 +765,38 @@ class CompactWindow(QWidget):
 
     def _apply_dock_mode(self, mode):
         controller = self.shortcut_tabs.controller
-        if self._dock_mode == 'compact' and self._caps.session_type != 'wayland':
-            self._compact_geometry = QRect(self.x(), self.y(), 280, self.card.sizeHint().height())
+        previous = self._dock_mode
+        if previous in FLOAT_MODES and self._caps.session_type != 'wayland':
+            geometry = QRect(self.geometry())
+            if previous == 'compact':
+                self._compact_geometry = geometry
+            else:
+                self._mini_geometry = geometry
         origin = QRect(self.geometry())
-        target = (self._compact_geometry if mode == 'compact' else
-                  dock_geometry(mode, self._screen_area()))
+        if mode in FLOAT_MODES:
+            saved = self._compact_geometry if mode == 'compact' else self._mini_geometry
+            if previous in FLOAT_MODES:
+                confirmed = self._compact_geometry if previous == 'compact' else self._mini_geometry
+                anchor = confirmed if self._caps.session_type == 'wayland' and confirmed else origin
+            else:
+                anchor = saved or self._compact_geometry or self._mini_geometry or origin
+            target = QRect(anchor)
+        else:
+            target = dock_geometry(mode, self._screen_area())
         self.drawer_animation.stop()
         self.action_drawer.setMaximumHeight(0)
         self._dock_mode = mode
+        self._sync_layout_actions()
         self._set_card_scroll(mode)
         self._arrange_sections(mode, target.width(), target.height())
         self.action_drawer.setMaximumHeight(0)
         self.setMinimumSize(0, 0)
         self.setMaximumSize(16777215, 16777215)
-        if mode == 'compact':
+        if mode in FLOAT_MODES:
             self.inner.activate()
-            target = QRect(target.x(), target.y(), 280,
-                           max(target.height(), self.card.sizeHint().height()))
+            width = 280 if mode == 'compact' else MINI_WIDTH
+            height = self.card.sizeHint().height() if mode == 'compact' else MINI_HEIGHT
+            target = QRect(target.x(), target.y(), width, height)
             x, y = clamp_position(target.x(), target.y(), target.width(), target.height(), self._screens())
             target.moveTo(x, y)
             self._needs_compact_clamp = False
@@ -697,14 +828,14 @@ class CompactWindow(QWidget):
             self.dock_animation.finished.connect(lambda: self.setFixedSize(target.size())
                                                  if mode != 'compact' else self.setFixedWidth(280))
             self.dock_animation.start()
-        self._dock_target = QRect(target) if mode != 'compact' else None
+        self._dock_target = QRect(target) if mode not in FLOAT_MODES else None
 
     def _placement_done(self):
         self._dock_pending = None
-        if self._dock_mode == 'compact':
+        if self._dock_mode in FLOAT_MODES:
             self.setMinimumHeight(0)
-            self.setMaximumHeight(16777215)
-            if self.height() < self.card.sizeHint().height():
+            self.setMaximumHeight(16777215 if self._dock_mode == 'compact' else MINI_HEIGHT)
+            if self._dock_mode == 'compact' and self.height() < self.card.sizeHint().height():
                 self.adjustSize()
         effect = self.card.graphicsEffect()
         if isinstance(effect, QGraphicsOpacityEffect):
@@ -712,9 +843,9 @@ class CompactWindow(QWidget):
             self.dock_fade.start()
         if self._needs_show_reconcile:
             QTimer.singleShot(0, self._reconcile_after_show)
-        if self._dock_mode == 'compact' and self._needs_compact_clamp:
+        if self._dock_mode in FLOAT_MODES and self._needs_compact_clamp:
             QTimer.singleShot(80, self._reconcile_compact_after_show)
-        if self._dock_mode != 'compact' and self._dock_verify_attempts:
+        if self._dock_mode not in FLOAT_MODES and self._dock_verify_attempts:
             QTimer.singleShot(180, self._verify_dock_after_show)
 
     def _fade_frame(self, value):
@@ -742,6 +873,9 @@ class CompactWindow(QWidget):
                 0, lambda: self.ai_strip.details(p, anchor=self.control_button)))
 
     def _animate_actions(self, expanded):
+        if self._dock_mode == 'mini':
+            self.action_drawer.setMaximumHeight(0)
+            return
         self.drawer_animation.stop()
         self.drawer_animation.setStartValue(self.action_drawer.maximumHeight())
         self.drawer_animation.setEndValue(self.shortcut_tabs.sizeHint().height() if expanded else 0)
@@ -785,6 +919,14 @@ class CompactWindow(QWidget):
         self.feedback_timer.start(7000)
         if self._dock_mode == 'compact':
             self.adjustSize()
+        elif self._dock_mode == 'mini':
+            self._show_mini_feedback(message)
+
+    def _show_mini_feedback(self, message):
+        self.mini_status.setText('● Aviso')
+        self.mini_status.setAccessibleName(f'Aviso do widget: {message}')
+        self.mini_status.setToolTip(message)
+        themed_style(self.mini_status, lambda: f'color:{TOKENS.warning};font-weight:700;')
 
     def _customize_prompts(self):
         open_editor = getattr(self._window, 'open_custom_prompts', self._window.raise_to_user)
@@ -829,7 +971,7 @@ class CompactWindow(QWidget):
                 QTimer.singleShot(0, self._reconcile_after_show)
                 return
             actual = value.get('geometry')
-            if not isinstance(actual, tuple) or len(actual) != 4 or self._dock_mode == 'compact':
+            if not isinstance(actual, tuple) or len(actual) != 4 or self._dock_mode in FLOAT_MODES:
                 self._dock_verify_attempts = 0
                 return
             target = dock_geometry(self._dock_mode, self._screen_area())
@@ -858,7 +1000,7 @@ class CompactWindow(QWidget):
                 return
             geometry = value.get('geometry')
             if (not isinstance(geometry, tuple) or len(geometry) != 4
-                    or self._dock_mode != 'compact' or not self.isVisible()):
+                    or self._dock_mode not in FLOAT_MODES or not self.isVisible()):
                 return
             x, y, width, height = geometry
             clamped = clamp_position(x, y, width, height, self._screens())
@@ -878,8 +1020,11 @@ class CompactWindow(QWidget):
             geometry = value.get('geometry')
             if isinstance(geometry, tuple) and len(geometry) == 4:
                 mode, self._dock_pending = self._dock_pending, None
-                self._compact_geometry = QRect(geometry[0], geometry[1], 280,
-                                               self.card.sizeHint().height())
+                current = QRect(*geometry)
+                if self._dock_mode == 'compact':
+                    self._compact_geometry = current
+                else:
+                    self._mini_geometry = current
                 self._apply_dock_mode(mode)
             else:
                 self._dock_pending = None
@@ -945,6 +1090,8 @@ class CompactWindow(QWidget):
         self.feedback_label.hide()
         if self._dock_mode == 'compact':
             self.adjustSize()
+        elif self._dock_mode == 'mini' and self._mini_latest is not None:
+            self._render_mini(*self._mini_latest)
 
     # ------------------------------------------------------------------ reading
 
@@ -999,10 +1146,72 @@ class CompactWindow(QWidget):
             alerts.append("Leitura desconhecida/antiga; aguardando nova observação")
         self.alert_label.setText("\n".join(alerts))
         self.alert_label.setVisible(bool(alerts))
+        self._mini_latest = (snapshot, signal, tuple(alerts))
+        self._render_mini(snapshot, signal, alerts)
         self._sync_tooltip()
         if self._dock_mode == 'compact':
             self.adjustSize()
         self._screen_changed()
+
+    def _render_mini(self, snapshot, signal, alerts):
+        from .dashboard_tab import VERDICT
+        verdict, role = VERDICT.get(signal.level, VERDICT['unknown'])
+        verdict = {'Saudável': 'OK', 'Desconhecido': 'Sem dados'}.get(verdict, verdict)
+        stale = snapshot.is_stale(15.0)
+        valid = not stale and not self._paused
+        temperature = (snapshot.temperature_c if valid and
+                       snapshot.source('temperature').status == 'ok' else None)
+        thermal_notes = []
+        limit = snapshot.thermal_passive_c or snapshot.thermal_critical_c
+        if temperature is not None and limit is not None:
+            if snapshot.thermal_critical_c is not None and temperature >= snapshot.thermal_critical_c:
+                thermal_notes.append('Limite térmico crítico observado')
+            elif temperature >= limit:
+                thermal_notes.append('Limite térmico passivo observado')
+            elif temperature >= limit - 5:
+                thermal_notes.append('Temperatura próxima do limite passivo')
+        battery_low = (valid and snapshot.battery is not None
+                       and snapshot.source('battery').status == 'ok'
+                       and snapshot.battery.status == 'Discharging'
+                       and snapshot.battery.percent <= 10)
+        if battery_low:
+            thermal_notes.append(f'Bateria em {snapshot.battery.percent}%, descarregando')
+        if self._paused:
+            verdict, role = 'Pausado', 'muted'
+        elif temperature is not None and limit is not None and temperature >= limit - 5:
+            if snapshot.thermal_critical_c is not None and temperature >= snapshot.thermal_critical_c:
+                verdict, role = 'Crítico', 'danger'
+            elif limit is not None and temperature >= limit:
+                verdict, role = 'Calor alto', 'danger'
+            elif limit is not None and temperature >= limit - 5:
+                verdict, role = 'Quente', 'warning'
+        elif battery_low:
+            verdict, role = f'Bateria {snapshot.battery.percent}%', 'danger'
+        self.mini_status.setText(f'● {verdict}')
+        self.mini_status.setAccessibleName(f'Estado do Fôlego: {verdict}')
+        themed_style(self.mini_status, lambda: f'color:{getattr(TOKENS, role)};font-weight:700;')
+        cpu = (snapshot.cpu_busy_frac if valid and snapshot.source('cpu').status == 'ok'
+               else None)
+        memory = (snapshot.mem if valid and snapshot.source('meminfo').status == 'ok'
+                  else None)
+        self.mini_cpu.setText(f'CPU {cpu * 100:.0f}%' if cpu is not None else 'CPU —')
+        self.mini_memory.setText(
+            f'RAM {(1 - memory.mem_available_kb / memory.mem_total_kb) * 100:.0f}%'
+            if memory is not None and memory.mem_total_kb else 'RAM —')
+        source = ('ACPI' if snapshot.temperature_sensor == 'acpitz'
+                  else snapshot.temperature_sensor)
+        self.mini_temperature.setText(
+            f'{source + " " if source else ""}{temperature:.0f} °C'
+            if temperature is not None else '— °C')
+        self.mini_cpu.setToolTip('Uso agregado dos núcleos; — indica leitura indisponível ou antiga')
+        self.mini_memory.setToolTip('RAM usada; — indica leitura indisponível ou antiga')
+        self.mini_temperature.setToolTip(
+            f'Temperatura · {snapshot.temperature_sensor or "sensor indisponível"}'
+            + (' · zona do sistema, não temperatura direta da CPU'
+               if snapshot.temperature_sensor == 'acpitz' else ''))
+        self.mini_status.setToolTip('\n'.join([signal.text, *thermal_notes, *alerts]))
+        if self._dock_mode == 'mini' and self.feedback_label.isVisible():
+            self._show_mini_feedback(self.feedback_label.text())
 
     def _render_details(self):
         if not hasattr(self, '_detail_values'):
@@ -1052,13 +1261,14 @@ class CompactWindow(QWidget):
         self.battery_label.setText(self._battery_text)
         self.battery_label.setToolTip('Bateria · estimativa variável com o consumo' if estimate
                                      else 'Bateria · tempo restante não disponível')
-        self.battery_label.setVisible(self._dock_mode != 'top')
+        self.battery_label.setVisible(self._dock_mode not in ('top', 'mini'))
         if self._dock_mode == 'top':
             self._render_details()
 
     def _sync_tooltip(self):
         self.setToolTip("\n".join(text for text in (
             self.signal_label.text(), self.mode_label.text(), self.operation_label.text(),
+            self.alert_label.text(), self.feedback_label.text() if self.feedback_label.isVisible() else '',
             self._caps.note if self._caps.compact_fallback else "") if text))
 
     def _open_central(self):
@@ -1091,11 +1301,21 @@ class CompactWindow(QWidget):
             self._sync_tooltip()
 
     def set_paused(self, paused: bool):
+        changed = bool(paused) != self._paused
         self._paused = bool(paused)
         self.pause_button.setText("Retomar" if paused else "Pausar")
         self.pause_button.setToolTip("Retomar monitoramento" if paused else "Pausar monitoramento")
         self.pause_button.setAccessibleDescription("monitoramento pausado" if paused else "monitoramento ativo")
         self._render_mode()
+        if changed:
+            state = 'Pausado' if paused else 'Aguardando'
+            self.mini_status.setText(f'● {state}')
+            self.mini_status.setAccessibleName(f'Estado do Fôlego: {state}')
+            themed_style(self.mini_status, lambda: f'color:{TOKENS.muted};font-weight:700;')
+            for label, text in ((self.mini_cpu, 'CPU —'),
+                                (self.mini_temperature, '— °C'),
+                                (self.mini_memory, 'RAM —')):
+                label.setText(text)
 
     def _toggle_pause(self):
         toggle = getattr(self._window, "toggle_pause", None)
@@ -1114,7 +1334,7 @@ class CompactWindow(QWidget):
                      for rect in (screen.availableGeometry(),))
 
     def _restore_position(self):
-        if self._dock_mode != 'compact' or not self._caps.absolute_position:
+        if self._dock_mode not in FLOAT_MODES or not self._caps.absolute_position:
             return  # the compositor owns placement of the decorated fallback
         raw = self._store.value(POSITION_KEY, "")
         x = y = None
@@ -1136,7 +1356,7 @@ class CompactWindow(QWidget):
         self.move(x, y)
 
     def _save_position(self):
-        if self._dock_mode != 'compact' or not self._caps.absolute_position:
+        if self._dock_mode not in FLOAT_MODES or not self._caps.absolute_position:
             return
         point = self.pos()
         self._store.setValue(POSITION_KEY, f"{point.x()},{point.y()}")
@@ -1152,14 +1372,14 @@ class CompactWindow(QWidget):
         self.raise_()
         if self._caps.session_type == 'wayland':
             self._dock_verify_attempts = 3 if (desired_mode in ('left', 'right', 'top')
-                                                 or desired_mode is None and self._dock_mode != 'compact') else 0
+                                                 or desired_mode is None and self._dock_mode not in FLOAT_MODES) else 0
             self._dock_verify_waits = 0
-        if self._caps.session_type == 'wayland' and desired_mode in (None, 'compact'):
+        if self._caps.session_type == 'wayland' and desired_mode in (None, *FLOAT_MODES):
             self._needs_compact_clamp = True
             QTimer.singleShot(80, self._reconcile_compact_after_show)
         if desired_mode is not None:
             self._requested_mode = desired_mode
-        if self._dock_mode != 'compact' or self._requested_mode is not None:
+        if self._dock_mode not in FLOAT_MODES or self._requested_mode is not None:
             self._needs_show_reconcile = True
             QTimer.singleShot(0, self._reconcile_after_show)
 
@@ -1173,7 +1393,7 @@ class CompactWindow(QWidget):
         if requested is not None and requested != self._dock_mode:
             self.set_dock_mode(requested)
             return
-        if self._dock_mode == 'compact':
+        if self._dock_mode in FLOAT_MODES:
             return
         target = dock_geometry(self._dock_mode, self._screen_area())
         self._dock_target = QRect(target)
@@ -1188,7 +1408,7 @@ class CompactWindow(QWidget):
             self._shortcut_result('Não foi possível restaurar a posição da barra')
 
     def _verify_dock_after_show(self):
-        if not self._dock_verify_attempts or self._dock_mode == 'compact' or self._force_close:
+        if not self._dock_verify_attempts or self._dock_mode in FLOAT_MODES or self._force_close:
             return
         surface = self.windowHandle()
         if (not self.isVisible() or surface is None or not surface.isExposed()
@@ -1211,7 +1431,7 @@ class CompactWindow(QWidget):
 
     def _reconcile_compact_after_show(self):
         if (not self._needs_compact_clamp or not self.isVisible() or self._force_close
-                or self._dock_mode != 'compact' or not self._screen_area().isValid()
+                or self._dock_mode not in FLOAT_MODES or not self._screen_area().isValid()
                 or self._dock_pending or self._show_clamp_phase
                 or self.shortcut_tabs.controller.future is not None):
             return
@@ -1226,7 +1446,7 @@ class CompactWindow(QWidget):
         self._screen_changed()
 
     def _screen_changed(self, *_args):
-        if self._dock_mode != 'compact':
+        if self._dock_mode not in FLOAT_MODES:
             area = self._screen_area()
             if not area.isValid() or self._dock_pending:
                 return
@@ -1273,7 +1493,7 @@ class CompactWindow(QWidget):
     # -------------------------------------------------------------------- events
 
     def mousePressEvent(self, event):
-        if self._dock_mode != 'compact':
+        if self._dock_mode not in FLOAT_MODES:
             super().mousePressEvent(event)
             return
         if not self._caps.absolute_position:

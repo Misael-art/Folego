@@ -367,12 +367,14 @@ def test_position_menu_returns_to_widget_without_tray_or_losing_current_tab(wind
     assert window.windowFlags() & Qt.WindowType.FramelessWindowHint
     assert not hasattr(window, 'back_button')
     assert window.brand.text() == 'FÔLEGO'
-    window.widget_position_menu.actions()[0].trigger();qapp.processEvents()
+    next(a for a in window.widget_position_menu.actions()
+         if a.text() == 'Widget flutuante').trigger();qapp.processEvents()
     assert not window.isVisible() and window._compact.isVisible() and not poller.stopped
     window._compact.open_button.click();qapp.processEvents()
     assert window.isVisible() and not window._compact.isVisible()
     assert window.tabs.currentWidget() is window.options
-    window.widget_position_menu.actions()[0].trigger();qapp.processEvents()
+    next(a for a in window.widget_position_menu.actions()
+         if a.text() == 'Widget flutuante').trigger();qapp.processEvents()
     assert window._compact.isVisible() and not window.isVisible() and not poller.stopped
     assert [a.text() for a in window.control_menu.actions()]==[
         'Sair do Fôlego', 'Posição do widget']
@@ -403,6 +405,26 @@ def test_dashboard_widget_button_restores_floating_mode(window, qapp, monkeypatc
         assert QSignalSpy(compact.dock_animation.finished).wait(1000)
     assert compact.isVisible() and compact._dock_mode == 'compact'
     assert compact.width() == 280
+    window.quit()
+
+
+def test_central_opens_mini_and_mini_returns_to_same_central(window, qapp):
+    from PySide6.QtTest import QTest
+    from folego.ui.desktop_caps import detect
+    window._compact_factory = lambda owner, _: CompactWindow(
+        owner, caps=detect(session_type='x11', platform='xcb', tray=True))
+    window.tabs.setCurrentWidget(window.options)
+    window.show()
+    next(action for action in window.widget_position_menu.actions()
+         if action.text() == 'Mini horizontal').trigger()
+    QTest.qWait(350)
+    widget = window._compact
+    assert widget.isVisible() and widget._dock_mode == 'mini'
+    assert not window.isVisible()
+    widget.open_button.click()
+    qapp.processEvents()
+    assert window.isVisible() and not widget.isVisible()
+    assert window.tabs.currentWidget() is window.options
     window.quit()
 
 

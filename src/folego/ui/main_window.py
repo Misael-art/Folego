@@ -247,7 +247,8 @@ class MainWindow(QMainWindow):
         self.control_menu = QMenu(self.control_button)
         self.control_menu.addAction('Sair do Fôlego', self.quit)
         self.widget_position_menu = self.control_menu.addMenu('Posição do widget')
-        for label, mode in (('Widget flutuante', 'compact'), ('Lateral esquerda', 'left'),
+        for label, mode in (('Mini horizontal', 'mini'), ('Widget flutuante', 'compact'),
+                            ('Lateral esquerda', 'left'),
                             ('Lateral direita', 'right'), ('Barra superior', 'top')):
             self.widget_position_menu.addAction(
                 label, lambda checked=False, target=mode: self._show_widget_position(target))
