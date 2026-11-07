@@ -1,5 +1,39 @@
 # Passagem para o próximo agente — atualizada em 07/11/2026
 
+## Dossiê leve de reinícios — 07/11/2026
+
+Incremento `1fb220f` na branch/PR #3. O observador lento do Fôlego agora
+reconcilia até três boots encerrados com a última amostra privada de cada boot
+e o último evento **retido** no journal. A leitura é limitada a 64 KiB e 80
+amostras por boot, com cache dos boots anteriores durante a vida do observador.
+O boot atual só usa o próprio ID. Ausência, janela ilegível, schema antigo sem
+proveniência e registros incompletos são estados distintos; nenhum significa
+host saudável. A distância amostra→journal usa monotônico quando disponível e
+marca o relógio civil como menos confiável nos registros antigos. O resumo
+aparece em `disk health`, no cartão Disco e em **Copiar dados**. O observador
+informa a duração da consulta. Não há novo daemon, escrita, rotação, reparo,
+SMART ou sondagem periódica Bluetooth/DRM.
+
+No host real, os boots com amostra tiveram 7 s e 11 s até os últimos eventos
+retidos; o boot de cerca de 14 s segue sem qualquer amostra. Isso não data o
+reset nem estabelece sua causa. Duas consultas do mesmo observador mediram
+67,27/25,15 ms de parede e 11,89/4,45 ms de CPU do processo Python; falta
+medição prolongada que isole também subprocessos. O cartão abriu em um
+processo próprio no KDE/Wayland real, exibiu o resumo e encerrou sem efeito.
+A GUI residente não foi reiniciada: ela carregará este incremento na próxima
+abertura normal; o CLI já usa o novo código.
+
+QA final: `./dev check` sequencial, **1286 passed, 2 skipped** headless e
+**1670 passed, 2 skipped** Qt offscreen; `git diff --check` passou. Os testes
+focados cobrem boot sem arquivo, schema antigo, janela de 64 KiB, linha
+interrompida, intervalo monotônico e integração do observador. As áreas de QA
+criadas nesta rodada foram preservadas, sem limpar caches. `AGENTS.md` já
+modificado antes desta tarefa não foi incluído. Evidência e limites em
+[coleta passiva](handoff/validation/passive-energy-2026-11-07/README.md).
+Permanecem pendentes: cobertura antes da GUI, retenção segura perto dos 4 MiB
+por boot, pstore/journal completo com PhaseZero e correlação GPU com SteamZero.
+SMART continua sem helper autorizado; não introduzir privilégio periódico.
+
 ## Energia, calor e pressão nos resets: coleta passiva — 07/11/2026
 
 Incremento `02f586b` na branch/PR #3. A cronologia por boot ID e a distinção

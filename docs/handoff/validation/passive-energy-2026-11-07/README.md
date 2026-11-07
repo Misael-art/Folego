@@ -75,3 +75,48 @@ induzido. Fixtures e Qt offscreen não certificam bateria física ou estabilidad
 PhaseZero mantém reparo ICC e journal 150 MiB/60 s; SteamZero investiga
 Gamescope/GPU. Baseline, leases, orçamento, disjuntor e operações incertas
 continuam sob os contratos dos seus owners.
+
+## Reconciliação passiva de boots — incremento seguinte
+
+Código: commit `1fb220f` na mesma branch/PR #3. Validação final:
+`./dev check` sequencial, 1286 passed/2 skipped headless e 1670 passed/2 skipped
+Qt offscreen; `git diff --check` aprovado. O ensaio KDE/Wayland abaixo usa
+apenas o cartão em um processo próprio e não certifica a GUI residente.
+
+O observador existente, consultado aproximadamente a cada cinco minutos pela
+GUI ou manualmente pelo CLI `disk health`, agora associa os últimos três boots
+encerrados do journal aos seus arquivos locais por boot ID. A leitura de cada
+arquivo é limitada aos últimos 64 KiB e às últimas 80 amostras válidas; a
+janela parcial fica indicada. O boot atual é lido pelo seu próprio ID, sem
+substituir ausência por uma amostra de outro boot. Arquivo ausente vira
+`missing`; arquivo ilegível ou janela sem linha completa vira `unknown`.
+Schema 1 é `partial` porque não prova qualidade das fontes nem monotônico.
+Linhas danificadas preservadas permanecem `partial`. Os arquivos não são
+modificados por esta consulta.
+
+Uma consulta limitada ao último evento **retido** no journal de cada boot
+encerrado mede a distância até a última amostra. Usa monotônico quando ambos
+os lados o fornecem; no histórico antigo usa relógio civil e sinaliza que um
+ajuste de hora pode afetar a distância. Isso não prova o instante real do
+reset. A informação integra o JSON do CLI e o cartão de reinícios na aba
+Disco; **Copiar dados** preserva os campos completos, enquanto a tela mostra
+uma frase curta. Duração da observação é exposta em milissegundos. A cache
+em memória evita repetir as leituras dos boots anteriores a cada consulta do
+mesmo observador. Não há novo daemon, nova escrita ou sondagem SMART.
+
+No host real, a consulta encontrou 7 s e 11 s entre as últimas amostras dos
+boots primeiro/terceiro e seus últimos eventos retidos (relógio civil,
+schema 1). O boot intermediário de aproximadamente 14 s segue sem amostra:
+seu estado de energia/calor/carga é desconhecido. Medições pontuais de duas
+consultas do mesmo observador: 67,27/25,15 ms de parede e 11,89/4,45 ms de
+CPU do processo Python. Isso não isola o custo dos subprocessos nem certifica
+uso prolongado. O cartão foi aberto por um processo Qt próprio no KDE/Wayland
+real, mostrou o resumo e encerrou; a GUI residente não foi reiniciada.
+
+Persistem lacunas: a GUI não existe no boot curto; o último evento retido no
+journal pode anteceder o corte; `acpitz` não mede a CPU; RPM permanece
+desconhecida; os 4 MiB por boot podem se esgotar em aproximadamente 32 h no
+tamanho de linha medido. Rotação segura, pstore e correlação temporal com
+SMART/GPU exigem trabalho dos respectivos owners e validação real. Nenhuma
+operação do ledger, lease, orçamento, disjuntor, serviço externo ou perfil
+físico foi alterada neste incremento.
