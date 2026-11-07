@@ -2,9 +2,12 @@
 
 ## Pressão sustentada e folga da coleta — 07/11/2026
 
-Incremento de código `e6bdd59` na branch do PR #3. A validação final do
+Incrementos de código `e6bdd59` e `a6b2b2f` na branch do PR #3. A validação do
 texto/agrupamento do alerta passou em 19 testes focados sem Qt e 30 com Qt;
 os 49 testes dos módulos de interface passaram após a guarda de pausa.
+Depois de persistir `avg60` no histórico, 19 testes focados sem Qt e 17 Qt
+passaram. `git diff --check` passou; a suíte completa anterior aprovou o
+mesmo restante do produto antes desse acréscimo localizado.
 
 Revisão do monitor passivo em
 [evidência e limites](handoff/validation/pressure-alert-2026-11-07/README.md).
@@ -13,6 +16,8 @@ O histórico do boot atual tinha 227 pontos schema 2, com duração mediana de
 poll da GUI era 2 s e passa a 5 s no código, sem alterar o gravador de 15 s,
 seus tetos ou fsync. O aviso de capacidade começa em 85% de 4 MiB/boot ou
 32 MiB totais, sem rotação nem descarte.
+As médias PSI de 60 s passam a integrar a mesma linha privada e o dossiê
+de boot, com pequeno aumento de bytes por amostra.
 
 Novo alerta de PSI usa somente dados já coletados, exige fonte `ok`, idade
 ≤15 s e pressão em avg60 confirmada ao longo de 15 s sem lacuna >20 s.
