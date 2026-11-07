@@ -27,6 +27,16 @@ configurada e temperatura acompanha os limites fornecidos pelo mesmo sensor.
 Uma medida sem avaliação válida usa apresentação neutra. Pausa e leitura
 antiga retiram o valor e a cor anterior.
 
+Após aprovação dessa composição, bateria e franquias de IA adotam as mesmas
+células na mini. A faixa cresce conforme o conteúdo, conserva 46 px de altura
+e respeita a área útil. A bateria mantém suas faixas próprias de cor; autonomia
+fica na dica. Franquias usam rótulo curto, percentual e pequenos marcadores de
+entregas e resets resgatáveis. Não confundir esses lembretes com agentes em
+execução. Ordem decrescente da cota e acesso ao painel de contas mantêm a
+coerência com o compacto. O tempo de reposição aparece apenas para esgotamento
+confirmado da janela de cinco horas, sem contagem semanal ou crédito presumido
+ao fim do relógio. Sem cota nem lembrete confirmado, a célula é recolhida.
+
 O aceite visual inclui estados normal, atenção, crítico e indisponível,
 tema claro e escuro, tamanho lógico e escala do ambiente. Conferir cortes,
 distância entre grupos, foco e acesso aos controles faz parte da entrega.

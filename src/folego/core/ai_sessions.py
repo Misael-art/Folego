@@ -79,10 +79,15 @@ def quota_window(name, used, reset, now, minutes=None):
             or not math.isfinite(used) or not 0 <= used <= 100):
         return None
     reset = timestamp(reset)
-    if isinstance(minutes, (int, float)) and not isinstance(minutes, bool) and minutes > 0:
+    known_duration = (isinstance(minutes, (int, float)) and not isinstance(minutes, bool)
+                      and math.isfinite(minutes) and minutes > 0)
+    if known_duration:
         name = 'Semana' if minutes == 10080 else f'Sessão ({minutes / 60:g} h)' if minutes < 1440 else f'Janela ({minutes / 1440:g} dias)'
-    return dict(name=name, used=round(used), remaining=round(100 - used), resets_at=reset,
-                valid=reset is not None and reset > now)
+    window = dict(name=name, used=round(used), remaining=round(100 - used), resets_at=reset,
+                  valid=reset is not None and reset > now)
+    if known_duration:
+        window['duration_minutes'] = minutes
+    return window
 
 
 def effective(item, now=None):
@@ -99,6 +104,19 @@ def effective(item, now=None):
 
 def band(remaining):
     return "unknown" if remaining is None else "green" if remaining > 60 else "yellow" if remaining > 20 else "red"
+
+
+def session_reset_at(item, now=None):
+    """Return a confirmed five-hour reset only when it clears every exhausted window."""
+    now = time.time() if now is None else now
+    if effective(item, now) != 0:
+        return None
+    exhausted = [window for window in item['windows'] if window['remaining'] == 0]
+    for window in exhausted:
+        duration = window.get('duration_minutes')
+        if duration != 300 and not (duration is None and window.get('name') == 'Sessão (5 h)'):
+            return None
+    return max(window['resets_at'] for window in exhausted) if exhausted else None
 
 
 def available_resets(item, now=None):
@@ -489,7 +507,8 @@ def claude(config, now, fetch, *, cache=None):
                       ("seven_day_opus", "Semana Opus"), ("seven_day_sonnet", "Semana Sonnet")):
         data = payload.get(key)
         if isinstance(data, dict):
-            value = quota_window(name, data.get("utilization"), data.get("resets_at"), now)
+            value = quota_window(name, data.get("utilization"), data.get("resets_at"), now,
+                                 300 if key == "five_hour" else None)
             if value is None:
                 result["reason"] = "Resposta parcial: janela inválida"
                 return result

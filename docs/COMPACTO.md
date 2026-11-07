@@ -2,14 +2,16 @@
 
 ## Mini horizontal
 
-A faixa mínima flutuante ocupa **384 × 46 px lógicos** em uma linha: alça de
+A faixa mínima flutuante parte de **384 × 46 px lógicos** em uma linha: alça de
 arraste, estado com palavra e cor, CPU agregada, temperatura com origem e uso de
-RAM. Uma leitura ausente ou antiga mostra `—`; `ACPI` não é chamada de
+RAM, bateria quando presente e franquias de IA confirmadas. A largura acompanha
+o conteúdo dentro da área útil da tela, sem preencher todo o monitor. A altura
+continua em 46 px. Uma leitura ausente ou antiga mostra `—`; `ACPI` não é chamada de
 temperatura direta da CPU. O botão **Expandir** abre o compacto de 280 px, a
 grade abre a Central e a seta abre diretamente os cinco formatos, com marca no
 atual. Todas as barras e o compacto oferecem o mesmo seletor, e a Central
 oferece **Mini horizontal** em **Posição do widget**. A área de arraste não
-executa ações. O hover não abre atalhos nessa faixa; avisos completos e cotas
+executa ações. O hover não abre atalhos nessa faixa; avisos completos
 continuam no compacto e na Central. Calor no limite do sensor e bateria crítica
 em descarga aparecem também no estado breve, com detalhes ao passar o ponteiro.
 O [mockup e critérios](handoff/validation/mini-widget-2026-11-07/README.md)
@@ -22,6 +24,25 @@ da Central. RAM segue a folga configurada no monitor. Temperatura usa os
 limites informados pelo sensor e fica neutra quando esses limites faltam.
 Pausa, coleta parcial e leitura antiga retiram os valores e suas cores.
 A diretriz é [qualidade visual nos mínimos detalhes](DESIGN.md).
+
+Bateria e franquias seguem o mesmo modelo de célula. Bateria usa o percentual
+com verde acima de 50%, amarelo até 50%, laranja até 25% e vermelho até 10%;
+a estimativa de autonomia, quando medida, aparece na dica. Os alertas sonoros
+existentes são compartilhados, sem duplicar monitoramento ou sons.
+
+As IAs com cota positiva aparecem da maior para a menor, usando a mesma conta
+selecionada pelo compacto. Pequenos marcadores mostram entregas para revisitar
+e resets resgatáveis confirmados. Esses números não representam processos ou
+agentes em execução. Uma cota desconhecida pode conservar os lembretes
+confirmados, com `—` no valor. Clique na célula para consultar a conta.
+Quando a cota chega a zero e somente janelas confirmadas de **cinco horas**
+impedem seu uso, a célula mostra o tempo até a reposição. Não há contagem
+semanal. Ao vencer o prazo, a franquia permanece desconhecida até nova leitura;
+o relógio não cria crédito. A interface usa o monitor já existente, inclusive
+quando o compacto está oculto.
+
+[Capturas e limites de validação](handoff/validation/mini-battery-quotas-2026-11-07/README.md)
+registram os estados, o encolhimento e a adaptação às larguras previstas.
 
 O widget tem 280 px de largura em pixels lógicos do desktop. Recursos ficam em
 duas linhas; alertas completos e mensagens podem aumentar a altura. O ícone de

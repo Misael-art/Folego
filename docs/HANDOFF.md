@@ -1,5 +1,67 @@
 # Passagem para o próximo agente — atualizada em 07/11/2026
 
+## Bateria e franquias na mini — 07/11/2026
+
+Depois de aprovar as células de CPU, temperatura e RAM, o usuário autorizou
+bateria e franquias com os mesmos critérios, lembretes pequenos e reposição
+de cinco horas para cota esgotada. Autorizou aumentar a largura conforme o
+conteúdo, mantendo uma faixa baixa e coesa. Owner da apresentação:
+`ui/compact.py` e `ui/mini_ai_strip.py`; fontes: Snapshot e AIMonitor existentes.
+`core/ai_sessions.py` preserva a duração confirmada da janela como metadado
+opcional e só oferece prazo curto quando todas as janelas esgotadas são de
+cinco horas. Uma janela semanal também esgotada bloqueia essa indicação.
+
+A faixa parte de 384 px, mede o conteúdo e conserva 46 px de altura. Bateria
+usa as cores próprias já existentes e autonomia na dica. IAs positivas seguem
+ordem decrescente; marcadores mostram entregas para revisitar e resets
+resgatáveis. Fonte desconhecida conserva apenas lembretes confirmados e `—`.
+Prazo vencido aguarda nova observação; não cria cota. O painel de contas usa
+a célula visível como owner e âncora. Não há novo coletor, chamada de rede,
+varredura de processos ou som duplicado. O temporizador local somente
+reavalia os dados já em memória enquanto a mini está visível.
+
+Foi perguntado opcionalmente se “quantidade de agentes” significava também
+agentes em execução. Sem resposta durante o lote, foi adotado o significado
+do widget atual: entregas e resets. Não inferir execução a partir de contas.
+Diretrizes e contratos atualizados em DESIGN, COMPACTO e README. A extensão
+foi gravada e relida no AI Memory na página existente
+`_rules/qualidade-visual-nos-minimos-detalhes.md`, revisão
+`01a1b75a-9eca-7512-ba92-86c77123dbf9`.
+
+O [recibo visual](handoff/validation/mini-battery-quotas-2026-11-07/README.md)
+registra 48 cenários próprios no KDE/Wayland, oito temas, seis estados e área
+útil real de 948 × 593 px. A inspeção corrigiu cortes que o piso nativo do
+botão Qt não reconhecia e manteve marcadores pequenos em células mais largas.
+A fixture de QA teve os pedidos de workers isolados antes das capturas finais.
+Clique Qt simulado abriu e dispensou os menus de contas e de controles
+preexistentes; interação física dos menus permanece não certificada. Os
+testes controlam também 948/1920/2560 px, sem alegar três monitores físicos.
+
+`./dev check` final passou com **1306 passed/2 skipped sem Qt em 28,22 s** e
+**1706 passed/2 skipped Qt offscreen em 115,91 s**; diff check aprovado.
+Python 3.14.7 gerenciado, HOME/XDG privados e suites sequenciais. Recibos
+`run-hddrhpmx` e `run-b5qurhyy`. O primeiro
+foco passou em 110 testes e falhou em três fixtures que forneciam uma função
+onde o monitor exige um objeto `collect`; o foco corrigido passou em três
+testes. Tentativas e logs próprios estão preservados em
+`.scratch/dev-tests-reviewed/run-_4frw0su` e `run-4mjm2u0m`. O preflight
+observou cerca de 5,2 GiB disponíveis, sem pressão sustentada de memória/I/O,
+73–76 °C para trip passivo de 100 °C, e sem outro build/teste concorrente.
+Não se interromperam processos alheios nem se ampliaram guardas de QA.
+
+A primeira suíte completa passou no núcleo e falhou em três regressões de
+largura: o contêiner de IAs conservava seu mínimo anterior ao ocultar as
+células. A ativação e notificação do layout agora atualizam esse mínimo antes
+de ajustar a faixa. O foco das três resoluções passou, seguido do gate final
+acima. Logs dessa falha: `run-py87un01` e `run-cu2fyol_`; foco corrigido:
+`run-v1c1f3k9`, preservados em `.scratch/dev-tests-reviewed/`. No Wayland,
+o ensaio final confirmou redução de 676 para 410 px ao retirar as cotas.
+Tentativas falhas não foram contadas como gates aprovados.
+
+Publicação e recarga da GUI ainda serão registradas após a conferência do
+SHA remoto. Próximo incremento: observar clique físico dos painéis e uso
+normal da bateria no alvo, sem produzir descarga ou calor como fixture.
+
 ## Qualidade visual da mini horizontal — 07/11/2026
 
 O usuário pediu separação entre CPU, temperatura e RAM e criticidade por

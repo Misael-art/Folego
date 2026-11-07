@@ -413,6 +413,76 @@ def test_mini_bar_hides_stale_values_and_wayland_requests_confirmed_move(qapp, m
     view.force_close()
 
 
+@pytest.mark.parametrize('percent,role', ((82, 'ok'), (50, 'warning'), (25, 'warning'), (10, 'danger')))
+def test_mini_battery_reuses_bands_estimate_and_pause_contract(qapp, percent, role):
+    from dataclasses import replace
+    view, _ = make(qapp)
+    sample = replace(snap(), mono=time.monotonic(), battery=BatteryInfo(percent, 'Discharging', 3600),
+                     sources=(SourceQuality('battery', 'ok'),))
+    view.show_snapshot(sample)
+    assert not view.mini_battery_cell.isHidden()
+    assert view.mini_battery.text() == f'{percent}%'
+    assert view.mini_battery.property('level') == role
+    assert '1h00' in view.mini_battery.toolTip()
+    view.set_paused(True)
+    assert view.mini_battery.text() == '—' and view.mini_battery.property('level') == 'muted'
+    view.set_paused(False)
+    view.show_snapshot(replace(sample, mono=time.monotonic() - 30))
+    assert view.mini_battery.text() == '—' and view.mini_battery.property('level') == 'muted'
+    view.show_snapshot(replace(sample, battery=None, sources=(SourceQuality('battery', 'missing'),)))
+    assert view.mini_battery_cell.isHidden()
+    view.force_close()
+
+
+@pytest.mark.parametrize('screen_width', (948, 1920, 2560))
+def test_mini_fits_battery_quotas_badges_and_controls_without_expanding_to_screen(
+        qapp, screen_width):
+    from dataclasses import replace
+    from PySide6.QtCore import QPoint, QRect
+    from PySide6.QtTest import QTest
+    from folego.core import ai_sessions as ai
+    view, _ = make(qapp)
+    view._screen_area = lambda: QRect(0, 0, screen_width, 593)
+    view._screens = lambda: ((0, 0, screen_width, 593),)
+    now = time.time()
+    items = []
+    view.ai_strip.monitor.poller.request = lambda: None
+    view.ai_strip.monitor.delivery_poller.request = lambda: None
+    for provider in ai.NAMES:
+        item = ai.unknown(provider)
+        item.update(observed_at=now, windows=[ai.quota_window('Sessão', 100 if provider == 'claude' else 19,
+                                                            now + 500, now, 300)],
+                    reset_credits=dict(available=12, observed_at=now))
+        items.append(item)
+    view.ai_strip.monitor.set_items(items)
+    view.ai_strip.monitor.set_deliveries([dict(provider=p, count=25, complete=False) for p in ai.NAMES])
+    view.show_compact()
+    view.show_snapshot(replace(snap(), mono=time.monotonic(), battery=BatteryInfo(100, 'Charging'),
+                               sources=(SourceQuality('battery', 'ok'),)))
+    view.set_dock_mode('mini')
+    QTest.qWait(350)
+    assert MINI_WIDTH < view.width() < screen_width
+    assert view.height() == MINI_HEIGHT
+    controls = [view.mini_cpu.parentWidget(), view.mini_temperature.parentWidget(),
+                view.mini_memory.parentWidget(), view.mini_battery_cell,
+                *sorted(view.mini_ai.buttons.values(), key=lambda w: w.x()),
+                view.mini_expand, view.navigation_group]
+    for left, right in zip(controls, controls[1:]):
+        assert left.mapTo(view, QPoint(left.width(), 0)).x() + 4 <= right.mapTo(view, QPoint(0, 0)).x()
+    assert view.navigation_group.mapTo(view, QPoint(view.navigation_group.width(), 0)).x() <= view.width()
+    for cell in view.mini_ai.buttons.values():
+        assert cell.width() >= cell.layout().minimumSize().width()
+    view.mini_ai.buttons['codex'].click()
+    assert view.ai_strip.account_panel is not None
+    assert view.ai_strip.account_menu.parentWidget() is view.mini_ai.buttons['codex']
+    view.ai_strip.account_menu.close()
+    view.ai_strip.monitor.set_items([])
+    view.ai_strip.monitor.set_deliveries([])
+    qapp.processEvents()
+    assert MINI_WIDTH <= view.width() < 600
+    view.force_close()
+
+
 @pytest.mark.parametrize('cpu,available,temperature,expected', (
     (.18, .34, 81, ('ok', 'ok', 'ok')),
     (.75, .19, 95, ('warning', 'warning', 'warning')),
