@@ -28,6 +28,27 @@ O primeiro bootstrap falhou por um temporário `kdotool` que desapareceu durante
 `du`; repetição somente leitura passou. Isso merece revisão do bootstrap,
 sem apagar temporários compartilhados para mascarar a corrida.
 
+Publicação verificada: commit de produto
+`e15ddef66e5f685bb48b4819fd49ef21d0f0a1a2` no [PR #3](https://github.com/Misael-art/Folego/pull/3),
+que permanece draft e sem merge. Os seis jobs do PR passaram; os três jobs da
+[tag anotada v0.2.0b7](https://github.com/Misael-art/Folego/actions/runs/42388916502)
+também passaram nesse SHA. A [prévia pública 0.2.0b7](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b7)
+contém fonte completa, wheel, sdist e `SHA256SUMS`. Os quatro arquivos foram
+baixados de volta; os três pacotes passaram na verificação SHA-256 com o
+`SHA256SUMS` público idêntico ao local. Hashes e ambiente descartável do wheel
+estão em `.scratch/release-b7-20261107`.
+
+A instalação do checkout canônico foi atualizada para 0.2.0b7 pelo `./dev` e
+somente `app-folego@autostart.service` foi reiniciado. A unit ficou ativa no
+PID **465224**, sem erro no journal; KWin encontrou a janela de 900×593 px e
+ela ficou ativa. Depois de quatro minutos, o processo tinha ~132 MiB RSS e
+11 s de CPU acumulada (~4,6% de um núcleo, incluindo a abertura). São uma
+amostra curta e métrica do processo inteiro, não o custo isolado da coleta.
+O histórico do mesmo boot continuou crescendo; três pontos recentes tinham
+intervalos de ~20 s, leitura de 91–140 ms, fonte completa e bateria a 30% em
+descarga. Esse intervalo real deve continuar sendo observado, sem aumentar a
+frequência de polling somente para aproximar o alvo nominal de 15 s.
+
 Continuam sem aceite: retenção que descarte amostras com prova de identidade e
 integridade, boot antes da GUI/pstore, redução causal da carga após ACK,
 validação física do aviso/energia/dock e guia de recuperação de disco com
