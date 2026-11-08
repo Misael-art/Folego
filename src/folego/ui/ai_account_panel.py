@@ -42,7 +42,7 @@ class AccountPanel(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(10, 8, 10, 8)
         title = QHBoxLayout()
-        heading = QLabel(ai.NAMES[provider] + ' · uso e renovação')
+        heading = QLabel(ai.NAMES[provider] + (' · estado e uso local' if provider == 'web' else ' · uso e renovação'))
         heading.setStyleSheet('font-size:12pt;font-weight:600;')
         title.addWidget(heading, 1)
         refresh = QPushButton('↻')
@@ -133,6 +133,9 @@ class AccountPanel(QWidget):
         while self.content.count():
             child = self.content.takeAt(0).widget()
             if child: child.deleteLater()
+        if self.provider == 'web':
+            self._select_web(item)
+            return
         now = time.time()
         remaining = ai.effective(item, now)
         color = dict(green='ok', yellow='warning', red='danger', unknown='muted')[ai.band(remaining)]
@@ -198,4 +201,41 @@ class AccountPanel(QWidget):
         if item.get('reason'): self.line(item['reason'], color='muted')
         if item.get('observed_at'): self.line('Consulta · ' + date(item['observed_at']), color='muted')
         if item.get('source'): self.line(item['source'], color='muted')
+        self.content.addStretch()
+
+    def _select_web(self, item):
+        service = item.get('web_service') or {}
+        tunnel = item.get('web_tunnel') or {}
+        for title, state in (('Serviço local', service), ('Runtime local do túnel', tunnel)):
+            code = state.get('state', 'unknown')
+            color = 'ok' if code == 'ready' else 'danger' if code == 'unavailable' else 'muted'
+            self.line(title + ' · ' + {'ready': 'pronto', 'unavailable': 'indisponível',
+                                     'not_required': 'não exigido', 'unknown': 'desconhecido'}.get(code, 'desconhecido'),
+                      color=color)
+            if state.get('detail'):
+                self.line(str(state['detail']), color='muted')
+            if state.get('checked_at'):
+                self.line('Verificado em ' + date(state['checked_at'])
+                          + (' · sondagem a cada 5 min' if title == 'Runtime local do túnel' else ''), color='muted')
+        if service.get('catalog_status') == 200:
+            self.line('Catálogo de modelos · última consulta local bem-sucedida', color='muted')
+        self.line('Resposta do ChatGPT Web · ' + item.get('web_inference', 'não comprovada'), color='muted')
+        self.line('Limite da sessão/conta · não informado pelo WebGPT', big=True, color='muted')
+        self.line('Saldo disponível e horário de reposição · desconhecidos', color='muted')
+        usage = item.get('local_usage')
+        if usage:
+            counts = usage['counts']
+            total = sum(counts.values())
+            self.line(f'Envios registrados no launcher · {total} nos últimos 7 dias', color='text')
+            self.line('GPT-6 Pro: ' + str(counts['gpt-6-pro']) + ' · GPT-5.6 Pro: '
+                      + str(counts['gpt-5.6-pro']) + ' · modelo não identificado: '
+                      + str(counts['pro-unknown']), color='muted')
+            self.line('Rastreamento iniciado em ' + date(usage['since'])
+                      + ' · só envios deste launcher; registro parcial', color='muted')
+        if item.get('plan'):
+            self.line('Plano no último registro · ' + str(item['plan']), color='muted')
+        if item.get('limits_checked_at'):
+            self.line('Plano verificado localmente em ' + date(item['limits_checked_at']), color='muted')
+        if item.get('reason'):
+            self.line(item['reason'], color='muted')
         self.content.addStretch()

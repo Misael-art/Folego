@@ -1,5 +1,93 @@
 # Passagem para o próximo agente — atualizada em 07/11/2026
 
+## Observação independente do Codex Web — 07/11/2026
+
+O parecer sobre a recuperação do WebGPT pelo PhaseZero foi confrontado com o
+distribuidor `miuuyy/codex-chatgpt-web` v6.1.17 instalado e com seus arquivos
+e endpoint próprios. A separação é: serviço local `/healthz` aceita turnos;
+runtime local do túnel está pronto; catálogo de modelos retornou 200; nenhum
+destes fatos comprova uma resposta ChatGPT Web completa, conexão remota do
+broker ou saldo de cota. Smoke automático não foi executado porque consumiria
+mensagens. O `limits.json` ativo continha `plan=unsupported`, verificação
+antiga de outubro e nenhum evento; isso não comprova conta ilimitada, defeito
+do launcher ou franquia esgotada. O rastreador do distribuidor só conta seus
+próprios envios Pro e declara que as janelas locais não são resets OpenAI.
+Fontes primárias: [release 6.1.17](https://github.com/miuuyy/codex-chatgpt-web/releases/tag/v6.1.17),
+[`limits-store.cjs`](https://github.com/miuuyy/codex-chatgpt-web/blob/v6.1.17/launcher/electron/limits-store.cjs)
+e [`profile.cjs`](https://github.com/miuuyy/codex-chatgpt-web/blob/v6.1.17/launcher/electron/profile.cjs).
+
+O Fôlego agora lê os caminhos nativos do launcher instalado, inclusive
+`--user-data-dir`, sem usar processo ou API do PhaseZero. A instalação
+standalone oficial também é detectada sem processo em execução; caminhos
+personalizados parados exigem conta explicitamente configurada. O registro
+opcional de perfis do PhaseZero continua só como fonte de nomes e caminhos:
+se estiver inválido, seus perfis não são adotados e as fontes nativas seguem
+com aviso. O Web não consulta `auth.json` Codex e não herda sua cota. Dados
+de Limits são expostos apenas como histórico parcial; percentual restante e
+data de reposição permanecem desconhecidos. O painel e o menu apresentam
+serviço, túnel, catálogo, histórico e limite como fatos separados. Não há
+daemon, gravação periódica, ação de reparo ou novo envio ao ChatGPT.
+
+O probe local usa loopback com timeout de 700 ms. A consulta somente leitura
+`tunnel-client runtimes cleanup --json` é executada apenas para o binário
+regular, próprio do usuário e não editável por grupo/outros, com timeout de
+2 s e cache de cinco minutos. Medição no host: descoberta por `/proc` em
+6,53 ms de CPU; primeira observação 50,33 ms de parede/15,45 ms de CPU;
+observações em cache 1,31 e 1,00 ms de parede. O monitor de contas já roda
+fora do loop gráfico a cada 60 s. Esses números medem a nova leitura, não
+certificam consumo de longo prazo ou hardware.
+
+Na primeira tentativa de `./dev check`, a suíte headless passou com **1312
+passed/2 skipped em 50,13 s**. A suíte Qt teve **1712 passed/2 skipped e uma
+falha** em um teste preexistente de temporização do dock
+(`test_dock_recheck_waits_for_busy_shortcut_controller`), que passou isolado
+depois. A tentativa não é gate verde. Uma borda de Limits corrompido foi
+corrigida após essa tentativa. O host reiniciou abruptamente às 20:18 após
+esse trabalho; não houve segundo gate pesado local. No novo boot, os testes
+focados passaram: **74 headless** e **3 Qt**, incluindo o caso de temporização.
+Os recibos próprios estão retidos em `.scratch/dev-tests-reviewed/`, inclusive
+as tentativas falhas. O código foi publicado em
+`adb0001d9875c3001097570e822ad14ce8aac984` (SHA remoto conferido) no
+[PR #6](https://github.com/Misael-art/Folego/pull/6), sobre o #5. Seis jobs
+de produto do SHA passaram no GitHub; CodeRabbit ficou skipped. O PR foi
+aberto em rascunho e marcado pronto para revisão após os checks; não houve
+merge nem release.
+
+Após o novo boot, a GUI da unit `app-folego@autostart.service` foi recarregada
+para usar o código publicado: PID 74212 ativo; supervisores de entrada e
+desempenho mantiveram os PIDs 4462/4465. O frame Fôlego ficou visível no
+KDE/Wayland via acessibilidade. O capturador de tela do Computer Use não
+funcionou neste compositor e não se declarou inspeção visual/física do painel
+Web. A CLI/passivo no hardware mostrou serviço local pronto e runtime local
+pronto; saldo, reset e resposta Web permanecem não comprovados.
+
+Incremento final de precisão: o painel e a dica agora exibem o horário da
+última verificação local, para não apresentar o cache de cinco minutos do
+túnel como leitura instantânea. Código em
+`c300646a71fd2620febea88608bf78b5747af29f` (SHA remoto conferido):
+**seis jobs de produto success**, CodeRabbit skipped. Após esse código,
+**74 testes headless focados e 2 Qt focados passaram** no host; a GUI foi
+recarregada pela própria unit, PID 94918, e os supervisores mantiveram
+PIDs 4462/4465. A suíte completa permaneceu delegada ao CI remoto pelo
+histórico de reset do host; não se fez outro teste longo local.
+
+O boot anterior `4fd0200a-d5e5-48f1-a47f-fa90eb8dc337` terminou sem
+desligamento normal visível no journal. Última amostra Fôlego às 20:18:38:
+ACPI 58 °C, 5,81 GiB disponíveis, swap 2,95 GiB, PSI CPU 18,85%, memória
+0%, I/O 0,14%. Nos cinco minutos finais houve pico ACPI de 88 °C e PSI CPU
+41,07%, sem pressão sustentada de memória/I/O. Um `python` a 91% de um núcleo
+aparece na última amostra, mas não há comando/árvore histórica que permita
+atribuí-lo com segurança. Nenhum erro de kernel relevante foi registrado nos
+minutos finais; pstore não estava legível ao usuário. Causa do reset segue
+indeterminada. O Fôlego, PhaseZero e SteamZero não foram alterados por causa
+desse evento. Por cautela, evitar nova suíte Qt completa neste host enquanto
+se investiga estabilidade; usar o CI remoto para a validação integral.
+
+Nenhuma inferência foi provocada para teste; observar resposta Web
+real e ferramenta remota em uma sessão do usuário é a evidência decisiva que
+falta para essas duas capacidades. Limite/reset exigem fonte explícita do
+provedor; não devem ser inferidos de janela local.
+
 ## Bateria e franquias na mini — 07/11/2026
 
 Depois de aprovar as células de CPU, temperatura e RAM, o usuário autorizou

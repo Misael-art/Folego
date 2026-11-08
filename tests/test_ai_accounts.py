@@ -75,11 +75,15 @@ def test_explicit_default_label_dedup_and_claude_accounts(tmp_path):
 
 
 @pytest.mark.parametrize('data', [dict(schemaVersion=99), dict(profiles=[dict(id='../escape', label='x')]),
-    dict(profiles=[dict(id='pz-0123456789ab', label='x', archived='no')])])
-def test_unknown_roster_protects_instead_of_probing_profiles(tmp_path, data):
+    dict(profiles=[dict(id='pz-0123456789ab', label='x', archived='no')]),
+    dict(current=dict(label=''))])
+def test_unknown_roster_does_not_block_native_sources_or_probe_profiles(tmp_path, data):
     roster(tmp_path, **data)
-    with pytest.raises(ValueError): inventory(env(tmp_path))
-    assert all(i['remaining'] is None and 'Inventário' in i['reason'] for i in ai.collect(env(tmp_path)))
+    rows = inventory(env(tmp_path))
+    assert len(rows) == 4
+    assert all('inventory_warning' in row for row in rows)
+    observed = ai.collect(env(tmp_path))
+    assert all('Registro complementar' in i['reason'] for i in observed)
 
 
 def test_multiple_defaults_are_not_silently_chosen(tmp_path):

@@ -416,39 +416,41 @@ def test_web_reads_launcher_pro_limits_not_the_root_codex_quota(tmp_path):
     root = web_root(tmp_path, events=[('gpt-5.6-pro', NOW - 3600)] * 85 + [('gpt-6-pro', NOW - 3 * 86400), ('other', NOW - 10)])
     codex_auth(tmp_path)  # a Codex login in the root must not be used
     item = ai.codex(root, NOW, provider='web', fetch=lambda *a: pytest.fail('Codex quota used for Web'))
-    names = {w['name']: w for w in item['windows']}
-    assert names['GPT-5.6 Pro (24 h)']['remaining'] == 50 and names['GPT-5.6 Pro (24 h)']['messages'] == '85/170'
-    assert names['GPT-6 Pro (7 dias)']['messages'] == '1/200' and names['Pro combinado (24 h)']['messages'] == '85/200'
-    assert item['remaining'] == 50 and item['plan'] == 'Pro 20x' and 'Limits' in item['source']
+    assert item['remaining'] is None and item['windows'] == []
+    assert item['local_usage']['counts'] == {'gpt-6-pro': 1, 'gpt-5.6-pro': 85, 'pro-unknown': 0}
+    assert 'não inclui outros clientes' in item['source']
+    assert 'não informados' in item['reason']
 
 
 @pytest.mark.parametrize('plan', ['unsupported', 'unknown'])
 def test_web_without_confirmed_pro_tracker_is_unknown(tmp_path, plan):
     item = ai.codex(web_root(tmp_path, plan=plan), NOW, provider='web')
-    assert item['remaining'] is None and 'Limits' in item['reason']
+    assert item['remaining'] is None and item['local_usage'] is None
+    assert 'não suportado ou não confirmado' in item['reason']
+    assert item['limits_action'] is False
 
 
-def test_web_marks_windows_counted_since_tracking_began(tmp_path):
+def test_web_marks_local_tracking_start_without_inventing_a_reset(tmp_path):
     item = ai.codex(web_root(tmp_path, events=[('gpt-6-pro', NOW - 60)], since=NOW - 86400), NOW, provider='web')
-    names = {w['name']: w for w in item['windows']}
-    assert 'contagem iniciada' in names['GPT-6 Pro (7 dias)']['messages']
-    assert names['GPT-5.6 Pro (24 h)']['messages'] == '0/170' and 'piso' in item['source']
+    assert item['local_usage']['since'] == NOW - 86400
+    assert item['local_usage']['counts']['gpt-6-pro'] == 1
+    assert item['windows'] == [] and item['remaining'] is None
 
 
 def test_web_rejects_events_before_tracking_or_missing_start(tmp_path):
     root = web_root(tmp_path, events=[('gpt-6-pro', NOW - 7200)], since=NOW - 3600)
-    assert ai.codex(root, NOW, provider='web')['remaining'] is None
+    assert ai.codex(root, NOW, provider='web')['local_usage'] is None
     path = tmp_path / 'chatgpt-web/launcher-data/limits.json'
     state = json.loads(path.read_text())
     state['accounts']['a' * 64].update(initializedAt=None, events=[])
     path.write_text(json.dumps(state))
-    assert 'início de contagem' in ai.codex(root, NOW, provider='web')['reason']
+    assert 'início do rastreamento' in ai.codex(root, NOW, provider='web')['reason']
 
 
 def test_web_missing_tracker_is_unknown(tmp_path):
     root = tmp_path / 'codex-home'
     root.mkdir()
-    assert 'Limits' in ai.codex(root, NOW, provider='web')['reason']
+    assert 'histórico local' in ai.codex(root, NOW, provider='web')['reason']
 
 
 def test_claude_stale_access_token_is_not_reported_as_expired_login(tmp_path):
@@ -550,8 +552,10 @@ def test_test_environment_never_runs_claude_client(tmp_path):
     assert item['reason'] == ai.STALE_CLAUDE
 
 
-def test_web_unsupported_check_shows_its_date_in_hover(tmp_path):
+def test_web_unsupported_check_does_not_claim_unlimited_or_broken_client(tmp_path):
     root = web_root(tmp_path, plan='unsupported')
     item = ai.codex(root, NOW, provider='web')
     text = ai.describe(item, NOW)
-    assert item['limits_action'] and 'última verificação' in text and '"unsupported"' in text
+    assert not item['limits_action'] and item['remaining'] is None
+    assert 'não suportado ou não confirmado' in text
+    assert 'atualização' not in text and 'ilimitado' not in text

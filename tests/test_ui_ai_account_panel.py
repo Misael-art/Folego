@@ -32,6 +32,26 @@ def test_default_account_and_other_account_have_independent_readable_cards(qapp)
     panel.close()
 
 
+def test_web_card_separates_local_readiness_from_unknown_account_allowance(qapp):
+    item = ai.unknown('web', label='Web instalado')
+    item.update(account_id='web', default=True,
+                web_service=dict(state='ready', detail='Serviço local aceita solicitações', catalog_status=200),
+                web_tunnel=dict(state='ready', detail='Runtime local do túnel pronto', checked_at=time.time()),
+                web_inference='não comprovada; nenhum envio de teste foi realizado',
+                local_usage=dict(counts={'gpt-6-pro': 2, 'gpt-5.6-pro': 1, 'pro-unknown': 0},
+                                 since=time.time() - 3600),
+                reason='Limite e reposição da conta ChatGPT não informados pelo WebGPT')
+    panel = AccountPanel('web', [item])
+    labels = '\n'.join(label.text() for label in panel.findChildren(QLabel))
+    assert 'Serviço local · pronto' in labels and 'Runtime local do túnel · pronto' in labels
+    assert 'sondagem a cada 5 min' in labels
+    assert 'Resposta do ChatGPT Web · não comprovada' in labels
+    assert 'Saldo disponível e horário de reposição · desconhecidos' in labels
+    assert 'Envios registrados no launcher · 3 nos últimos 7 dias' in labels
+    assert '%' not in labels and 'Cota disponível' not in labels
+    panel.close()
+
+
 def test_meter_describes_default_without_aggregating_other_accounts(qapp):
     strip = AIStrip(collect_fn=lambda: [])
     strip.set_items(items())
