@@ -453,6 +453,8 @@ def test_mini_fits_battery_quotas_badges_and_controls_without_expanding_to_scree
         item.update(observed_at=now, windows=[ai.quota_window('Sessão', 100 if provider == 'claude' else 19,
                                                             now + 500, now, 300)],
                     reset_credits=dict(available=12, observed_at=now))
+        if provider == 'web':
+            item.update(web_instances=1, web_instances_at=now)
         items.append(item)
     view.ai_strip.monitor.set_items(items)
     view.ai_strip.monitor.set_deliveries([dict(provider=p, count=25, complete=False) for p in ai.NAMES])
@@ -576,6 +578,8 @@ def _four_quotas(view):
         item = ai.unknown(provider, label='Conta QA')
         item.update(account_id=provider + '-qa', default=True, observed_at=now,
                     windows=[ai.quota_window('Sessão QA', 100 - remaining, now + 3600, now)])
+        if provider == 'web':
+            item.update(web_instances=1, web_instances_at=now)
         items.append(item)
     deliveries = [dict(provider=item['provider'], count=1, pending=[])
                   for item in items]

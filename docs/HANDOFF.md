@@ -15,7 +15,8 @@ colapso elétrico. O escopo de validação do tema ES-DE concluiu perto do corte
 sem evidência que o vincule como causa. Os boots curtos não dão amostras
 estáveis; o segundo e terceiro cortes ocorreram durante a inicialização,
 quando o agente `codex exec` anterior já não estava em execução. Pstore requer
-acesso privilegiado e segue sem leitura. Causa raiz continua indeterminada;
+acesso privilegiado; consulta com `bigsudo` neste boot retornou diretório vazio.
+Causa raiz continua indeterminada;
 correlacionar os próximos cortes com pstore, firmware/energia e GPU é decisivo.
 
 O indicador Web passou a usar a contagem de processos nativos Codex que
@@ -27,7 +28,10 @@ concluídas mantêm badge próprio. Este estado não certifica turno ativo, cota
 resposta remota ou estabilidade do host. Testes focados: 76 headless e 12 Qt
 após a correção dos contratos de UI; o teste Qt inicial precisou atualizar
 expectativas antigas de cota Web. QA retido em `.scratch/dev-tests-reviewed/`
-e `.scratch/dev-tests/`. Gates de release/CI do SHA final ainda pendentes.
+e `.scratch/dev-tests/`. O primeiro CI do PR #7 em `7202f07` passou núcleo/CLI,
+mas falhou em 14 cenários de layout Qt que ainda presumiam um percentual Web.
+As fixtures agora representam uma instância Web aberta e os 14 cenários
+passaram localmente. Novo SHA e gates de release/CI ainda pendentes.
 
 ## Candidato à prévia 0.2.0b8 — 07/11/2026
 
