@@ -79,3 +79,20 @@ def test_delivery_and_reset_badges_survive_unknown_quota_without_inventing_count
     assert not strip.badges['codex'].isHidden()
     assert 'Resets disponíveis não verificados' in strip.buttons['codex'].toolTip()
     strip.close()
+
+
+def test_web_cell_shows_ok_only_with_fresh_open_instance(qapp):
+    now = time.time()
+    monitor = AIMonitor(collect_fn=lambda: [], deliveries=SimpleNamespace(collect=lambda: []))
+    strip = MiniAIStrip(monitor)
+    strip.show()
+    web = ai.unknown('web')
+    web.update(account_id='web-account', web_instances=2, web_instances_at=now)
+    monitor.set_items([web])
+    assert not strip.buttons['web'].isHidden()
+    assert strip.values['web'].text() == 'OK'
+    assert '2 instância(s) aberta(s)' in strip.buttons['web'].toolTip()
+    web['web_instances'] = 0
+    monitor.set_items([web])
+    assert strip.buttons['web'].isHidden()
+    strip.close()

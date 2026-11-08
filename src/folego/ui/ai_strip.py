@@ -208,7 +208,8 @@ class AIStrip(QWidget):
         value = round(value * 8) / 8
         for provider, button in self.buttons.items():
             count = next((r.get('count') for r in self.delivery_items if r['provider'] == provider), None)
-            button.set_halo(value if count and self.columns[provider].isVisible() else 0.0)
+            active_web = provider == 'web' and button.instance_active
+            button.set_halo(value if (count or active_web) and self.columns[provider].isVisible() else 0.0)
 
     def open_agent(self, provider, account=None):
         account = account or self.default_item(provider).get('account_id')
@@ -305,16 +306,29 @@ class AIStrip(QWidget):
         for provider, button in self.buttons.items():
             items = [item for item in self.items if item.get("provider") == provider]
             left, selected = available_account(items, now)
+            instances = None
+            if provider == 'web':
+                live = [(ai_sessions.web_instances(item, now), item) for item in items]
+                live = [(count, item) for count, item in live if count is not None and count > 0]
+                if live:
+                    instances, selected = max(live, key=lambda pair: (pair[0], pair[1].get('default', False)))
+                    left = None
+                else:
+                    selected = None
             self.display_accounts[provider] = selected.get('account_id') if selected else None
             if selected is not None:
-                available.append((provider, left))
-            button.set_remaining(left if selected else ai_sessions.effective(self.default_item(provider), now))
-            summary = (f'{left}% disponível · {selected.get("label", "conta")}' if selected else
+                available.append((provider, left if left is not None else -1))
+            button.set_instance_active(provider == 'web' and instances is not None)
+            button.set_remaining(None if provider == 'web' else
+                                 left if selected else ai_sessions.effective(self.default_item(provider), now))
+            summary = (f'{instances} instância(s) aberta(s) · {selected.get("label", "conta")}; cota não informada'
+                       if provider == 'web' and instances is not None else
+                       f'{left}% disponível · {selected.get("label", "conta")}' if selected else
                        '0% disponível' if button.remaining == 0 else 'cota desconhecida ou vencida')
             delivery = next((r for r in self.delivery_items if r['provider'] == provider), {})
             count = delivery.get('count')
-            has_deliveries |= bool(count) and selected is not None
-            if not count: button.set_halo(0.0)
+            has_deliveries |= (bool(count) or instances is not None) and selected is not None
+            if not count and instances is None: button.set_halo(0.0)
             badge = self.badges[provider]
             partial = not delivery.get('complete', True)
             number = str(count) + ('+' if partial else '')
@@ -341,7 +355,9 @@ class AIStrip(QWidget):
             has_resets |= total > 0 and selected is not None
             button.setAccessibleName(ai_sessions.NAMES[provider] + ": " + summary + ' · ' + completed
                                      + (' · ' + resets if total else ''))
-            button.setToolTip('Uso e renovação por conta · clique para abrir o cliente da conta exibida')
+            button.setToolTip(('Instância Codex Web aberta; não confirma turno ativo nem limite · '
+                               if provider == 'web' else 'Uso e renovação por conta · ')
+                              + 'clique para abrir o cliente da conta exibida')
         order = {provider: index for index, provider in enumerate(ai_sessions.NAMES)}
         available.sort(key=lambda pair: (-pair[1], order[pair[0]]))
         self.empty_label.setVisible(not available)

@@ -95,6 +95,14 @@ class MiniAIStrip(QWidget):
                 else:
                     selected = next((i for i in items if i.get('default')), items[0] if items else {})
                     left = ai_sessions.effective(selected, now)
+            instances = None
+            if provider == 'web':
+                live = [(ai_sessions.web_instances(item, now), item) for item in items]
+                live = [(n, item) for n, item in live if n is not None and n > 0]
+                if live:
+                    instances, selected = max(live, key=lambda pair: (pair[0], pair[1].get('default', False)))
+                left = None
+                reset_at = None
             delivery = next((row for row in self.monitor.delivery_items
                              if row.get('provider') == provider), {})
             count = delivery.get('count')
@@ -103,10 +111,16 @@ class MiniAIStrip(QWidget):
             tickets = sum(n for n in credits if n is not None)
             visible = ((left is not None and left > 0) or reset_at is not None
                        or bool(count) or tickets > 0)
+            if provider == 'web':
+                visible = instances is not None
             text = (f'Reset {remaining_text(round(reset_at - now))}' if reset_at is not None else
                     f'{left}%' if left is not None else '—')
+            if provider == 'web' and instances is not None:
+                text = 'OK'
             role = {'green': 'ok', 'yellow': 'warning', 'red': 'danger',
                     'unknown': 'muted'}[ai_sessions.band(left)]
+            if provider == 'web' and instances is not None:
+                role = 'ok'
             done = 'Entregas não verificadas' if count is None else (
                 f'Pelo menos {count} entregas para revisitar' if partial else f'{count} entregas para revisitar')
             quota = ('Cota esgotada; reposição da janela de 5 h em ' +
@@ -120,6 +134,12 @@ class MiniAIStrip(QWidget):
             detail = '\n'.join((name, selected.get('label', 'Conta não confirmada'), quota,
                                 done, resets,
                                 'Clique para consultar a conta'))
+            if provider == 'web':
+                status = ('Instâncias não verificadas' if instances is None else
+                          f'{instances} instância(s) aberta(s); turno ativo não comprovado')
+                detail = '\n'.join((name, selected.get('label', 'Conta não confirmada'),
+                                    status, 'Limite e reposição não informados', done,
+                                    'Clique para consultar a conta'))
             number = (str(min(count, 19)) + ('+' if count > 19 or partial else '')) if count else ''
             rows.append((provider, visible, text, role, number, tickets, detail,
                          selected.get('account_id', ''), left))

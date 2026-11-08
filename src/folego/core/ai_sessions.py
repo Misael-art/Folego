@@ -133,6 +133,16 @@ def available_resets(item, now=None):
     return count
 
 
+def web_instances(item, now=None):
+    """Fresh count of native Codex clients using a WebGPT account, not launchers."""
+    now = time.time() if now is None else now
+    count = item.get('web_instances')
+    seen = timestamp(item.get('web_instances_at'))
+    if type(count) is not int or count < 0 or seen is None or not 0 <= now - seen <= 120:
+        return None
+    return count
+
+
 def _rollouts(home):
     """Bound both directory enumeration and bytes read, not just result count."""
     import itertools
@@ -590,7 +600,7 @@ def grok(home, now, query, *, cache=None):
 
 
 def collect(env=None, *, now=None, fetch=http_json, discover=None, grok_query=None, claude_renewal=None):
-    from .ai_accounts import inventory, settings
+    from .ai_accounts import inventory, process_account, settings
     native = env is None
     env = dict(os.environ if native else env)
     now = time.time() if now is None else now
@@ -599,8 +609,18 @@ def collect(env=None, *, now=None, fetch=http_json, discover=None, grok_query=No
         if discover is None and native:
             from .agent_deliveries import running_agents
             discover = running_agents
+        processes_known = discover is not None
+        processes = list(discover()) if discover is not None else []
+        web_counts = {}
+        seen_processes = set()
+        for process in processes:
+            provider, path = process_account(process, env)
+            identity = process.get('identity')
+            if provider == 'web' and identity is not None and identity not in seen_processes:
+                seen_processes.add(identity)
+                web_counts[path] = web_counts.get(path, 0) + 1
         from .web_gpt import installed_launchers
-        accounts = inventory(env, discover=discover,
+        accounts = inventory(env, discover=lambda: processes,
                              discover_web=installed_launchers if native else lambda _env: [])
     except (OSError, ValueError, TypeError, KeyError):
         return [unknown(p, 'Inventário de contas não confirmado; confira a configuração') for p in NAMES]
@@ -628,6 +648,8 @@ def collect(env=None, *, now=None, fetch=http_json, discover=None, grok_query=No
                 item['paid_until'] = timestamp(configuration.get('grok_paid_until')) if account['default'] else None
         except (OSError, ValueError, TypeError, KeyError, AttributeError, subprocess.SubprocessError):
             item = unknown(provider, 'Fonte indisponível; confira o login no cliente')
+        if provider == 'web' and processes_known:
+            item.update(web_instances=web_counts.get(account['path'], 0), web_instances_at=now)
         item.update(account_id=account['account_id'], label=account['label'], default=account['default'])
         if account.get('inventory_warning'):
             item['reason'] = (item.get('reason', '') + '; ' + account['inventory_warning']).strip('; ')
@@ -689,6 +711,8 @@ def describe(item, now=None):
     now = time.time() if now is None else now
     if item.get('provider') == 'web':
         lines = [item.get('label', 'Codex Web')]
+        instances = web_instances(item, now)
+        lines.append('Instâncias Codex Web: ' + ('não verificadas' if instances is None else str(instances)))
         for title, key in (('Serviço local', 'web_service'), ('Runtime local do túnel', 'web_tunnel')):
             observation = item.get(key) or {}
             state = observation.get('state', 'unknown')

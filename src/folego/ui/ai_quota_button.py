@@ -20,6 +20,7 @@ class QuotaButton(QToolButton):
         self.remaining = None
         self.displayed = None
         self.halo = 0.0
+        self.instance_active = False
         self.ring_size = 30
         self.setText(label)
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
@@ -65,6 +66,12 @@ class QuotaButton(QToolButton):
             self.halo = value
             self._draw_icon()
 
+    def set_instance_active(self, active):
+        active = self.provider == 'web' and bool(active)
+        if self.instance_active != active:
+            self.instance_active = active
+            self._draw_icon()
+
     def _draw_icon(self):
         # Render at the target screen's scale; retain PhaseZero's 64-unit geometry.
         ratio = self.devicePixelRatioF()
@@ -77,7 +84,10 @@ class QuotaButton(QToolButton):
         ring = QRectF(5, 5, 54, 54)
         painter.setPen(QPen(QColor(128, 128, 128, 110), 7))
         painter.drawEllipse(ring)
-        if self.remaining is not None:
+        if self.instance_active:
+            painter.setPen(QPen(QColor(LEVEL_COLORS['green']), 7))
+            painter.drawEllipse(ring)
+        elif self.remaining is not None:
             color = QColor(LEVEL_COLORS[ai_sessions.band(self.remaining)])
             painter.setPen(QPen(color, 7, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             painter.drawArc(ring, 90 * 16, round(-360 * 16 * self.displayed / 100))
@@ -93,11 +103,11 @@ class QuotaButton(QToolButton):
             painter.drawEllipse(QRectF(13, 13, 38, 38))
         font = QFont()
         font.setBold(True)
-        font.setPixelSize(19 if self.remaining == 100 else 22)
+        font.setPixelSize(18 if self.instance_active or self.remaining == 100 else 22)
         painter.setFont(font)
         painter.setPen(QColor('#ffffff'))
         painter.drawText(QRectF(0, 0, 64, 64), Qt.AlignmentFlag.AlignCenter,
-                         '?' if self.remaining is None else str(self.remaining))
+                         'OK' if self.instance_active else '?' if self.remaining is None else str(self.remaining))
         painter.end()
         pixmap.setDevicePixelRatio(pixels / self.ring_size)
         self.setIcon(QIcon(pixmap))

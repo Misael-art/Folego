@@ -1,5 +1,65 @@
 # Passagem para o próximo agente — atualizada em 07/11/2026
 
+## Quedas de 07/11 e presença Codex Web
+
+Depois do boot `8b1a9e6b-e6ad-4c5f-b558-62d78a149dbf` (21:14–22:13),
+houve dois boots curtos, `fbfdea8a-dd70-4a61-b690-13839ac6dcc3`
+(22:14:20–22:14:37) e `aa29e4bb25454c189594660fdf517cff`
+(22:22:20–22:23:07), antes de `7fb93068-0b66-415e-b394-a4144387e6d9`.
+Na última amostra do primeiro corte, 22:13:22, ACPI marcou 92 °C,
+RAM disponível ~5,86 GiB, swap ~2,7 GiB, PSI CPU 26,37%, memória 0% e
+I/O 0,08%. Nos cinco minutos finais, ACPI variou de 81 a 98 °C; não há
+registro de OOM, panic, thermal trip ou desligamento ordenado. A bateria
+estava descarregando; a tensão medida de 7,603 V é observação, não prova de
+colapso elétrico. O escopo de validação do tema ES-DE concluiu perto do corte,
+sem evidência que o vincule como causa. Os boots curtos não dão amostras
+estáveis; o segundo e terceiro cortes ocorreram durante a inicialização,
+quando o agente `codex exec` anterior já não estava em execução. Pstore requer
+acesso privilegiado; consulta com `bigsudo` neste boot retornou diretório vazio.
+Causa raiz continua indeterminada;
+correlacionar os próximos cortes com pstore, firmware/energia e GPU é decisivo.
+
+O indicador Web passou a usar a contagem de processos nativos Codex que
+selecionam perfil `chatgpt-web/*`, sem contar o launcher residente. A coleta
+reutiliza o inventário já executado a cada 60 s, deduplica identidades e
+vence em 120 s; falha de inventário não vira zero. O círculo verde “OK” pulsa
+enquanto houver instância e desaparece com zero; a mini mostra “OK”. Entregas
+concluídas mantêm badge próprio. Este estado não certifica turno ativo, cota,
+resposta remota ou estabilidade do host. Testes focados: 76 headless e 12 Qt
+após a correção dos contratos de UI; o teste Qt inicial precisou atualizar
+expectativas antigas de cota Web. QA retido em `.scratch/dev-tests-reviewed/`
+e `.scratch/dev-tests/`. O primeiro CI do PR #7 em `7202f07` passou núcleo/CLI,
+mas falhou em 14 cenários de layout Qt que ainda presumiam um percentual Web.
+As fixtures agora representam uma instância Web aberta e os 14 cenários
+passaram localmente. Novo SHA e gates de release/CI ainda pendentes.
+
+## Candidato à prévia 0.2.0b8 — 07/11/2026
+
+A integração autorizada foi verificada no GitHub, em ordem: PR #4 (merge
+`67758464379d18b642fecc8374f6d32237c8c067`), PR #5 (merge
+`b2fe49419df7ae7fdd63ab5dbabe27334d586b30`) e PR #6 (merge
+`01de622f4f67af49e7cd8a96467b326fab1594c9`). Os PRs #5 e #6
+tinham seis checks de produto aprovados nos respectivos heads. O workflow
+de push de `main` no último merge (`42432443276`) terminou em sucesso;
+o anterior do #5 foi cancelado pela chegada do merge seguinte, sem ser
+contabilizado como gate verde.
+
+O candidato b8 reúne a proteção dos helpers legítimos do Steam contra falsos
+órfãos, a mini horizontal adaptativa com indicadores independentes de CPU,
+RAM e temperatura, bateria e cotas confirmadas, além de observação do
+Codex Web independente do PhaseZero e com estados de evidência separados.
+Versão/lockfile avançados juntos; README e guia de pacotes apontam para o
+marco de distribuição. A publicação exige ainda CI verde do SHA final, tag
+anotada, construção revisada dos três pacotes, `SHA256SUMS` e conferência dos
+quatro assets públicos. Não considerar esta preparação prova de publicação.
+
+O host reiniciou abruptamente em boot anterior, sem causa atribuída. No
+preflight desta rodada: 6,4 GiB de RAM disponível, 2,4 GiB de swap usada,
+PSI em 10 s de memória e I/O em 0%, 122 GiB livres em `/home`, ACPI 87 °C
+para trip passivo de 100 °C. Suites longas ficam delegadas ao CI remoto;
+o status físico KDE/Wayland, a estabilidade prolongada e a franquia real do
+WebGPT mantêm seus limites documentados acima.
+
 ## Observação independente do Codex Web — 07/11/2026
 
 O parecer sobre a recuperação do WebGPT pelo PhaseZero foi confrontado com o

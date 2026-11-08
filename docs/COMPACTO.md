@@ -180,7 +180,15 @@ quando a fonte daquele provedor informa tickets (atualmente confirmado no Codex)
   parcial e a resposta Web não comprovada sem envio. Serviço e túnel prontos
   não provam inferência nem conexão remota do broker. Plano não suportado no
   rastreador não significa uso ilimitado nem instalação quebrada. Não há smoke
-  automático, pois ele gastaria mensagens. A conta fica no menu de contas.
+  automático, pois ele gastaria mensagens. Na faixa de IAs, um cliente Codex
+  realmente aberto com perfil `chatgpt-web/*` mostra círculo verde pulsante
+  com “OK”; na mini horizontal aparece “OK”. A contagem de entregas concluídas
+  permanece distinta da contagem de instâncias abertas, disponível na descrição
+  acessível e no painel. O launcher sozinho não acende o indicador. Com zero
+  instâncias, o Web sai das faixas; sem inventário confiável, não se presume
+  zero. A observação usa a varredura existente de contas a cada 60 segundos e
+  vence em 120 segundos. Instância aberta não comprova turno em execução,
+  resposta remota ou cota disponível. A conta permanece no menu de contas.
 - Grok: se sua fonte não oferecer uma franquia percentual confirmada, fica no
   menu de contas. Metadados de assinatura aparecem separados da reposição de
   cota. A data de Grok pode ser informada pelo

@@ -204,6 +204,10 @@ class AccountPanel(QWidget):
         self.content.addStretch()
 
     def _select_web(self, item):
+        instances = ai.web_instances(item)
+        self.line('Instâncias Codex Web · ' + ('não verificadas' if instances is None else str(instances)),
+                  color='ok' if instances else 'muted')
+        self.line('Instância aberta não confirma um turno em execução', color='muted')
         service = item.get('web_service') or {}
         tunnel = item.get('web_tunnel') or {}
         for title, state in (('Serviço local', service), ('Runtime local do túnel', tunnel)):

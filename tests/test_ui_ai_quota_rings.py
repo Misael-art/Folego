@@ -61,6 +61,9 @@ def test_all_providers_use_rings_with_truthful_zero_and_unknown(qapp):
     strip.set_items([observation(p, n) for p, n in zip(ai.NAMES, (100, 61, 20, 0))])
     for provider, remaining in zip(ai.NAMES, (100, 61, 20, 0)):
         button = strip.buttons[provider]
+        if provider == 'web':
+            assert button.remaining is None and not strip.columns[provider].isVisible()
+            continue
         assert button.remaining == remaining
         if remaining:
             assert f'{remaining}% disponível' in button.accessibleName()
@@ -156,11 +159,30 @@ def test_pulse_redraws_in_coarse_steps(qapp):
     strip.shutdown()
 
 
+def test_web_ring_tracks_real_instance_without_quota(qapp):
+    strip = make(qapp)
+    strip.show(); qapp.processEvents()
+    web = ai.unknown('web')
+    web.update(account_id='web-account', web_instances=1, web_instances_at=time.time())
+    strip.set_items([web])
+    assert strip.columns['web'].isVisible()
+    assert strip.buttons['web'].instance_active
+    assert strip.buttons['web'].remaining is None
+    assert strip.delivery_pulse.state() == QVariantAnimation.State.Running
+    web['web_instances'] = 0
+    strip.set_items([web])
+    assert not strip.columns['web'].isVisible()
+    assert not strip.buttons['web'].instance_active
+    strip.shutdown()
+
+
 def test_four_columns_fit_with_gifts_in_light_dark_and_transparent_themes(qapp):
     strip = make(qapp)
     items = [observation(p, 31) for p in ai.NAMES]
     for item in items:
         item['reset_credits'] = dict(available=2, observed_at=time.time())
+        if item['provider'] == 'web':
+            item.update(web_instances=1, web_instances_at=time.time())
     strip.set_items(items)
     strip.set_deliveries([dict(provider=p, count=3, pending=[]) for p in ai.NAMES])
     previous = TOKENS.key, TOKENS.transparency
@@ -174,7 +196,7 @@ def test_four_columns_fit_with_gifts_in_light_dark_and_transparent_themes(qapp):
                 gift = strip.reset_badges[provider]
                 assert gift.parentWidget().rect().contains(gift.geometry())
                 assert not gift.geometry().intersects(strip.badges[provider].geometry())
-                assert contains_color(button, '#eab308')
+                assert contains_color(button, '#16a34a' if provider == 'web' else '#eab308')
     finally:
         apply_theme(qapp, previous[0], transparency=previous[1])
         strip.shutdown()
