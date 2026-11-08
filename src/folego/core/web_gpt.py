@@ -115,14 +115,16 @@ def local_limits(path, now):
 
 def service_status(core_home):
     from .ai_sessions import read_json
+    checked_at = time.time()
     try:
         config = read_json(Path(core_home) / 'config.json')
     except (OSError, ValueError):
-        return dict(state='unknown', detail='Configuração do WebGPT ausente ou ilegível')
+        return dict(state='unknown', detail='Configuração do WebGPT ausente ou ilegível', checked_at=checked_at)
     host, port = config.get('host'), config.get('port')
     if host not in ('127.0.0.1', '::1') or type(port) is not int or not 1 <= port <= 65535:
-        return dict(state='unknown', detail='Endpoint local não confirmado')
-    result = dict(state='unavailable', detail='Serviço local não respondeu', mode=config.get('mode'))
+        return dict(state='unknown', detail='Endpoint local não confirmado', checked_at=checked_at)
+    result = dict(state='unavailable', detail='Serviço local não respondeu',
+                  mode=config.get('mode'), checked_at=checked_at)
     try:
         connection = http.client.HTTPConnection(host, port, timeout=.7)
         try:
@@ -151,20 +153,21 @@ def service_status(core_home):
 
 def tunnel_status(core_home, alias, now=None):
     now = time.monotonic() if now is None else now
+    checked_at = time.time()
     if not isinstance(alias, str) or not alias or len(alias) > 100:
-        return dict(state='unknown', detail='Alias do túnel não confirmado')
+        return dict(state='unknown', detail='Alias do túnel não confirmado', checked_at=checked_at)
     binary = Path(core_home) / 'bin/tunnel-client'
     try:
         info = binary.lstat()
         if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o022:
-            return dict(state='unknown', detail='Cliente de túnel não confiável')
+            return dict(state='unknown', detail='Cliente de túnel não confiável', checked_at=checked_at)
     except OSError:
-        return dict(state='unknown', detail='Cliente de túnel ausente')
+        return dict(state='unknown', detail='Cliente de túnel ausente', checked_at=checked_at)
     key = (str(binary), info.st_mtime_ns, alias)
     cached = _TUNNEL_CACHE.get(key)
     if cached and now - cached[0] < _TUNNEL_TTL:
         return dict(cached[1])
-    result = dict(state='unknown', detail='Estado local do túnel não disponível')
+    result = dict(state='unknown', detail='Estado local do túnel não disponível', checked_at=checked_at)
     try:
         response = subprocess.run([str(binary), 'runtimes', 'cleanup', '--json'],
                                   capture_output=True, timeout=2, check=False)
@@ -176,10 +179,10 @@ def tunnel_status(core_home, alias, now=None):
                 if len(matches) == 1:
                     entry = matches[0]
                     ready = entry.get('classification') == 'live_runtime' and entry.get('runtime_state') == 'ready'
-                    result = dict(state='ready' if ready else 'unavailable',
+                    result = dict(state='ready' if ready else 'unavailable', checked_at=checked_at,
                                   detail='Runtime local do túnel pronto' if ready else 'Runtime local do túnel não pronto')
                 elif not matches:
-                    result = dict(state='unavailable', detail='Runtime local do túnel ausente')
+                    result = dict(state='unavailable', detail='Runtime local do túnel ausente', checked_at=checked_at)
     except (OSError, ValueError, subprocess.SubprocessError):
         pass
     if len(_TUNNEL_CACHE) > 8:

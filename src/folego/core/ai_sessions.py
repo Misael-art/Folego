@@ -690,9 +690,12 @@ def describe(item, now=None):
     if item.get('provider') == 'web':
         lines = [item.get('label', 'Codex Web')]
         for title, key in (('Serviço local', 'web_service'), ('Runtime local do túnel', 'web_tunnel')):
-            state = (item.get(key) or {}).get('state', 'unknown')
+            observation = item.get(key) or {}
+            state = observation.get('state', 'unknown')
             lines.append(title + ': ' + {'ready': 'pronto', 'unavailable': 'indisponível',
                                          'not_required': 'não exigido', 'unknown': 'desconhecido'}.get(state, 'desconhecido'))
+            if observation.get('checked_at'):
+                lines.append(title + ' verificado: ' + stamp(observation['checked_at']))
         lines.extend(['Resposta ChatGPT Web: não comprovada sem envio',
                       'Limite, saldo e reposição da conta: não informados'])
         usage = item.get('local_usage')

@@ -214,6 +214,9 @@ class AccountPanel(QWidget):
                       color=color)
             if state.get('detail'):
                 self.line(str(state['detail']), color='muted')
+            if state.get('checked_at'):
+                self.line('Verificado em ' + date(state['checked_at'])
+                          + (' · sondagem a cada 5 min' if title == 'Runtime local do túnel' else ''), color='muted')
         if service.get('catalog_status') == 200:
             self.line('Catálogo de modelos · última consulta local bem-sucedida', color='muted')
         self.line('Resposta do ChatGPT Web · ' + item.get('web_inference', 'não comprovada'), color='muted')

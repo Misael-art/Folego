@@ -97,7 +97,9 @@ def test_tunnel_probe_is_read_only_cached_and_never_proves_remote_attachment(tmp
     monkeypatch.setattr(web_gpt.subprocess, 'run', run)
     first = web_gpt.tunnel_status(core, 'codex-chatgpt-web', now=1000)
     second = web_gpt.tunnel_status(core, 'codex-chatgpt-web', now=1001)
-    assert first == second == dict(state='ready', detail='Runtime local do túnel pronto')
+    assert first == second
+    assert first['state'] == 'ready' and first['detail'] == 'Runtime local do túnel pronto'
+    assert first['checked_at'] > 0
     assert calls == [[str(binary), 'runtimes', 'cleanup', '--json']]
     web_gpt.tunnel_status(core, 'codex-chatgpt-web', now=1301)
     assert len(calls) == 2
