@@ -59,8 +59,10 @@ do limite passivo, urgência ao atingi-lo e limite crítico do equipamento. Com 
 bandeja disponível, o Fôlego avisa sem repetir a cada leitura. O alerta não
 reduz a carga nem suspende agentes por conta própria.
 
-O **mini horizontal** reúne estado, CPU, temperatura com fonte e RAM em uma
-faixa flutuante de uma linha. A alça pontilhada move a faixa; **Expandir** abre
+O **mini horizontal** reúne estado, CPU, temperatura com fonte, RAM, bateria e
+cotas de IA em células de uma linha. A largura acompanha os dados disponíveis;
+entregas, resets resgatáveis e reposição confirmada de cinco horas têm lembretes
+discretos. A alça pontilhada move a faixa; **Expandir** abre
 o compacto, a grade abre a Central e a seta lista diretamente todos os formatos.
 O **modo compacto** tem 280 px de largura e recursos em duas linhas. O ícone de
 grade abre a **Central**; a seta ao lado reúne os cinco formatos,

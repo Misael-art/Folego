@@ -4,6 +4,7 @@ The widget never takes focus. Resource mutations remain manual in the central
 window; the colored tabs request copy, paste, capture or the app-owned keyboard.
 Wayland placement is compositor-owned; X11 positions are clamped to live screens.
 """
+import math
 import os
 
 from PySide6.QtCore import (QPoint, QRect, QRectF, Qt, QTimer, QPropertyAnimation,
@@ -18,6 +19,7 @@ from . import title_signal
 from .desktop_caps import detect
 from .theme import _background_color, background, themed_style, TOKENS, set_control_icon, on_theme_change
 from .palettes import readable
+from .mini_ai_strip import MiniAIStrip
 from ..core.battery_alerts import battery_band, remaining_text
 
 POSITION_KEY = "compact/position"
@@ -407,16 +409,53 @@ class CompactWindow(QWidget):
         self.mini_bar.setAccessibleName('Faixa mínima do Fôlego')
         self.mini_layout = QHBoxLayout(self.mini_bar)
         self.mini_layout.setContentsMargins(2, 0, 2, 0)
-        self.mini_layout.setSpacing(3)
+        self.mini_layout.setSpacing(6)
         self.mini_drag = MiniDragHandle(self)
         self.mini_status = QLabel('● Aguardando')
-        self.mini_cpu = QLabel('CPU —')
+        self.mini_cpu = QLabel('—')
         self.mini_temperature = QLabel('— °C')
-        self.mini_memory = QLabel('RAM —')
+        self.mini_memory = QLabel('—')
+        self.mini_battery = QLabel('—')
         for label in (self.mini_status, self.mini_cpu, self.mini_temperature,
-                      self.mini_memory):
+                      self.mini_memory, self.mini_battery):
             label.setTextFormat(Qt.TextFormat.PlainText)
             label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        status_font = QFont(self.mini_status.font())
+        status_font.setPointSize(9)
+        self.mini_status.setFont(status_font)
+        self.mini_layout.addWidget(self.mini_drag)
+        self.mini_layout.addWidget(self.mini_status)
+        for caption, label, name in (('CPU', self.mini_cpu, 'Uso da CPU'),
+                                     ('TEMP', self.mini_temperature, 'Temperatura'),
+                                     ('RAM', self.mini_memory, 'RAM em uso'),
+                                     ('BAT', self.mini_battery, 'Bateria')):
+            cell = QFrame()
+            cell.setObjectName('miniMetric')
+            cell.setFixedHeight(34)
+            themed_style(cell, lambda: f'QFrame#miniMetric{{background:{background(TOKENS.surface_alt)};'
+                         'border:0;border-radius:6px;}')
+            cell_layout = QVBoxLayout(cell)
+            cell_layout.setContentsMargins(6, 2, 6, 2)
+            cell_layout.setSpacing(0)
+            title = QLabel(caption)
+            themed_style(title, lambda: f'background:transparent;color:{TOKENS.muted};font-size:7pt;')
+            label.setAccessibleName(name)
+            self._set_mini_metric(label, label.text(), 'muted')
+            cell_layout.addWidget(title)
+            cell_layout.addWidget(label)
+            self.mini_layout.addWidget(cell)
+            if label is self.mini_temperature:
+                self.mini_temperature_caption = title
+            elif label is self.mini_battery:
+                self.mini_battery_cell = cell
+                cell.hide()
+        self.mini_ai = MiniAIStrip(self.ai_strip.monitor, self.mini_bar)
+        self.mini_ai.details_requested.connect(self._mini_account_details)
+        self.mini_layout.addWidget(self.mini_ai)
+        self.mini_fit_timer = QTimer(self)
+        self.mini_fit_timer.setSingleShot(True)
+        self.mini_fit_timer.timeout.connect(self._fit_mini)
+        self.mini_ai.changed.connect(self._schedule_mini_fit)
         self.mini_expand = QPushButton()
         set_control_icon(self.mini_expand, 'view-restore', QStyle.StandardPixmap.SP_TitleBarNormalButton)
         self.mini_expand.setFixedSize(32, 32)
@@ -424,9 +463,6 @@ class CompactWindow(QWidget):
         self.mini_expand.setAccessibleName('Expandir para o widget compacto')
         self.mini_expand.setToolTip('Expandir para o widget compacto')
         self.mini_expand.clicked.connect(lambda: self.set_dock_mode('compact'))
-        for item in (self.mini_drag, self.mini_status, self.mini_cpu,
-                     self.mini_temperature, self.mini_memory):
-            self.mini_layout.addWidget(item)
         self.mini_layout.addStretch(1)
         self.mini_layout.addWidget(self.mini_expand)
         self.mini_bar.hide()
@@ -794,7 +830,7 @@ class CompactWindow(QWidget):
         self.setMaximumSize(16777215, 16777215)
         if mode in FLOAT_MODES:
             self.inner.activate()
-            width = 280 if mode == 'compact' else MINI_WIDTH
+            width = 280 if mode == 'compact' else self._mini_width()
             height = self.card.sizeHint().height() if mode == 'compact' else MINI_HEIGHT
             target = QRect(target.x(), target.y(), width, height)
             x, y = clamp_position(target.x(), target.y(), target.width(), target.height(), self._screens())
@@ -827,11 +863,13 @@ class CompactWindow(QWidget):
             self.dock_animation.setEndValue(target)
             self.dock_animation.finished.connect(lambda: self.setFixedSize(target.size())
                                                  if mode != 'compact' else self.setFixedWidth(280))
+            self.dock_animation.finished.connect(self._schedule_mini_fit)
             self.dock_animation.start()
         self._dock_target = QRect(target) if mode not in FLOAT_MODES else None
 
     def _placement_done(self):
         self._dock_pending = None
+        self._schedule_mini_fit()
         if self._dock_mode in FLOAT_MODES:
             self.setMinimumHeight(0)
             self.setMaximumHeight(16777215 if self._dock_mode == 'compact' else MINI_HEIGHT)
@@ -1154,22 +1192,32 @@ class CompactWindow(QWidget):
         self._screen_changed()
 
     def _render_mini(self, snapshot, signal, alerts):
-        from .dashboard_tab import VERDICT
+        from .dashboard_tab import VERDICT, usage_level
+        thresholds = getattr(self._window, '_thresholds', title_signal.Thresholds())
         verdict, role = VERDICT.get(signal.level, VERDICT['unknown'])
         verdict = {'Saudável': 'OK', 'Desconhecido': 'Sem dados'}.get(verdict, verdict)
-        stale = snapshot.is_stale(15.0)
+        stale = snapshot.is_stale(thresholds.stale_after_s)
         valid = not stale and not self._paused
         temperature = (snapshot.temperature_c if valid and
                        snapshot.source('temperature').status == 'ok' else None)
+        if temperature is not None and not math.isfinite(temperature):
+            temperature = None
         thermal_notes = []
         limit = snapshot.thermal_passive_c or snapshot.thermal_critical_c
+        if limit is not None and not math.isfinite(limit):
+            limit = None
+        temperature_role = 'muted'
         if temperature is not None and limit is not None:
+            temperature_role = 'ok'
             if snapshot.thermal_critical_c is not None and temperature >= snapshot.thermal_critical_c:
                 thermal_notes.append('Limite térmico crítico observado')
+                temperature_role = 'danger'
             elif temperature >= limit:
                 thermal_notes.append('Limite térmico passivo observado')
-            elif temperature >= limit - 5:
+                temperature_role = 'danger'
+            elif temperature >= limit - thresholds.thermal_margin_c:
                 thermal_notes.append('Temperatura próxima do limite passivo')
+                temperature_role = 'warning'
         battery_low = (valid and snapshot.battery is not None
                        and snapshot.source('battery').status == 'ok'
                        and snapshot.battery.status == 'Discharging'
@@ -1178,12 +1226,12 @@ class CompactWindow(QWidget):
             thermal_notes.append(f'Bateria em {snapshot.battery.percent}%, descarregando')
         if self._paused:
             verdict, role = 'Pausado', 'muted'
-        elif temperature is not None and limit is not None and temperature >= limit - 5:
+        elif temperature is not None and limit is not None and temperature >= limit - thresholds.thermal_margin_c:
             if snapshot.thermal_critical_c is not None and temperature >= snapshot.thermal_critical_c:
                 verdict, role = 'Crítico', 'danger'
             elif limit is not None and temperature >= limit:
                 verdict, role = 'Calor alto', 'danger'
-            elif limit is not None and temperature >= limit - 5:
+            elif limit is not None and temperature >= limit - thresholds.thermal_margin_c:
                 verdict, role = 'Quente', 'warning'
         elif battery_low:
             verdict, role = f'Bateria {snapshot.battery.percent}%', 'danger'
@@ -1194,24 +1242,88 @@ class CompactWindow(QWidget):
                else None)
         memory = (snapshot.mem if valid and snapshot.source('meminfo').status == 'ok'
                   else None)
-        self.mini_cpu.setText(f'CPU {cpu * 100:.0f}%' if cpu is not None else 'CPU —')
-        self.mini_memory.setText(
-            f'RAM {(1 - memory.mem_available_kb / memory.mem_total_kb) * 100:.0f}%'
-            if memory is not None and memory.mem_total_kb else 'RAM —')
+        cpu_role = 'muted'
+        if cpu is not None and math.isfinite(cpu) and 0 <= cpu <= 1:
+            level = usage_level(cpu, warning=.75, critical=.95)
+            cpu_role = {'ok': 'ok', 'atenção': 'warning', 'crítico': 'danger'}[level]
+        else:
+            cpu = None
+        self._set_mini_metric(self.mini_cpu, f'{cpu * 100:.0f}%' if cpu is not None else '—',
+                              cpu_role)
+        memory_role, memory_text = 'muted', '—'
+        if memory is not None and 0 <= memory.mem_available_kb <= memory.mem_total_kb and memory.mem_total_kb > 0:
+            available = memory.mem_available_kb / memory.mem_total_kb
+            memory_text = f'{(1 - available) * 100:.0f}%'
+            memory_role = ('danger' if available < thresholds.red_available_frac else
+                           'warning' if available < thresholds.yellow_available_frac else 'ok')
+        self._set_mini_metric(self.mini_memory, memory_text, memory_role)
+        battery = (snapshot.battery if valid and snapshot.source('battery').status == 'ok'
+                   else None)
+        self.mini_battery_cell.setVisible(snapshot.battery is not None
+                                          or snapshot.source('battery').status not in ('missing', 'unsupported'))
+        battery_role = 'muted'
+        if battery is not None:
+            battery_role = {'green': 'ok', 'yellow': 'warning', 'orange': 'warning',
+                            'red': 'danger'}[battery_band(battery.percent)]
+        self._set_mini_metric(self.mini_battery, f'{battery.percent}%' if battery else '—',
+                              battery_role, color=self._battery_color if battery else None)
+        if battery:
+            self.mini_battery.setToolTip(self._battery_text + '\n' + self.battery_label.toolTip())
+        self._schedule_mini_fit()
         source = ('ACPI' if snapshot.temperature_sensor == 'acpitz'
                   else snapshot.temperature_sensor)
-        self.mini_temperature.setText(
-            f'{source + " " if source else ""}{temperature:.0f} °C'
-            if temperature is not None else '— °C')
-        self.mini_cpu.setToolTip('Uso agregado dos núcleos; — indica leitura indisponível ou antiga')
-        self.mini_memory.setToolTip('RAM usada; — indica leitura indisponível ou antiga')
+        self.mini_temperature_caption.setText('ACPI' if source == 'ACPI' else 'TEMP')
+        self._set_mini_metric(self.mini_temperature,
+                              f'{temperature:.0f} °C' if temperature is not None else '— °C',
+                              temperature_role)
+        self.mini_cpu.setToolTip(
+            f'Uso agregado dos núcleos · {self.mini_cpu.accessibleDescription()}\n'
+            'Atenção a partir de 75%; crítico a partir de 95%.')
+        self.mini_memory.setToolTip(
+            f'RAM usada · {self.mini_memory.accessibleDescription()}\n'
+            f'Atenção com menos de {thresholds.yellow_available_frac * 100:g}% livre; '
+            f'crítico com menos de {thresholds.red_available_frac * 100:g}% livre.')
+        thermal_detail = (f'Limite do sensor {limit:g} °C' if limit is not None
+                          else 'Limite do sensor indisponível; criticidade desconhecida')
         self.mini_temperature.setToolTip(
-            f'Temperatura · {snapshot.temperature_sensor or "sensor indisponível"}'
-            + (' · zona do sistema, não temperatura direta da CPU'
-               if snapshot.temperature_sensor == 'acpitz' else ''))
+            f'Temperatura · {snapshot.temperature_sensor or "sensor indisponível"}\n'
+            f'{self.mini_temperature.accessibleDescription()} · {thermal_detail}'
+            + ('\nZona térmica do sistema (ACPI)' if source == 'ACPI' else ''))
         self.mini_status.setToolTip('\n'.join([signal.text, *thermal_notes, *alerts]))
         if self._dock_mode == 'mini' and self.feedback_label.isVisible():
             self._show_mini_feedback(self.feedback_label.text())
+
+    def _set_mini_metric(self, label, text, role, *, color=None):
+        state = {'ok': 'Normal', 'warning': 'Atenção', 'danger': 'Crítico',
+                 'muted': 'Sem avaliação válida'}[role]
+        label.setText(text)
+        label.setProperty('level', role)
+        label.setAccessibleDescription(f'{text} · {state}')
+        label.setToolTip(f'{label.accessibleName()} · {label.accessibleDescription()}')
+        themed_style(label, lambda: f'background:transparent;color:{color() if color else getattr(TOKENS, role)};'
+                     'font-size:9pt;font-weight:600;')
+
+    def _mini_account_details(self, provider, account, anchor):
+        self.ai_strip.details(provider, anchor=anchor)
+        if account and self.ai_strip.account_panel is not None:
+            self.ai_strip.account_panel.select(account)
+
+    def _mini_width(self):
+        self.mini_layout.invalidate()
+        self.inner.invalidate()
+        return min(self._screen_area().width(), max(MINI_WIDTH, self.card.minimumSizeHint().width()))
+
+    def _schedule_mini_fit(self):
+        if self._dock_mode == 'mini':
+            self.mini_fit_timer.start(0)
+
+    def _fit_mini(self):
+        if self._dock_mode != 'mini' or self._dock_pending:
+            return
+        width = self._mini_width()
+        if self.width() != width:
+            self.setFixedWidth(width)
+            self._screen_changed()
 
     def _render_details(self):
         if not hasattr(self, '_detail_values'):
@@ -1312,10 +1424,10 @@ class CompactWindow(QWidget):
             self.mini_status.setText(f'● {state}')
             self.mini_status.setAccessibleName(f'Estado do Fôlego: {state}')
             themed_style(self.mini_status, lambda: f'color:{TOKENS.muted};font-weight:700;')
-            for label, text in ((self.mini_cpu, 'CPU —'),
+            for label, text in ((self.mini_cpu, '—'),
                                 (self.mini_temperature, '— °C'),
-                                (self.mini_memory, 'RAM —')):
-                label.setText(text)
+                                (self.mini_memory, '—'), (self.mini_battery, '—')):
+                self._set_mini_metric(label, text, 'muted')
 
     def _toggle_pause(self):
         toggle = getattr(self._window, "toggle_pause", None)
@@ -1446,6 +1558,8 @@ class CompactWindow(QWidget):
         self._screen_changed()
 
     def _screen_changed(self, *_args):
+        if self._dock_mode == 'mini' and not self._dock_pending:
+            self.setFixedWidth(self._mini_width())
         if self._dock_mode not in FLOAT_MODES:
             area = self._screen_area()
             if not area.isValid() or self._dock_pending:

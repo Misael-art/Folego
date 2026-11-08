@@ -10,6 +10,32 @@ from folego.core import ai_sessions as ai
 NOW = 1_793_534_400.0
 
 
+@pytest.mark.parametrize('session_used,week_used,minutes,expected', (
+    (100, 40, 300, NOW + 600),
+    (100, 100, 300, None),
+    (40, 100, 300, None),
+    (40, 40, 300, None),
+    (100, 40, None, None),
+    (100, 40, 60, None),
+))
+def test_only_confirmed_exhausted_five_hour_windows_offer_a_countdown(
+        session_used, week_used, minutes, expected):
+    session = ai.quota_window('Sessão', session_used, NOW + 600, NOW, minutes)
+    weekly = ai.quota_window('Semana', week_used, NOW + 86400, NOW, 10080)
+    item = dict(observed_at=NOW, windows=[session, weekly])
+    assert ai.session_reset_at(item, NOW) == expected
+    assert ai.session_reset_at(item, NOW + 600) is None
+    assert ai.session_reset_at(item, NOW - 1) is None
+    assert ai.session_reset_at(dict(item, observed_at=NOW - 901), NOW) is None
+    if minutes is not None:
+        assert session['duration_minutes'] == minutes
+
+
+def test_legacy_confirmed_five_hour_window_remains_readable():
+    window = ai.quota_window('Sessão (5 h)', 100, NOW + 600, NOW)
+    assert ai.session_reset_at(dict(observed_at=NOW, windows=[window]), NOW) == NOW + 600
+
+
 def env(home):
     return {"HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config")}
 
@@ -92,6 +118,7 @@ def test_claude_usage_is_confirmed_but_renewal_is_not_invented(tmp_path):
         return payload
     item = ai.claude(config, NOW, fetch)
     assert item["remaining"] == 40
+    assert item['windows'][0]['duration_minutes'] == 300
     assert "aceito" in item["access"] and "não verificada" in item["renewal"]
     assert "private-" not in json.dumps(item)
     assert path.read_bytes() == before

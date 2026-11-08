@@ -7,6 +7,43 @@ registra a linguagem visual, as decisões que chegaram ao produto e as propostas
 que ainda precisam de evidência. A [passagem](HANDOFF.md) guarda datas, SHAs,
 resultados e limites de cada rodada.
 
+## Qualidade visual nos mínimos detalhes
+
+Diretriz explícita do usuário em 07/11/2026. Cada ajuste deve cuidar de
+legibilidade, alinhamento, espaçamento, contraste, hierarquia e acabamento no
+tamanho real de uso. A revisão deve observar o conjunto e os pequenos grupos
+de informação, inclusive quando uma área tem poucos pixels disponíveis.
+
+Leituras próximas precisam de separação perceptível e relação clara entre
+rótulo e valor. A criticidade pertence a cada métrica. CPU, temperatura e RAM
+usam as cores semânticas do tema no valor, com estado textual na descrição
+acessível e na dica. A intensidade visual deve orientar a leitura sem disputar
+atenção com o estado geral, a navegação e a tarefa principal.
+
+Na mini horizontal, pequenas células arredondadas agrupam CPU, temperatura e
+RAM. O rótulo discreto fica acima do valor, com margens próprias e intervalos
+regulares. CPU acompanha os limiares de uso da Central, RAM acompanha a folga
+configurada e temperatura acompanha os limites fornecidos pelo mesmo sensor.
+Uma medida sem avaliação válida usa apresentação neutra. Pausa e leitura
+antiga retiram o valor e a cor anterior.
+
+Após aprovação dessa composição, bateria e franquias de IA adotam as mesmas
+células na mini. A faixa cresce conforme o conteúdo, conserva 46 px de altura
+e respeita a área útil. A bateria mantém suas faixas próprias de cor; autonomia
+fica na dica. Franquias usam rótulo curto, percentual e pequenos marcadores de
+entregas e resets resgatáveis. Não confundir esses lembretes com agentes em
+execução. Ordem decrescente da cota e acesso ao painel de contas mantêm a
+coerência com o compacto. O tempo de reposição aparece apenas para esgotamento
+confirmado da janela de cinco horas, sem contagem semanal ou crédito presumido
+ao fim do relógio. Sem cota nem lembrete confirmado, a célula é recolhida.
+
+O aceite visual inclui estados normal, atenção, crítico e indisponível,
+tema claro e escuro, tamanho lógico e escala do ambiente. Conferir cortes,
+distância entre grupos, foco e acesso aos controles faz parte da entrega.
+Capturas recentes e resultados de execução fundamentam o registro de aceite.
+A diretriz também está registrada no AI Memory do projeto em
+`_rules/qualidade-visual-nos-minimos-detalhes.md`.
+
 ## Calor e pedidos de alívio aos agentes
 
 O alerta térmico usa o limite **do mesmo sensor** que fornece a temperatura.

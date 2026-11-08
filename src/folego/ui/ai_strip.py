@@ -246,14 +246,15 @@ class AIStrip(QWidget):
         if self.account_menu is not None:
             self.account_menu.close()
         button = self.buttons[provider]
-        menu = QMenu(button)
+        anchor = anchor or button
+        menu = QMenu(anchor)
         panel = AccountPanel(provider, [i for i in self.items if i['provider'] == provider])
         if self.display_accounts.get(provider):
             panel.select(self.display_accounts[provider])
         menu.setObjectName('accountPopup')
         menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         menu.setStyleSheet('QMenu#accountPopup{background:transparent;border:none;padding:0;}')
-        area = button.screen().availableGeometry()
+        area = anchor.screen().availableGeometry()
         panel.setFixedSize(min(560, area.width() - 20), min(470, area.height() - 24))
         panel.open_requested.connect(lambda p, a: (menu.close(), self.open_agent(p, a)))
         panel.billing_requested.connect(lambda p, a: (menu.close(), self.billing(p, a)))
@@ -263,7 +264,6 @@ class AIStrip(QWidget):
         menu.addAction(action)
         self.account_menu, self.account_panel = menu, panel
         menu.aboutToHide.connect(lambda: self._panel_hidden(menu))
-        anchor = anchor or button
         point = anchor.mapToGlobal(QPoint(0, anchor.height()))
         point.setX(max(area.left(), min(point.x(), area.right() + 1 - panel.width() - 4)))
         point.setY(max(area.top(), min(point.y(), area.bottom() + 1 - panel.height() - 4)))

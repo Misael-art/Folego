@@ -1,5 +1,135 @@
 # Passagem para o próximo agente — atualizada em 07/11/2026
 
+## Bateria e franquias na mini — 07/11/2026
+
+Depois de aprovar as células de CPU, temperatura e RAM, o usuário autorizou
+bateria e franquias com os mesmos critérios, lembretes pequenos e reposição
+de cinco horas para cota esgotada. Autorizou aumentar a largura conforme o
+conteúdo, mantendo uma faixa baixa e coesa. Owner da apresentação:
+`ui/compact.py` e `ui/mini_ai_strip.py`; fontes: Snapshot e AIMonitor existentes.
+`core/ai_sessions.py` preserva a duração confirmada da janela como metadado
+opcional e só oferece prazo curto quando todas as janelas esgotadas são de
+cinco horas. Uma janela semanal também esgotada bloqueia essa indicação.
+
+A faixa parte de 384 px, mede o conteúdo e conserva 46 px de altura. Bateria
+usa as cores próprias já existentes e autonomia na dica. IAs positivas seguem
+ordem decrescente; marcadores mostram entregas para revisitar e resets
+resgatáveis. Fonte desconhecida conserva apenas lembretes confirmados e `—`.
+Prazo vencido aguarda nova observação; não cria cota. O painel de contas usa
+a célula visível como owner e âncora. Não há novo coletor, chamada de rede,
+varredura de processos ou som duplicado. O temporizador local somente
+reavalia os dados já em memória enquanto a mini está visível.
+
+Foi perguntado opcionalmente se “quantidade de agentes” significava também
+agentes em execução. Sem resposta durante o lote, foi adotado o significado
+do widget atual: entregas e resets. Não inferir execução a partir de contas.
+Diretrizes e contratos atualizados em DESIGN, COMPACTO e README. A extensão
+foi gravada e relida no AI Memory na página existente
+`_rules/qualidade-visual-nos-minimos-detalhes.md`, revisão
+`01a1b75a-9eca-7512-ba92-86c77123dbf9`.
+
+O [recibo visual](handoff/validation/mini-battery-quotas-2026-11-07/README.md)
+registra 48 cenários próprios no KDE/Wayland, oito temas, seis estados e área
+útil real de 948 × 593 px. A inspeção corrigiu cortes que o piso nativo do
+botão Qt não reconhecia e manteve marcadores pequenos em células mais largas.
+A fixture de QA teve os pedidos de workers isolados antes das capturas finais.
+Clique Qt simulado abriu e dispensou os menus de contas e de controles
+preexistentes; interação física dos menus permanece não certificada. Os
+testes controlam também 948/1920/2560 px, sem alegar três monitores físicos.
+
+`./dev check` final passou com **1306 passed/2 skipped sem Qt em 28,22 s** e
+**1706 passed/2 skipped Qt offscreen em 115,91 s**; diff check aprovado.
+Python 3.14.7 gerenciado, HOME/XDG privados e suites sequenciais. Recibos
+`run-hddrhpmx` e `run-b5qurhyy`, retidos em `.scratch/dev-tests-reviewed/`. O primeiro
+foco passou em 110 testes e falhou em três fixtures que forneciam uma função
+onde o monitor exige um objeto `collect`; o foco corrigido passou em três
+testes. Tentativas e logs próprios estão preservados em
+`.scratch/dev-tests-reviewed/run-_4frw0su` e `run-4mjm2u0m`. O preflight
+observou cerca de 5,2 GiB disponíveis, sem pressão sustentada de memória/I/O,
+73–76 °C para trip passivo de 100 °C, e sem outro build/teste concorrente.
+Não se interromperam processos alheios nem se ampliaram guardas de QA.
+
+A primeira suíte completa passou no núcleo e falhou em três regressões de
+largura: o contêiner de IAs conservava seu mínimo anterior ao ocultar as
+células. A ativação e notificação do layout agora atualizam esse mínimo antes
+de ajustar a faixa. O foco das três resoluções passou, seguido do gate final
+acima. Logs dessa falha: `run-py87un01` e `run-cu2fyol_`; foco corrigido:
+`run-v1c1f3k9`, preservados em `.scratch/dev-tests-reviewed/`. No Wayland,
+o ensaio final confirmou redução de 676 para 410 px ao retirar as cotas.
+Tentativas falhas não foram contadas como gates aprovados.
+
+O código foi publicado em `d5945c3711af4d2a294dc204bdf71b466555edb0`,
+com SHA remoto conferido, na mesma branch e no
+[PR #5](https://github.com/Misael-art/Folego/pull/5), ainda sobre o #4.
+Os seis jobs de produto desse SHA passaram no GitHub;
+CodeRabbit/Sourcery ficaram skipped. Não houve merge
+nem release deste incremento.
+
+A GUI PID 925658 saiu por **Sair do Fôlego** na própria bandeja, após
+revalidar owner DBus, PID e início. Saída e unit confirmadas em sucesso antes
+de `./dev setup` e da abertura pela unit existente. Nova GUI **1192556**,
+active/running, Result=success, ExecMainStatus=0, NRestarts=0; o KWin
+reconheceu a janela. Entrada e Desempenho conservaram os PIDs 3817 e 3825.
+Recibo privado: `mini-battery-quotas-20261107/host-update.json`, no diretório
+de QA revisada. O formato continua acessível em **Mini horizontal**.
+
+Próximo incremento: observar clique físico dos painéis e uso normal da
+bateria no alvo, sem produzir descarga ou calor como fixture; esclarecer
+contagem de agentes em execução caso o usuário queira ampliar os lembretes.
+
+## Qualidade visual da mini horizontal — 07/11/2026
+
+O usuário pediu separação entre CPU, temperatura e RAM e criticidade por
+métrica, com a diretriz **qualidade visual nos mínimos detalhes**. A correção
+de ditado enfatizou qualidade visual. Owner da apresentação é
+`ui/compact.py`; o incremento `ba24c055c885df08b806624b60edc1fadfcd800f`
+está no [PR #5](https://github.com/Misael-art/Folego/pull/5), branch
+`codex/mini-visual-quality-20261107`, apoiada no PR #4 para conservar a
+proteção dos helpers do Steam. Os seis jobs de produto desse SHA passaram
+no GitHub; revisores automáticos ficaram skipped.
+
+A faixa mantém 384 × 46 px lógicos. Cada leitura tem uma célula com fundo do
+tema, raio de 6 px, rótulo discreto acima do valor e separação de 6 px.
+CPU reutiliza o classificador da Central com 75%/95%; RAM segue as frações de
+folga configuradas no monitor; temperatura usa os limites e a margem do
+mesmo sensor. Cor, dica e descrição acessível identificam o estado. Fonte
+parcial, valor antigo ou pausa retiram o valor e a cor. Temperatura medida
+sem limite declarado conserva a leitura e usa apresentação neutra.
+
+O [registro de design](DESIGN.md) e o [guia do compacto](COMPACTO.md) receberam
+os critérios. A diretriz foi gravada e relida no AI Memory do projeto em
+`_rules/qualidade-visual-nos-minimos-detalhes.md`, página
+`01a1b718-0be9-7261-9fef-a715a61cc584`.
+
+Validação local com Python 3.14.7, HOME/XDG privados e suites sequenciais.
+O foco de compacto, temas e hover passou em 69 testes. `./dev check` final
+passou em **1299 testes sem Qt e 1689 Qt offscreen**, com dois skips por
+perfil. A revisão final do diff e das referências passou. O preflight
+observou RAM disponível entre 5,6 e 6,6 GiB, pressão de memória baixa e
+temperatura ACPI entre 72 e 83 °C para um limite passivo de 100 °C. Os
+processos concorrentes foram inspecionados sem interrompê-los.
+
+O [ensaio KDE/Wayland](handoff/validation/mini-visual-quality-2026-11-07/README.md)
+passou em 48 cenários de janela própria, oito temas e seis estados. Células
+e controles ficaram dentro da faixa, com a geometria confirmada pelo KWin.
+Dados de demonstração, áudio isolado e capturas próprias. A primeira captura
+de demonstração omitira a fonte de processos e mostrava estado geral crítico;
+a fonte sintética foi completada e as capturas finais foram regeneradas.
+Toque, arraste físico e outras escalas permanecem com aceite próprio.
+
+A GUI anterior PID 667345 saiu pelo item da própria bandeja após conferir
+owner, PID e início do processo. `./dev setup` sincronizou o ambiente e a
+unit gráfica existente voltou em PID **925658**, active/running,
+Result=success, com a Central aberta. Entrada e Desempenho mantiveram os
+PIDs 3817 e 3825. O novo formato fica no seletor **Mini horizontal**.
+As capturas de pixels pertencem ao processo QA. O backend de captura geral
+do Computer Use estava indisponível no KDE desta sessão.
+
+Próximo passo é revisar o PR #5 após o #4 e observar o uso normal da mini.
+As áreas de testes desta tarefa foram retidas em
+`.scratch/dev-tests-reviewed/`, incluindo o diretório
+`mini-visual-quality-20261107-lHpFbu`.
+
 ## Falso alerta de três órfãos do Steam — 07/11/2026
 
 A janela residente avisava sobre PIDs 5988 (`steamwebhelper`), 3942 e 5286
