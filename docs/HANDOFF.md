@@ -50,7 +50,8 @@ as tentativas falhas. O código foi publicado em
 `adb0001d9875c3001097570e822ad14ce8aac984` (SHA remoto conferido) no
 [PR #6](https://github.com/Misael-art/Folego/pull/6), sobre o #5. Seis jobs
 de produto do SHA passaram no GitHub; CodeRabbit ficou skipped. O PR foi
-aberto em rascunho para revisão; não houve merge nem release.
+aberto em rascunho e marcado pronto para revisão após os checks; não houve
+merge nem release.
 
 Após o novo boot, a GUI da unit `app-folego@autostart.service` foi recarregada
 para usar o código publicado: PID 74212 ativo; supervisores de entrada e
@@ -59,6 +60,16 @@ KDE/Wayland via acessibilidade. O capturador de tela do Computer Use não
 funcionou neste compositor e não se declarou inspeção visual/física do painel
 Web. A CLI/passivo no hardware mostrou serviço local pronto e runtime local
 pronto; saldo, reset e resposta Web permanecem não comprovados.
+
+Incremento final de precisão: o painel e a dica agora exibem o horário da
+última verificação local, para não apresentar o cache de cinco minutos do
+túnel como leitura instantânea. Código em
+`c300646a71fd2620febea88608bf78b5747af29f` (SHA remoto conferido):
+**seis jobs de produto success**, CodeRabbit skipped. Após esse código,
+**74 testes headless focados e 2 Qt focados passaram** no host; a GUI foi
+recarregada pela própria unit, PID 94918, e os supervisores mantiveram
+PIDs 4462/4465. A suíte completa permaneceu delegada ao CI remoto pelo
+histórico de reset do host; não se fez outro teste longo local.
 
 O boot anterior `4fd0200a-d5e5-48f1-a47f-fa90eb8dc337` terminou sem
 desligamento normal visível no journal. Última amostra Fôlego às 20:18:38:
