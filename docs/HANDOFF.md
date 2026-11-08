@@ -16,6 +16,10 @@ foram verificadas. Receitas e hashes estão em `.scratch/release-b8-20261107/`.
 O checkout canônico foi atualizado para `main` e a unit existente
 `app-folego@autostart.service` reiniciada para carregar 0.2.0b8. Ela ficou
 ativa no PID **127571**, com janela Fôlego 900×593 localizada pelo KWin.
+A árvore AT-SPI da sessão KDE/Wayland mostrou a célula Web visível na mini,
+com `1 instância aberta` e a ressalva de que turno ativo não foi comprovado.
+Esse percurso certifica a presença e o texto acessível; não certifica os
+pixels da animação ou o desaparecimento após fechar um agente real.
 A leitura direta do processo anterior revelou 115 MiB RSS e ~60 MiB anônimos
 após 30 min; os ~974 MiB exibidos pelo systemd eram principalmente cache de
 arquivos recuperável da unit. O inventário de processos nativos levou
