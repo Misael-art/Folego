@@ -46,8 +46,19 @@ corrigida após essa tentativa. O host reiniciou abruptamente às 20:18 após
 esse trabalho; não houve segundo gate pesado local. No novo boot, os testes
 focados passaram: **74 headless** e **3 Qt**, incluindo o caso de temporização.
 Os recibos próprios estão retidos em `.scratch/dev-tests-reviewed/`, inclusive
-as tentativas falhas. CI remoto e publicação: **pendentes** neste ponto da
-passagem.
+as tentativas falhas. O código foi publicado em
+`adb0001d9875c3001097570e822ad14ce8aac984` (SHA remoto conferido) no
+[PR #6](https://github.com/Misael-art/Folego/pull/6), sobre o #5. Seis jobs
+de produto do SHA passaram no GitHub; CodeRabbit ficou skipped. O PR foi
+aberto em rascunho para revisão; não houve merge nem release.
+
+Após o novo boot, a GUI da unit `app-folego@autostart.service` foi recarregada
+para usar o código publicado: PID 74212 ativo; supervisores de entrada e
+desempenho mantiveram os PIDs 4462/4465. O frame Fôlego ficou visível no
+KDE/Wayland via acessibilidade. O capturador de tela do Computer Use não
+funcionou neste compositor e não se declarou inspeção visual/física do painel
+Web. A CLI/passivo no hardware mostrou serviço local pronto e runtime local
+pronto; saldo, reset e resposta Web permanecem não comprovados.
 
 O boot anterior `4fd0200a-d5e5-48f1-a47f-fa90eb8dc337` terminou sem
 desligamento normal visível no journal. Última amostra Fôlego às 20:18:38:
