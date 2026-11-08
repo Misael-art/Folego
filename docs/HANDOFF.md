@@ -70,8 +70,35 @@ pela acessibilidade. Não foi certificado recebimento de notificação pelo Plas
 uma nova resposta Web bem-sucedida; não repetir uma tarefa anterior sem conferir
 seus efeitos. O usuário foi informado dessa ação pelo fluxo oficial. Esta prévia
 entrega detecção, diagnóstico e solicitação limitada ao responsável, sem prometer
-reparar indisponibilidade do provedor. Commit/PR/release e checks do SHA serão
-registrados no fechamento da publicação. Não há autorização de merge.
+reparar indisponibilidade do provedor. Não há autorização de merge.
+
+Publicação: código `71ab3df6725b1c18937480d7e13ee72d59853d5e` confirmado no
+GitHub, branch `codex/web-mcp-session-alert-20261108`. O
+[PR #9](https://github.com/Misael-art/Folego/pull/9) foi reutilizado e está
+pronto para revisão sobre `main`. Os seis jobs de produto dos runs
+`42511308867` (push) e `42511312946` (PR) passaram; CodeRabbit ficou skipped.
+A [prévia v0.2.0b9](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b9)
+foi publicada com tag anotada `e24d8a1480e5f49487710af85ddedb277079c368`
+apontando para o código acima, sem merge. O CI adicional da tag, run
+`42511573637`, ainda estava em andamento na última consulta.
+
+Os quatro assets públicos foram baixados: wheel, sdist, fonte completa e
+`SHA256SUMS`; manifesto e pacotes são idênticos aos locais, com hashes
+conferidos. Os 166 módulos Python do wheel/sdist e os 1000 caminhos rastreados
+da fonte completa foram comparados com o commit. Fonte completa: 22.175.384 B,
+revisada como artefato, fora do Git. O wheel também foi instalado em venv
+isolado, confirmou 0.2.0b9 e importou a recuperação sem Qt. Receitas, notas e
+recibos estão em `.scratch/release-b9-20261108/`. O build offline exigiu usar
+o cache oficial `.dev/cache/uv`; a primeira tentativa com o cache padrão
+recusou resolver o backend, sem download ou instalação global.
+
+O registro central foi atualizado para a branch de continuidade atual deste
+checkout único e para a tag/SHA explicitamente autorizados pelo pedido de
+prévia. A primeira tentativa de push com ref local `HEAD` foi recusada pelo
+guard; o push normal com a branch registrada passou. Nenhum guard foi
+desligado ou modificado. Próximo passo de produto permanece a renovação de
+login e comprovação de nova resposta Web, sem presumir êxito por serviço local
+pronto. Os aceites físicos e de estabilidade anteriores continuam pendentes.
 
 ## Sessão MCP encerrada relatada pelo Codex Web — 08/11/2026
 
