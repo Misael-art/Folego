@@ -152,6 +152,31 @@ def test_web_grok_and_missing_accounts_are_unknown(tmp_path):
     assert [ai.band(x) for x in (0, 20, 21, 60, 61)] == ["red", "red", "yellow", "yellow", "green"]
 
 
+def test_web_instance_count_uses_codex_profile_processes_once_and_expires(tmp_path):
+    root = tmp_path / 'web-profile'
+    root.mkdir()
+    (root / 'config.toml').write_text('model = "chatgpt-web/gpt-6-sol"\n')
+    calls = []
+    def discover():
+        calls.append(True)
+        return [dict(provider='codex', roots=dict(CODEX_HOME=str(root)), identity=(1, 10, 20)),
+                dict(provider='codex', roots=dict(CODEX_HOME=str(root)), identity=(1, 10, 20)),
+                dict(provider='codex', roots={}, identity=(1, 11, 21))]
+    items = ai.collect(env(tmp_path), now=NOW, discover=discover)
+    web = next(item for item in items if item['provider'] == 'web' and item.get('account_id')
+               and item['label'] == 'Conta 2')
+    assert calls == [True]
+    assert ai.web_instances(web, NOW) == 1
+    assert ai.web_instances(web, NOW + 121) is None
+    assert ai.web_instances(next(item for item in items if item['provider'] == 'web'
+                                 and item is not web), NOW) == 0
+
+
+def test_web_instance_absence_is_unknown_without_process_inventory(tmp_path):
+    web = next(item for item in ai.collect(env(tmp_path), now=NOW) if item['provider'] == 'web')
+    assert ai.web_instances(web, NOW) is None
+
+
 def test_cli_ai_status_is_headless_and_uses_same_data(tmp_path, monkeypatch, capsys):
     from folego import cli
     monkeypatch.setenv("HOME", str(tmp_path))

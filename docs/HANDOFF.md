@@ -1,5 +1,34 @@
 # Passagem para o próximo agente — atualizada em 07/11/2026
 
+## Quedas de 07/11 e presença Codex Web
+
+Depois do boot `8b1a9e6b-e6ad-4c5f-b558-62d78a149dbf` (21:14–22:13),
+houve dois boots curtos, `fbfdea8a-dd70-4a61-b690-13839ac6dcc3`
+(22:14:20–22:14:37) e `aa29e4bb25454c189594660fdf517cff`
+(22:22:20–22:23:07), antes de `7fb93068-0b66-415e-b394-a4144387e6d9`.
+Na última amostra do primeiro corte, 22:13:22, ACPI marcou 92 °C,
+RAM disponível ~5,86 GiB, swap ~2,7 GiB, PSI CPU 26,37%, memória 0% e
+I/O 0,08%. Nos cinco minutos finais, ACPI variou de 81 a 98 °C; não há
+registro de OOM, panic, thermal trip ou desligamento ordenado. A bateria
+estava descarregando; a tensão medida de 7,603 V é observação, não prova de
+colapso elétrico. O escopo de validação do tema ES-DE concluiu perto do corte,
+sem evidência que o vincule como causa. Os boots curtos não dão amostras
+estáveis; o segundo e terceiro cortes ocorreram durante a inicialização,
+quando o agente `codex exec` anterior já não estava em execução. Pstore requer
+acesso privilegiado e segue sem leitura. Causa raiz continua indeterminada;
+correlacionar os próximos cortes com pstore, firmware/energia e GPU é decisivo.
+
+O indicador Web passou a usar a contagem de processos nativos Codex que
+selecionam perfil `chatgpt-web/*`, sem contar o launcher residente. A coleta
+reutiliza o inventário já executado a cada 60 s, deduplica identidades e
+vence em 120 s; falha de inventário não vira zero. O círculo verde “OK” pulsa
+enquanto houver instância e desaparece com zero; a mini mostra “OK”. Entregas
+concluídas mantêm badge próprio. Este estado não certifica turno ativo, cota,
+resposta remota ou estabilidade do host. Testes focados: 76 headless e 12 Qt
+após a correção dos contratos de UI; o teste Qt inicial precisou atualizar
+expectativas antigas de cota Web. QA retido em `.scratch/dev-tests-reviewed/`
+e `.scratch/dev-tests/`. Gates de release/CI do SHA final ainda pendentes.
+
 ## Candidato à prévia 0.2.0b8 — 07/11/2026
 
 A integração autorizada foi verificada no GitHub, em ordem: PR #4 (merge
