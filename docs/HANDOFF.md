@@ -57,6 +57,17 @@ de 200×63 em temas `snes-us` e `ps2` ficaram em
 `.scratch/web-mcp-visual-20261108/`; badge `1!` legível nos dois temas,
 sem evidência de compositor físico.
 
+Incremento de produto `fade7927dd17029cb9d86464fcb1a4b8d5403d4a`
+confirmado na branch remota `codex/web-mcp-session-alert-20261108`,
+[PR #9](https://github.com/Misael-art/Folego/pull/9) em draft. Às 12:43 -03, a unit
+existente `app-folego@autostart.service` foi reiniciada sem filhos de trabalho
+sob seu PID anterior; ficou `active/running` no PID 2790076, com janela Fôlego
+900×593 listada pelo KWin e 158,9 MB de memória de cgroup na primeira leitura.
+Não houve injeção de erro MCP na sessão real. Os checks do SHA remoto estavam
+em andamento na última consulta (núcleo e CLI aprovados; Qt pendente). Próximo
+passo: confirmar CI e registrar, em uma ocorrência futura, erro bruto do
+cliente e reação visual real sem provocar a falha.
+
 ## Prévia 0.2.0b8 publicada e instalada
 
 O [PR #7](https://github.com/Misael-art/Folego/pull/7) foi integrado em `main`
