@@ -235,8 +235,10 @@ def build_parser() -> argparse.ArgumentParser:
         description="Bem-estar do Steam Deck: diagnóstico e higiene com confirmação.")
     commands = parser.add_subparsers(dest="command")
 
-    ai = commands.add_parser("ai", help="cotas e validade das IAs; somente leitura")
-    ai.add_argument("sub", choices=["status"])
+    ai = commands.add_parser("ai", help="cotas, diagnóstico e recuperação pelo responsável Web")
+    ai.add_argument("sub", choices=["status", "recover-web"])
+    ai.add_argument("--account", help="com recover-web: identidade da conta Web")
+    ai.add_argument("--confirmar", action="store_true")
     ai.add_argument("--json", action="store_true")
 
     perf = commands.add_parser("performance", help="modo desempenho: observação por app; somente leitura")
@@ -2759,6 +2761,24 @@ def _dispatch(ns, argv) -> int:
     if ns.command == "performance":
         return _cmd_performance(ns)
     if ns.command == "ai":
+        if ns.sub == 'recover-web':
+            if not ns.confirmar:
+                print('Use --confirmar para solicitar o ciclo ao responsável Web já habilitado')
+                return EXIT_NEEDS_CONFIRM
+            from .core.agent_deliveries import DeliveryMonitor
+            from .actions.web_recovery import WebRecovery
+            monitor = DeliveryMonitor()
+            rows = WebRecovery(monitor).handle(monitor.collect(), since=time.time() - 900, account_id=ns.account)
+            receipts = [p for row in rows if row['provider'] == 'web'
+                        for p in row['pending'] if 'web_recovery' in p]
+            if ns.json:
+                print(json.dumps(dict(schema=1, receipts=receipts), ensure_ascii=False))
+            else:
+                print('\n'.join(p['web_recovery']['detail'] for p in receipts)
+                      or 'Nenhum erro de capacidade recente e não visto nesta conta')
+            return (EXIT_UNKNOWN if any(p['web_recovery']['outcome'] == 'desconhecido' for p in receipts)
+                    else EXIT_PARTIAL if any(p['web_recovery']['outcome'] == 'parcial' for p in receipts)
+                    else EXIT_REFUSED)
         from .core.ai_sessions import collect, describe
         items = collect()
         if ns.json:

@@ -25,6 +25,7 @@ from .procfs import _parse_stat
 MAX_SESSIONS = 128
 MAX_TAIL = 64 * 1024
 WEB_MCP_SESSION_ERROR = 'McpServerError: Session terminated'
+WEB_CAPACITY_ERROR = 'Selected model is at capacity. Please try a different model.'
 
 
 def identity(pid, proc=Path('/proc')):
@@ -193,6 +194,11 @@ def last_delivery(provider, path, since, now, primary=False):
                 reported_web_mcp_error = (provider == 'web' and
                     isinstance(event.get('last_agent_message'), str) and
                     WEB_MCP_SESSION_ERROR in event['last_agent_message'])
+                error = event.get('error')
+                # A failed native turn carries this in error, not in the final
+                # answer. Quoting the text in a successful answer is no trigger.
+                web_capacity_error = (provider == 'web' and isinstance(error, dict)
+                                      and error.get('message') == WEB_CAPACITY_ERROR)
         elif provider == 'claude':
             if record.get('isSidechain'): continue
             if record.get('type') == 'api-request':
@@ -225,6 +231,8 @@ def last_delivery(provider, path, since, now, primary=False):
             pending = dict(at=at, event=str(token)) if at >= since else None
             if pending and provider == 'web' and reported_web_mcp_error:
                 pending['reported_web_mcp_error'] = True
+            if pending and provider == 'web' and web_capacity_error:
+                pending['web_capacity_error'] = True
     if size > MAX_TAIL and not observed:
         raise ValueError('estado da sessão fora da cauda observável')
     return pending
@@ -324,6 +332,8 @@ class DeliveryMonitor:
         receipt = dict(session=session, event=event, at=pending['at'])
         if pending.get('reported_web_mcp_error'):
             receipt['reported_web_mcp_error'] = True
+        if pending.get('web_capacity_error'):
+            receipt['web_capacity_error'] = True
         return receipt
 
     def acknowledge(self, pending):

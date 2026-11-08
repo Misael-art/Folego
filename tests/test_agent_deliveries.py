@@ -272,3 +272,22 @@ def test_web_mcp_report_does_not_infer_error_from_tool_or_other_provider(tmp_pat
     append(path, dict(timestamp=iso(NOW + 1), type='event_msg', payload=dict(
         type='task_complete', turn_id='turn-1', last_agent_message='Tudo bem.')))
     assert 'reported_web_mcp_error' not in last_delivery('codex', path, NOW, NOW + 2)
+
+
+@pytest.mark.parametrize('provider,error,answer,trigger', [
+    ('web', {'message': 'Selected model is at capacity. Please try a different model.',
+             'codex_error_info': 'server_overloaded'}, None, True),
+    ('web', None, 'Selected model is at capacity. Please try a different model.', False),
+    ('web', {'message': 'Unknown model'}, None, False),
+    ('codex', {'message': 'Selected model is at capacity. Please try a different model.'}, None, False),
+])
+def test_capacity_requires_failed_native_web_completion(tmp_path, provider, error, answer, trigger):
+    path = codex(tmp_path)
+    complete = event('task_complete', NOW + 1)
+    complete['payload'].update(error=error, last_agent_message=answer)
+    append(path, complete)
+    result = last_delivery(provider, path, NOW, NOW + 2)
+    assert bool(result.get('web_capacity_error')) is trigger
+    assert 'message' not in result and 'error' not in result
+    append(path, event('task_started', NOW + 2))
+    assert last_delivery(provider, path, NOW, NOW + 3) is None

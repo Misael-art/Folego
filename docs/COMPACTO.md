@@ -199,7 +199,44 @@ quando a fonte daquele provedor informa tickets (atualmente confirmado no Codex)
   observação aceita pelo provedor de metadados locais e validade não verificada.
   Cupons/créditos não fornecidos pela fonte continuam não informados.
 
-Fôlego usa configuração própria e não importa, inicia ou administra PhaseZero.
+Fôlego usa configuração própria. A observação de contas não depende do PhaseZero;
+a recuperação Web opcional descrita abaixo apenas solicita um ciclo ao responsável
+já instalado e habilitado, sem administrar sua instalação ou suas políticas.
+
+### Recuperação do Codex Web
+
+O monitor reconhece a mensagem exata `Selected model is at capacity. Please try
+a different model.` no campo `error.message` de uma conclusão nativa do Codex
+Web. A mesma frase em conversa, resposta bem-sucedida ou outro provedor não
+aciona reparo. A leitura aproveita a cauda de 64 KiB já coletada a cada 5 s;
+o recibo guarda identidade e booleano, sem texto da conversa. Há badge vermelho
+`!`, aviso na Central/bandeja e nenhum som de conclusão bem-sucedida.
+
+Durante o monitoramento, erros novos e recentes solicitam o ciclo do responsável
+da mesma conta. O adaptador atual reconhece o protocolo de recuperação PhaseZero
+já habilitado: confere manifesto/hashes, propriedade e a unit efetiva do systemd,
+incluindo a ausência de overrides. Outros launchers continuam observáveis, com
+recuperação indisponível. Desabilitar a recuperação no responsável bloqueia novos
+pedidos do Fôlego. Não há novo daemon, grant de recursos ou instalação automática.
+
+Cada pedido passa pelo coordenador, com intenção durável e ID por conta/turno.
+O erro é revalidado antes do pedido. No máximo três intenções por dez minutos,
+com intervalo de um minuto; solicitações incertas bloqueiam novos pedidos até
+revisão. O responsável conserva sua própria trava, verificação de ociosidade,
+orçamento e disjuntor. O Fôlego não troca conta/modelo, renova credenciais,
+reenvia tarefa nem reinicia diretamente agentes ou navegador.
+
+O painel da conta e `./dev run ai status --json` mostram o diagnóstico do
+responsável, válido por 150 s. Serviço/túnel prontos não comprovam resposta Web.
+`login-required` pede login no ChatGPT **dentro do launcher desta conta**;
+indisponibilidade do provedor exige aguardar. A mensagem de capacidade,
+isoladamente, não comprova qual dessas causas ocorreu.
+
+Para solicitar manualmente o mesmo ciclo para um erro ainda não visto, de até
+15 minutos, use `./dev run ai recover-web --account ID --confirmar --json`.
+O ID da conta vem de `ai status`; `operation ID --json` consulta a intenção.
+Resultado parcial significa que o pedido foi aceito para processamento, sem
+certificar recuperação. Timeout permanece desconhecido e não autoriza repetição.
 Os diretórios nativos principais são `~/.codex`,
 `~/.codex-chatgpt-web` (WebGPT standalone),
 `~/.local/share/codex-web-gpt/codex-home` (compatibilidade), `~/.claude` e `~/.grok`.
@@ -211,8 +248,8 @@ Raízes de `$CODEX_HOME`, `$CLAUDE_CONFIG_DIR` e `$GROK_HOME` acrescentam contas
 não substituem a principal. Processos locais podem fornecer suas raízes nativas.
 Quando existe, o registro opcional `phasezero/ai-accounts/codex-profiles/profiles.json`
 em XDG_DATA_HOME fornece nomes e caminhos dos perfis Codex/Web, inclusive inativos.
-Perfis arquivados não são adotados automaticamente. Não se executa código, inicia
-serviço ou copia login do PhaseZero. Sem esse registro, os diretórios nativos e
+Perfis arquivados não são adotados automaticamente. A descoberta não executa
+código, inicia serviço ou copia login do PhaseZero. Sem esse registro, os diretórios nativos e
 a configuração própria continuam funcionando. Registro complementar inválido
 é ignorado com aviso visível, sem adotar seus perfis.
 Para outras contas, crie `$XDG_CONFIG_HOME/folego/ai-sessions.json` (por padrão,

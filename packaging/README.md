@@ -111,7 +111,7 @@ nem à validação de instalação GUI/launcher em outra distribuição.
   leitor de tela e login físico X11 permanecem pendentes.
 - A instalação em uma máquina Linux limpa e o ensaio prolongado de memória/
   QProcess ainda são evidências pendentes de F8.
-- A prévia 0.2.0b8 tem fonte completa, wheel, sdist e SHA256SUMS na release do GitHub.
+- A prévia 0.2.0b9 tem fonte completa, wheel, sdist e SHA256SUMS na release do GitHub.
   O código-fonte do tag inclui `dev` e `uv.lock`; o sdist Python não substitui
   esse checkout para o bootstrap. Veja [o guia do compacto](../docs/COMPACTO.md).
 - O empacotamento não inclui assinatura, repositório APT/Flatpak nem integração

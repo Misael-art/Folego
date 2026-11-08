@@ -186,3 +186,8 @@ class Tray:
                    'O agente relatou “McpServerError: Session terminated”. '
                    'Reconecte o Codex Native2 no ChatGPT e repita a operação após conferir o resultado anterior. '
                    'O estado do serviço local, isoladamente, não confirma esse erro.')
+
+    def show_web_capacity_error(self, detail):
+        notify = getattr(self.tray, 'showMessage', None)
+        if notify is not None:
+            notify('Fôlego · erro de capacidade no Codex Web', detail)

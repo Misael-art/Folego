@@ -59,6 +59,17 @@ def test_meter_describes_default_without_aggregating_other_accounts(qapp):
     strip.shutdown()
 
 
+def test_web_login_diagnosis_is_actionable_even_when_local_service_is_ready(qapp):
+    item = ai.unknown('web')
+    item.update(account_id='web', web_service=dict(state='ready'),
+                web_recovery=dict(state='login-required', detail='Renove o login no ChatGPT dentro do launcher desta conta'))
+    panel = AccountPanel('web', [item])
+    labels = '\n'.join(w.text() for w in panel.findChildren(QLabel))
+    assert 'Renove o login' in labels and 'Serviço local · pronto' in labels
+    assert 'Saldo disponível e horário de reposição · desconhecidos' in labels
+    panel.close()
+
+
 def test_opening_selected_account_only_sends_its_delivery_receipts(qapp):
     from PySide6.QtCore import QObject, Signal
     class Opener(QObject):

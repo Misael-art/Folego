@@ -209,6 +209,7 @@ class MainWindow(QMainWindow):
         self.options.screen_energy_requested.connect(self._screen_energy_request)
         self.ai_monitor.deliveries_ready.connect(self._screen_delivery_attention)
         self.ai_monitor.web_mcp_reported.connect(self._web_mcp_reported)
+        self.ai_monitor.web_capacity_reported.connect(self._web_capacity_reported)
         self._screen_delivery_ids = set()
         self._web_mcp_note = ''
         self._screen_thermal_level = 0
@@ -357,6 +358,9 @@ class MainWindow(QMainWindow):
                                      any(item.get('reported_web_mcp_error')
                                          for item in row.get('pending', ()))
                                      for row in rows) else '')
+        if any(row.get('provider') == 'web' and any(p.get('web_capacity_error') for p in row.get('pending', ()))
+               for row in rows):
+            self._web_mcp_note = 'Codex Web: erro de capacidade; confira a recuperação no painel da conta.'
         ids = {(item.get('session'), item.get('event'))
                for row in rows if isinstance(row, dict)
                for item in row.get('pending', ()) if isinstance(item, dict)
@@ -369,6 +373,13 @@ class MainWindow(QMainWindow):
         self.tray.show_web_mcp_report()
         if self._compact is not None:
             self._compact._shortcut_result('Codex Web: agente relatou sessão MCP encerrada; verifique o cliente.')
+        self._wake_screen()
+
+    def _web_capacity_reported(self, receipt):
+        detail = receipt.get('web_recovery', {}).get('detail', 'Confira o diagnóstico no painel da conta Web')
+        self.tray.show_web_capacity_error(detail)
+        if self._compact is not None:
+            self._compact._shortcut_result('Codex Web: ' + detail)
         self._wake_screen()
 
     def _pressure_request(self, action, value=None):

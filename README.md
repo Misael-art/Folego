@@ -94,6 +94,15 @@ serviço local. Reconecte o Codex Native2 no ChatGPT e confira o resultado da
 operação anterior antes de repetir. A recuperação automática do serviço local
 continua com o responsável configurado no host; o Fôlego não reinicia o
 cliente, o túnel ou agentes por esse texto.
+Quando um turno Web falha com `Selected model is at capacity. Please try a
+different model.`, o monitor solicita automaticamente um ciclo de recuperação
+ao responsável já habilitado e verificado daquela conta. O pedido usa o diário
+de operações e não reenvia a tarefa. O painel **Contas e cotas de IA** e
+`./dev run ai status` mostram o diagnóstico recente do responsável, inclusive
+quando é necessário renovar o login no ChatGPT dentro do launcher. A mensagem
+de capacidade também pode encobrir uma falha local do campo de mensagem;
+trocar o modelo não corrige essa situação. Sem responsável compatível, o
+Fôlego avisa e preserva o estado. [Escopo e limites](docs/COMPACTO.md#recuperação-do-codex-web).
 Ao lado das entregas, um **presente verde piscando** mostra as redefinições
 disponíveis confirmadas das contas do provedor. Clique para consultar a conta;
 o resgate continua no cliente de IA.
@@ -155,12 +164,12 @@ contas usam um fundo contínuo, com os elementos internos transparentes.
 O alvo é **Linux**, com KDE Plasma para a integração completa com o desktop.
 O wrapper gerencia Python **3.14.7**, uv e dependências fixadas em `uv.lock`.
 Não é necessário ativar um ambiente virtual ou instalar pacotes Python globalmente.
-A [prévia 0.2.0b8](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b8)
+A [prévia 0.2.0b9](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b9)
 oferece fonte completa, wheel, sdist e SHA256SUMS. A fonte completa inclui o wrapper
 e o lockfile; os pacotes Python exigem Python 3.14 e a dependência GUI opcional.
 
 ```bash
-git clone --branch v0.2.0b8 https://github.com/Misael-art/Folego.git
+git clone --branch v0.2.0b9 https://github.com/Misael-art/Folego.git
 cd Folego
 ./dev setup
 ./dev gui

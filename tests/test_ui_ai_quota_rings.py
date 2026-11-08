@@ -204,6 +204,25 @@ def test_web_mcp_report_is_visible_and_emitted_once(qapp):
     monitor.shutdown()
 
 
+def test_capacity_error_badge_and_notification_are_deduplicated(qapp):
+    strip = make(qapp)
+    web = ai.unknown('web')
+    web.update(account_id='web-account', web_instances=1, web_instances_at=time.time())
+    strip.set_items([web])
+    receipt = dict(session='capacity-session', event='turn', at=time.time() + 1, web_capacity_error=True)
+    row = dict(provider='web', count=1, pending=[receipt], complete=True)
+    strip.set_deliveries([row])
+    assert strip.badges['web'].text() == '1!'
+    assert 'erro de capacidade' in strip.buttons['web'].accessibleName()
+    assert 'recuperação' in strip.badges['web'].toolTip()
+    emitted = []
+    strip.monitor.web_capacity_reported.connect(emitted.append)
+    strip.monitor.set_deliveries([row])
+    strip.monitor.set_deliveries([row])
+    assert emitted == [receipt]
+    strip.shutdown()
+
+
 def test_four_columns_fit_with_gifts_in_light_dark_and_transparent_themes(qapp):
     strip = make(qapp)
     items = [observation(p, 31) for p in ai.NAMES]

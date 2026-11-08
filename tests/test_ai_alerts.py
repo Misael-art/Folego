@@ -74,3 +74,10 @@ def test_reported_web_mcp_failure_does_not_play_success_completion_cue():
     assert tracker.delivery_changes([failure], now=103) == []
     success = dict(provider='web', count=2, pending=[*failure['pending'], dict(event='ok', at=104)])
     assert tracker.delivery_changes([success], now=105) == ['web']
+
+
+def test_native_capacity_error_never_plays_success_cue():
+    tracker = AlertTracker(now=100)
+    failed = dict(provider='web', count=1, pending=[dict(event='capacity', at=101, web_capacity_error=True)])
+    assert tracker.delivery_changes([failed], now=102) == []
+    assert tracker.delivery_changes([failed], now=103) == []

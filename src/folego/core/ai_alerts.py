@@ -44,7 +44,8 @@ class AlertTracker:
             if provider not in ai_sessions.NAMES or row.get('count') is None: continue
             pending = {p['event'] for p in row.get('pending', []) if isinstance(p.get('event'), str)}
             successful = {p['event'] for p in row.get('pending', [])
-                          if isinstance(p.get('event'), str) and not p.get('reported_web_mcp_error')}
+                          if isinstance(p.get('event'), str) and not p.get('reported_web_mcp_error')
+                          and not p.get('web_capacity_error')}
             seen = self.deliveries.get(provider)
             if seen is None:
                 self.deliveries[provider] = pending

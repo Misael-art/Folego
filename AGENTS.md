@@ -85,6 +85,14 @@ projetos e classes protegidas nunca são alvo. SIGKILL continua manual.
 
 ## Organização do desenvolvimento
 
+Pedido de 08/11: autoriza, para o erro nativo Web `Selected model is at capacity.
+Please try a different model.`, solicitar automaticamente o ciclo do responsável
+de recuperação já habilitado e verificado da mesma conta. Usar diário/ID,
+revalidação, deduplicação e orçamento; sem replay de tarefa, troca de conta/modelo,
+renovação de credenciais ou restart direto de agentes pelo Fôlego. Autoriza
+instalação/teste local e publicação de prévia deste incremento após os gates;
+não autoriza merge nem certifica recuperação de indisponibilidade do provedor.
+
 1. Escolha uma pendência de `docs/HANDOFF.md`; reproduza o contrato que falha.
 2. Entregue um incremento integrado em CLI/GUI quando aplicável; evite módulos
    sem chamada de produção e reescritas amplas antes de estabilizar contratos.

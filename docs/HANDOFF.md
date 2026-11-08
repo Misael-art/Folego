@@ -1,5 +1,78 @@
 # Passagem para o próximo agente — atualizada em 08/11/2026
 
+## Capacidade do Codex Web e recuperação pelo responsável — 08/11/2026
+
+O erro nativo `Selected model is at capacity. Please try a different model.`
+veio em `task_complete.error.message`, com `codex_error_info=server_overloaded`.
+No episódio das 18:23:48.454Z, o launcher 6.1.17 registrou, 532 ms antes,
+falha `new_chat_preparation`: `ChatGPT composer is unavailable`. O mesmo
+pareamento aparece nos turnos das 17:01/17:02/17:03Z. O responsável instalado
+informava `login-required`, serviço/rota/túnel prontos e nenhuma ação. Uma
+inspeção somente leitura das superfícies ChatGPT no launcher encontrou uma
+delas com controle de login e sem campo de mensagem. A evidência explica por
+que trocar o modelo não remove essa falha local; não comprova indisponibilidade
+global do modelo nem que login seja a única causa possível da mensagem genérica.
+
+O Fôlego passou a detectar o erro estruturado na mesma cauda de 64 KiB das
+entregas. A frase em resposta bem-sucedida não dispara recuperação. Novos erros
+durante o monitoramento solicitam, em worker, o ciclo de recuperação do
+responsável já habilitado **daquela conta**. O adaptador opcional reconhece
+o protocolo existente PhaseZero, verifica manifesto/hashes, propriedade,
+vinculação efetiva da unit e ausência de overrides; não há dependência dele
+para observar o Web. Responsável ausente, alterado ou desligado bloqueia o pedido.
+O coordenador grava intenção/ID antes da solicitação, deduplica após restart,
+limita três intenções por dez minutos/intervalo de 60 s e bloqueia pedidos após
+resultado incerto. O responsável mantém suas próprias verificações de
+ociosidade, recursos, orçamento e disjuntor. Sem novo daemon, replay de tarefa,
+troca de modelo/conta, renovação de credenciais ou restart direto pelo Fôlego.
+
+GUI: erro com badge vermelho `!`, aviso na Central/bandeja/widget e sem som de
+sucesso. O painel da conta e `ai status` mostram o diagnóstico do responsável
+com validade de 150 s, distinguindo login, espera e infraestrutura pronta de
+uma resposta Web comprovada. A CLI `ai recover-web --account ID --confirmar
+--json` solicita o mesmo ciclo para erro recente, de até 15 min, ainda não visto;
+`operation ID --json` consulta o registro. Versão e lock avançaram para 0.2.0b9.
+
+Validação final: `./dev check` sequencial passou **1346 passed/2 skipped em
+28,87 s** headless e **1753 passed/2 skipped em 116,33 s** Qt. Workspaces:
+`.scratch/dev-tests/run-662lzpgn/` e `run-lhse6dk2/`. Antes disso, passaram
+50 testes headless e 66 Qt focados. As primeiras tentativas expuseram o
+isolamento XDG da sessão do agente e arredondamento submicrossegundo de
+timestamps; foram corrigidos sem relaxar orçamento, propriedade ou expiração.
+As tentativas falhas permanecem em
+`.scratch/dev-tests-reviewed/web-capacity-20261108/`. Seis execuções antigas
+concluídas/revisadas foram preservadas em `web-capacity-preflight-20261108/`,
+no mesmo diretório de revisão, após excluir referências em processos vivos.
+Nenhum payload de QA foi apagado. Durante o gate: ~4,4–4,7 GiB de RAM
+disponível, PSI baixo e ACPI observado entre 73 e 85 °C, abaixo do passivo 100 °C.
+
+Na sessão KDE/Wayland real, a janela própria de QA 600×510 mostrou badge `1!`
+e orientação de login legíveis. Recibo e captura **de cliente** em
+`.scratch/web-capacity-wayland-20261108/controlled/`. A primeira tentativa
+de QA deixou o coletor real substituir os dados sintéticos; falhou e foi
+preservada, sem virar aceite. Nenhum erro foi injetado em sessão real.
+
+Teste de produção às 15:36:32 -03: a CLI instalada detectou o erro real da
+conta e solicitou a unit existente; o systemd concluiu o ciclo com `success`.
+Operação `7443bb0a5516c096240868e9c328ad9649ee9790502331c630f892226f9241a5`
+tem intenção e resultado parcial duráveis em XDG_STATE_HOME real. Parcial
+significa pedido aceito; o responsável manteve `login-required`, sem reparo.
+Uma primeira consulta havia sido recusada antes do efeito por perder a ligação
+com o launcher ao receber ambiente explícito; a descoberta foi corrigida e
+ganhou regressão no gate final. `./dev setup` confirmou a instalação GUI b9,
+e a unit própria `app-folego@autostart.service` foi recarregada às 15:39:35,
+após confirmar que só tinha a GUI em seu cgroup. PID observado **3396409**,
+`active/running`. AT-SPI/KWin confirmou Central 900×593, aviso real de
+capacidade e badge `18+!` no widget. Abertura da Central/widget foi percorrida
+pela acessibilidade. Não foi certificado recebimento de notificação pelo Plasma.
+
+**Aceite ainda aberto:** renovar login no ChatGPT dentro do launcher e observar
+uma nova resposta Web bem-sucedida; não repetir uma tarefa anterior sem conferir
+seus efeitos. O usuário foi informado dessa ação pelo fluxo oficial. Esta prévia
+entrega detecção, diagnóstico e solicitação limitada ao responsável, sem prometer
+reparar indisponibilidade do provedor. Commit/PR/release e checks do SHA serão
+registrados no fechamento da publicação. Não há autorização de merge.
+
 ## Sessão MCP encerrada relatada pelo Codex Web — 08/11/2026
 
 Às 00:35:47 -03, a resposta final de um agente Codex Web registrou

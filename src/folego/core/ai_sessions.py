@@ -722,6 +722,8 @@ def describe(item, now=None):
                 lines.append(title + ' verificado: ' + stamp(observation['checked_at']))
         lines.extend(['Resposta ChatGPT Web: não comprovada sem envio',
                       'Limite, saldo e reposição da conta: não informados'])
+        if item.get('web_recovery'):
+            lines.append('Recuperação Web: ' + item['web_recovery']['detail'])
         usage = item.get('local_usage')
         if usage:
             lines.append('Envios registrados neste launcher em 7 dias: '
