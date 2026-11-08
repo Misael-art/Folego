@@ -126,8 +126,8 @@ def suggest(snapshot: Snapshot, *, orphan_count: int = 0,
         out.append(Suggestion(
             "orfaos", MEDIO,
             f"{orphan_count} processo(s) possivelmente abandonado(s)",
-            "Adotados pelo supervisor da sessão, sem filhos vivos e sem consumir "
-            "CPU: a decisão é sua — encerrar exige confirmação, e a próxima "
+            "Adotados pelo supervisor da sessão ou PID 1, sem filhos vivos e "
+            "sem avanço de CPU: isso não prova desuso; encerrar exige confirmação, e a próxima "
             "leitura confirma (ou não) o efeito.",
             "orfaos"))
 

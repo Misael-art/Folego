@@ -81,6 +81,8 @@ def test_the_panel_lists_each_orphan_with_its_cost(panel):
     assert rows[0]["comm"] == "esquecido"
     assert "244,1 MB" in rows[0]["rss"]
     assert rows[1]["idle"] == "90 s"
+    assert "pai morto" not in widget.status_label.text()
+    assert "Uso real ainda precisa de revisão" in widget.status_label.text()
 
 
 def test_a_cpu_active_process_is_a_clue_not_a_terminable_orphan(panel):

@@ -121,6 +121,28 @@ def test_a_process_adopted_by_the_session_supervisor_is_still_an_orphan(reaper, 
     assert kills == [(500, TERM)]
 
 
+def test_a_live_non_supervisor_parent_blocks_a_stale_candidate(reaper, live, kills):
+    pid_dir(live, 5900, comm="pv-adverb", ppid=5273, pgid=5900,
+            session=5900, starttime=7)
+    proc(live, ppid=5900, pgid=5987, session=5987)
+
+    result = reaper.terminate(candidate())
+
+    assert not result.ok and "já tem pai" in result.reason
+    assert kills == []
+
+
+@pytest.mark.parametrize("comm", ("srt-logger", "steamwebhelper"))
+def test_steam_runtime_infrastructure_is_refused_even_from_stale_candidates(
+        reaper, live, kills, comm):
+    proc(live, comm=comm)
+
+    result = reaper.terminate(candidate(comm=comm))
+
+    assert not result.ok and "protegido" in result.reason
+    assert kills == []
+
+
 def test_permission_error_is_reported_not_raised(reaper, live, monkeypatch):
     proc(live)
 
