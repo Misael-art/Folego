@@ -2,8 +2,9 @@
 
 Provider data is deliberately asymmetric: Codex reports rate limits, Claude
 has a first-party usage endpoint, Grok's own CLI answers its billing extension
-and Codex Web tunnels ChatGPT Web, whose Pro allowance only its launcher's own
-Limits tracker counts. A Web root's Codex login is not that allowance. A reset
+and Codex Web tunnels ChatGPT Web. Its launcher only counts its own sends;
+that record is neither provider allowance nor a reset timestamp. A Web root's
+Codex login is not that allowance. A reset
 in the past invalidates an observation; it never creates a full allowance.
 """
 from __future__ import annotations
@@ -35,14 +36,6 @@ _GROK_CACHE = {}
 _CLAUDE_RENEWALS = {}  # config -> last request to the client, bounded attempts
 STALE_CLAUDE = "Token de acesso vencido; use o Claude Code para renová-lo e atualizar a cota"
 DAY = 86400
-# Same rolling allowance table as the Codex Web launcher's Limits (limits-policy.json).
-WEB_LIMITS = {
-    'pro_100': (('Pro combinado (7 dias)', 'shared', 7 * DAY, 50),),
-    'pro_200': (('GPT-6 Pro (7 dias)', 'gpt-6-pro', 7 * DAY, 200),
-                ('GPT-5.6 Pro (24 h)', 'gpt-5.6-pro', DAY, 170),
-                ('Pro combinado (24 h)', 'shared', DAY, 200)),
-}
-WEB_MODELS = {'gpt-6-pro', 'gpt-5.6-pro', 'pro-unknown', 'other'}
 
 
 def read_json(path):
@@ -272,6 +265,8 @@ def codex_remote(home, result, now, fetch):
 def codex(home, now, *, provider="codex", label=None, fetch=None):
     result = unknown(provider, "Sem observação recente da conta", label)
     home = Path(home)
+    if provider == 'web':
+        return web_limits(home, result, now)
     auth = None
     try:
         auth = read_json(home / "auth.json")
@@ -286,8 +281,6 @@ def codex(home, now, *, provider="codex", label=None, fetch=None):
         auth_changed = (home / "auth.json").stat().st_mtime
     except FileNotFoundError:
         auth_changed = 0
-    if provider == "web":
-        return web_limits(home, result, now)
     if fetch is not None and auth is not None:
         try:
             remote = codex_remote(home, dict(result), now, fetch)
@@ -339,59 +332,9 @@ def stamp(seconds):
 
 
 def web_limits(home, result, now):
-    """Read the launcher's own ChatGPT Web Limits tracker; never the root's Codex quota."""
-    result.update(windows=[], remaining=None, plan=None, paid_until=None,
-                  access='não verificado', renewal='não verificada')
-    path = Path(home).parent / 'launcher-data/limits.json'
-    try:
-        state = read_json(path)
-    except FileNotFoundError:
-        result.update(limits_action=True, reason='Limits do Codex Web não encontrado; ative Limits no aplicativo')
-        return result
-    accounts, active = state.get('accounts'), state.get('activeAccountKey')
-    account = accounts.get(active) if state.get('version') == 1 and isinstance(accounts, dict) else None
-    if not isinstance(account, dict) or not isinstance(account.get('events'), list):
-        result['reason'] = 'Limits do Codex Web desconhecido ou sem conta ativa'
-        return result
-    plan, checked = account.get('plan'), account.get('checkedAt')
-    checked = checked / 1000 if type(checked) is int and checked > 0 else None
-    result['limits_checked_at'] = checked
-    when = stamp(checked) if checked else 'data desconhecida'
-    if plan not in WEB_LIMITS:
-        result['limits_action'] = True
-        result['reason'] = (f'Limits do Codex Web sem plano Pro confirmado (última verificação: {when}, '
-                            f'resultado "{plan}"); refaça a verificação em Limits no aplicativo; se ela falhar, '
-                            'o aplicativo precisa de atualização')
-        return result
-    since = account.get('initializedAt')
-    if type(since) is not int or since <= 0:
-        result['reason'] = 'Limits do Codex Web sem início de contagem válido'
-        return result
-    since /= 1000
-    events = []
-    for event in account['events']:
-        at = event.get('at') if isinstance(event, dict) else None
-        if (type(at) is not int or at < since * 1000 or event.get('model') not in WEB_MODELS):
-            result['reason'] = 'Limits do Codex Web com evento inválido'
-            return result
-        if now * 1000 - 7 * DAY * 1000 < at <= now * 1000 and event['model'] != 'other':
-            events.append((at / 1000, event['model']))
-    uncertain = False
-    for name, model, duration, limit in WEB_LIMITS[plan]:
-        counted = sorted(at for at, kind in events if at > now - duration and (model == 'shared' or kind == model))
-        uncertain |= model != 'shared' and any(kind == 'pro-unknown' and at > now - duration for at, kind in events)
-        used = min(100, 100 * len(counted) / limit)
-        window = quota_window(name, used, (counted[0] if counted else now) + duration, now)
-        window['messages'] = f'{len(counted)}/{limit}'
-        if since > now - duration:
-            window['messages'] += ' (contagem iniciada em ' + stamp(since) + ')'
-        result['windows'].append(window)
-    result.update(observed_at=now, plan='Pro 20x' if plan == 'pro_200' else 'Pro 5x', reason='',
-                  source='Limits do Codex Web (piso: só mensagens Pro enviadas pelo aplicativo, tabela oficial dele)')
-    result['source'] += '; plano verificado em ' + when
-    if uncertain:
-        result['source'] += '; há mensagens Pro de modelo não identificado'
-    result['remaining'] = effective(result, now)
+    """Read only local launcher submissions; server quota and reset stay unknown."""
+    from .web_gpt import local_limits
+    result.update(local_limits(Path(home).parent / 'launcher-data/limits.json', now))
     return result
 
 
@@ -656,15 +599,24 @@ def collect(env=None, *, now=None, fetch=http_json, discover=None, grok_query=No
         if discover is None and native:
             from .agent_deliveries import running_agents
             discover = running_agents
-        accounts = inventory(env, discover=discover)
+        from .web_gpt import installed_launchers
+        accounts = inventory(env, discover=discover,
+                             discover_web=installed_launchers if native else lambda _env: [])
     except (OSError, ValueError, TypeError, KeyError):
         return [unknown(p, 'Inventário de contas não confirmado; confira a configuração') for p in NAMES]
     result = []
     for account in accounts:
         provider = account['provider']
         try:
-            if provider in ('codex', 'web'):
+            if provider == 'codex':
                 item = codex(account['path'], now, provider=provider, fetch=fetch)
+            elif provider == 'web':
+                from .web_gpt import observe
+                root = Path(account['path']).parent
+                item = unknown('web')
+                item.update(observe(account.get('web_core_home', root / 'core-home'),
+                                    account.get('web_launcher_data', root / 'launcher-data'),
+                                    now=now, live=native and account['default']))
             elif provider == 'claude':
                 renew = claude_renewal or (claude_renew if native else None)
                 item = claude_with_renewal(account['path'], now, fetch, renew, cache=_CLAUDE_CACHE)
@@ -677,6 +629,8 @@ def collect(env=None, *, now=None, fetch=http_json, discover=None, grok_query=No
         except (OSError, ValueError, TypeError, KeyError, AttributeError, subprocess.SubprocessError):
             item = unknown(provider, 'Fonte indisponível; confira o login no cliente')
         item.update(account_id=account['account_id'], label=account['label'], default=account['default'])
+        if account.get('inventory_warning'):
+            item['reason'] = (item.get('reason', '') + '; ' + account['inventory_warning']).strip('; ')
         billing = configuration.get('billing_accounts', {})
         reference = billing.get(account['account_id'], {}) if isinstance(billing, dict) else {}
         if isinstance(billing, dict) and account['account_id'] not in billing and account['default']:
@@ -733,6 +687,23 @@ def next_monthly(day, now):
 
 def describe(item, now=None):
     now = time.time() if now is None else now
+    if item.get('provider') == 'web':
+        lines = [item.get('label', 'Codex Web')]
+        for title, key in (('Serviço local', 'web_service'), ('Runtime local do túnel', 'web_tunnel')):
+            state = (item.get(key) or {}).get('state', 'unknown')
+            lines.append(title + ': ' + {'ready': 'pronto', 'unavailable': 'indisponível',
+                                         'not_required': 'não exigido', 'unknown': 'desconhecido'}.get(state, 'desconhecido'))
+        lines.extend(['Resposta ChatGPT Web: não comprovada sem envio',
+                      'Limite, saldo e reposição da conta: não informados'])
+        usage = item.get('local_usage')
+        if usage:
+            lines.append('Envios registrados neste launcher em 7 dias: '
+                         + str(sum(usage['counts'].values())) + ' (parcial)')
+        if item.get('limits_checked_at'):
+            lines.append('Plano verificado localmente: ' + stamp(item['limits_checked_at']))
+        if item.get('reason'):
+            lines.append(item['reason'])
+        return '\n'.join(lines)
     left = effective(item, now)
     lines = [item['label'], 'Percentual não confirmado' if left is None else f'{left}% disponível na janela mais restrita']
     def date(value):

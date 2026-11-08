@@ -171,10 +171,18 @@ quando a fonte daquele provedor informa tickets (atualmente confirmado no Codex)
   mudar a organização invalida uso e perfil anteriores mesmo sem trocar o token.
   A espera por HTTP 429 continua valendo para a mesma credencial durante essa troca.
   Não há rede no loop gráfico.
-- Codex Web e Grok: se suas fontes não oferecerem uma franquia percentual
-  confirmada, ficam no menu de contas, fora da faixa principal. Quando houver
-  observação válida e cota positiva, entram automaticamente. Metadados de
-  assinatura, quando disponíveis, aparecem como tal, separados da reposição de
+- Codex Web: o launcher registra somente seus próprios envios Pro, quando o
+  rastreamento está ativo. Esse histórico parcial não é saldo da conta nem
+  informa o reset do provedor. O Fôlego nunca converte essas contagens em
+  percentual de franquia ou horário de reposição. No menu e no painel mostra
+  separadamente o serviço local (`/healthz`), o runtime local do túnel
+  (inspeção somente leitura, no máximo a cada cinco minutos), o histórico
+  parcial e a resposta Web não comprovada sem envio. Serviço e túnel prontos
+  não provam inferência nem conexão remota do broker. Plano não suportado no
+  rastreador não significa uso ilimitado nem instalação quebrada. Não há smoke
+  automático, pois ele gastaria mensagens. A conta fica no menu de contas.
+- Grok: se sua fonte não oferecer uma franquia percentual confirmada, fica no
+  menu de contas. Metadados de assinatura aparecem separados da reposição de
   cota. A data de Grok pode ser informada pelo
   usuário; isso não confirma pagamento ou cota. Esses campos continuam
   indisponíveis nas fontes consultadas; não se usam tokens gastos na conversa
@@ -185,15 +193,20 @@ quando a fonte daquele provedor informa tickets (atualmente confirmado no Codex)
 
 Fôlego usa configuração própria e não importa, inicia ou administra PhaseZero.
 Os diretórios nativos principais são `~/.codex`,
-`~/.local/share/codex-web-gpt/codex-home`, `~/.claude` e `~/.grok`.
+`~/.codex-chatgpt-web` (WebGPT standalone),
+`~/.local/share/codex-web-gpt/codex-home` (compatibilidade), `~/.claude` e `~/.grok`.
+Quando o launcher WebGPT empacotado está em execução, sua instalação e seu
+diretório de dados são descobertos pelos caminhos do próprio processo e
+arquivos do WebGPT, inclusive em instalação personalizada. Nenhum processo do
+PhaseZero é necessário. Fôlego só consulta loopback e não copia token ou login.
 Raízes de `$CODEX_HOME`, `$CLAUDE_CONFIG_DIR` e `$GROK_HOME` acrescentam contas;
 não substituem a principal. Processos locais podem fornecer suas raízes nativas.
 Quando existe, o registro opcional `phasezero/ai-accounts/codex-profiles/profiles.json`
 em XDG_DATA_HOME fornece nomes e caminhos dos perfis Codex/Web, inclusive inativos.
 Perfis arquivados não são adotados automaticamente. Não se executa código, inicia
 serviço ou copia login do PhaseZero. Sem esse registro, os diretórios nativos e
-a configuração própria continuam funcionando. Registro desconhecido protege as
-fontes e aparece como inventário não confirmado.
+a configuração própria continuam funcionando. Registro complementar inválido
+é ignorado com aviso visível, sem adotar seus perfis.
 Para outras contas, crie `$XDG_CONFIG_HOME/folego/ai-sessions.json` (por padrão,
 `~/.config/folego/ai-sessions.json`). Caminhos devem ser absolutos. Exemplo:
 
@@ -202,7 +215,9 @@ Para outras contas, crie `$XDG_CONFIG_HOME/folego/ai-sessions.json` (por padrão
   "schema": 1,
   "accounts": [
     {"provider": "codex", "label": "Codex trabalho", "path": "/caminho/conta/codex-home"},
-    {"provider": "web", "label": "Web pessoal", "path": "/caminho/conta-web/codex-home"},
+    {"provider": "web", "label": "Web pessoal", "path": "/caminho/conta-web/codex-home",
+     "web_core_home": "/caminho/conta-web/core-home",
+     "web_launcher_data": "/caminho/conta-web/launcher-data"},
     {"provider": "claude", "label": "Claude trabalho", "path": "/caminho/claude-work", "default": true}
   ],
   "grok_paid_until": "2026-11-30T23:59:59-03:00"

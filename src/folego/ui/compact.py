@@ -903,6 +903,15 @@ class CompactWindow(QWidget):
             count = row.get('count')
             extras = [f'{count} entregas' if count != 1 else '1 entrega'] if count else []
             items = [item for item in self.ai_strip.items if item.get('provider') == provider]
+            if provider == 'web':
+                selected = next((item for item in items if item.get('default')), items[0] if items else {})
+                service = (selected.get('web_service') or {}).get('state')
+                tunnel = (selected.get('web_tunnel') or {}).get('state')
+                status = ('serviço pronto' if service == 'ready' else
+                          'serviço indisponível' if service == 'unavailable' else 'serviço desconhecido')
+                extras.append('túnel local pronto' if tunnel == 'ready' else
+                              'túnel local indisponível' if tunnel == 'unavailable' else 'túnel não confirmado')
+                extras.append('limite desconhecido')
             tickets = sum(n for item in items if (n := ai_sessions.available_resets(item)) is not None and n > 0)
             if tickets:
                 extras.append(f'{tickets} tickets')

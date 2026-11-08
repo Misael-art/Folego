@@ -851,7 +851,9 @@ def test_widget_header_uses_navigation_and_control_menu_instead_of_window_button
         'Contas e cotas de IA', 'Ocultar widget', 'Sair do Fôlego']
     view._refresh_accounts_menu()
     assert len(view.accounts_menu.actions())==4
-    assert all('sem confirmação' in action.text() for action in view.accounts_menu.actions())
+    assert all('sem confirmação' in action.text() for action in view.accounts_menu.actions()
+               if not action.text().startswith('Codex Web'))
+    assert 'limite desconhecido' in view.accounts_menu.actions()[1].text()
     from folego.core import ai_sessions as ai
     import time
     item=ai.unknown('codex')
