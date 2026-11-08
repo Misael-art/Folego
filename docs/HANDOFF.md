@@ -1,5 +1,32 @@
 # Passagem para o próximo agente — atualizada em 07/11/2026
 
+## Prévia 0.2.0b8 publicada e instalada
+
+O [PR #7](https://github.com/Misael-art/Folego/pull/7) foi integrado em `main`
+no commit `ebd9a98abab5ba0d6137f218d444e4eea7e4c8e8`. Seis jobs do SHA
+`abd735413a56bb968256c9f9405b6e1cb81de227` e os três jobs do merge
+(`42436033055`) e da tag (`42436272994`) passaram. A
+[prerelease v0.2.0b8](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b8)
+tem tag anotada que resolve para o commit do merge e quatro assets: fonte
+completa, wheel, sdist e `SHA256SUMS`. Os quatro arquivos foram baixados do
+GitHub; o manifesto público é idêntico ao local e os três pacotes passaram
+`sha256sum -c`. O wheel foi instalado em venv privado e a versão/importação
+foram verificadas. Receitas e hashes estão em `.scratch/release-b8-20261107/`.
+
+O checkout canônico foi atualizado para `main` e a unit existente
+`app-folego@autostart.service` reiniciada para carregar 0.2.0b8. Ela ficou
+ativa no PID **127571**, com janela Fôlego 900×593 localizada pelo KWin.
+A árvore AT-SPI da sessão KDE/Wayland mostrou a célula Web visível na mini,
+com `1 instância aberta` e a ressalva de que turno ativo não foi comprovado.
+Esse percurso certifica a presença e o texto acessível; não certifica os
+pixels da animação ou o desaparecimento após fechar um agente real.
+A leitura direta do processo anterior revelou 115 MiB RSS e ~60 MiB anônimos
+após 30 min; os ~974 MiB exibidos pelo systemd eram principalmente cache de
+arquivos recuperável da unit. O inventário de processos nativos levou
+10,77 ms de parede/10,69 ms de CPU nesta amostra. Isso não é prova de consumo
+de longo prazo da nova animação. Clique físico, posição visual do círculo,
+turno ativo, estabilidade prolongada e causa dos resets ainda exigem evidência.
+
 ## Quedas de 07/11 e presença Codex Web
 
 Depois do boot `8b1a9e6b-e6ad-4c5f-b558-62d78a149dbf` (21:14–22:13),
@@ -31,7 +58,7 @@ expectativas antigas de cota Web. QA retido em `.scratch/dev-tests-reviewed/`
 e `.scratch/dev-tests/`. O primeiro CI do PR #7 em `7202f07` passou núcleo/CLI,
 mas falhou em 14 cenários de layout Qt que ainda presumiam um percentual Web.
 As fixtures agora representam uma instância Web aberta e os 14 cenários
-passaram localmente. Novo SHA e gates de release/CI ainda pendentes.
+passaram localmente. O CI final e a publicação estão registrados acima.
 
 ## Candidato à prévia 0.2.0b8 — 07/11/2026
 
@@ -49,9 +76,8 @@ O candidato b8 reúne a proteção dos helpers legítimos do Steam contra falsos
 RAM e temperatura, bateria e cotas confirmadas, além de observação do
 Codex Web independente do PhaseZero e com estados de evidência separados.
 Versão/lockfile avançados juntos; README e guia de pacotes apontam para o
-marco de distribuição. A publicação exige ainda CI verde do SHA final, tag
-anotada, construção revisada dos três pacotes, `SHA256SUMS` e conferência dos
-quatro assets públicos. Não considerar esta preparação prova de publicação.
+marco de distribuição. Esta seção preserva o estado da preparação antes da
+publicação; a evidência final está no início deste documento.
 
 O host reiniciou abruptamente em boot anterior, sem causa atribuída. No
 preflight desta rodada: 6,4 GiB de RAM disponível, 2,4 GiB de swap usada,
