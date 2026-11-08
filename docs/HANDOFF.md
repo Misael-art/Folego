@@ -1,5 +1,32 @@
 # Passagem para o próximo agente — atualizada em 07/11/2026
 
+## Candidato à prévia 0.2.0b8 — 07/11/2026
+
+A integração autorizada foi verificada no GitHub, em ordem: PR #4 (merge
+`67758464379d18b642fecc8374f6d32237c8c067`), PR #5 (merge
+`b2fe49419df7ae7fdd63ab5dbabe27334d586b30`) e PR #6 (merge
+`01de622f4f67af49e7cd8a96467b326fab1594c9`). Os PRs #5 e #6
+tinham seis checks de produto aprovados nos respectivos heads. O workflow
+de push de `main` no último merge (`42432443276`) terminou em sucesso;
+o anterior do #5 foi cancelado pela chegada do merge seguinte, sem ser
+contabilizado como gate verde.
+
+O candidato b8 reúne a proteção dos helpers legítimos do Steam contra falsos
+órfãos, a mini horizontal adaptativa com indicadores independentes de CPU,
+RAM e temperatura, bateria e cotas confirmadas, além de observação do
+Codex Web independente do PhaseZero e com estados de evidência separados.
+Versão/lockfile avançados juntos; README e guia de pacotes apontam para o
+marco de distribuição. A publicação exige ainda CI verde do SHA final, tag
+anotada, construção revisada dos três pacotes, `SHA256SUMS` e conferência dos
+quatro assets públicos. Não considerar esta preparação prova de publicação.
+
+O host reiniciou abruptamente em boot anterior, sem causa atribuída. No
+preflight desta rodada: 6,4 GiB de RAM disponível, 2,4 GiB de swap usada,
+PSI em 10 s de memória e I/O em 0%, 122 GiB livres em `/home`, ACPI 87 °C
+para trip passivo de 100 °C. Suites longas ficam delegadas ao CI remoto;
+o status físico KDE/Wayland, a estabilidade prolongada e a franquia real do
+WebGPT mantêm seus limites documentados acima.
+
 ## Observação independente do Codex Web — 07/11/2026
 
 O parecer sobre a recuperação do WebGPT pelo PhaseZero foi confrontado com o
