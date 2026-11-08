@@ -64,3 +64,13 @@ def test_first_delivery_after_startup_is_audible_even_if_provider_was_unavailabl
     assert tracker.delivery_changes([new],now=107)==[]
     restarted=AlertTracker(now=200)
     assert restarted.delivery_changes([new],now=201)==[]
+
+
+def test_reported_web_mcp_failure_does_not_play_success_completion_cue():
+    tracker = AlertTracker(now=100)
+    failure = dict(provider='web', count=1, pending=[dict(
+        event='failed', at=101, reported_web_mcp_error=True)])
+    assert tracker.delivery_changes([failure], now=102) == []
+    assert tracker.delivery_changes([failure], now=103) == []
+    success = dict(provider='web', count=2, pending=[*failure['pending'], dict(event='ok', at=104)])
+    assert tracker.delivery_changes([success], now=105) == ['web']

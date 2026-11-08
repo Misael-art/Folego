@@ -178,3 +178,11 @@ class Tray:
                f"PSI de espera em 60 s: {detail} "
                f"(amostra {alert.get('sample_at') or 'sem horário'}{age_text}). "
                "Salve o trabalho e reduza tarefas pelo aplicativo responsável.")
+
+    def show_web_mcp_report(self):
+        notify = getattr(self.tray, 'showMessage', None)
+        if notify is not None:
+            notify('Fôlego · Codex Web precisa de atenção',
+                   'O agente relatou “McpServerError: Session terminated”. '
+                   'Reconecte o Codex Native2 no ChatGPT e repita a operação após conferir o resultado anterior. '
+                   'O estado do serviço local, isoladamente, não confirma esse erro.')

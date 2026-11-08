@@ -327,17 +327,25 @@ class AIStrip(QWidget):
                        '0% disponível' if button.remaining == 0 else 'cota desconhecida ou vencida')
             delivery = next((r for r in self.delivery_items if r['provider'] == provider), {})
             count = delivery.get('count')
+            web_mcp_report = provider == 'web' and any(
+                receipt.get('reported_web_mcp_error') for receipt in delivery.get('pending', ()))
+            if web_mcp_report:
+                summary += ' · agente relatou sessão MCP encerrada'
             has_deliveries |= (bool(count) or instances is not None) and selected is not None
             if not count and instances is None: button.set_halo(0.0)
             badge = self.badges[provider]
             partial = not delivery.get('complete', True)
             number = str(count) + ('+' if partial else '')
-            badge.setText('?' if count is None else number if count else '')
-            background = TOKENS.accent if count else TOKENS.muted if count is None else TOKENS.surface
-            badge.setStyleSheet(f"background:{TOKENS.accent if count else TOKENS.muted if count is None else 'transparent'};"
+            badge_text = '?' if count is None else number if count else ''
+            if web_mcp_report and count: badge_text += '!'
+            badge.setText(badge_text)
+            background = TOKENS.danger if web_mcp_report else TOKENS.accent if count else TOKENS.muted if count is None else TOKENS.surface
+            badge.setStyleSheet(f"background:{TOKENS.danger if web_mcp_report else TOKENS.accent if count else TOKENS.muted if count is None else 'transparent'};"
                                f"color:{on_color(background)};font-size:8pt;font-weight:600;border-radius:6px;")
             completed = 'conclusões não verificadas' if count is None else f'{count} novas entregas para revisitar'
             if count and partial: completed = 'Pelo menos ' + completed + '; outras sessões não verificadas'
+            badge.setToolTip('O agente relatou sessão MCP encerrada; abra o Codex Web para conferir.'
+                             if web_mcp_report else completed)
             confirmed = [(i, ai_sessions.available_resets(i)) for i in items]
             offers = [(i, n) for i, n in confirmed if n is not None and n > 0]
             total = sum(n for _, n in offers)

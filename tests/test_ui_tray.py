@@ -168,6 +168,17 @@ def test_pressure_alert_explains_source_window_and_manual_action():
     assert "memória 6%; disco/I/O 12%; CPU 30%" in tray.tray.messages[-1][1]
 
 
+def test_web_mcp_report_names_client_action_without_claiming_local_outage():
+    tray, _ = build()
+    tray.install()
+    tray.show_web_mcp_report()
+    title, body = tray.tray.messages[-1]
+    assert 'Codex Web precisa de atenção' in title
+    assert 'McpServerError: Session terminated' in body
+    assert 'Reconecte o Codex Native2 no ChatGPT' in body
+    assert 'não confirma esse erro' in body
+
+
 def test_the_tray_menu_offers_only_viewing_actions():
     tray, window = build()
     tray.install()

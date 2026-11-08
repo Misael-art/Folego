@@ -208,7 +208,9 @@ class MainWindow(QMainWindow):
         self._pressure_seen = False
         self.options.screen_energy_requested.connect(self._screen_energy_request)
         self.ai_monitor.deliveries_ready.connect(self._screen_delivery_attention)
+        self.ai_monitor.web_mcp_reported.connect(self._web_mcp_reported)
         self._screen_delivery_ids = set()
+        self._web_mcp_note = ''
         self._screen_thermal_level = 0
         self._screen_wake_pending = False
         self._screen_reconcile_pending = False
@@ -350,6 +352,11 @@ class MainWindow(QMainWindow):
             self._wake_screen()
 
     def _screen_delivery_attention(self, rows):
+        self._web_mcp_note = ('Codex Web: agente relatou sessão MCP encerrada; verifique o cliente.'
+                              if any(row.get('provider') == 'web' and
+                                     any(item.get('reported_web_mcp_error')
+                                         for item in row.get('pending', ()))
+                                     for row in rows) else '')
         ids = {(item.get('session'), item.get('event'))
                for row in rows if isinstance(row, dict)
                for item in row.get('pending', ()) if isinstance(item, dict)
@@ -357,6 +364,12 @@ class MainWindow(QMainWindow):
         if ids - self._screen_delivery_ids:
             self._wake_screen()
         self._screen_delivery_ids = ids
+
+    def _web_mcp_reported(self, _receipt):
+        self.tray.show_web_mcp_report()
+        if self._compact is not None:
+            self._compact._shortcut_result('Codex Web: agente relatou sessão MCP encerrada; verifique o cliente.')
+        self._wake_screen()
 
     def _pressure_request(self, action, value=None):
         if self._pressure_controller.future is None:
@@ -544,7 +557,7 @@ class MainWindow(QMainWindow):
             snapshot, protected_fn=self._protection_reason))
         self.orphans.show_protections(self._sessions_view, self._exclusions_view,
                                       error=self._protect_default or "")
-        notes = (self._tray_note,) if self._tray_note else ()
+        notes = tuple(note for note in (self._tray_note, self._web_mcp_note) if note)
         self.dashboard.show_snapshot(
             snapshot, orphan_count=len(candidates),
             thumbnails_kb=self.disk.thumbnails_kb, extra_notes=notes,

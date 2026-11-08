@@ -43,16 +43,19 @@ class AlertTracker:
             provider = row.get('provider')
             if provider not in ai_sessions.NAMES or row.get('count') is None: continue
             pending = {p['event'] for p in row.get('pending', []) if isinstance(p.get('event'), str)}
+            successful = {p['event'] for p in row.get('pending', [])
+                          if isinstance(p.get('event'), str) and not p.get('reported_web_mcp_error')}
             seen = self.deliveries.get(provider)
             if seen is None:
                 self.deliveries[provider] = pending
                 # A provider may have no readable session at startup. A native
                 # receipt explicitly completed after we started is still new.
-                if any((at := ai_sessions.timestamp(p.get('at'))) is not None and self.started_at <= at <= now
+                if any(p.get('event') in successful and
+                       (at := ai_sessions.timestamp(p.get('at'))) is not None and self.started_at <= at <= now
                        for p in row.get('pending', [])):
                     sounds.append(provider)
                 continue
-            if pending - seen: sounds.append(provider)
+            if successful - seen: sounds.append(provider)
             # Acknowledgment, partial reads and new requests must not replay old
             # completion sounds. Overflow protects instead of silently evicting.
             if len(seen | pending) > 16384:

@@ -1,4 +1,61 @@
-# Passagem para o próximo agente — atualizada em 07/11/2026
+# Passagem para o próximo agente — atualizada em 08/11/2026
+
+## Sessão MCP encerrada relatada pelo Codex Web — 08/11/2026
+
+Às 00:35:47 -03, a resposta final de um agente Codex Web registrou
+`McpServerError: Session terminated` ao tentar acessar o Codex Native2. O
+launcher havia encerrado o turno Web às 00:35:45 com estado `completed`.
+Às 00:35:11, a recuperação existente do PhaseZero observou launcher, rota,
+túnel e conector prontos, com sessão ocupada, sem falha local e sem ação; às
+00:36:21, observou estado `ready` e nenhuma ação. A frase não constava nos logs
+do launcher: apareceu na resposta do agente. A causa exata da terminação da
+sessão MCP não foi comprovada. Um restart local nesse momento arriscaria o
+turno ativo e não reconectaria necessariamente o cliente remoto.
+
+O Fôlego agora reconhece **somente o relato** no registro nativo de conclusão
+Web que o monitor de entregas já lia, dentro da cauda máxima de 64 KiB. Não há
+novo daemon, consulta MCP ativa, nova varredura nem persistência do texto da
+conversa. O recibo guarda só um booleano e os hashes de identidade usuais. Um
+recibo novo apresenta badge `!` vermelho e texto acessível na célula Web, aviso
+na Central, notificação pela bandeja se disponível, feedback no widget aberto
+e despertar pela política de tela já habilitada. Repetições da mesma conclusão
+na sessão atual são deduplicadas; o histórico em memória é limitado a 2048
+identidades. O relato não toca o som de entrega bem-sucedida. O aviso não
+equivale à indisponibilidade do serviço/túnel, que
+seguem seus estados independentes.
+
+Não foi implantado restart automático para `Session terminated`: a sessão e o
+token pertencem ao turno do cliente MCP e um retry cego pode duplicar efeitos.
+O owner existente do host já executa recuperação opt-in de falhas locais
+confirmadas; o Fôlego não disputa essa propriedade nem depende dele para ler
+o estado Web. A ação humana quando só esse relato existe é reconectar o
+Codex Native2 no ChatGPT e conferir o resultado anterior antes de repetir.
+Observação decisiva ainda faltante: erro bruto do cliente MCP com identidade
+da sessão e instante, correlacionado ao estado do túnel e do servidor no mesmo
+turno. Não registrar tokens ou conteúdo sensível. A detecção depende de a
+resposta final conter a frase exata enquanto o Fôlego estiver monitorando;
+outros modos de falha e mensagens que não cheguem à resposta permanecem
+desconhecidos.
+
+Validação: `./dev check` passou 1319 testes headless e 1724 Qt, com 2
+ignorados em cada perfil. Após a revisão visual, a adição do `!` foi
+revalidada por 9 testes Qt focados. Os testes focados do monitor passaram 17
+e os de interface/bandeja 27. A primeira fixture falhou porque a conta foi registrada
+depois do cache de inventário; foi corrigida e a tentativa permanece em
+`.scratch/dev-tests-reviewed/`. Uma execução intermediária de `./dev check`
+parou depois de 1318 headless aprovados porque o limite de 20 workspaces reteve
+a etapa Qt; a suíte Qt separada passou 1723 antes do ajuste final do som.
+As execuções completas finais ficaram em `.scratch/dev-tests/run-ngpknkiy/`
+e `.scratch/dev-tests/run-9ql5ciee/`. Durante o gate, ACPI marcou 79–82 °C,
+RAM disponível ficou em ~4,3 GiB e PSI de CPU/memória/I/O permaneceu baixo.
+Uma coleta real de entregas levou 139,15 ms de parede/98,69 ms de CPU; é
+amostra única do monitor inteiro, sem baseline antes/depois. O incremento
+reutiliza a mesma leitura limitada a cada 5 s e não acrescenta sondagem.
+Testes Qt offscreen não certificam entrega da notificação pelo Plasma,
+visibilidade física da célula ou reconexão real do cliente. Capturas offscreen
+de 200×63 em temas `snes-us` e `ps2` ficaram em
+`.scratch/web-mcp-visual-20261108/`; badge `1!` legível nos dois temas,
+sem evidência de compositor físico.
 
 ## Prévia 0.2.0b8 publicada e instalada
 

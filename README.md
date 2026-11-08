@@ -86,6 +86,14 @@ Uma cota desconhecida não é tratada como zero. O anel faz uma transição suav
 ao receber um novo percentual; uma cota que volta aparece com uma transição curta
 e a reposição confirmada usa o aviso sonoro existente. Entregas para revisitar
 fazem a borda interna pulsar.
+Quando a resposta final de um agente Codex Web relata
+`McpServerError: Session terminated`, o Fôlego marca a entrega com `!` vermelho,
+mostra aviso na janela e na bandeja disponível e acende a tela se a economia
+de energia estiver ativa. É um relato da sessão MCP, não prova de defeito no
+serviço local. Reconecte o Codex Native2 no ChatGPT e confira o resultado da
+operação anterior antes de repetir. A recuperação automática do serviço local
+continua com o responsável configurado no host; o Fôlego não reinicia o
+cliente, o túnel ou agentes por esse texto.
 Ao lado das entregas, um **presente verde piscando** mostra as redefinições
 disponíveis confirmadas das contas do provedor. Clique para consultar a conta;
 o resgate continua no cliente de IA.

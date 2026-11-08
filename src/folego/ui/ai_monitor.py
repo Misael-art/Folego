@@ -1,4 +1,6 @@
 """One AI observation owner, independent of floating-widget visibility."""
+from collections import deque
+import time
 from PySide6.QtCore import QObject, Signal
 
 from ..core import ai_sessions
@@ -10,11 +12,15 @@ from .workers import Poller
 class AIMonitor(QObject):
     quotas_ready = Signal(object)
     deliveries_ready = Signal(object)
+    web_mcp_reported = Signal(object)
 
     def __init__(self, parent=None, *, collect_fn=None, deliveries=None, alerts=None):
         super().__init__(parent)
         self.items = [ai_sessions.unknown(p) for p in ai_sessions.NAMES]
         self.delivery_items = []
+        self._started_at = time.time()
+        self._reported_web_mcp_ids = set()
+        self._reported_web_mcp_order = deque()
         self.deliveries = deliveries or DeliveryMonitor()
         self.alerts = alerts or AlertSounds(self)
         self.poller = Poller(collect_fn or ai_sessions.collect, interval_s=60, parent=self, offload=True)
@@ -33,6 +39,18 @@ class AIMonitor(QObject):
 
     def set_deliveries(self, rows):
         self.delivery_items = rows
+        for row in rows:
+            if row.get('provider') != 'web': continue
+            for receipt in row.get('pending', ()):
+                if not receipt.get('reported_web_mcp_error'): continue
+                key = (receipt.get('session'), receipt.get('event'))
+                if None in key or key in self._reported_web_mcp_ids: continue
+                if len(self._reported_web_mcp_order) == 2048:
+                    self._reported_web_mcp_ids.remove(self._reported_web_mcp_order.popleft())
+                self._reported_web_mcp_order.append(key)
+                self._reported_web_mcp_ids.add(key)
+                if receipt.get('at', 0) >= self._started_at:
+                    self.web_mcp_reported.emit(receipt)
         self.alerts.observe('deliveries', rows)
         self.deliveries_ready.emit(rows)
 

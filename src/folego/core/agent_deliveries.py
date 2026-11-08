@@ -24,6 +24,7 @@ from .procfs import _parse_stat
 
 MAX_SESSIONS = 128
 MAX_TAIL = 64 * 1024
+WEB_MCP_SESSION_ERROR = 'McpServerError: Session terminated'
 
 
 def identity(pid, proc=Path('/proc')):
@@ -187,6 +188,11 @@ def last_delivery(provider, path, since, now, primary=False):
                 observed = True
                 token = event.get('turn_id')
                 if not token: raise ValueError('conclusão sem identidade')
+                # The final answer is already present in this bounded record.
+                # This is an agent report, not proof that the local service failed.
+                reported_web_mcp_error = (provider == 'web' and
+                    isinstance(event.get('last_agent_message'), str) and
+                    WEB_MCP_SESSION_ERROR in event['last_agent_message'])
         elif provider == 'claude':
             if record.get('isSidechain'): continue
             if record.get('type') == 'api-request':
@@ -217,6 +223,8 @@ def last_delivery(provider, path, since, now, primary=False):
                     if not token: raise ValueError('conclusão sem identidade')
         if token and session:
             pending = dict(at=at, event=str(token)) if at >= since else None
+            if pending and provider == 'web' and reported_web_mcp_error:
+                pending['reported_web_mcp_error'] = True
     if size > MAX_TAIL and not observed:
         raise ValueError('estado da sessão fora da cauda observável')
     return pending
@@ -313,7 +321,10 @@ class DeliveryMonitor:
         event = hashlib.sha256((session + '\0' + pending['event']).encode()).hexdigest()
         seen = value['seen'].get(session, {})
         if seen and (seen.get('event') == event or seen.get('at', 0) > pending['at']): return None
-        return dict(session=session, event=event, at=pending['at'])
+        receipt = dict(session=session, event=event, at=pending['at'])
+        if pending.get('reported_web_mcp_error'):
+            receipt['reported_web_mcp_error'] = True
+        return receipt
 
     def acknowledge(self, pending):
         """Only the snapshot whose application was actually opened is viewed."""
