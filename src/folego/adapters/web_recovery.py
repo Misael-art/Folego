@@ -1,5 +1,6 @@
 """Delegate to an installed, opted-in owner; never repair a browser ourselves."""
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -7,21 +8,25 @@ import stat
 import subprocess
 import time
 
-from ..core.ai_sessions import timestamp
+from ..core.ai_sessions import WEB_RECOVERY_MAX_AGE, timestamp
 
 
 STATES = {
     'ready': 'Infraestrutura local verificada; resposta Web ainda não comprovada',
     'login-required': 'Renove o login no ChatGPT dentro do launcher desta conta',
     'permission-required': 'Confira a permissão do conector no responsável pelo Web',
-    'waiting-for-idle': 'Recuperação aguardando o encerramento do turno ativo',
+    'waiting-for-idle': 'Recuperação aguardando a ociosidade do launcher',
     'waiting-for-resources': 'Recuperação aguardando margem de recursos',
+    'off': 'Monitor de recuperação desativado no responsável',
+    'repairable': 'O responsável identificou uma ação de recuperação',
+    'repair-failed': 'Uma ação do responsável falhou; confira o diagnóstico no PhaseZero',
     'cooldown': 'Recuperação em intervalo de espera',
     'circuit-open': 'Recuperação pausada após tentativas repetidas',
     'awaiting-validation': 'Reparo local realizado; valide uma nova resposta Web',
     'upstream-unavailable': 'Provedor indisponível; aguarde antes de tentar novamente',
     'rate-limited': 'Limite de solicitações do provedor; aguarde',
     'quota-exhausted': 'Franquia do provedor esgotada; confira no cliente',
+    'turn-stuck': 'O responsável sinalizou uma tarefa de longa duração',
 }
 
 
@@ -46,7 +51,6 @@ def owner(core_home, *, env=None):
     Optional adapter only. Other launchers retain passive monitoring. No global
     PhaseZero command or alternate account is selected as a fallback.
     """
-    import json
     env = os.environ if env is None else env
     root = Path(core_home).absolute().parent
     state = json.loads(trusted_bytes(root / 'state.json'))
@@ -79,29 +83,70 @@ def owner(core_home, *, env=None):
                 digest=hashlib.sha256(trusted_bytes(root / 'state.json')).hexdigest())
 
 
+def _turn_state(record, observation):
+    turns = observation.get('launcherTurns')
+    active = {turn for turn in turns if isinstance(turn, str) and turn} if isinstance(turns, list) else set()
+    stuck = record.get('stuckTurns')
+    if (record['state'] == 'turn-stuck' and isinstance(stuck, list)
+            and any(isinstance(turn, str) and turn in active for turn in stuck)):
+        return 'long-running'
+    return 'active' if active or observation.get('busy') is True else 'unknown'
+
+
+def _connector_status(record, observation, *, at, now):
+    if 'pendingAction' in record or not isinstance(observation, dict):
+        return dict(state='unknown')
+    incomplete = observation.get('launcherSetupIncomplete') is True
+    # Legacy receipts can prove the setup was incomplete. Their action list
+    # also includes deferred attempts, and False can mean the launcher was unreadable.
+    attempt = record.get('connectorVerification') if record.get('schemaVersion') == 1 else None
+    if isinstance(attempt, dict):
+        state = attempt.get('state')
+        finished = timestamp(attempt.get('at'))
+        if (state in ('verified', 'deferred', 'failed', 'unknown') and finished is not None
+                and at <= finished <= now + 5 and (state != 'verified' or not incomplete)):
+            return dict(state=state, checked_at=finished)
+    return dict(state='pending' if incomplete else 'unknown')
+
+
 def status(core_home, *, now=None):
-    """Sanitized last observation, independent of model capacity and quota."""
-    import json
+    """Project bounded, account-local recovery metadata from the existing owner."""
     now = time.time() if now is None else now
+    result = dict(state='unknown', freshness='unknown', turn_state='unknown', connector=dict(state='unknown'),
+                  detail='Diagnóstico recente do responsável não disponível')
     try:
         record = json.loads(trusted_bytes(Path(core_home).parent / 'recovery-state.json'))
-        at = timestamp(record.get('observedAt'))
-        if at is None or not -5 <= now - at <= 150:
-            raise ValueError('Observação do responsável antiga ou desconhecida')
-        state = record.get('state')
-        if not isinstance(state, str):
-            raise ValueError('Estado do responsável desconhecido')
-        return dict(state=state if state in STATES else 'attention', checked_at=at,
-                    detail=STATES.get(state, 'Consulte o diagnóstico do responsável pelo Web'))
-    except (OSError, ValueError, TypeError, AttributeError):
-        return dict(state='unknown', detail='Diagnóstico recente do responsável não disponível')
+    except (OSError, ValueError, RecursionError):
+        return result
+    if not isinstance(record, dict) or not isinstance(record.get('state'), str):
+        return result
+    version = record.get('schemaVersion')
+    if 'schemaVersion' in record and (type(version) is not int or version != 1):
+        return result
+    at = timestamp(record.get('observedAt'))
+    if at is None or at > now + 5:
+        return result
+    result['last_observed_at'] = at
+    next_attempt = timestamp(record.get('nextAttemptAt'))
+    if next_attempt is not None and now < next_attempt <= at + 600:
+        result['next_attempt_at'] = next_attempt
+    if now - at > WEB_RECOVERY_MAX_AGE:
+        result.update(freshness='stale', detail='Diagnóstico atual do responsável desconhecido')
+        return result
+    state = record['state']
+    observation = record.get('after', record.get('observation'))
+    result.update(state=state if state in STATES else 'attention', freshness='fresh', checked_at=at,
+                  detail=STATES.get(state, 'Consulte o diagnóstico do responsável pelo Web'),
+                  connector=_connector_status(record, observation, at=at, now=now))
+    if isinstance(observation, dict):
+        result['turn_state'] = _turn_state(record, observation)
+    return result
 
 
 def request(core_home, expected, *, env=None, run=subprocess.run):
     """Revalidate owner and systemd binding at the act. Only request its cycle."""
     if owner(core_home, env=env) != expected:
         raise ValueError('Responsável mudou; solicitação bloqueada')
-    import json
     try:
         record = json.loads(trusted_bytes(Path(core_home).parent / 'recovery-state.json'))
         if not isinstance(record, dict) or record.get('pendingAction'):

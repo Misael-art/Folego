@@ -30,6 +30,7 @@ import urllib.error
 MAX_AGE = 900
 MAX_FILE = 512 * 1024
 MAX_TAIL = 64 * 1024
+WEB_RECOVERY_MAX_AGE = 150
 NAMES = {"codex": "Codex", "web": "Codex Web", "claude": "Claude", "grok": "Grok"}
 _CLAUDE_CACHE = {}  # sanitized observations only; no tokens, no disk writes
 _GROK_CACHE = {}
@@ -707,6 +708,35 @@ def next_monthly(day, now):
     return date.strftime('%d/%m/%Y')
 
 
+def web_recovery_lines(recovery, now=None):
+    now = time.time() if now is None else now
+    at = recovery.get('last_observed_at')
+    stale = recovery.get('freshness') == 'stale' or (at is not None and now - at > WEB_RECOVERY_MAX_AGE)
+    detail = 'Diagnóstico atual do responsável desconhecido' if stale else recovery['detail']
+    lines = ['Recuperação Web · ' + detail]
+    if not stale and 'connector' in recovery:
+        turn = {'active': 'Tarefa em andamento',
+                'long-running': 'Tarefa ativa há mais de 30 min'}.get(recovery.get('turn_state'))
+        if turn:
+            lines.append('Launcher · ' + turn)
+        connector = recovery['connector']
+        status = {'pending': 'Verificação pendente no PhaseZero',
+                  'deferred': 'Verificação adiada pelo PhaseZero',
+                  'failed': 'Verificação falhou',
+                  'verified': 'Conector verificado'}.get(connector['state'], 'Estado desconhecido')
+        if connector.get('checked_at'):
+            status += ' · ' + stamp(connector['checked_at'])
+        lines.append('Conector · ' + status)
+    if at is not None:
+        minutes = max(0, int((now - at) // 60))
+        lines.append('Último diagnóstico há ' + (f'{minutes} min' if minutes else 'menos de 1 min'))
+    next_attempt = recovery.get('next_attempt_at')
+    if next_attempt is not None and next_attempt > now:
+        label = 'Última previsão de nova tentativa' if stale else 'Próxima tentativa prevista'
+        lines.append(label + ' · ' + stamp(next_attempt))
+    return lines
+
+
 def describe(item, now=None):
     now = time.time() if now is None else now
     if item.get('provider') == 'web':
@@ -723,7 +753,7 @@ def describe(item, now=None):
         lines.extend(['Resposta ChatGPT Web: não comprovada sem envio',
                       'Limite, saldo e reposição da conta: não informados'])
         if item.get('web_recovery'):
-            lines.append('Recuperação Web: ' + item['web_recovery']['detail'])
+            lines.extend(web_recovery_lines(item['web_recovery'], now))
         usage = item.get('local_usage')
         if usage:
             lines.append('Envios registrados neste launcher em 7 dias: '

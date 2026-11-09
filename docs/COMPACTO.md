@@ -226,11 +226,21 @@ revisão. O responsável conserva sua própria trava, verificação de ociosidad
 orçamento e disjuntor. O Fôlego não troca conta/modelo, renova credenciais,
 reenvia tarefa nem reinicia diretamente agentes ou navegador.
 
-O painel da conta e `./dev run ai status --json` mostram o diagnóstico do
-responsável, válido por 150 s. Serviço/túnel prontos não comprovam resposta Web.
-`login-required` pede login no ChatGPT **dentro do launcher desta conta**;
-indisponibilidade do provedor exige aguardar. A mensagem de capacidade,
-isoladamente, não comprova qual dessas causas ocorreu.
+O painel da conta e `./dev run ai status --json` mostram a atividade observada
+no launcher, o estado do conector e a idade do último diagnóstico do
+responsável. Uma previsão de nova tentativa vem do próprio recibo. Após 150 s,
+o estado atual fica desconhecido e a previsão, se ainda futura, aparece como
+histórica. `login-required` pede login no ChatGPT **dentro do launcher desta
+conta**. Serviço, túnel, conector e resposta Web são sinais independentes.
+
+Recibos PhaseZero sem versão ainda informam espera, tarefa longa e configuração
+incompleta quando esses dados estão presentes. Para exibir o resultado de uma
+tentativa, o adaptador reconhece `schemaVersion: 1` e `connectorVerification`
+com `state` (`verified`, `deferred`, `failed` ou `unknown`) e `at` do mesmo ciclo.
+A confirmação exige recibo recente e nenhuma ação pendente ou indicação de
+configuração incompleta. A lista de ações do recibo pode incluir uma tentativa
+adiada. A leitura exporta estados e horários, sem IDs de abas nem conteúdo da
+sessão. A verificação e o alerta de tarefa longa pertencem ao PhaseZero.
 
 Para solicitar manualmente o mesmo ciclo para um erro ainda não visto, de até
 15 minutos, use `./dev run ai recover-web --account ID --confirmar --json`.

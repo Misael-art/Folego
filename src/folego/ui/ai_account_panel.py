@@ -226,10 +226,8 @@ class AccountPanel(QWidget):
         self.line('Resposta do ChatGPT Web · ' + item.get('web_inference', 'não comprovada'), color='muted')
         recovery = item.get('web_recovery')
         if recovery:
-            self.line('Recuperação Web · ' + recovery['detail'],
-                      color='muted' if recovery.get('state') in ('unknown', 'ready') else 'warning')
-            if recovery.get('checked_at'):
-                self.line('Responsável verificado em ' + date(recovery['checked_at']), color='muted')
+            for line in ai.web_recovery_lines(recovery):
+                self.line(line, color='muted')
         self.line('Limite da sessão/conta · não informado pelo WebGPT', big=True, color='muted')
         self.line('Saldo disponível e horário de reposição · desconhecidos', color='muted')
         usage = item.get('local_usage')

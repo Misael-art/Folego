@@ -70,6 +70,39 @@ def test_web_login_diagnosis_is_actionable_even_when_local_service_is_ready(qapp
     panel.close()
 
 
+def test_web_accounts_show_independent_connector_and_turn_states(qapp, tmp_path):
+    import json
+
+    from folego.core import web_gpt
+
+    now = time.time()
+    rows = []
+    for account, state in (('principal', 'deferred'), ('outra', 'verified')):
+        root = tmp_path / account
+        root.mkdir()
+        busy = state == 'deferred'
+        receipt = dict(schemaVersion=1, observedAt=now - 8, state='waiting-for-idle' if busy else 'ready',
+                       observation=dict(busy=busy, launcherSetupIncomplete=busy),
+                       connectorVerification=dict(state=state, at=now - 5))
+        (root / 'recovery-state.json').write_text(json.dumps(receipt))
+        rows.append(dict(provider='web', account_id=account, label=account, default=busy,
+                         **web_gpt.observe(root / 'core-home', root / 'launcher-data', now=now)))
+
+    def visible_lines(panel):
+        return '\n'.join(panel.content.itemAt(i).widget().text() for i in range(panel.content.count())
+                         if isinstance(panel.content.itemAt(i).widget(), QLabel))
+
+    panel = AccountPanel('web', rows)
+    principal = visible_lines(panel)
+    assert 'Tarefa em andamento' in principal and 'Verificação adiada' in principal
+    assert 'Último diagnóstico há menos de 1 min' in principal and 'Conector verificado' not in principal
+    panel.account_buttons['outra'].click()
+    other = visible_lines(panel)
+    assert 'Conector verificado' in other and 'Verificação adiada' not in other
+    assert 'Resposta do ChatGPT Web · não comprovada' in other
+    panel.close()
+
+
 def test_opening_selected_account_only_sends_its_delivery_receipts(qapp):
     from PySide6.QtCore import QObject, Signal
     class Opener(QObject):

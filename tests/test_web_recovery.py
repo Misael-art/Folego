@@ -98,6 +98,84 @@ def test_recent_login_diagnosis_is_visible_without_claiming_capacity_or_quota(ow
     assert backend.status(owner.core, now=now + 151)['state'] == 'unknown'
 
 
+def test_web_monitor_reports_deferred_race_without_treating_actions_as_success(owner, monkeypatch, capsys):
+    from folego import cli
+    from folego.core import ai_sessions
+
+    now = time.time()
+    path = owner.root / 'recovery-state.json'
+    record = dict(observedAt=now - 4, state='waiting-for-idle', actions=['reverify-connector'],
+                  observation=dict(busy=False, launcherTurns=[], launcherSetupIncomplete=True),
+                  after=dict(busy=True, launcherTurns=['private-trace'], launcherSetupIncomplete=True),
+                  nextAttemptAt=now + 56)
+    path.write_text(json.dumps(record))
+    legacy = backend.status(owner.core, now=now)
+    assert legacy['turn_state'] == 'active'
+    assert legacy['connector']['state'] == 'pending'
+
+    record.update(schemaVersion=1, connectorVerification=dict(state='deferred', at=now - 2, secret='private'))
+    path.write_text(json.dumps(record))
+    item = dict(provider='web', **web_gpt.observe(owner.core, owner.root / 'data', now=now))
+    monkeypatch.setattr(ai_sessions, 'collect', lambda: [item])
+    assert cli.main(['ai', 'status', '--json']) == 0
+    output = capsys.readouterr().out
+    recovery = json.loads(output)['meters'][0]['web_recovery']
+    assert recovery['connector']['state'] == 'deferred'
+    assert recovery['freshness'] == 'fresh' and recovery['next_attempt_at'] == now + 56
+    assert 'private' not in output and 'actions' not in output
+    assert 'Verificação adiada' in ai_sessions.describe(item, now=now)
+
+    record.update(state='ready', connectorVerification=dict(state='verified', at=now),
+                  after=dict(busy=False, launcherTurns=[], launcherSetupIncomplete=False))
+    path.write_text(json.dumps(record))
+    assert backend.status(owner.core, now=now)['connector']['state'] == 'verified'
+
+
+@pytest.mark.parametrize('fault, expected', [
+    ('legacy', 'unknown'), ('version', 'unknown'), ('version-bool', 'unknown'),
+    ('invalid-after', 'unknown'), ('pending', 'unknown'), ('old-result', 'unknown'),
+    ('conflict', 'pending'), ('failed', 'failed'), ('unknown', 'unknown'),
+])
+def test_connector_readiness_requires_fresh_consistent_confirmation(owner, fault, expected):
+    now = time.time()
+    record = dict(schemaVersion=1, observedAt=now - 10, state='ready', actions=['reverify-connector'],
+                  observation=dict(busy=False, launcherTurns=[], launcherSetupIncomplete=False),
+                  connectorVerification=dict(state='verified', at=now - 5))
+    if fault == 'legacy': record.pop('schemaVersion')
+    elif fault == 'version': record['schemaVersion'] = 2
+    elif fault == 'version-bool': record['schemaVersion'] = True
+    elif fault == 'invalid-after': record['after'] = None
+    elif fault == 'pending': record['pendingAction'] = 'reverify-connector'
+    elif fault == 'old-result': record['connectorVerification']['at'] = now - 151
+    elif fault == 'conflict': record['observation']['launcherSetupIncomplete'] = True
+    else: record['connectorVerification']['state'] = fault
+    (owner.root / 'recovery-state.json').write_text(json.dumps(record))
+    assert backend.status(owner.core, now=now)['connector']['state'] == expected
+
+
+def test_web_monitor_preserves_only_age_and_schedule_when_a_receipt_expires(owner):
+    from folego.core import ai_sessions
+
+    now = time.time()
+    record = dict(observedAt=now - 150, state='turn-stuck', stuckTurns=['private-trace'],
+                  observation=dict(busy=True, launcherTurns=['private-trace'], launcherSetupIncomplete=True),
+                  nextAttemptAt=now + 90)
+    (owner.root / 'recovery-state.json').write_text(json.dumps(record))
+    fresh = backend.status(owner.core, now=now)
+    assert fresh['turn_state'] == 'long-running' and fresh['connector']['state'] == 'pending'
+    # The same snapshot can remain open while a background collection is delayed.
+    lines = ai_sessions.web_recovery_lines(fresh, now=now + 1)
+    assert any('Último diagnóstico há 2 min' in line for line in lines)
+    assert any('Última previsão de nova tentativa' in line for line in lines)
+    assert all('30 min' not in line and 'Verificação pendente' not in line for line in lines)
+    stale = backend.status(owner.core, now=now + 1)
+    assert stale['freshness'] == 'stale' and stale['state'] == 'unknown'
+    assert stale['turn_state'] == stale['connector']['state'] == 'unknown'
+    assert stale['last_observed_at'] == now - 150 and stale['next_attempt_at'] == now + 90
+    assert 'private-trace' not in json.dumps(stale)
+    assert 'next_attempt_at' not in backend.status(owner.core, now=now + 91)
+
+
 def test_pending_owner_effect_blocks_another_cycle(owner):
     registered = backend.owner(owner.core, env=owner.env)
     (owner.root / 'recovery-state.json').write_text(json.dumps(dict(pendingAction='restart-backend')))
