@@ -83,6 +83,16 @@ explícitas ativadas pelo usuário; fechamento pelo canal do app (bandeja, unit,
 janela) com intenção/ID, revalidação no ato, orçamento e disjuntor. Agentes,
 projetos e classes protegidas nunca são alvo. SIGKILL continua manual.
 
+### Guarda de perfil de energia autorizado em 09/11
+
+Pedido do usuário após os desligamentos por queda de voltagem: o Fôlego pode
+**reduzir automaticamente o perfil de energia** (`powerprofilesctl`) na descarga
+— equilibrado em atenção, economia em crítica — e devolver o perfil anterior com
+o carregador, se ninguém o trocou. Ligado por padrão, com opção persistente em
+Opções. Recibo com intenção/ID antes do efeito, confirmação por leitura,
+orçamento por hora e pausa após resultado não confirmado. Não autoriza fechar
+ou pausar processos, suspender, alterar brilho/TDP nem elevar o perfil.
+
 ## Organização do desenvolvimento
 
 Pedido de 08/11: autoriza, para o erro nativo Web `Selected model is at capacity.

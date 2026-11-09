@@ -35,9 +35,10 @@ from .custom_prompts_tab import CustomPromptsTab
 from .ai_monitor import AIMonitor
 from .desktop_shortcuts import DesktopController
 from .screen_energy import ScreenEnergy
+from ..actions.power_profile_guard import PowerProfileGuard
 from .theme import TOKENS, _background_color, set_control_icon, prepare_surface
 from ..core import health
-from ..core.battery_alerts import BatteryAlertTracker, VoltageSagNotice
+from ..core.battery_alerts import BatteryAlertTracker, VoltageSagNotice, voltage_level
 from ..core.host_guard import PressureAlertTracker, ThermalTracker
 from ..core.agent_pressure import PressureBackend
 from ..core.exclusions import ExclusionError, ExclusionList
@@ -111,7 +112,7 @@ class MainWindow(QMainWindow):
                  exclusions: ExclusionList | None = None, journal=None,
                  config_store=None, grant_store=None, compact_factory=None, process_jobs=None,
                  accessibility_factory=None, startup_defaults=False,
-                 host_guard_factory=None):
+                 host_guard_factory=None, power_guard=None):
         super().__init__()
         self.setObjectName('mainWindow')
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
@@ -199,6 +200,14 @@ class MainWindow(QMainWindow):
         self._screen_controller.payload.connect(self._screen_result)
         self._screen_controller.failed.connect(self._screen_error)
         self._screen_controller.busy_changed.connect(self._screen_after_busy)
+        self._power_controller = DesktopController(
+            self, backend=power_guard if power_guard is not None else PowerProfileGuard())
+        self._power_controller.payload.connect(self._power_result)
+        self._power_controller.failed.connect(self._power_error)
+        self._power_key = self._power_pending = None
+        self._power_asked_at = 0.0
+        self.options.power_guard_requested.connect(self._power_request)
+        QTimer.singleShot(0, lambda: self._power_request('status'))
         self._pressure_controller = DesktopController(self, backend=PressureBackend())
         self._pressure_controller.payload.connect(self.options.show_cooperative_state)
         self._pressure_controller.failed.connect(self.options.cooperative_error)
@@ -308,6 +317,43 @@ class MainWindow(QMainWindow):
         self._poller.snapshot_ready.connect(self.apply_snapshot)
         self._poller.error.connect(self.show_error)
         self._poller.start()
+
+    def _power_request(self, action, value=None):
+        if self._quitting: return
+        if self._power_controller.future is None:
+            self._power_controller.request(action, value)
+        elif action != 'observe':
+            self._power_pending = action  # a user choice is never dropped behind a sample
+
+    def _observe_power_profile(self, battery):
+        """Hand sustained sag, or the return of external power, to the profile guard."""
+        key = None
+        if battery is not None:
+            level = voltage_level(battery)
+            if level in ('attention', 'critical'):
+                key = level
+            elif battery.status in ('Charging', 'Full', 'Not charging'):
+                key = 'external'
+        now = time.monotonic()
+        # Sagging samples are re-sent at a slow pace; the charger only on its edge.
+        due = (key != self._power_key if key == 'external' or key is None
+               else key != self._power_key or now - self._power_asked_at >= 15)
+        if not due or self._power_controller.future is not None: return
+        self._power_key, self._power_asked_at = key, now
+        self._power_request('observe', key)
+
+    def _power_result(self, result):
+        if result.get('changed'):
+            self.tray.show_power_profile(result['changed'])
+        if 'enabled' in result:
+            self.options.show_power_guard(result)
+        pending, self._power_pending = self._power_pending, None
+        if pending:
+            QTimer.singleShot(0, lambda: self._power_request(pending))
+
+    def _power_error(self, message):
+        self._power_pending = None
+        self.options.show_power_guard({'enabled': False, 'unavailable': True, 'message': message})
 
     def _screen_energy_request(self, action):
         self.options.screen_energy_choice.setEnabled(False)
@@ -546,6 +592,7 @@ class MainWindow(QMainWindow):
             self.ai_monitor.alerts.battery_cue(cue)
         if self._voltage_notice.observe(battery):
             self.tray.show_battery_voltage(battery)
+        self._observe_power_profile(battery)
         signal = title_signal.compute(snapshot, self._thresholds,
                                       engine=self._health)
         self._last_snapshot = snapshot
@@ -896,6 +943,7 @@ class MainWindow(QMainWindow):
             self._freshness_timer.stop()
             self._screen_timer.stop()
             self._screen_controller.close()
+            self._power_controller.close()
             self._pressure_controller.close()
             if self._poller is not None:
                 self._poller.stop()

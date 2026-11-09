@@ -203,6 +203,18 @@ class Tray:
                      "sem aviso. Conecte o carregador agora, salve o trabalho e pause "
                      "tarefas pesadas (builds, jogos, agentes).", 'critical')
 
+    def show_power_profile(self, change):
+        """The voltage guard changed (or gave back) the power profile."""
+        from ..actions.power_profile_guard import NAMES
+        if change.get('restore'):
+            return self._notice('resources', "Bateria · perfil de energia restaurado",
+                                f"Carregador conectado: perfil de volta a {NAMES[change['to']]}.")
+        return self._notice(
+            'resources', "Bateria · perfil de energia reduzido",
+            f"Voltagem em patamar de {'atenção' if change.get('level') == 'attention' else 'risco'}: "
+            f"perfil trocado de {NAMES[change['from']]} para {NAMES[change['to']]} para aliviar a "
+            "bateria. Volta ao anterior com o carregador; desligue em Opções.")
+
     def show_web_mcp_report(self):
         self._notice('service', 'Codex Web precisa de atenção',
                      'O agente relatou “McpServerError: Session terminated”. '

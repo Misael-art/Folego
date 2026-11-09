@@ -63,6 +63,13 @@ def never_touch_real_edge_config():
     assert before == after, "test suite touched ~/.config/microsoft-edge/Local State"
 
 
+@pytest.fixture(autouse=True)
+def never_change_the_host_power_profile(monkeypatch):
+    """The voltage guard must only meet fakes: no test may reach powerprofilesctl."""
+    from folego.actions import power_profile_guard
+    monkeypatch.setattr(power_profile_guard, "_tool", lambda: None)
+
+
 @pytest.fixture
 def fake_home(tmp_path, monkeypatch):
     """Isolated HOME + XDG dirs; every path resolved through folego.paths lands here."""

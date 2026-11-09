@@ -282,3 +282,16 @@ def test_battery_voltage_notice_states_reading_and_manual_action():
     assert "voltagem crítica" in title
     assert "6,57 V com 54% indicados" in body
     assert "Conecte o carregador" in body
+
+
+def test_power_profile_notice_names_the_change_and_its_reversal():
+    tray, _ = build()
+    tray.install()
+    tray.show_power_profile({'from': 'performance', 'to': 'power-saver',
+                             'restore': False, 'level': 'critical'})
+    title, body = tray.tray.messages[-1]
+    assert "perfil de energia reduzido" in title
+    assert "de desempenho para economia" in body and "Opções" in body
+    tray.show_power_profile({'from': 'power-saver', 'to': 'performance', 'restore': True})
+    title, body = tray.tray.messages[-1]
+    assert "restaurado" in title and "desempenho" in body

@@ -23,11 +23,14 @@ class OptionsTab(QWidget):
     operation_verified = Signal(object)
     sound_preview = Signal(str)
     screen_energy_requested = Signal(str)
+    power_guard_requested = Signal(str)
     def __init__(self, *, jobs=None):
         super().__init__()
         self._stopped = False
         self._desktop_options = False
         self._screen_energy_state = {'enabled': False, 'message': 'Verificando o Plasma.'}
+        self._power_guard_state = {'enabled': False, 'unavailable': True,
+                                   'message': 'Verificando o perfil de energia.'}
         self._cooperative_message = 'Pedido cooperativo: aguardando leitura térmica.'
         self._sound_message = 'Sons distintos por agente; alerta em 20%, fim da franquia e reposição confirmada.'
         self.jobs = jobs or TuneJobs(parent=self, argv_factory=options_argv, timeout_ms=30000)
@@ -234,11 +237,38 @@ class OptionsTab(QWidget):
         screen_layout.addWidget(self.screen_energy_status)
         screen_layout.addWidget(screen_hint)
         self.settings_box.insertWidget(0, screen_group)
+        power_group = QGroupBox('Bateria · perfil de energia')
+        power_layout = QVBoxLayout(power_group)
+        self.power_guard_choice = QCheckBox('Reduzir o perfil de energia quando a voltagem cair')
+        self.power_guard_choice.setAccessibleName('Guarda de perfil de energia por voltagem')
+        self.power_guard_choice.setEnabled(False)
+        self.power_guard_choice.clicked.connect(
+            lambda checked: self.power_guard_requested.emit('enable' if checked else 'disable'))
+        self.power_guard_status = QLabel('Verificando o perfil de energia.')
+        self.power_guard_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.power_guard_status.setWordWrap(True)
+        power_hint = QLabel('Na descarga: voltagem em atenção pede o perfil equilibrado; crítica pede '
+                            'economia. O perfil anterior volta quando o carregador é conectado, se '
+                            'você não o tiver trocado. Nenhum aplicativo é fechado.')
+        power_hint.setWordWrap(True)
+        for widget in (self.power_guard_choice, self.power_guard_status, power_hint):
+            power_layout.addWidget(widget)
+        self.settings_box.insertWidget(1, power_group)
+        self.show_power_guard(self._power_guard_state)
         self.show_screen_energy(self._screen_energy_state)
         self.cooperative_status = QLabel(self._cooperative_message)
         self.cooperative_status.setTextFormat(Qt.TextFormat.PlainText)
         self.cooperative_status.setWordWrap(True)
         screen_layout.addWidget(self.cooperative_status)
+
+    def show_power_guard(self, state):
+        self._power_guard_state = state
+        if self._stopped or not self._desktop_options: return
+        from PySide6.QtCore import QSignalBlocker
+        with QSignalBlocker(self.power_guard_choice):
+            self.power_guard_choice.setChecked(bool(state.get('enabled')))
+        self.power_guard_choice.setEnabled(not state.get('unavailable', False))
+        self.power_guard_status.setText(state.get('message', 'Estado do perfil desconhecido'))
 
     def show_screen_energy(self, state):
         self._screen_energy_state = state

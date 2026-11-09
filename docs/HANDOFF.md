@@ -30,6 +30,15 @@
 - Nenhuma ação automática foi adicionada: perfil de energia, pausa de cargas e
   suspensão preventiva dependem de autorização do usuário. Observado no host:
   `powerprofilesctl` em `performance` durante descarga a 7,28 V com 82%.
+- Guarda de perfil (autorizado em 09/11, ver `AGENTS.md`):
+  `actions/power_profile_guard.py` pede `balanced` em atenção e `power-saver`
+  em crítica após duas observações, nunca eleva, e restaura o perfil original
+  quando a bateria deixa de descarregar e o perfil ainda é o que ele aplicou.
+  Recibo em `state/power-profile-guard.json`, auditoria `power-profile`, 4 trocas
+  por hora, pausa após troca não confirmada até o usuário religar a opção em
+  Opções › "Bateria · perfil de energia". Testes só com daemon falso; o conftest
+  esconde `powerprofilesctl` de toda a suíte. Sem CLI: o guarda roda na GUI.
+  Não exercitado no host com queda real de voltagem.
 - Pendente: aceite no KDE real em descarga (render conferido só em Qt
   offscreen); o alerta não evita o corte, só avisa.
 
