@@ -21,7 +21,7 @@ from .theme import (_background_color, background, themed_style, TOKENS, THEMES,
                     set_control_icon, on_theme_change, theme_swatch)
 from .palettes import readable
 from .mini_ai_strip import MiniAIStrip
-from ..core.battery_alerts import battery_band, remaining_text
+from ..core.battery_alerts import battery_band, remaining_text, voltage_sag, voltage_text
 
 POSITION_KEY = "compact/position"
 WIDGET_TITLE = "Fôlego — widget"
@@ -1274,11 +1274,15 @@ class CompactWindow(QWidget):
             elif temperature >= limit - thresholds.thermal_margin_c:
                 thermal_notes.append('Temperatura próxima do limite passivo')
                 temperature_role = 'warning'
-        battery_low = (valid and snapshot.battery is not None
-                       and snapshot.source('battery').status == 'ok'
-                       and snapshot.battery.status == 'Discharging'
-                       and snapshot.battery.percent <= 10)
-        if battery_low:
+        battery_ok = (valid and snapshot.battery is not None
+                      and snapshot.source('battery').status == 'ok')
+        battery_sag = battery_ok and voltage_sag(snapshot.battery)
+        battery_low = battery_ok and (battery_sag or (
+            snapshot.battery.status == 'Discharging' and snapshot.battery.percent <= 10))
+        if battery_sag:
+            thermal_notes.append(f'Voltagem da bateria baixa ({voltage_text(snapshot.battery)}) '
+                                 f'apesar de {snapshot.battery.percent}%: risco de desligamento')
+        elif battery_low:
             thermal_notes.append(f'Bateria em {snapshot.battery.percent}%, descarregando')
         if self._paused:
             verdict, role = 'Pausado', 'muted'
@@ -1289,6 +1293,8 @@ class CompactWindow(QWidget):
                 verdict, role = 'Calor alto', 'danger'
             elif limit is not None and temperature >= limit - thresholds.thermal_margin_c:
                 verdict, role = 'Quente', 'warning'
+        elif battery_sag:
+            verdict, role = f'Bateria {voltage_text(snapshot.battery)}', 'danger'
         elif battery_low:
             verdict, role = f'Bateria {snapshot.battery.percent}%', 'danger'
         self.mini_status.setText(f'● {verdict}')

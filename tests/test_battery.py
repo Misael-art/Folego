@@ -124,3 +124,26 @@ def test_battery_bands_and_time():
     assert remaining_text(None) == ''
     assert remaining_text(7200) == '2h00'
     assert len({pcm(f'battery-{threshold}') for threshold in (75, 50, 25, 10)}) == 4
+
+
+def test_voltage_sag_alerts_despite_gauge_percent(tmp_path):
+    # Observed on 2026-11-09: gauge at 54% while a 7.7 V-design pack sagged to 6.57 V.
+    from folego.core.battery_alerts import voltage_sag
+    supply(tmp_path, percent='54', voltage_now='6569000', current_now='2711000',
+           voltage_min_design='7700000')
+    battery, quality = read_battery(tmp_path)
+    assert quality.status == 'ok' and battery.voltage_min_design_uv == 7_700_000
+    assert voltage_sag(battery)
+    tracker = BatteryAlertTracker()
+    assert tracker.observe(battery, now=0) == 'battery-10'
+    assert tracker.observe(battery, now=30) is None
+    assert tracker.observe(battery, now=61) == 'battery-10'
+
+
+def test_voltage_sag_needs_design_reference_and_discharge():
+    from folego.core.battery_alerts import voltage_sag
+    assert not voltage_sag(BatteryInfo(54, 'Discharging', voltage_uv=6_569_000))
+    assert not voltage_sag(BatteryInfo(54, 'Charging', voltage_uv=6_569_000,
+                                       voltage_min_design_uv=7_700_000))
+    assert not voltage_sag(BatteryInfo(54, 'Discharging', voltage_uv=7_400_000,
+                                       voltage_min_design_uv=7_700_000))

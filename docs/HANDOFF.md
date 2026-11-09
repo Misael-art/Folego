@@ -1,5 +1,26 @@
 # Passagem para o próximo agente — atualizada em 09/11/2026
 
+## Alerta de queda de voltagem da bateria e diagnóstico dos resets — 09/11/2026
+
+- Diagnóstico de 09/11 (journal + `host-timeline` + upower): 8 boots; 5 terminam
+  sem desligamento. Duas quedas na bateria com o medidor mostrando 74% (7,09 V) e 54%
+  (**6,57 V** a 2,7 A, 81 °C): pacote GETAC com 63% da capacidade de projeto
+  (3,28/5,2 Ah, ciclos=0) e medidor descalibrado; corte por queda de voltagem sem log.
+  Três quedas na tomada (carregando, 54–60 °C, ~7 GB livres) sem mensagem do
+  kernel: suspeita de energia/carregador, não comprovada. Três desligamentos
+  limpos, dois pelo botão de energia.
+- `BatteryInfo.voltage_min_design_uv` lê `voltage_min_design`;
+  `battery_alerts.voltage_sag` sinaliza descarga abaixo de 90% dessa referência
+  (sem referência = desconhecido, sem alerta). O cue crítico `battery-10` e o
+  estado `Bateria X,XX V` da mini passam a disparar mesmo com percentual alto.
+- Validação: `tests/test_battery.py` (11) e testes de UI/collector/timeline
+  relacionados passaram com HOME/XDG/TMPDIR privados, venv GUI, Qt offscreen.
+  `./dev check` bloqueado pelo limite de 20 workspaces retidos em
+  `.scratch/dev-tests` (inspecionar antes de remover). Falhas que já existiam
+  sem esta mudança (confirmadas com stash): `test_session_resilience::test_reconcile_known_journal_result_closes_started_review_once`,
+  `test_ui_capture_alerts::test_desktop_options_persist_and_preview_only_on_explicit_click`.
+- Pendente: aceite no KDE real em descarga; o alerta não evita o corte, só avisa.
+
 ## Sinalização por categoria e diagnóstico de OOM em cgroups — 09/11/2026
 
 Pop-ups nativos usam cinco selos com forma e cor próprias. O adaptador

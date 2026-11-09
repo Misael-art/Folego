@@ -20,6 +20,26 @@ def remaining_text(seconds: int | None) -> str:
     return f'{hours}h{minutes:02d}' if hours else f'{minutes} min'
 
 
+# A worn pack or miscalibrated gauge can report 50-70% while the cells sag
+# below the cutoff under load and the host loses power without a log. Only a
+# kernel-reported design minimum defines the reference; no cell-count guess.
+VOLTAGE_SAG_RATIO = 0.90
+
+
+def voltage_sag(battery) -> bool:
+    """True when a discharging pack is below 90% of its design minimum voltage."""
+    if battery is None or battery.status != 'Discharging':
+        return False
+    voltage, minimum = battery.voltage_uv, getattr(battery, 'voltage_min_design_uv', None)
+    if voltage is None or minimum is None:
+        return False
+    return voltage < minimum * VOLTAGE_SAG_RATIO
+
+
+def voltage_text(battery) -> str:
+    return f'{battery.voltage_uv / 1_000_000:.2f} V'.replace('.', ',')
+
+
 class BatteryAlertTracker:
     def __init__(self):
         self.previous = None
@@ -35,7 +55,7 @@ class BatteryAlertTracker:
         current = battery.percent
         previous = self.previous
         self.previous = current
-        if current <= 10:
+        if current <= 10 or voltage_sag(battery):
             if self.last_critical is None or now - self.last_critical >= 60:
                 self.last_critical = now
                 return 'battery-10'
