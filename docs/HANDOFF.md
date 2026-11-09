@@ -35,6 +35,15 @@ Código `7ff9c2dc2086860d5f71751890050b2a0faeacb0` confirmado no GitHub e no
 em execução e três na fila na primeira consulta. A evidência de interface
 é da janela própria de QA com interação Qt.
 
+Na verificação posterior, o head `81793ca4579e5d5b1285a374da30ccde4661e3de`
+do PR passou os seis checks de produto. CodeRabbit e Sourcery ficaram
+skipped. A GUI residente PID 453574, iniciada às 08:55:19 -03, usa o
+checkout em instalação editável. O owner AT-SPI foi conferido pelo PID.
+Na árvore da mini, a célula do Grok publicou **Entregas** com contador **2**
+e cota não confirmada. A geometria observada do widget residente era do
+modo compacto. A confirmação da apresentação da mini veio da janela
+Wayland própria descrita acima.
+
 ## Diagnóstico da verificação do conector Codex Web por conta — 09/11/2026
 
 O Fôlego passou a apresentar atividade do launcher, estado do conector, idade
