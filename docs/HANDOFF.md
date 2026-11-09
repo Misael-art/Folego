@@ -1,5 +1,58 @@
 # Passagem para o próximo agente — atualizada em 09/11/2026
 
+## Sinalização por categoria e diagnóstico de OOM em cgroups — 09/11/2026
+
+Pop-ups nativos usam cinco selos com forma e cor próprias. O adaptador
+compartilha o payload entre a GUI e o Modo Desempenho, com `desktop-entry`,
+imagem local empacotada e urgência independente. Na GUI o envio é assíncrono,
+com fila e prazo limitados. A bandeja oferece o selo como fallback quando
+o envio nativo ainda não foi iniciado. Os avisos de entrada, calor, PSI e
+Codex Web mantêm as políticas de repetição existentes.
+
+Entregas confirmadas produzem um pop-up por provedor no ciclo, com contagem.
+A detecção e o som usam o mesmo rastreador. A preferência de som afeta só o
+áudio. Recibo anterior à abertura, repetido ou com erro estruturado fica
+fora do aviso de conclusão. O texto de respostas e os IDs de sessões ficam
+fora dos pop-ups.
+
+O journal e as units do systemd registraram seis encerramentos de `rustc`
+por `CONSTRAINT_MEMCG` em scopes transitórios de testes Cargo. Cada scope
+atingiu o teto de 3,42 GiB e tinha `MemorySwapMax=0`. As amostras globais
+retidas do Fôlego imediatamente anteriores aos eventos tinham de 2,54 a
+3,32 GiB de `MemAvailable`. Em dois episódios, o PSI global de
+memória em 60 s ficou abaixo de 1% na amostra anterior. A telemetria global
+e o OOM local são coerentes. O diagnóstico indica uma lacuna de cobertura
+por escopo, pois o observador de saúde atual não lê eventos OOM. Próximo
+incremento a considerar é observar o journal do kernel por boot e,
+para grupos ainda ativos, correlacionar `memory.events` e o limite efetivo.
+Em um build ativo, `memory.current` ficou a 80 KiB de `memory.max` e
+`memory.events` já registrava tentativas de ultrapassar o teto. Esse sinal
+local estava disponível antes do sexto encerramento pelo kernel.
+Nenhuma reprodução de pressão nem mudança nos limites do host foi usada.
+
+O foco passou 82 testes em `.scratch/dev-tests/run-2jgt8837/`. O envio real
+pelo worker foi aceito nas cinco categorias pelo Plasma 6.7.4 com KWin e
+D-Bus privados. O ensaio verificou a leitura dos selos e o retorno do envio.
+O Spectacle capturou os pop-ups do compositor isolado em Breeze claro a
+100% e Breeze escuro a 150%. Capturas e recibos em
+`.scratch/notices-20261109.4tNvDD/`. A apresentação no histórico não fez
+parte da inspeção visual. O worker recusa enviar na plataforma Qt offscreen.
+
+Os logs dos dois jobs Qt do head anterior confirmaram uma falha de largura
+na gaveta do compacto sob a fonte do Ubuntu. O texto **Apagar tudo** exigia
+72 px com a margem verificada e recebia 71 px. O botão **D** passou de 38
+para 32 px, devolvendo espaço aos três controles de texto. A asserção de
+legibilidade foi mantida.
+
+`./dev check` passou em Python 3.14.7 com HOME/XDG privados. O núcleo
+teve **1358 + 2 skips** em 29,72 s em `run-u04h_7_m`. Depois dos ajustes
+de layout e isolamento offscreen, a suíte Qt final passou **1772 + 2 skips**
+em 137,51 s em `run-pzcexxce`. Os dois passes Qt intermediários foram
+preservados em `.scratch/dev-tests-reviewed/notices-intermediate-20261109/`.
+Código `746e3a497c1e50bb406e67f4bea4b1c453cbc317` confirmado no GitHub e
+no [PR #9](https://github.com/Misael-art/Folego/pull/9). Na primeira
+consulta, cinco jobs de produto estavam em execução e um na fila.
+
 ## Temas na mini e comandos do widget compacto — 09/11/2026
 
 A mini horizontal tem **Controles → Tema de cores**, com as oito amostras
@@ -29,11 +82,12 @@ os acionamentos do ensaio foram Qt. Recibos e tentativas iniciais em
 O foco inicial passou 146 testes e apontou uma expectativa antiga para o
 menu. A asserção passou a conferir os itens visíveis. O foco de regressão
 passou 10 testes, com 83 desmarcados. Evidência em `run-i0o_pqde` e
-`run-7j3_oqrt` sob `.scratch/dev-tests/`.
+`run-7j3_oqrt` sob `.scratch/dev-tests-reviewed/widget-design-20261109/`.
 
 `./dev check` passou com Python 3.14.7 e HOME/XDG privados. Foram
 **1357 + 2 skips** headless em 32,32 s e **1769 + 2 skips** Qt offscreen
-em 144,45 s, nos workspaces `run-dcbs8lq3` e `run-kz_1s0t9`.
+em 144,45 s, nos workspaces `run-dcbs8lq3` e `run-kz_1s0t9`, preservados
+em `.scratch/dev-tests-reviewed/widget-design-20261109/`.
 Código `90b0958402e6e3e09e8ab8b01d899a8afb38b4d6` confirmado no GitHub e
 no [PR #9](https://github.com/Misael-art/Folego/pull/9). Os seis jobs de
 produto estavam na fila na primeira consulta.
