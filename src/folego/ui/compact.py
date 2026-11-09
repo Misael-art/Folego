@@ -397,12 +397,12 @@ class CompactWindow(QWidget):
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(0)
             for control in controls:
-                themed_style(control, lambda: f'QPushButton{{background:transparent;color:{TOKENS.text};'
-                             'border:none;border-radius:0;padding:0;min-height:0;}'
-                             f'QPushButton:hover{{background:{background(TOKENS.surface_alt)};}}')
                 row.addWidget(control)
             themed_style(group, lambda target=name: f'QFrame#{target}{{background:transparent;'
-                         f'border:1px solid {TOKENS.border};border-radius:7px;}}')
+                         f'border:1px solid {TOKENS.border};border-radius:7px;}}'
+                         f'QFrame#{target} QPushButton{{background:transparent;color:{TOKENS.text};'
+                         'border:none;border-radius:0;padding:0;min-height:0;}'
+                         f'QFrame#{target} QPushButton:hover{{background:{background(TOKENS.surface_alt)};}}')
             if name == 'keyboardGroup':
                 self.keyboard_group = group
                 header.addWidget(group, 0, 1)
@@ -483,7 +483,18 @@ class CompactWindow(QWidget):
         self.mini_expand.setAccessibleName('Expandir para o widget compacto')
         self.mini_expand.setToolTip('Expandir para o widget compacto')
         self.mini_expand.clicked.connect(lambda: self.set_dock_mode('compact'))
+        self.mini_actions_handle = QPushButton('···')
+        self.mini_actions_handle.setFixedSize(28, 26)
+        self.mini_actions_handle.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.mini_actions_handle.setAccessibleName('Revelar atalhos da mini horizontal')
+        self.mini_actions_handle.setToolTip('Atalhos da mini · passe o mouse ou toque')
+        themed_style(self.mini_actions_handle, lambda: f'QPushButton{{background:transparent;'
+                     f'color:{TOKENS.text};border:1px solid {TOKENS.border};border-radius:7px;'
+                     'min-height:0;padding:0;font-weight:700;}'
+                     f'QPushButton:hover{{background:{background(TOKENS.surface_alt)};}}')
+        self.mini_actions_handle.clicked.connect(lambda: self._animate_actions(True))
         self.mini_layout.addStretch(1)
+        self.mini_layout.addWidget(self.mini_actions_handle)
         self.mini_layout.addWidget(self.mini_expand)
         self.mini_bar.hide()
         self.layout_menu = QMenu('Visualizações', self.control_button)
@@ -554,9 +565,9 @@ class CompactWindow(QWidget):
         self.side_content.hide()
         self.action_drawer = QWidget(self)
         self.action_drawer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        drawer = QVBoxLayout(self.action_drawer)
-        drawer.setContentsMargins(0, 0, 0, 0)
-        drawer.addWidget(self.shortcut_tabs)
+        self.drawer_layout = QHBoxLayout(self.action_drawer)
+        self.drawer_layout.setContentsMargins(0, 0, 0, 0)
+        self.drawer_layout.addWidget(self.shortcut_tabs)
         self.action_drawer.setMaximumHeight(0)
         layout.addWidget(self.action_drawer)
         self._arrange_sections('compact')
@@ -628,7 +639,16 @@ class CompactWindow(QWidget):
         self.gauge.setFixedSize(gauge_side, gauge_side)
         self.ai_strip.layout().setDirection(QBoxLayout.Direction.TopToBottom if side
                                              else QBoxLayout.Direction.LeftToRight)
-        self.shortcut_tabs.set_orientation(mode)
+        self.shortcut_tabs.set_orientation(mode, self.control_button)
+        self.drawer_layout.setAlignment(self.shortcut_tabs, Qt.AlignmentFlag.AlignRight
+                                        if mode == 'mini' else Qt.AlignmentFlag(0))
+        self.drawer_layout.setContentsMargins(0, 0, 10 if mode == 'mini' else 0,
+                                             4 if mode == 'mini' else 0)
+        self.action_drawer.setVisible(mode != 'mini')
+        self.control_button.setText('Menu' if mode == 'mini' else '')
+        if mode != 'mini':
+            self.navigation_group.layout().addWidget(self.control_button)
+            self.control_button.show()
         for column in self.ai_strip.columns.values():
             self.ai_strip.layout().setAlignment(column, Qt.AlignmentFlag.AlignHCenter if side else Qt.AlignmentFlag(0))
             self.ai_strip.layout().setStretchFactor(column, 0 if side or slim_top else 1)
@@ -643,9 +663,12 @@ class CompactWindow(QWidget):
         keyboard_button = self.shortcut_tabs.buttons['keyboard']
         for button, width in ((keyboard_button, 24 if side else 30),
                               (self.shortcut_tabs.top_button, 16 if side else 20),
-                              (self.open_button, 32 if mode == 'mini' else 24 if side else 30),
-                              (self.control_button, 32 if mode == 'mini' else 16 if side else 20)):
+                              (self.open_button, 32 if mode == 'mini' else 24 if side else 30)):
             button.setFixedSize(width, 32 if mode == 'mini' else 25 if side else 28)
+        if mode == 'mini':
+            self.control_button.setFixedSize(58, 24)
+        else:
+            self.control_button.setFixedSize(16 if side else 20, 25 if side else 28)
         self.header_layout.setColumnStretch(0, 1)
         self.header_layout.setColumnStretch(1, 1 if side else 0)
         if side:
@@ -982,7 +1005,13 @@ class CompactWindow(QWidget):
 
     def _animate_actions(self, expanded):
         if self._dock_mode == 'mini':
-            self.action_drawer.setMaximumHeight(0)
+            if expanded and (self._dock_pending or self._requested_mode is not None):
+                return
+            height = self.drawer_layout.sizeHint().height() if expanded else 0
+            if height != self.action_drawer.maximumHeight():
+                self.action_drawer.setMaximumHeight(height)
+                self.action_drawer.setVisible(expanded)
+                self.setFixedHeight(MINI_HEIGHT + height)
             return
         self.drawer_animation.stop()
         self.drawer_animation.setStartValue(self.action_drawer.maximumHeight())
@@ -998,7 +1027,8 @@ class CompactWindow(QWidget):
 
     def enterEvent(self, event):
         self.drawer_delay.stop()
-        self._animate_actions(True)
+        if self._dock_mode != 'mini':
+            self._animate_actions(True)
         super().enterEvent(event)
 
     def leaveEvent(self, event):
@@ -1006,9 +1036,18 @@ class CompactWindow(QWidget):
         super().leaveEvent(event)
 
     def eventFilter(self, watched, event):
+        kind = event.type()
+        if kind == QEvent.Type.Expose and self._needs_show_reconcile and watched is self.windowHandle():
+            QTimer.singleShot(0, self, self._reconcile_after_show)
+        if self._dock_mode == 'mini' and watched in (self.mini_actions_handle, self.shortcut_tabs):
+            if kind == QEvent.Type.Enter:
+                self.drawer_delay.stop()
+                self._animate_actions(True)
+            elif kind == QEvent.Type.Leave:
+                self.drawer_delay.start()
         # Qt/Wayland can synthesize an Enter on popup dismissal without pairing
         # its Leave when another surface of the same application is entered.
-        if (event.type() == QEvent.Type.Enter and isinstance(watched, QWindow)
+        if (kind == QEvent.Type.Enter and isinstance(watched, QWindow)
                 and self.isVisible() and watched is not self.windowHandle()):
             self.drawer_delay.start()
         return super().eventFilter(watched, event)
@@ -1610,6 +1649,9 @@ class CompactWindow(QWidget):
         if (not self._needs_show_reconcile or not self.isVisible() or self._force_close
                 or self._dock_pending or self.shortcut_tabs.controller.future is not None):
             return
+        surface = self.windowHandle()
+        if self._caps.session_type == 'wayland' and (surface is None or not surface.isExposed()):
+            return
         self._needs_show_reconcile = False
         requested, self._requested_mode = self._requested_mode, None
         if requested is not None and requested != self._dock_mode:
@@ -1767,7 +1809,10 @@ class CompactWindow(QWidget):
     def hideEvent(self, event):
         self.drawer_delay.stop()
         self.drawer_animation.stop()
-        self.action_drawer.setMaximumHeight(0)
+        if self._dock_mode == 'mini':
+            self._animate_actions(False)
+        else:
+            self.action_drawer.setMaximumHeight(0)
         self._save_position()
         super().hideEvent(event)
 

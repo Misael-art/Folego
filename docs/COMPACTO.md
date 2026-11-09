@@ -5,15 +5,16 @@
 A faixa mínima flutuante parte de **384 × 46 px lógicos** em uma linha: alça de
 arraste, estado com palavra e cor, CPU agregada, temperatura com origem e uso de
 RAM, bateria quando presente e franquias de IA confirmadas. A largura acompanha
-o conteúdo dentro da área útil da tela, sem preencher todo o monitor. A altura
-continua em 46 px. Uma leitura ausente ou antiga mostra `—`; `ACPI` não é chamada de
-temperatura direta da CPU. O botão **Expandir** abre o compacto de 268 px, a
-grade abre a Central e a seta abre diretamente os cinco formatos, com marca no
-atual. O mesmo menu oferece **Tema de cores**, com amostras das oito paletas e
-marca no tema em uso. Todas as barras e o compacto oferecem o seletor de formatos, e a Central
-oferece **Mini horizontal** em **Posição do widget**. A área de arraste não
-executa ações. O hover não abre atalhos nessa faixa; avisos completos
-continuam no compacto e na Central. Calor no limite do sensor e bateria crítica
+o conteúdo dentro da área útil da tela, sem preencher todo o monitor. Recolhida,
+a faixa tem 46 px de altura. Uma leitura ausente ou antiga mostra `—`; `ACPI`
+identifica a origem térmica. O botão **Expandir** abre o compacto de 268 px e
+a grade abre a Central. Passe o mouse sobre **···**, à direita dos indicadores,
+para revelar uma fileira curta com **Menu**, **D** (mostrar área de trabalho),
+**Copiar**, **Colar** e **Prompts**. A fileira fica abaixo dos indicadores,
+mantém a largura da faixa e se recolhe ao sair. **Menu** abre os cinco
+formatos e **Tema de cores**, com marca na escolha atual. A alça à esquerda
+serve para arrastar. Avisos completos aparecem no compacto e na Central.
+Calor no limite do sensor e bateria crítica
 em descarga aparecem também no estado breve, com detalhes ao passar o ponteiro.
 O [mockup e critérios](handoff/validation/mini-widget-2026-11-07/README.md)
 registram a hierarquia e as transições.
@@ -51,10 +52,13 @@ memória livre dividem a linha de resumo. Alertas completos e mensagens podem
 aumentar a altura. O ícone de grade abre a **Central** e recolhe o widget.
 A seta abre os controles, incluindo **Monitoramento → Pausar monitoramento**
 ou **Retomar monitoramento**.
-o ícone de teclado e sua seta são um grupo separado para abrir o teclado embaixo
-ou no topo. **Modo widget**, na Central, retorna ao controle flutuante sem
-parar o monitoramento. Em outras abas, use **Posição do widget → Widget
-flutuante** ou **Mini horizontal** no menu do cabeçalho; a aba e os campos em edição são preservados.
+O ícone de teclado e sua seta são um grupo separado para abrir o teclado embaixo
+ou no topo. A Central oferece dois botões empilhados, **Widget flutuante**
+e **Mini horizontal**. Em outras abas, use
+**Posição do widget** no menu do cabeçalho. A aba e os campos em edição são
+preservados. Em **Opções → Modo de abertura**, selecione Central, mini horizontal,
+widget flutuante, lateral esquerda, lateral direita ou barra superior para a
+próxima abertura. A Central é o padrão quando ainda não há escolha salva.
 As duas interfaces dispensam minimizar, maximizar e fechar.
 Para encerrar, use a seta da Central → **Sair do Fôlego** ou a bandeja. **Ocultar widget**,
 no mesmo menu, mantém um caminho de retorno: sem bandeja e com a central
@@ -94,7 +98,7 @@ Fôlego pede ao KWin para posicionar **somente sua própria janela** e verifica
 a posição antes de concluir; o conteúdo reaparece suavemente após a confirmação.
 Ao reabrir uma barra depois de visitar a Central, o Fôlego confirma novamente
 o encaixe: a regra inicial do KWin para o widget flutuante pode ter reposicionado
-a mesma janela. **Modo widget** na Central abre o widget flutuante. O menu **Posição
+a mesma janela. **Widget flutuante** na Central abre o compacto. O menu **Posição
 do widget** na Central e o seletor direto no widget oferecem mini, compacto,
 as duas laterais e o topo, sem depender da alça de borda estar visível.
 O flutuante preserva a posição quando ela cabe na área útil; se a altura mudou,

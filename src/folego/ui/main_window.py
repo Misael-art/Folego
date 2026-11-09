@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (QMainWindow, QStyle, QStyleOptionTab, QStylePaint
 
 from . import desktop_caps, title_signal
 from .compact import CompactWindow
+from .desktop_preferences import WIDGET_VIEWS, startup_view
 from .dashboard_tab import DashboardTab
 from .disk_tab import DiskTab, plan_argv
 from .orphans_panel import OrphansPanel
@@ -173,7 +174,8 @@ class MainWindow(QMainWindow):
         self._process_group = ""
 
         self.dashboard = DashboardTab(on_jump=self.jump_to, thresholds=self._thresholds,
-                                      on_widget=self.enter_widget_mode)
+                                      on_widget=self.enter_widget_mode,
+                                      on_mini=lambda: self._show_widget_position('mini'))
         self._widget_confirm = confirm_fn or self._ask_widget_rule
         self._show_automation_state()
         self.tunings = TuningsTab(jobs=self._jobs, confirm_fn=confirm_fn)
@@ -262,9 +264,7 @@ class MainWindow(QMainWindow):
         self.control_menu = QMenu(self.control_button)
         self.control_menu.addAction('Sair do Fôlego', self.quit)
         self.widget_position_menu = self.control_menu.addMenu('Posição do widget')
-        for label, mode in (('Mini horizontal', 'mini'), ('Widget flutuante', 'compact'),
-                            ('Lateral esquerda', 'left'),
-                            ('Lateral direita', 'right'), ('Barra superior', 'top')):
+        for mode, label in WIDGET_VIEWS:
             self.widget_position_menu.addAction(
                 label, lambda checked=False, target=mode: self._show_widget_position(target))
         self.control_button.setMenu(self.control_menu)
@@ -754,7 +754,12 @@ class MainWindow(QMainWindow):
 
     def _show_widget_position(self, mode):
         self.show_compact(mode=mode)
-        self.hide_window()
+        return self._compact.isVisible() and self.hide_window()
+
+    def show_startup_view(self):
+        mode = startup_view()
+        if mode == 'central' or not self._show_widget_position(mode):
+            self.show()
 
     def enter_widget_mode(self) -> bool:
         """Modo widget: abre o widget flutuante e recolhe a janela central para a bandeja."""

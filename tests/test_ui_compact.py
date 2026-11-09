@@ -188,6 +188,7 @@ def test_wayland_floating_widget_clamps_after_kwin_initial_position(qapp, monkey
 
 def test_dock_choice_during_floating_geometry_check_is_kept(qapp, monkeypatch):
     from PySide6.QtCore import QRect
+    from PySide6.QtTest import QTest
     view, _ = make(qapp, caps=wayland())
     view._screen_area = lambda: QRect(0, 0, 948, 593)
     view._screens = lambda: ((0, 0, 948, 593),)
@@ -195,6 +196,7 @@ def test_dock_choice_during_floating_geometry_check_is_kept(qapp, monkeypatch):
     monkeypatch.setattr(view.shortcut_tabs.controller, 'request',
                         lambda action, value=None: requested.append((action, value)) or True)
     view.show_compact()
+    assert QTest.qWaitForWindowExposed(view, 2000)
     view._reconcile_compact_after_show()
     view.set_dock_mode('left')
     assert view._requested_mode == 'left'
@@ -353,7 +355,6 @@ def test_mini_bar_is_one_line_and_every_form_has_a_direct_route(qapp):
     view._clear_feedback()
     assert 'Bateria 9%' in view.mini_status.text()
     assert all(not handle.isVisible() for handle in view._handles.values())
-    view._animate_actions(True)
     assert view.action_drawer.maximumHeight() == 0
     controls = [view.mini_drag, view.mini_status, view.mini_cpu,
                 view.mini_temperature, view.mini_memory, view.mini_expand,

@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt, Signal, QSignalBlocker
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QLineEdit, QLabel, QPushButton,
                               QVBoxLayout, QHBoxLayout, QScrollArea, QGroupBox, QLayout, QWidget, QSlider)
 from .tune_jobs import TuneJobs
+from .desktop_preferences import STARTUP_VIEWS, set_startup_view, startup_view
 from .theme import TOKENS, THEMES, choose_theme, on_theme_change, choose_transparency, apply_theme, theme_swatch
 
 
@@ -68,9 +69,9 @@ class OptionsTab(QWidget):
         self.recover_run_button.clicked.connect(self.recover_run)
         self.retained_runs.currentIndexChanged.connect(
             lambda: self.recover_run_button.setEnabled(bool(self.retained_runs.currentData())))
-        text = QLabel("A opção inicia a central e o monitor com seu login gráfico. "
+        text = QLabel("A opção inicia o Fôlego e o monitor com seu login gráfico. "
                       "Não amplia permissões de reparo ou limpeza. Desligar impede o próximo início "
-                      "e para a unit própria do monitor de entrada; a central aberta continua na tela.")
+                      "e para a unit própria do monitor de entrada; o Fôlego aberto continua na tela.")
         text.setWordWrap(True)
         outer = QVBoxLayout(self)
         area = QScrollArea()
@@ -80,7 +81,18 @@ class OptionsTab(QWidget):
         box.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         self.settings_box = box
         self.build_theme_options()
+        self.startup_view_choice = QComboBox()
+        self.startup_view_choice.setAccessibleName('Modo de abertura do Fôlego')
+        for mode, label in STARTUP_VIEWS:
+            self.startup_view_choice.addItem(label, mode)
+        self._startup_view = startup_view()
+        self.startup_view_choice.setCurrentIndex(self.startup_view_choice.findData(self._startup_view))
+        self.startup_view_choice.currentIndexChanged.connect(self._save_startup_view)
+        self.startup_view_status = QLabel('A escolha vale na próxima abertura do Fôlego.')
+        self.startup_view_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.startup_view_status.setWordWrap(True)
         for title, controls in (
+            ('Modo de abertura', (self.startup_view_choice, self.startup_view_status)),
             ("Início com a sessão", (self.choice, text, self.status, self.verify)),
             ("Operações pendentes", (self.pending, self.operation_id, self.reconcile, self.cancel,
                                      self.operation_status)),
@@ -95,6 +107,18 @@ class OptionsTab(QWidget):
         box.addStretch(1)
         area.setWidget(content)
         outer.addWidget(area)
+
+    def _save_startup_view(self):
+        mode = self.startup_view_choice.currentData()
+        try:
+            set_startup_view(mode)
+        except (RuntimeError, ValueError) as error:
+            with QSignalBlocker(self.startup_view_choice):
+                self.startup_view_choice.setCurrentIndex(self.startup_view_choice.findData(self._startup_view))
+            self.startup_view_status.setText(str(error))
+            return
+        self._startup_view = mode
+        self.startup_view_status.setText('Preferência salva para a próxima abertura do Fôlego.')
 
     def build_theme_options(self):
         group = QGroupBox('Aparência · consoles clássicos')

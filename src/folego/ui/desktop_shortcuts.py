@@ -351,7 +351,7 @@ class ShortcutTabs(QWidget):
         self.top_button.setToolTip('Abrir teclado no topo da tela')
         self.top_button.clicked.connect(lambda: self.open_keyboard('top'))
 
-    def set_orientation(self, mode):
+    def set_orientation(self, mode, menu_button=None):
         """Keep the same actions while adapting their order to the dock."""
         keys = ('select_all', 'delete_all', 'prompts', 'copy', 'paste', 'print')
         labels = ('Selecionar tudo', 'Apagar tudo', 'Prompts', 'Copiar', 'Colar', 'Print')
@@ -360,17 +360,41 @@ class ShortcutTabs(QWidget):
         self.actions_layout.removeWidget(desktop)
         for key in keys:
             self.actions_layout.removeWidget(self.buttons[key])
+        if menu_button is not None:
+            self.actions_layout.removeWidget(menu_button)
+        if mode == 'mini':
+            mini_keys = ('copy', 'paste', 'prompts')
+            mini_buttons = [self.buttons[key] for key in mini_keys]
+            mini_buttons.insert(0, desktop)
+            if menu_button is not None:
+                mini_buttons.insert(0, menu_button)
+            for key in keys:
+                if key not in mini_keys:
+                    self.buttons[key].hide()
+            for column, button in enumerate(mini_buttons):
+                button.setFixedHeight(24)
+                self.actions_layout.addWidget(button, 0, column)
+                button.show()
+                self.actions_layout.setColumnStretch(column, 0)
+            self.actions_layout.setColumnStretch(5, 0)
+            for key in mini_keys:
+                self.buttons[key].setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+            return
         columns = 1 if mode in ('left', 'right') else 6 if mode == 'top' else 3
         self.actions_layout.setVerticalSpacing(1 if columns == 1 else 2 if compact else 3)
         for index, key in enumerate(keys):
             button = self.buttons[key]
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
             button.setText('Selecionar' if index == 0 and (compact or columns == 1)
                            else 'Apagar' if index == 1 and columns == 1 else labels[index])
             button.setMinimumHeight(22 if compact else 0)
             button.setMaximumHeight(22 if compact else 16777215)
             self.actions_layout.addWidget(button, index // columns, index % columns)
+            button.show()
         if compact:
             self.actions_layout.addWidget(desktop, 0, 3, 2, 1)
+        desktop.setMinimumHeight(0)
+        desktop.setMaximumHeight(16777215)
         desktop.setVisible(compact)
         for column in range(6):
             self.actions_layout.setColumnStretch(column, 1 if column < columns else 0)

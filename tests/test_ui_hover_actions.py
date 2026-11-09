@@ -52,6 +52,48 @@ def test_entering_another_surface_reconciles_popup_synthetic_enter(qapp):
     other.destroy();view.force_close()
 
 
+def test_mini_reveals_a_short_horizontal_drawer_at_the_right(qapp, monkeypatch):
+    from PySide6.QtTest import QTest
+
+    view, _ = make(qapp)
+    view.show_compact(desired_mode='mini')
+    QTest.qWait(350)
+    closed = view.size()
+    assert view.action_drawer.maximumHeight() == 0
+    assert not view.control_button.isVisible()
+    enter = QEnterEvent(QPointF(), QPointF(), QPointF())
+    QApplication.sendEvent(view, enter)
+    assert view.action_drawer.maximumHeight() == 0
+    QApplication.sendEvent(view.mini_actions_handle, enter)
+    qapp.processEvents()
+    keys = ('show-desktop', 'copy', 'paste', 'prompts')
+    buttons = [view.control_button, *(view.shortcut_tabs.buttons[key] for key in keys)]
+    assert all(button.isVisible() and button.height() == 24 for button in buttons)
+    assert [button.x() for button in buttons] == sorted({button.x() for button in buttons})
+    assert view.shortcut_tabs.width() < view.width() * 0.75
+    assert view.shortcut_tabs.x() > 0 and view.width() == closed.width()
+    assert view.height() > closed.height()
+    assert view.shortcut_tabs.buttons['delete_all'].isHidden()
+    assert view.open_button.isVisible() and view.mini_drag.isVisible()
+    requests = []
+    monkeypatch.setattr(view.shortcut_tabs.controller, 'request', lambda *args: requests.append(args) or True)
+    for key in keys[:-1]:
+        view.shortcut_tabs.buttons[key].click()
+    assert requests == [(key,) for key in keys[:-1]]
+    view.control_button.click()
+    assert view.control_menu.isVisible()
+    view._collapse_actions()
+    assert view.height() > closed.height()
+    view.control_menu.close()
+    QApplication.sendEvent(view, QEvent(QEvent.Type.Leave))
+    wait(qapp, lambda: view.size() == closed)
+    assert not view.control_button.isVisible()
+    view.set_dock_mode('compact')
+    QTest.qWait(350)
+    assert view.control_button.parentWidget() is view.navigation_group
+    view.force_close()
+
+
 @pytest.mark.parametrize('mode', ('left', 'right', 'top'))
 def test_dock_actions_reveal_on_hover_and_retract_after_leave(qapp, mode):
     from PySide6.QtCore import QRect
