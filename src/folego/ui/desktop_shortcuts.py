@@ -317,7 +317,7 @@ class ShortcutTabs(QWidget):
             button.clicked.connect(lambda checked=False, action=key: self.activate(action))
             self.buttons[key] = button
         desktop = QPushButton('D', self)
-        desktop.setFixedWidth(38)
+        desktop.setFixedWidth(32)
         desktop.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         desktop.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         desktop.setAccessibleName('Mostrar área de trabalho')
