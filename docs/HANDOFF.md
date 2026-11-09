@@ -1,4 +1,40 @@
-# Passagem para o próximo agente — atualizada em 08/11/2026
+# Passagem para o próximo agente — atualizada em 09/11/2026
+
+## Diagnóstico da verificação do conector Codex Web por conta — 09/11/2026
+
+O Fôlego passou a apresentar atividade do launcher, estado do conector, idade
+do diagnóstico e próxima tentativa informada pelo PhaseZero no painel **Contas
+e cotas de IA** e em `folego ai status --json`. A coleta continua no worker de
+60 s, lendo o recibo limitado da conta. Após 150 s, os estados atuais viram
+desconhecidos. A idade e a última previsão ainda futura ficam como histórico.
+Somente estados e horários saem do adaptador. A verificação e o alerta de
+tarefa longa pertencem ao PhaseZero.
+
+A lista de ações do PhaseZero pode incluir `reverify-connector` após adiamento
+ou launcher inacessível. O Fôlego reconhece resultado explícito de tentativa
+no contrato opcional `schemaVersion: 1` e `connectorVerification` documentado
+em [COMPACTO.md](COMPACTO.md#recuperação-do-codex-web). Recibos antigos ainda
+informam espera e configuração incompleta quando observado. A leitura real
+retornou infraestrutura `ready`, recibo recente e conector `unknown`. Próximo
+passo no PhaseZero: publicar o resultado explícito no recibo do monitor e
+comprovar a sequência espera → confirmação no launcher. O teste real de
+resposta Web continua sendo uma evidência separada.
+
+Validação com Python gerenciado 3.14.7 e HOME/XDG privados. A regressão falhou
+antes da implementação em `.scratch/dev-tests/run-lca6rw5y/`. Depois, o foco
+Qt passou 47 testes em `.scratch/dev-tests/run-cte9y96f/`. `./dev check`
+passou **1357 + 2 skips** headless em 33,35 s e **1765 + 2 skips** Qt offscreen
+em 137,34 s, nos workspaces `run-0dtpdjua` e `run-y3q66jyd`. A janela própria
+KDE/Wayland 560×470 mostrou adiamento, confirmação em outra conta, recibo
+antigo e reabertura. Recibo, log da tentativa inicial e capturas de cliente em
+`.scratch/web-monitor-wayland-20261109.ExFNzx/`. O popup aberto por acionamento
+sintético não ficou visível na primeira tentativa. A interação física do menu
+e o fluxo integrado com a confirmação do PhaseZero instalado ficam pendentes.
+
+Código `56ace2dc37fc39ede1bfdfba210e1747d0146a0c` confirmado no GitHub e no
+[PR #9](https://github.com/Misael-art/Folego/pull/9). Na primeira consulta,
+três jobs de produto executavam e três aguardavam na fila. A GUI instalada
+permanece na prévia anterior.
 
 ## Capacidade do Codex Web e recuperação pelo responsável — 08/11/2026
 
