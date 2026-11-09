@@ -663,17 +663,19 @@ def test_side_dock_reaches_all_quotas_above_fixed_actions(qapp, width, height, m
 @pytest.mark.parametrize('width,height', ((948, 593), (1920, 1080), (2560, 1080)))
 def test_top_dock_keeps_four_quotas_and_actions_inside_view(qapp, width, height):
     from PySide6.QtCore import QPoint, QRect
-    from PySide6.QtTest import QTest
     view, _ = make(qapp)
     view._screen_area = lambda: QRect(0, 0, width, height)
     view.show_compact()
     view.show_snapshot(snap())
     _four_quotas(view)
     view.set_dock_mode('top')
-    QTest.qWait(450)
+    # This is a layout check. Drive both Qt timelines to their final frames.
+    view.dock_animation.setCurrentTime(view.dock_animation.duration())
+    qapp.processEvents()
     assert view.action_drawer.maximumHeight() == 0
     view._animate_actions(True)
-    QTest.qWait(180)
+    view.drawer_animation.setCurrentTime(view.drawer_animation.duration())
+    qapp.processEvents()
     assert view.geometry() == dock_geometry('top', QRect(0, 0, width, height))
     assert view.dock_scroll.geometry().bottom() < view.action_drawer.geometry().top()
     if width >= 900:

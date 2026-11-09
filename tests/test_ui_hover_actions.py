@@ -59,6 +59,8 @@ def test_mini_reveals_a_short_horizontal_drawer_at_the_right(qapp, monkeypatch):
     view.show_compact(desired_mode='mini')
     QTest.qWait(350)
     closed = view.size()
+    bottom = view._screen_area().bottom()
+    view.move(20, bottom + 1 - closed.height())
     assert view.action_drawer.maximumHeight() == 0
     assert not view.control_button.isVisible()
     enter = QEnterEvent(QPointF(), QPointF(), QPointF())
@@ -73,6 +75,7 @@ def test_mini_reveals_a_short_horizontal_drawer_at_the_right(qapp, monkeypatch):
     assert view.shortcut_tabs.width() < view.width() * 0.75
     assert view.shortcut_tabs.x() > 0 and view.width() == closed.width()
     assert view.height() > closed.height()
+    assert view.geometry().bottom() <= bottom
     assert view.shortcut_tabs.buttons['delete_all'].isHidden()
     assert view.open_button.isVisible() and view.mini_drag.isVisible()
     requests = []

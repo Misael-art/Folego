@@ -1012,6 +1012,8 @@ class CompactWindow(QWidget):
                 self.action_drawer.setMaximumHeight(height)
                 self.action_drawer.setVisible(expanded)
                 self.setFixedHeight(MINI_HEIGHT + height)
+                if expanded:
+                    self._screen_changed()
             return
         self.drawer_animation.stop()
         self.drawer_animation.setStartValue(self.action_drawer.maximumHeight())
