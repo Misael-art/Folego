@@ -113,6 +113,13 @@ estado textual e cromático, alça de movimento e três caminhos visíveis
 em todos os formatos. Alertas com fonte ausente não viram valores seguros; o
 compacto e a Central mantêm o detalhamento.
 
+Na mini, **Tema de cores** entra no menu existente, com amostras das paletas
+e marca na seleção. No compacto de 268 px, estado e memória livre dividem
+a linha de resumo e a pausa fica em **Monitoramento**. O rodapé retrátil
+organiza os atalhos em duas linhas de 22 px. O botão **D** ocupa uma coluna
+à direita, com ícone de desktop e fundo neutro para distingui-lo dos atalhos
+coloridos de edição, prompts e captura.
+
 1. **Conceito original.** O cabeçalho com “Central” e vários botões avulsos
    evoluiu para dois grupos. O teclado abre embaixo e seu chevron abre no topo.
    A grade abre a Central e seu chevron reúne ocultar, sair, contas e posições.

@@ -7,9 +7,10 @@ arraste, estado com palavra e cor, CPU agregada, temperatura com origem e uso de
 RAM, bateria quando presente e franquias de IA confirmadas. A largura acompanha
 o conteúdo dentro da área útil da tela, sem preencher todo o monitor. A altura
 continua em 46 px. Uma leitura ausente ou antiga mostra `—`; `ACPI` não é chamada de
-temperatura direta da CPU. O botão **Expandir** abre o compacto de 280 px, a
+temperatura direta da CPU. O botão **Expandir** abre o compacto de 268 px, a
 grade abre a Central e a seta abre diretamente os cinco formatos, com marca no
-atual. Todas as barras e o compacto oferecem o mesmo seletor, e a Central
+atual. O mesmo menu oferece **Tema de cores**, com amostras das oito paletas e
+marca no tema em uso. Todas as barras e o compacto oferecem o seletor de formatos, e a Central
 oferece **Mini horizontal** em **Posição do widget**. A área de arraste não
 executa ações. O hover não abre atalhos nessa faixa; avisos completos
 continuam no compacto e na Central. Calor no limite do sensor e bateria crítica
@@ -45,9 +46,11 @@ quando o compacto está oculto.
 [Capturas e limites de validação](handoff/validation/mini-battery-quotas-2026-11-07/README.md)
 registram os estados, o encolhimento e a adaptação às larguras previstas.
 
-O widget tem 280 px de largura em pixels lógicos do desktop. Recursos ficam em
-duas linhas; alertas completos e mensagens podem aumentar a altura. O ícone de
-grade abre a **Central** e recolhe o widget. A seta ao lado abre os controles;
+O compacto tem 268 px de largura em pixels lógicos do desktop. O estado e a
+memória livre dividem a linha de resumo. Alertas completos e mensagens podem
+aumentar a altura. O ícone de grade abre a **Central** e recolhe o widget.
+A seta abre os controles, incluindo **Monitoramento → Pausar monitoramento**
+ou **Retomar monitoramento**.
 o ícone de teclado e sua seta são um grupo separado para abrir o teclado embaixo
 ou no topo. **Modo widget**, na Central, retorna ao controle flutuante sem
 parar o monitoramento. Em outras abas, use **Posição do widget → Widget
@@ -66,7 +69,7 @@ auxiliar de entrada; um som em andamento conclui a restauração do volume.
 Ao passar o mouse pela borda esquerda do widget, uma faixa em dois tons mais
 escuros revela a seta para a barra direita. A borda direita abre a barra
 esquerda; a borda superior abre a barra horizontal no topo. A seta da borda
-externa de cada lateral, ou do centro da borda superior, retorna aos 280 px do
+externa de cada lateral, ou do centro da borda superior, retorna aos 268 px do
 compacto. O seletor de visualizações em cada formato também leva diretamente
 às outras quatro superfícies. Os controles, leitura de
 recursos e cotas são os mesmos componentes nas quatro formas completas. As laterais têm
@@ -414,6 +417,14 @@ não se restaura às cegas nem se repete o som incerto.
 
 ## Abas de ações rápidas
 
+No compacto, a gaveta que abre com o ponteiro tem dois grupos. **Selecionar**,
+**Apagar tudo**, **Prompts**, **Copiar**, **Colar** e **Print** ocupam duas linhas
+de 22 px, com os nomes completos nas dicas e na acessibilidade. O botão
+**D** tem ícone de desktop e ocupa a altura das duas linhas. Ele solicita
+**Mostrar área de trabalho** ao KDE/KWin pelo mesmo fluxo do menu Custom.
+O compositor recolhe as janelas e mantém as aplicações abertas. Se o desktop
+já estiver visível, o comando mantém esse estado.
+
 **Selecionar tudo**, **Apagar tudo** e **Prompts** ficam em uma linha fina acima das abas.
 Atuam somente no campo editável em foco, identificado pelo AT-SPI e pelo
 proprietário da janela ativa. Apagar remove o texto do campo inteiro, não só a
@@ -436,6 +447,8 @@ SNES americano (cinza/lavanda), Super Famicom (quatro cores), Mega Drive / Genes
 (branco/laranja), NES (cinza/preto/vermelho), TurboGrafx-16 (grafite/laranja) e
 PlayStation 2 (preto/azul). São inspirações aproximadas nas cores fornecidas
 pelo usuário; os tons de texto são ajustados para contraste nas superfícies.
+Na mini horizontal, **Controles → Tema de cores** usa as mesmas paletas e
+mostra qual delas está em uso.
 
 A seleção aplica imediatamente em todas as superfícies Qt, abertas ou ocultas:
 central, widget, prompts/submenus/Custom, contas, avisos, controles e teclado.

@@ -13,7 +13,7 @@ from folego.core.exclusions import ExclusionError
 from folego.core.sessions import ACTIVE, Session, SessionError
 from folego.core.snapshot import AppRSS, BatteryInfo, MemInfo, Pressure, Snapshot, SourceQuality
 from folego.orchestration.config import ConfigError
-from folego.ui.compact import CompactWindow
+from folego.ui.compact import COMPACT_WIDTH, CompactWindow
 from folego.ui.main_window import MainWindow
 from fixtures_automation import StaticConfig, StaticGrants, stores
 from fixtures_proc import proc_info
@@ -404,7 +404,7 @@ def test_dashboard_widget_button_restores_floating_mode(window, qapp, monkeypatc
     if compact.dock_animation.state() != compact.dock_animation.State.Stopped:
         assert QSignalSpy(compact.dock_animation.finished).wait(1000)
     assert compact.isVisible() and compact._dock_mode == 'compact'
-    assert compact.width() == 280
+    assert compact.width() == COMPACT_WIDTH
     window.quit()
 
 

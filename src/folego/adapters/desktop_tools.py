@@ -104,6 +104,8 @@ class DesktopTools:
         return "Solicitação de tecla enviada ao aplicativo em foco"
 
     def perform(self, action, value=None):
+        if action == 'show-desktop':
+            return self.show_desktop()
         if action == 'standard-macro':
             from ..core.custom_prompts import standard_shortcut, shortcut_codes
             return self.keys(shortcut_codes(standard_shortcut(value)))

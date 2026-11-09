@@ -64,10 +64,11 @@ cotas de IA em células de uma linha. A largura acompanha os dados disponíveis;
 entregas, resets resgatáveis e reposição confirmada de cinco horas têm lembretes
 discretos. Uma conta sem cota disponível aparece pelo motivo que a mantém na
 faixa, como **Entregas** ou **Resgate**. A alça pontilhada move a faixa; **Expandir** abre
-o compacto, a grade abre a Central e a seta lista diretamente todos os formatos.
-O **modo compacto** tem 280 px de largura e recursos em duas linhas. O ícone de
+o compacto, a grade abre a Central e a seta lista todos os formatos e o submenu
+**Tema de cores**. O **modo compacto** tem 268 px lógicos de largura. O ícone de
 grade abre a **Central**; a seta ao lado reúne os cinco formatos,
-**Contas e cotas de IA**, **Ocultar widget** e **Sair do Fôlego**. **Modo widget**, na Central, retorna ao
+**Contas e cotas de IA**, **Monitoramento**, **Ocultar widget** e **Sair do Fôlego**.
+Em **Monitoramento**, a ação alterna entre pausar e retomar. **Modo widget**, na Central, retorna ao
 flutuante mantendo o monitoramento. A saída também fica na bandeja. As duas
 interfaces dispensam botões de minimizar, maximizar e fechar.
 O menu **Posição do widget**, na Central, e o seletor do widget permitem escolher
@@ -108,9 +109,10 @@ Ao lado das entregas, um **presente verde piscando** mostra as redefinições
 disponíveis confirmadas das contas do provedor. Clique para consultar a conta;
 o resgate continua no cliente de IA.
 
-Os atalhos coloridos aparecem em duas linhas iguais ao passar o mouse pelo
-widget e se recolhem ao sair. **Copiar, Colar e Print** ficam abaixo de
-**Selecionar tudo, Apagar tudo e Prompts**. O ícone de teclado no cabeçalho abre
+No compacto, a gaveta aparece ao passar o mouse pelo widget e se recolhe ao
+sair. **Copiar, Colar e Print** ficam abaixo de **Selecionar, Apagar tudo e Prompts**.
+À direita, o botão **D** mostra a área de trabalho pelo KWin e mantém as
+aplicações abertas. O ícone de teclado no cabeçalho abre
 na parte inferior; somente sua seta abre no topo. CPU e Tmp ficam alinhados,
 com a temperatura do host em °C e a rotação do cooler em RPM lado a lado na
 terceira linha (sensor indisponível: **— °C** ou **— RPM**). Quando só existe a

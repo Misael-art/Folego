@@ -1,7 +1,7 @@
 """One live theme authority for every Qt surface, with persistent selection."""
 from pathlib import Path
 from PySide6.QtCore import QSettings, QObject, QEvent, Qt
-from PySide6.QtGui import QColor, QPalette, QIcon, QPainter
+from PySide6.QtGui import QColor, QPalette, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QWidget, QStyle, QStyleOption, QDialog
 from .palettes import THEMES, DEFAULT_THEME, Tokens, luminance, on_color
 
@@ -78,6 +78,15 @@ def shortcut_style(index):
             f'QPushButton:hover{{border-color:{TOKENS.text};}}'
             f'QPushButton:focus{{border:2px solid {TOKENS.focus};padding:0;}}'
             f'QPushButton:disabled{{background:{background(TOKENS.surface_alt)};color:{TOKENS.muted};border-color:{TOKENS.border};}}')
+
+
+def theme_swatch(theme):
+    pixmap = QPixmap(60, 14)
+    painter = QPainter(pixmap)
+    for index, color in enumerate(theme.tokens.actions):
+        painter.fillRect(index * 10, 0, 10, 14, QColor(color))
+    painter.end()
+    return QIcon(pixmap)
 
 
 def tint_icon(icon):

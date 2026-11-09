@@ -17,7 +17,8 @@ from PySide6.QtWidgets import (QBoxLayout, QFrame, QGridLayout, QHBoxLayout, QLa
 
 from . import title_signal
 from .desktop_caps import detect
-from .theme import _background_color, background, themed_style, TOKENS, set_control_icon, on_theme_change
+from .theme import (_background_color, background, themed_style, TOKENS, THEMES, choose_theme,
+                    set_control_icon, on_theme_change, theme_swatch)
 from .palettes import readable
 from .mini_ai_strip import MiniAIStrip
 from ..core.battery_alerts import battery_band, remaining_text
@@ -28,6 +29,7 @@ FLOAT_MODES = ('compact', 'mini')
 DOCK_MODES = (*FLOAT_MODES, 'right', 'left', 'top')
 MINI_WIDTH = 384
 MINI_HEIGHT = 46
+COMPACT_WIDTH = 268
 SLIM_TOP_WIDTH = 900
 SLIM_TOP_HEIGHT = 120
 
@@ -228,7 +230,7 @@ class CompactWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setWindowTitle(WIDGET_TITLE)
         self.setAccessibleName("Widget do Fôlego")
-        self.setFixedWidth(280)
+        self.setFixedWidth(COMPACT_WIDTH)
         themed_style(self, lambda: "QWidget {font-size:9pt;}"
             "QFrame#widgetCard {background:transparent;border:none;}"
             f"QLabel {{background:transparent;color:{TOKENS.text};}}"
@@ -320,7 +322,10 @@ class CompactWindow(QWidget):
         readings = QVBoxLayout()
         self.readings_layout = readings
         readings.setSpacing(3)
-        readings.addWidget(self.status_label)
+        self.summary_row = QHBoxLayout()
+        self.summary_row.setSpacing(4)
+        self.summary_row.addWidget(self.status_label, 1)
+        readings.addLayout(self.summary_row)
         readings.addWidget(self.detail_label)
         readings.addWidget(self.battery_label)
         readings_widget = QWidget()
@@ -484,6 +489,19 @@ class CompactWindow(QWidget):
         self.control_menu.addSeparator()
         self.accounts_menu = self.control_menu.addMenu('Contas e cotas de IA')
         self.accounts_menu.aboutToShow.connect(self._refresh_accounts_menu)
+        self.theme_menu = self.control_menu.addMenu('Tema de cores')
+        self.theme_actions = QActionGroup(self.theme_menu)
+        self.theme_actions.setExclusive(True)
+        for key, theme in THEMES.items():
+            action = self.theme_menu.addAction(theme_swatch(theme), theme.name)
+            action.setCheckable(True)
+            action.setData(key)
+            self.theme_actions.addAction(action)
+        self.theme_actions.triggered.connect(self._change_theme)
+        self._sync_theme_menu()
+        on_theme_change(self, self._theme_changed)
+        self.monitoring_menu = self.control_menu.addMenu('Monitoramento')
+        self.pause_action = self.monitoring_menu.addAction('Pausar monitoramento', self._toggle_pause)
         self.hide_action = self.control_menu.addAction('Ocultar widget', self._hide_safely)
         self.quit_action = self.control_menu.addAction('Sair do Fôlego', self._window.quit)
         self.control_menu.aboutToShow.connect(self._sync_layout_actions)
@@ -584,13 +602,14 @@ class CompactWindow(QWidget):
             self.body_layout.addWidget(self.readings_widget)
         for layout, saved in ((self.gauge_widget.layout(), self._gauge_margins),
                               (self.readings_layout, self._readings_margins)):
-            margins = (0, 0, 0, 0) if side or slim_top else (saved.left(), saved.top(),
-                                                            saved.right(), saved.bottom())
+            margins = ((0, 0, 0, 0) if side or slim_top or mode == 'compact'
+                       else (saved.left(), saved.top(), saved.right(), saved.bottom()))
             layout.setContentsMargins(*margins)
+        self.body_layout.setSpacing(7 if mode == 'compact' else 10)
         self.body_layout.setDirection(QBoxLayout.Direction.TopToBottom if side
                                       else QBoxLayout.Direction.LeftToRight)
         self.body_layout.setStretch(1, 0 if side else 1)
-        gauge_side = 64 if slim_top else 68
+        gauge_side = 60 if mode == 'compact' else 64 if slim_top else 68
         self.gauge.setFixedSize(gauge_side, gauge_side)
         self.ai_strip.layout().setDirection(QBoxLayout.Direction.TopToBottom if side
                                              else QBoxLayout.Direction.LeftToRight)
@@ -633,9 +652,12 @@ class CompactWindow(QWidget):
             self.header_layout.addWidget(self.navigation_group, 0, 2)
         self.readings_layout.removeWidget(self.free_label)
         self.footer_layout.removeWidget(self.free_label)
+        self.summary_row.removeWidget(self.free_label)
         self.notices_layout.removeWidget(self.pause_button)
         self.footer_layout.removeWidget(self.pause_button)
-        if side:
+        if mode == 'compact':
+            self.summary_row.addWidget(self.free_label)
+        elif side:
             self.readings_layout.addWidget(self.free_label)
             self.notices_layout.addWidget(self.pause_button)
         elif slim_top:
@@ -643,7 +665,10 @@ class CompactWindow(QWidget):
         else:
             self.footer_layout.insertWidget(0, self.pause_button)
             self.footer_layout.addWidget(self.free_label)
-        self.footer_widget.setVisible(not side and not slim_top and mode != 'mini')
+        self.footer_widget.setVisible(mode == 'top' and not slim_top)
+        self.pause_button.setVisible(side or mode == 'top')
+        self.monitoring_menu.menuAction().setVisible(mode == 'compact')
+        self.theme_menu.menuAction().setVisible(mode == 'mini')
         self.body_layout.setAlignment(self.gauge_widget, Qt.AlignmentFlag.AlignHCenter if side else Qt.AlignmentFlag(0))
         for label in (self.status_label, self.alert_label, self.feedback_label):
             label.setAlignment(Qt.AlignmentFlag.AlignHCenter if side else Qt.AlignmentFlag.AlignLeft)
@@ -655,7 +680,7 @@ class CompactWindow(QWidget):
             font = QFont(label.font())
             font.setPointSize(8 if short_side or slim_top else 9)
             label.setFont(font)
-        self.free_label.setWordWrap(not slim_top)
+        self.free_label.setWordWrap(not slim_top and mode != 'compact')
         self.battery_label.setWordWrap(side)
         self.battery_label.setAlignment(reading_alignment)
         self.pause_button.setMinimumWidth(0)
@@ -675,7 +700,7 @@ class CompactWindow(QWidget):
                                           else 'Sem cotas disponíveis confirmadas')
         self.inner.setContentsMargins(16 if mode == 'left' else 6, 6,
                                       16 if mode == 'right' else 6, 2 if mode != 'compact' else 6)
-        self.inner.setSpacing(2 if side else 4)
+        self.inner.setSpacing(2 if side else 3 if mode == 'compact' else 4)
         self.dock_scroll.setLayoutDirection(Qt.LayoutDirection.RightToLeft if mode == 'right'
                                              else Qt.LayoutDirection.LeftToRight)
         header, body, notices, ai, footer = self._sections
@@ -830,7 +855,7 @@ class CompactWindow(QWidget):
         self.setMaximumSize(16777215, 16777215)
         if mode in FLOAT_MODES:
             self.inner.activate()
-            width = 280 if mode == 'compact' else self._mini_width()
+            width = COMPACT_WIDTH if mode == 'compact' else self._mini_width()
             height = self.card.sizeHint().height() if mode == 'compact' else MINI_HEIGHT
             target = QRect(target.x(), target.y(), width, height)
             x, y = clamp_position(target.x(), target.y(), target.width(), target.height(), self._screens())
@@ -862,7 +887,7 @@ class CompactWindow(QWidget):
             self.dock_animation.setStartValue(origin)
             self.dock_animation.setEndValue(target)
             self.dock_animation.finished.connect(lambda: self.setFixedSize(target.size())
-                                                 if mode != 'compact' else self.setFixedWidth(280))
+                                                 if mode != 'compact' else self.setFixedWidth(COMPACT_WIDTH))
             self.dock_animation.finished.connect(self._schedule_mini_fit)
             self.dock_animation.start()
         self._dock_target = QRect(target) if mode not in FLOAT_MODES else None
@@ -918,6 +943,27 @@ class CompactWindow(QWidget):
             action = self.accounts_menu.addAction(' · '.join([name, status, *extras]))
             action.triggered.connect(lambda checked=False, p=provider: QTimer.singleShot(
                 0, lambda: self.ai_strip.details(p, anchor=self.control_button)))
+
+    def _sync_theme_menu(self):
+        for action in self.theme_actions.actions():
+            key = action.data()
+            current = key == TOKENS.key
+            action.setChecked(current)
+            action.setText(THEMES[key].name + (' · em uso' if current else ''))
+
+    def _theme_changed(self):
+        self._sync_theme_menu()
+        if self._dock_mode == 'compact' and self.isVisible():
+            QTimer.singleShot(0, self, lambda: self._drawer_frame(None))
+        else:
+            self._schedule_mini_fit()
+
+    def _change_theme(self, action):
+        try:
+            choose_theme(action.data())
+        except (RuntimeError, ValueError) as error:
+            self._sync_theme_menu()
+            self._shortcut_result(str(error))
 
     def _animate_actions(self, expanded):
         if self._dock_mode == 'mini':
@@ -1427,6 +1473,7 @@ class CompactWindow(QWidget):
         self._paused = bool(paused)
         self.pause_button.setText("Retomar" if paused else "Pausar")
         self.pause_button.setToolTip("Retomar monitoramento" if paused else "Pausar monitoramento")
+        self.pause_action.setText(self.pause_button.toolTip())
         self.pause_button.setAccessibleDescription("monitoramento pausado" if paused else "monitoramento ativo")
         self._render_mode()
         if changed:

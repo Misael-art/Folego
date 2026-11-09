@@ -1,11 +1,10 @@
 """Session startup preference; all system/file operations run in a worker."""
 import sys
 from PySide6.QtCore import Qt, Signal, QSignalBlocker
-from PySide6.QtGui import QPixmap, QPainter, QColor, QIcon
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QLineEdit, QLabel, QPushButton,
                               QVBoxLayout, QHBoxLayout, QScrollArea, QGroupBox, QLayout, QWidget, QSlider)
 from .tune_jobs import TuneJobs
-from .theme import TOKENS, THEMES, choose_theme, on_theme_change, choose_transparency, apply_theme
+from .theme import TOKENS, THEMES, choose_theme, on_theme_change, choose_transparency, apply_theme, theme_swatch
 
 
 def options_argv(action, target, confirm):
@@ -101,12 +100,7 @@ class OptionsTab(QWidget):
         self.theme_choice.setAccessibleName('Tema de cores de todo o Fôlego')
         self.theme_choice.setToolTip('Aplica agora na central, widget, menus, painéis e teclado; mantém a escolha ao reabrir')
         for key, theme in THEMES.items():
-            pixmap = QPixmap(60, 14)
-            painter = QPainter(pixmap)
-            for i, color in enumerate(theme.tokens.actions):
-                painter.fillRect(i * 10, 0, 10, 14, QColor(color))
-            painter.end()
-            self.theme_choice.addItem(QIcon(pixmap), theme.name, key)
+            self.theme_choice.addItem(theme_swatch(theme), theme.name, key)
         self.theme_description = QLabel()
         self.theme_description.setWordWrap(True)
         self.theme_status = QLabel()

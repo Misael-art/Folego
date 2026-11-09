@@ -3,7 +3,7 @@ import pytest
 import time
 
 from folego.core.snapshot import BatteryInfo, MemInfo, Pressure, Snapshot, SourceQuality
-from folego.ui.compact import CompactWindow, MINI_HEIGHT, MINI_WIDTH, clamp_position, dock_geometry
+from folego.ui.compact import COMPACT_WIDTH, CompactWindow, MINI_HEIGHT, MINI_WIDTH, clamp_position, dock_geometry
 from folego.ui.desktop_caps import detect
 
 pytest.importorskip("PySide6")
@@ -311,7 +311,7 @@ def test_widget_position_menu_switches_docks_and_floating(qapp):
     assert view.geometry() == dock_geometry('left', view._screen_area())
     view.layout_actions['compact'].trigger()
     QTest.qWait(300)
-    assert view._dock_mode == 'compact' and view.width() == 280
+    assert view._dock_mode == 'compact' and view.width() == COMPACT_WIDTH
     view.force_close()
 
 
@@ -372,7 +372,7 @@ def test_mini_bar_is_one_line_and_every_form_has_a_direct_route(qapp):
         assert view.layout_actions[mode].isChecked()
     view.mini_expand.click()
     QTest.qWait(320)
-    assert view._dock_mode == 'compact' and view.width() == 280
+    assert view._dock_mode == 'compact' and view.width() == COMPACT_WIDTH
     view.layout_actions['mini'].trigger()
     QTest.qWait(320)
     view.open_button.click()
@@ -801,15 +801,54 @@ def test_an_illegible_automation_state_is_not_drawn_as_manual(qapp):
 
 def test_pause_is_a_distinct_state_and_says_so(qapp):
     view, host = make(qapp)
-    view.pause_button.click()
+    assert view.monitoring_menu.menuAction().isVisible()
+    assert view.pause_button.isHidden()
+    assert view.pause_action.text() == "Pausar monitoramento"
+    view.pause_action.trigger()
     assert host.paused is True
     assert "PAUSADO" in view.mode_label.text()
     assert view.pause_button.toolTip() == "Retomar monitoramento"
     assert view.pause_button.accessibleDescription() == "monitoramento pausado"
+    assert view.pause_action.text() == "Retomar monitoramento"
 
-    view.pause_button.click()
+    view.pause_action.trigger()
     assert host.paused is False
     assert "ativo" in view.mode_label.text()
+    view.force_close()
+
+
+def test_mini_theme_menu_saves_shared_selection_and_keeps_previous_on_failure(qapp, tmp_path, monkeypatch):
+    from PySide6.QtCore import QSettings
+    from folego.ui import compact, theme
+
+    view, _ = make(qapp)
+    store = QSettings(str(tmp_path / 'theme.ini'), QSettings.Format.IniFormat)
+    monkeypatch.setattr(compact, 'choose_theme', lambda key: theme.choose_theme(key, store=store))
+    previous = theme.TOKENS.key, theme.TOKENS.transparency
+    other = next(key for key in theme.THEMES if key != previous[0])
+    try:
+        assert not view.theme_menu.menuAction().isVisible()
+        view._arrange_sections('mini')
+        assert view.theme_menu.menuAction().isVisible() and not view.monitoring_menu.menuAction().isVisible()
+        actions = {action.data(): action for action in view.theme_actions.actions()}
+        assert len(actions) == len(theme.THEMES) and actions[previous[0]].isChecked()
+        assert all(not action.icon().isNull() for action in actions.values())
+        actions[other].trigger()
+        assert theme.TOKENS.key == store.value(theme.THEME_KEY) == other
+        assert theme.TOKENS.transparency == previous[1]
+        assert actions[other].isChecked() and not actions[previous[0]].isChecked()
+        assert [key for key, action in actions.items() if action.text().endswith(' · em uso')] == [other]
+
+        def fail(key):
+            raise RuntimeError('Tema não foi salvo')
+
+        monkeypatch.setattr(compact, 'choose_theme', fail)
+        actions[previous[0]].trigger()
+        assert actions[other].isChecked() and not actions[previous[0]].isChecked()
+        assert view.feedback_label.text() == 'Tema não foi salvo'
+    finally:
+        view.force_close()
+        theme.apply_theme(qapp, previous[0], transparency=previous[1])
 
 
 def test_repeated_navigation_clicks_do_not_create_any_operation(qapp):
@@ -881,10 +920,10 @@ def test_widget_header_uses_navigation_and_control_menu_instead_of_window_button
     assert view.open_button.text()=='' and not view.open_button.icon().isNull()
     assert view.open_button.accessibleName()=='Abrir a central do Fôlego'
     assert not hasattr(view,'hide_button') and not hasattr(view,'quit_button')
-    assert [a.text() for a in view.control_menu.actions()]==[
+    assert [a.text() for a in view.control_menu.actions() if a.isVisible()]==[
         'Mini horizontal', 'Widget compacto', 'Lateral esquerda',
         'Lateral direita', 'Barra superior', 'Abrir Central', '',
-        'Contas e cotas de IA', 'Ocultar widget', 'Sair do Fôlego']
+        'Contas e cotas de IA', 'Monitoramento', 'Ocultar widget', 'Sair do Fôlego']
     view._refresh_accounts_menu()
     assert len(view.accounts_menu.actions())==4
     assert all('sem confirmação' in action.text() for action in view.accounts_menu.actions()
