@@ -1,5 +1,40 @@
 # Passagem para o próximo agente — atualizada em 09/11/2026
 
+## Visibilidade de contas e entregas na mini — 09/11/2026
+
+A consulta somente leitura encontrou duas entregas do Grok para revisitar.
+Elas mantinham a célula visível com `0%`. Na **Mini horizontal**, cotas
+positivas continuam ordenadas pelo percentual. Sem cota positiva, a célula
+indica **Entrega**, **Entregas**, **Resgate**, reposição confirmada de cinco
+horas ou instância Web aberta, conforme a evidência. O Web também mostra
+entregas pendentes com o cliente fechado. Quando desaparece o último sinal,
+a célula é recolhida e a conta fica acessível pelo menu. Zero confirmado e
+cota desconhecida continuam distintos nos detalhes da conta.
+
+Uma leitura que chegava durante o posicionamento do mini era descartada pelo
+ajuste de largura quando o KWin não confirmava a posição. A falha de
+posicionamento agora reagenda o mesmo ajuste, assim como a confirmação já
+fazia. A regressão reproduziu 384 px com 587 px de conteúdo e passou após
+a correção. O foco de mini, compacto e cotas passou 71 testes antes desse
+ajuste. As execuções anteriores foram preservadas em
+`.scratch/dev-tests-reviewed/mini-delivery-initial-20261109/`. A regressão
+de posicionamento ficou em `run-jilf4__1` e `run-0_9pweiu`.
+
+No KDE/Wayland, uma janela própria com dados sintéticos percorreu três
+estados em cada tema `snes-us` e `ps2`. A área útil real foi 948 × 593 px.
+A faixa mostrou os lembretes com 585 px, o percentual do Grok com 573 px e
+recolheu para 453 px, sempre com 46 px de altura e sem sobrepor os controles.
+Recibo, falhas iniciais da QA e capturas de cliente estão em
+`.scratch/mini-delivery-wayland-20261109.JdU3yp/`.
+
+`./dev check` final, Python 3.14.7 e HOME/XDG privados, passou **1357 + 2 skips**
+headless em 29,32 s e **1768 + 2 skips** Qt offscreen em 126,70 s, em
+`.scratch/dev-tests/run-oyqmrc0s/` e `.scratch/dev-tests/run-v4off3md/`.
+Código `7ff9c2dc2086860d5f71751890050b2a0faeacb0` confirmado no GitHub e no
+[PR #9](https://github.com/Misael-art/Folego/pull/9), com três jobs de produto
+em execução e três na fila na primeira consulta. A evidência de interface
+é da janela própria de QA com interação Qt.
+
 ## Diagnóstico da verificação do conector Codex Web por conta — 09/11/2026
 
 O Fôlego passou a apresentar atividade do launcher, estado do conector, idade
@@ -21,10 +56,12 @@ comprovar a sequência espera → confirmação no launcher. O teste real de
 resposta Web continua sendo uma evidência separada.
 
 Validação com Python gerenciado 3.14.7 e HOME/XDG privados. A regressão falhou
-antes da implementação em `.scratch/dev-tests/run-lca6rw5y/`. Depois, o foco
-Qt passou 47 testes em `.scratch/dev-tests/run-cte9y96f/`. `./dev check`
+antes da implementação em `run-lca6rw5y/`. Depois, o foco Qt passou 47 testes
+em `run-cte9y96f/`. `./dev check`
 passou **1357 + 2 skips** headless em 33,35 s e **1765 + 2 skips** Qt offscreen
-em 137,34 s, nos workspaces `run-0dtpdjua` e `run-y3q66jyd`. A janela própria
+em 137,34 s, nos workspaces `run-0dtpdjua` e `run-y3q66jyd`. As quatro execuções
+foram preservadas em `.scratch/dev-tests-reviewed/web-monitor-20261109/`.
+A janela própria
 KDE/Wayland 560×470 mostrou adiamento, confirmação em outra conta, recibo
 antigo e reabertura. Recibo, log da tentativa inicial e capturas de cliente em
 `.scratch/web-monitor-wayland-20261109.ExFNzx/`. O popup aberto por acionamento
