@@ -19,7 +19,19 @@
   `.scratch/dev-tests` (inspecionar antes de remover). Falhas que já existiam
   sem esta mudança (confirmadas com stash): `test_session_resilience::test_reconcile_known_journal_result_closes_started_review_once`,
   `test_ui_capture_alerts::test_desktop_options_persist_and_preview_only_on_explicit_click`.
-- Pendente: aceite no KDE real em descarga; o alerta não evita o corte, só avisa.
+- Incremento seguinte (mesmo dia): `voltage_level` classifica a descarga em
+  estável/aceitável/atenção/crítica (≥96%, ≥93%, ≥90% e abaixo de 90% de
+  `voltage_min_design`; 7,39/7,16/6,93 V neste pacote), com as mesmas faixas de
+  cor do percentual. Compacto e modo topo mostram `Bat 82% · ~1h46 · 7,42 V`; a
+  mini tem rótulo próprio de voltagem na célula BAT. Fora da descarga ou sem
+  referência a leitura fica neutra, sem patamar. `VoltageSagNotice` exige duas
+  amostras críticas seguidas e repete a cada 5 min; a bandeja publica
+  "Bateria · voltagem crítica" (categoria recursos) com a ação manual.
+- Nenhuma ação automática foi adicionada: perfil de energia, pausa de cargas e
+  suspensão preventiva dependem de autorização do usuário. Observado no host:
+  `powerprofilesctl` em `performance` durante descarga a 7,28 V com 82%.
+- Pendente: aceite no KDE real em descarga (render conferido só em Qt
+  offscreen); o alerta não evita o corte, só avisa.
 
 ## Sinalização por categoria e diagnóstico de OOM em cgroups — 09/11/2026
 

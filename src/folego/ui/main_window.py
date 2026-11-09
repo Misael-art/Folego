@@ -37,7 +37,7 @@ from .desktop_shortcuts import DesktopController
 from .screen_energy import ScreenEnergy
 from .theme import TOKENS, _background_color, set_control_icon, prepare_surface
 from ..core import health
-from ..core.battery_alerts import BatteryAlertTracker
+from ..core.battery_alerts import BatteryAlertTracker, VoltageSagNotice
 from ..core.host_guard import PressureAlertTracker, ThermalTracker
 from ..core.agent_pressure import PressureBackend
 from ..core.exclusions import ExclusionError, ExclusionList
@@ -161,6 +161,7 @@ class MainWindow(QMainWindow):
         self._collection_error = ""
         self.ai_monitor = AIMonitor(self)
         self._battery_alerts = BatteryAlertTracker()
+        self._voltage_notice = VoltageSagNotice()
         self._jobs = jobs if jobs is not None else TuneJobs(parent=self)
         self._disk_jobs = disk_jobs if disk_jobs is not None else TuneJobs(
             parent=self, argv_factory=plan_argv, timeout_ms=DISK_TIMEOUT_MS)
@@ -538,11 +539,13 @@ class MainWindow(QMainWindow):
     def apply_snapshot(self, snapshot):
         self._request_history()
         self._collection_error = ""
-        cue = self._battery_alerts.observe(
-            snapshot.battery if not snapshot.is_stale(self._thresholds.stale_after_s)
-            and snapshot.source('battery').status == 'ok' else None)
+        battery = (snapshot.battery if not snapshot.is_stale(self._thresholds.stale_after_s)
+                   and snapshot.source('battery').status == 'ok' else None)
+        cue = self._battery_alerts.observe(battery)
         if cue:
             self.ai_monitor.alerts.battery_cue(cue)
+        if self._voltage_notice.observe(battery):
+            self.tray.show_battery_voltage(battery)
         signal = title_signal.compute(snapshot, self._thresholds,
                                       engine=self._health)
         self._last_snapshot = snapshot

@@ -21,7 +21,8 @@ from .theme import (_background_color, background, themed_style, TOKENS, THEMES,
                     set_control_icon, on_theme_change, theme_swatch)
 from .palettes import readable
 from .mini_ai_strip import MiniAIStrip
-from ..core.battery_alerts import battery_band, remaining_text, voltage_sag, voltage_text
+from ..core.battery_alerts import (VOLTAGE_BANDS, VOLTAGE_NAMES, battery_band, remaining_text,
+                                    voltage_level, voltage_sag, voltage_text)
 
 POSITION_KEY = "compact/position"
 WIDGET_TITLE = "Fôlego — widget"
@@ -252,6 +253,8 @@ class CompactWindow(QWidget):
         self.battery_label = QLabel()
         self.battery_label.hide()
         self._battery_band = 'green'
+        self._voltage_band = None
+        self._voltage_text = ''
         self._battery_text = ''
         themed_style(self.battery_label, self._battery_style)
         self._automation_text = "automação manual · preset equilibrado · nenhum grant ativo"
@@ -425,6 +428,10 @@ class CompactWindow(QWidget):
                       self.mini_memory, self.mini_battery):
             label.setTextFormat(Qt.TextFormat.PlainText)
             label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        self.mini_voltage = QLabel('')
+        self.mini_voltage.setTextFormat(Qt.TextFormat.PlainText)
+        self.mini_voltage.setAccessibleName('Voltagem da bateria')
+        self.mini_voltage.hide()
         status_font = QFont(self.mini_status.font())
         status_font.setPointSize(9)
         self.mini_status.setFont(status_font)
@@ -447,7 +454,15 @@ class CompactWindow(QWidget):
             label.setAccessibleName(name)
             self._set_mini_metric(label, label.text(), 'muted')
             cell_layout.addWidget(title)
-            cell_layout.addWidget(label)
+            if label is self.mini_battery:
+                row = QHBoxLayout()
+                row.setContentsMargins(0, 0, 0, 0)
+                row.setSpacing(4)
+                row.addWidget(label)
+                row.addWidget(self.mini_voltage)
+                cell_layout.addLayout(row)
+            else:
+                cell_layout.addWidget(label)
             self.mini_layout.addWidget(cell)
             if label is self.mini_temperature:
                 self.mini_temperature_caption = title
@@ -1330,7 +1345,16 @@ class CompactWindow(QWidget):
         self._set_mini_metric(self.mini_battery, f'{battery.percent}%' if battery else '—',
                               battery_role, color=self._battery_color if battery else None)
         if battery:
-            self.mini_battery.setToolTip(self._battery_text + '\n' + self.battery_label.toolTip())
+            tip = self._battery_text + '\n' + self.battery_label.toolTip()
+            if self._voltage_text:
+                self.mini_battery.setAccessibleDescription(
+                    f'{self.mini_battery.accessibleDescription()} · voltagem {self._voltage_text}')
+            self.mini_battery.setToolTip(tip)
+            self.mini_voltage.setToolTip(tip)
+        self.mini_voltage.setText(self._voltage_text.replace(' ', '') if battery else '')
+        self.mini_voltage.setVisible(bool(battery and self._voltage_text))
+        themed_style(self.mini_voltage, lambda: 'background:transparent;'
+                     f'color:{self._band_color(self._voltage_band)};font-size:9pt;font-weight:700;')
         self._schedule_mini_fit()
         source = ('ACPI' if snapshot.temperature_sensor == 'acpitz'
                   else snapshot.temperature_sensor)
@@ -1395,8 +1419,7 @@ class CompactWindow(QWidget):
             self.detail_label.setTextFormat(Qt.TextFormat.PlainText)
             self.detail_label.setText('\n'.join((memory, cpu, thermal, fan, swap, temp)))
         else:
-            battery = (f'<span style="color:{self._battery_color()};font-weight:700">{self._battery_text}</span>'
-                       if self._dock_mode == 'top' else '')
+            battery = self._battery_html() if self._dock_mode == 'top' else ''
             self.detail_label.setTextFormat(Qt.TextFormat.RichText)
             if self._dock_mode == 'compact':
                 self.detail_label.setText('<table width="100%" cellspacing="0"><tr>'
@@ -1408,11 +1431,22 @@ class CompactWindow(QWidget):
                     f'<td>{memory}</td><td>{cpu}</td><td>{thermal} · {fan}</td></tr>'
                     f'<tr><td>{swap}</td><td>{temp}</td><td>{battery}</td></tr></table>')
 
+    def _band_color(self, band):
+        return {'green': TOKENS.ok, 'yellow': readable('#e8bd18', (TOKENS.surface, TOKENS.surface_alt)),
+                'orange': readable('#ef8625', (TOKENS.surface, TOKENS.surface_alt)),
+                'red': TOKENS.danger, None: TOKENS.muted}[band]
+
     def _battery_color(self):
-        colors = {'green': TOKENS.ok, 'yellow': readable('#e8bd18', (TOKENS.surface, TOKENS.surface_alt)),
-                  'orange': readable('#ef8625', (TOKENS.surface, TOKENS.surface_alt)),
-                  'red': TOKENS.danger}
-        return colors[self._battery_band]
+        return self._band_color(self._battery_band)
+
+    def _voltage_html(self, text=None):
+        """Voltage in its own level colour; muted when the level is unknown."""
+        return (f'<span style="color:{self._band_color(self._voltage_band)};font-weight:700">'
+                f'{text or self._voltage_text}</span>')
+
+    def _battery_html(self):
+        html = f'<span style="color:{self._battery_color()};font-weight:700">{self._battery_text}</span>'
+        return html + (' · ' + self._voltage_html() if self._voltage_text else '')
 
     def _battery_style(self):
         return f'color:{self._battery_color()};font-weight:700;'
@@ -1421,7 +1455,8 @@ class CompactWindow(QWidget):
         battery = (snapshot.battery if snapshot.source('battery').status == 'ok'
                    and not snapshot.is_stale(15.0, now_mono) else None)
         if battery is None:
-            self._battery_text = ''
+            self._battery_text = self._voltage_text = ''
+            self._voltage_band = None
             self.battery_label.hide()
             if self._dock_mode == 'top':
                 self._render_details()
@@ -1432,9 +1467,21 @@ class CompactWindow(QWidget):
                   'Not charging': ' · conectada'}.get(battery.status, '')
         estimate = remaining_text(battery.remaining_s) if battery.status == 'Discharging' else ''
         self._battery_text = f'Bat {battery.percent}%{suffix}' + (f' · ~{estimate}' if estimate else '')
-        self.battery_label.setText(self._battery_text)
-        self.battery_label.setToolTip('Bateria · estimativa variável com o consumo' if estimate
-                                     else 'Bateria · tempo restante não disponível')
+        level = voltage_level(battery)
+        self._voltage_band = VOLTAGE_BANDS.get(level)
+        self._voltage_text = voltage_text(battery) if battery.voltage_uv is not None else ''
+        self.battery_label.setTextFormat(Qt.TextFormat.RichText)
+        self.battery_label.setText(self._battery_html())
+        tip = ('Bateria · estimativa variável com o consumo' if estimate
+               else 'Bateria · tempo restante não disponível')
+        if self._voltage_text:
+            tip += (f'\nVoltagem {self._voltage_text} · {VOLTAGE_NAMES[level]}' if level else
+                    f'\nVoltagem {self._voltage_text} · sem avaliação fora da descarga'
+                    if battery.status != 'Discharging' else
+                    f'\nVoltagem {self._voltage_text} · sem referência de projeto')
+            if level == 'critical':
+                tip += ' · risco de desligamento: conecte o carregador e reduza a carga'
+        self.battery_label.setToolTip(tip)
         self.battery_label.setVisible(self._dock_mode not in ('top', 'mini'))
         if self._dock_mode == 'top':
             self._render_details()

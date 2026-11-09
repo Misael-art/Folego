@@ -270,3 +270,15 @@ def test_the_tooltip_shows_the_worst_watched_volume(qapp):
     tray.show_snapshot(snap(tmpfs=(TmpfsVolume(
         "/tmp", "tmpfs", 8 * 1024**3, 8_010_114_007, 579_820_585),)))
     assert "/tmp 93%" in tray.tray.tooltips[-1]
+
+
+def test_battery_voltage_notice_states_reading_and_manual_action():
+    from folego.core.snapshot import BatteryInfo
+    tray, _ = build()
+    tray.install()
+    tray.show_battery_voltage(BatteryInfo(54, 'Discharging', voltage_uv=6_569_000,
+                                          voltage_min_design_uv=7_700_000))
+    title, body = tray.tray.messages[-1]
+    assert "voltagem crítica" in title
+    assert "6,57 V com 54% indicados" in body
+    assert "Conecte o carregador" in body

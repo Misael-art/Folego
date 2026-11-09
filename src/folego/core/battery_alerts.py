@@ -23,21 +23,59 @@ def remaining_text(seconds: int | None) -> str:
 # A worn pack or miscalibrated gauge can report 50-70% while the cells sag
 # below the cutoff under load and the host loses power without a log. Only a
 # kernel-reported design minimum defines the reference; no cell-count guess.
-VOLTAGE_SAG_RATIO = 0.90
+# Levels are fractions of that reference, lowest bound first.
+VOLTAGE_LEVELS = (('stable', 0.96), ('acceptable', 0.93), ('attention', 0.90))
+VOLTAGE_BANDS = {'stable': 'green', 'acceptable': 'yellow', 'attention': 'orange',
+                 'critical': 'red'}
+VOLTAGE_NAMES = {'stable': 'estável', 'acceptable': 'aceitável', 'attention': 'atenção',
+                 'critical': 'crítica'}
+
+
+def voltage_level(battery) -> str | None:
+    """Classify a discharging pack against its design minimum; unknown stays None.
+
+    Charger voltage masks the cells, so only discharge readings are classified.
+    """
+    if battery is None or battery.status != 'Discharging':
+        return None
+    voltage, minimum = battery.voltage_uv, getattr(battery, 'voltage_min_design_uv', None)
+    if voltage is None or minimum is None:
+        return None
+    for name, fraction in VOLTAGE_LEVELS:
+        if voltage >= minimum * fraction:
+            return name
+    return 'critical'
 
 
 def voltage_sag(battery) -> bool:
     """True when a discharging pack is below 90% of its design minimum voltage."""
-    if battery is None or battery.status != 'Discharging':
-        return False
-    voltage, minimum = battery.voltage_uv, getattr(battery, 'voltage_min_design_uv', None)
-    if voltage is None or minimum is None:
-        return False
-    return voltage < minimum * VOLTAGE_SAG_RATIO
+    return voltage_level(battery) == 'critical'
 
 
 def voltage_text(battery) -> str:
     return f'{battery.voltage_uv / 1_000_000:.2f} V'.replace('.', ',')
+
+
+class VoltageSagNotice:
+    """One notice per sustained critical sag; a single load spike is not enough."""
+
+    def __init__(self, *, repeat_s=300):
+        self.repeat_s = repeat_s
+        self.streak = 0
+        self.last = None
+
+    def observe(self, battery, *, now=None) -> bool:
+        now = time.monotonic() if now is None else now
+        if not voltage_sag(battery):
+            self.streak = 0
+            if voltage_level(battery) != 'attention':
+                self.last = None  # recovered or unknown: the next sag is a new event
+            return False
+        self.streak += 1
+        if self.streak < 2 or (self.last is not None and now - self.last < self.repeat_s):
+            return False
+        self.last = now
+        return True
 
 
 class BatteryAlertTracker:

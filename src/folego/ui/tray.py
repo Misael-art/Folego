@@ -195,6 +195,14 @@ class Tray:
                      f"(amostra {alert.get('sample_at') or 'sem horário'}{age_text}). "
                      "Salve o trabalho e reduza tarefas pelo aplicativo responsável.")
 
+    def show_battery_voltage(self, battery):
+        """Sustained sag below the design reference: the gauge percent is not trustworthy."""
+        volts = f"{battery.voltage_uv / 1_000_000:.2f} V".replace(".", ",")
+        self._notice('resources', "Bateria · voltagem crítica",
+                     f"{volts} com {battery.percent}% indicados: o equipamento pode desligar "
+                     "sem aviso. Conecte o carregador agora, salve o trabalho e pause "
+                     "tarefas pesadas (builds, jogos, agentes).", 'critical')
+
     def show_web_mcp_report(self):
         self._notice('service', 'Codex Web precisa de atenção',
                      'O agente relatou “McpServerError: Session terminated”. '

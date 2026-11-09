@@ -147,3 +147,35 @@ def test_voltage_sag_needs_design_reference_and_discharge():
                                        voltage_min_design_uv=7_700_000))
     assert not voltage_sag(BatteryInfo(54, 'Discharging', voltage_uv=7_400_000,
                                        voltage_min_design_uv=7_700_000))
+
+
+def test_voltage_levels_follow_design_reference_only_while_discharging():
+    from folego.core.battery_alerts import voltage_level
+
+    def pack(volts, status='Discharging', design=7_700_000):
+        return BatteryInfo(60, status, voltage_uv=round(volts * 1e6),
+                           voltage_min_design_uv=design)
+    assert [voltage_level(pack(v)) for v in (7.65, 7.39, 7.30, 7.17, 7.10, 6.94, 6.92)] == [
+        'stable', 'acceptable', 'acceptable', 'acceptable', 'attention', 'attention', 'critical']
+    assert voltage_level(pack(8.4, 'Charging')) is None
+    assert voltage_level(pack(6.5, design=None)) is None
+    assert voltage_level(None) is None
+
+
+def test_voltage_notice_needs_sustained_sag_and_respects_repeat_window():
+    from folego.core.battery_alerts import VoltageSagNotice
+    low = BatteryInfo(54, 'Discharging', voltage_uv=6_569_000, voltage_min_design_uv=7_700_000)
+    near = BatteryInfo(54, 'Discharging', voltage_uv=7_000_000, voltage_min_design_uv=7_700_000)
+    fine = BatteryInfo(54, 'Discharging', voltage_uv=7_600_000, voltage_min_design_uv=7_700_000)
+    notice = VoltageSagNotice()
+    assert not notice.observe(low, now=0)       # one spike is not sustained
+    assert notice.observe(low, now=2)
+    assert not notice.observe(low, now=60)      # inside the repeat window
+    assert not notice.observe(near, now=62)     # oscillation near the limit is the same event
+    assert not notice.observe(low, now=64)
+    assert not notice.observe(low, now=66)
+    assert notice.observe(low, now=310)
+    assert not notice.observe(fine, now=312)    # recovery re-arms immediately
+    assert not notice.observe(low, now=314)
+    assert notice.observe(low, now=316)
+    assert not notice.observe(None, now=318)

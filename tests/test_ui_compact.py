@@ -977,3 +977,36 @@ def test_cooler_speed_stays_next_to_temperature_in_each_position(qapp):
     assert 'ACPI 56 °C' in view.detail_label.text()
     assert 'não confirma temperatura da CPU' in view.detail_label.toolTip()
     view.force_close()
+
+
+def test_battery_voltage_is_shown_in_its_own_level_colour(qapp):
+    from dataclasses import replace
+    from folego.ui.theme import TOKENS
+    view, _ = make(qapp)
+    view.show_compact()
+
+    def show(volts, status='Discharging', design=7_700_000):
+        view.show_snapshot(replace(
+            snap(), mono=time.monotonic(),
+            battery=BatteryInfo(80, status, 3600, voltage_uv=volts,
+                                voltage_min_design_uv=design),
+            sources=(SourceQuality('battery', 'ok'),)))
+    show(7_650_000)
+    assert '7,65 V' in view.battery_label.text() and '80%' in view.battery_label.text()
+    assert view._voltage_band == 'green' and 'estável' in view.battery_label.toolTip()
+    assert f'color:{TOKENS.ok}' in view._voltage_html()
+    show(7_100_000)
+    assert view._voltage_band == 'orange' and 'atenção' in view.battery_label.toolTip()
+    show(6_570_000)
+    assert view._voltage_band == 'red' and f'color:{TOKENS.danger}' in view._voltage_html()
+    assert 'risco de desligamento' in view.battery_label.toolTip()
+    assert view.mini_battery.text() == '80%' and view.mini_voltage.text() == '6,57V'
+    assert not view.mini_voltage.isHidden() and TOKENS.danger in view.mini_voltage.styleSheet()
+    assert 'voltagem 6,57 V' in view.mini_battery.accessibleDescription()
+    show(8_400_000, 'Charging')
+    assert view._voltage_band is None and f'color:{TOKENS.muted}' in view._voltage_html()
+    assert 'fora da descarga' in view.battery_label.toolTip()
+    show(6_570_000, design=None)
+    assert view._voltage_band is None and 'sem referência' in view.battery_label.toolTip()
+    show(None)
+    assert 'V<' not in view.battery_label.text() and view._voltage_text == ''
