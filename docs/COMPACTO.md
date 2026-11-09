@@ -31,10 +31,11 @@ a estimativa de autonomia, quando medida, aparece na dica. Os alertas sonoros
 existentes são compartilhados, sem duplicar monitoramento ou sons.
 
 As IAs com cota positiva aparecem da maior para a menor, usando a mesma conta
-selecionada pelo compacto. Pequenos marcadores mostram entregas para revisitar
-e resets resgatáveis confirmados. Esses números não representam processos ou
-agentes em execução. Uma cota desconhecida pode conservar os lembretes
-confirmados, com `—` no valor. Clique na célula para consultar a conta.
+selecionada pelo compacto. Com cota zerada ou desconhecida, a célula mostra
+**Entrega**, **Entregas** ou **Resgate** conforme o lembrete disponível. O
+marcador informa a quantidade de entregas para revisitar ou de resets
+resgatáveis confirmados. Quando o último lembrete sai, a célula se recolhe.
+Clique na célula para consultar a conta, inclusive seu estado de cota.
 Quando a cota chega a zero e somente janelas confirmadas de **cinco horas**
 impedem seu uso, a célula mostra o tempo até a reposição. Não há contagem
 semanal. Ao vencer o prazo, a franquia permanece desconhecida até nova leitura;
@@ -103,8 +104,8 @@ abertura inicia no compacto.
 
 ## Sessões de IA
 
-O widget mostra somente provedores com cota positiva confirmada, do maior para o
-menor **percentual disponível**. Um empate mantém a ordem Codex, Codex Web,
+No compacto e nas barras, as cotas positivas confirmadas aparecem do maior
+para o menor **percentual disponível**. Um empate mantém a ordem Codex, Codex Web,
 Claude e Grok. A conta padrão representa o provedor quando tem cota; se estiver
 zerada ou sem confirmação, a conta elegível com maior percentual aparece em seu
 lugar. Nome acessível, clique e painel se referem à mesma conta. Passe o mouse
@@ -184,13 +185,15 @@ quando a fonte daquele provedor informa tickets (atualmente confirmado no Codex)
   realmente aberto com perfil `chatgpt-web/*` mostra círculo verde pulsante
   com “OK”; na mini horizontal aparece “OK”. A contagem de entregas concluídas
   permanece distinta da contagem de instâncias abertas, disponível na descrição
-  acessível e no painel. O launcher sozinho não acende o indicador. Com zero
-  instâncias, o Web sai das faixas; sem inventário confiável, não se presume
-  zero. A observação usa a varredura existente de contas a cada 60 segundos e
+  acessível e no painel. O launcher sozinho não acende o indicador. Sem
+  instância confirmada, a mini ainda pode mostrar uma entrega Web pendente.
+  Sem inventário confiável, a contagem de instâncias fica desconhecida.
+  A observação usa a varredura existente de contas a cada 60 segundos e
   vence em 120 segundos. Instância aberta não comprova turno em execução,
   resposta remota ou cota disponível. A conta permanece no menu de contas.
-- Grok: se sua fonte não oferecer uma franquia percentual confirmada, fica no
-  menu de contas. Metadados de assinatura aparecem separados da reposição de
+- Grok: se sua fonte não oferecer uma franquia percentual confirmada, o menu
+  de contas mantém o diagnóstico e a mini pode mostrar entregas pendentes.
+  Metadados de assinatura aparecem separados da reposição de
   cota. A data de Grok pode ser informada pelo
   usuário; isso não confirma pagamento ou cota. Esses campos continuam
   indisponíveis nas fontes consultadas; não se usam tokens gastos na conversa

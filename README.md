@@ -62,7 +62,8 @@ reduz a carga nem suspende agentes por conta própria.
 O **mini horizontal** reúne estado, CPU, temperatura com fonte, RAM, bateria e
 cotas de IA em células de uma linha. A largura acompanha os dados disponíveis;
 entregas, resets resgatáveis e reposição confirmada de cinco horas têm lembretes
-discretos. A alça pontilhada move a faixa; **Expandir** abre
+discretos. Uma conta sem cota disponível aparece pelo motivo que a mantém na
+faixa, como **Entregas** ou **Resgate**. A alça pontilhada move a faixa; **Expandir** abre
 o compacto, a grade abre a Central e a seta lista diretamente todos os formatos.
 O **modo compacto** tem 280 px de largura e recursos em duas linhas. O ícone de
 grade abre a **Central**; a seta ao lado reúne os cinco formatos,
@@ -76,8 +77,8 @@ faixa de encaixe. A seta leva, respectivamente, à barra lateral direita,
 lateral esquerda ou horizontal superior. A seta na borda da barra retorna ao
 compacto. As barras ocupam a área útil informada pelo desktop, respeitando
 painéis conhecidos; o conteúdo lateral tem rolagem quando necessário.
-A faixa de IAs mostra somente provedores com cota positiva e confirmada,
-ordenados pelo percentual disponível. Contas sem cota ou sem confirmação
+No compacto e nas barras, a faixa ordena as cotas positivas e confirmadas
+pelo percentual disponível. Contas sem cota ou sem confirmação
 continuam acessíveis em **Contas e cotas de IA**; passe o mouse sobre um medidor
 visível para abrir o painel da conta exibida. Consumo, resets, tickets e
 referência da assinatura ficam separados. Os medidores seguem o padrão circular do PhaseZero:

@@ -413,6 +413,38 @@ def test_mini_bar_hides_stale_values_and_wayland_requests_confirmed_move(qapp, m
     view.force_close()
 
 
+def test_mini_refits_deliveries_after_wayland_placement_failure(qapp, monkeypatch):
+    from PySide6.QtCore import QRect
+    from PySide6.QtTest import QTest
+
+    view, _ = make(qapp, caps=wayland())
+    view._screen_area = lambda: QRect(0, 0, 948, 593)
+    view._screens = lambda: ((0, 0, 948, 593),)
+    controller = view.shortcut_tabs.controller
+
+    def request(action, value=None):
+        controller.action = action
+        return True
+
+    monkeypatch.setattr(controller, 'request', request)
+    monitor = view.ai_strip.monitor
+    monkeypatch.setattr(monitor.poller, 'request', lambda: None)
+    monkeypatch.setattr(monitor.delivery_poller, 'request', lambda: None)
+    view.show_compact()
+    view.set_dock_mode('mini')
+    view._capture_result({'operation': 'widget-geometry', 'geometry': (100, 100, 280, 160)})
+    assert view._dock_pending == 'mini' and view.width() == MINI_WIDTH
+    monitor.set_deliveries([dict(provider=p, count=2) for p in view.mini_ai.buttons])
+    QTest.qWait(25)
+    assert not view.mini_fit_timer.isActive() and view.width() == MINI_WIDTH
+
+    view._capture_failed('O compositor não confirmou a posição da janela')
+    QTest.qWait(25)
+    assert view._dock_pending is None
+    assert view.width() == view._mini_width() > MINI_WIDTH
+    view.force_close()
+
+
 @pytest.mark.parametrize('percent,role', ((82, 'ok'), (50, 'warning'), (25, 'warning'), (10, 'danger')))
 def test_mini_battery_reuses_bands_estimate_and_pause_contract(qapp, percent, role):
     from dataclasses import replace

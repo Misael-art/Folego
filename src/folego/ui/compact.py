@@ -1101,6 +1101,7 @@ class CompactWindow(QWidget):
         if self.shortcut_tabs.controller.action == 'widget-place' and self._dock_pending:
             self._dock_pending = None
             self.card.setGraphicsEffect(None)
+            self._schedule_mini_fit()
             if self._dock_verify_attempts:
                 QTimer.singleShot(180, self._verify_dock_after_show)
             else:
