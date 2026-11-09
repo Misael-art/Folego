@@ -229,6 +229,8 @@ def last_delivery(provider, path, since, now, primary=False):
                     if not token: raise ValueError('conclusão sem identidade')
         if token and session:
             pending = dict(at=at, event=str(token)) if at >= since else None
+            if pending and provider in ('codex', 'web') and error is not None:
+                pending['delivery_failed'] = True
             if pending and provider == 'web' and reported_web_mcp_error:
                 pending['reported_web_mcp_error'] = True
             if pending and provider == 'web' and web_capacity_error:
@@ -330,6 +332,8 @@ class DeliveryMonitor:
         seen = value['seen'].get(session, {})
         if seen and (seen.get('event') == event or seen.get('at', 0) > pending['at']): return None
         receipt = dict(session=session, event=event, at=pending['at'])
+        if pending.get('delivery_failed'):
+            receipt['delivery_failed'] = True
         if pending.get('reported_web_mcp_error'):
             receipt['reported_web_mcp_error'] = True
         if pending.get('web_capacity_error'):

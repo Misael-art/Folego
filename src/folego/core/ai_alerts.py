@@ -38,28 +38,22 @@ class AlertTracker:
 
     def delivery_changes(self, rows, now=None):
         now = time.time() if now is None else now
-        sounds = []
+        deliveries = {}
         for row in rows:
             provider = row.get('provider')
             if provider not in ai_sessions.NAMES or row.get('count') is None: continue
-            pending = {p['event'] for p in row.get('pending', []) if isinstance(p.get('event'), str)}
-            successful = {p['event'] for p in row.get('pending', [])
-                          if isinstance(p.get('event'), str) and not p.get('reported_web_mcp_error')
-                          and not p.get('web_capacity_error')}
-            seen = self.deliveries.get(provider)
-            if seen is None:
-                self.deliveries[provider] = pending
-                # A provider may have no readable session at startup. A native
-                # receipt explicitly completed after we started is still new.
-                if any(p.get('event') in successful and
-                       (at := ai_sessions.timestamp(p.get('at'))) is not None and self.started_at <= at <= now
-                       for p in row.get('pending', [])):
-                    sounds.append(provider)
-                continue
-            if successful - seen: sounds.append(provider)
+            pending = {p['event']: p for p in row.get('pending', []) if isinstance(p.get('event'), str)}
+            seen = self.deliveries.setdefault(provider, set())
             # Acknowledgment, partial reads and new requests must not replay old
             # completion sounds. Overflow protects instead of silently evicting.
-            if len(seen | pending) > 16384:
+            if len(seen) + len(pending.keys() - seen) > 16384:
                 raise ValueError('Histórico sonoro excede o limite; reinicie para estabelecer uma nova referência')
+            count = sum(1 for event, receipt in pending.items()
+                        if event not in seen and not any(receipt.get(flag) for flag in (
+                            'delivery_failed', 'reported_web_mcp_error', 'web_capacity_error'))
+                        and (at := ai_sessions.timestamp(receipt.get('at'))) is not None
+                        and self.started_at <= at <= now)
+            if count:
+                deliveries[provider] = deliveries.get(provider, 0) + count
             seen.update(pending)
-        return sounds
+        return deliveries

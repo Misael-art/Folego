@@ -36,17 +36,18 @@ def test_all_accounts_and_providers_are_independent():
 
 
 def test_delivery_identity_survives_acknowledgment_and_partial_reads():
-    tracker = AlertTracker()
+    tracker = AlertTracker(now=100)
     def rows(provider, *events, count=1):
-        return [dict(provider=provider, count=count, pending=[dict(event=e) for e in events])]
-    assert tracker.delivery_changes(rows('codex', 'old')) == []
-    assert tracker.delivery_changes(rows('codex', 'new', 'old')) == ['codex']
-    assert tracker.delivery_changes(rows('codex', count=None)) == []
-    assert tracker.delivery_changes(rows('codex', 'new')) == []
-    assert tracker.delivery_changes(rows('codex', 'next')) == ['codex']
+        return [dict(provider=provider, count=count,
+                     pending=[dict(event=e, at=99 if e.startswith('old') else 101) for e in events])]
+    assert tracker.delivery_changes(rows('codex', 'old')) == {}
+    assert tracker.delivery_changes(rows('codex', 'new', 'old', 'old-delayed')) == {'codex': 1}
+    assert tracker.delivery_changes(rows('codex', count=None)) == {}
+    assert tracker.delivery_changes(rows('codex', 'new')) == {}
+    assert tracker.delivery_changes(rows('codex', 'next', 'another')) == {'codex': 2}
     for provider in ('web', 'claude', 'grok'):
-        assert tracker.delivery_changes(rows(provider, count=0)) == []
-        assert tracker.delivery_changes(rows(provider, 'new')) == [provider]
+        assert tracker.delivery_changes(rows(provider, count=0)) == {}
+        assert tracker.delivery_changes(rows(provider, 'new')) == {provider: 1}
 
 
 def test_original_cues_are_distinct_short_and_faded():
@@ -58,26 +59,36 @@ def test_original_cues_are_distinct_short_and_faded():
 
 def test_first_delivery_after_startup_is_audible_even_if_provider_was_unavailable():
     tracker=AlertTracker(now=100)
-    assert tracker.delivery_changes([dict(provider='grok',count=None,pending=[])],now=101)==[]
+    assert tracker.delivery_changes([dict(provider='grok',count=None,pending=[])],now=101)=={}
     new=dict(provider='grok',count=1,pending=[dict(event='first',at=105)])
-    assert tracker.delivery_changes([new],now=106)==['grok']
-    assert tracker.delivery_changes([new],now=107)==[]
+    assert tracker.delivery_changes([new],now=106)=={'grok': 1}
+    assert tracker.delivery_changes([new],now=107)=={}
     restarted=AlertTracker(now=200)
-    assert restarted.delivery_changes([new],now=201)==[]
+    assert restarted.delivery_changes([new],now=201)=={}
 
 
 def test_reported_web_mcp_failure_does_not_play_success_completion_cue():
     tracker = AlertTracker(now=100)
     failure = dict(provider='web', count=1, pending=[dict(
         event='failed', at=101, reported_web_mcp_error=True)])
-    assert tracker.delivery_changes([failure], now=102) == []
-    assert tracker.delivery_changes([failure], now=103) == []
+    assert tracker.delivery_changes([failure], now=102) == {}
+    assert tracker.delivery_changes([failure], now=103) == {}
     success = dict(provider='web', count=2, pending=[*failure['pending'], dict(event='ok', at=104)])
-    assert tracker.delivery_changes([success], now=105) == ['web']
+    assert tracker.delivery_changes([success], now=105) == {'web': 1}
 
 
 def test_native_capacity_error_never_plays_success_cue():
     tracker = AlertTracker(now=100)
     failed = dict(provider='web', count=1, pending=[dict(event='capacity', at=101, web_capacity_error=True)])
-    assert tracker.delivery_changes([failed], now=102) == []
-    assert tracker.delivery_changes([failed], now=103) == []
+    assert tracker.delivery_changes([failed], now=102) == {}
+    assert tracker.delivery_changes([failed], now=103) == {}
+
+
+def test_structured_generic_failure_is_excluded_from_delivery_notice():
+    tracker = AlertTracker(now=100)
+    rows = [dict(provider='codex', count=2, pending=[
+        dict(event='failed', at=101, delivery_failed=True),
+        dict(event='finished', at=101),
+    ])]
+    assert tracker.delivery_changes(rows, now=102) == {'codex': 1}
+    assert tracker.delivery_changes(rows, now=103) == {}

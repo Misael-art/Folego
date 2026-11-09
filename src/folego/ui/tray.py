@@ -7,11 +7,12 @@ where the user still sees the signal (window + title) instead of pretending an
 icon is there. Nothing in this class writes: the menu only brings the window up
 or stops the watcher — an act on the system needs a click inside the window.
 """
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QIcon
 import time
 from PySide6.QtWidgets import QApplication, QMenu, QStyle, QSystemTrayIcon
 
 from . import title_signal
+from ..adapters.desktop_notices import DesktopNotice
 
 
 def area_available() -> bool:
@@ -24,11 +25,12 @@ def _default_tray(parent):
 
 class Tray:
     def __init__(self, window, *, available_fn=area_available, tray_factory=None,
-                 thresholds: title_signal.Thresholds | None = None):
+                 thresholds: title_signal.Thresholds | None = None, send_notice=None):
         self._window = window
         self._available = available_fn
         self._factory = tray_factory or _default_tray
         self._thresholds = thresholds or title_signal.Thresholds()
+        self._send_notice = send_notice
         self.tray = None
         self.fallback = ""
         self._context_menu = None
@@ -128,43 +130,57 @@ class Tray:
             lines.append(self._input_note)
         return "\n".join(lines)
 
+    def _notice(self, category, title, body, urgency='normal'):
+        notice = DesktopNotice(category, title, body, urgency)
+        if self._send_notice is not None and self._send_notice(notice):
+            return True
+        notify = getattr(self.tray, 'showMessage', None)
+        if notify is None:
+            return False
+        notify(title, body, QIcon(str(notice.icon)))
+        return True
+
+    def show_agent_deliveries(self, deliveries):
+        from ..core.ai_sessions import NAMES
+        for provider, count in deliveries.items():
+            title = f'Agentes · {NAMES[provider]}'
+            body = ('Uma nova entrega para revisitar.' if count == 1
+                    else f'{count} novas entregas para revisitar.')
+            self._notice('agent', title, body)
+
     def show_accessibility(self, report):
         alerts = report.get("alerts", [])
         note = "; ".join(alerts)[:512] if alerts else ""
         self._input_note = "Entrada: " + note if note else ""
         previous, when = self._input_alert
         now = time.monotonic()
-        notify = getattr(self.tray, "showMessage", None)
-        if note and notify and (note != previous or now - when >= 300):
-            notify("Fôlego · entrada precisa de atenção", note)
-            self._input_alert = (note, now)
+        if note and (note != previous or now - when >= 300):
+            if self._notice('input', 'Entrada · precisa de atenção', note):
+                self._input_alert = (note, now)
 
     def show_thermal(self, thermal: dict):
         """Notify on fresh measured heat, with escalation and bounded repetition."""
         rank = {"high": 1, "danger": 2, "critical": 3}.get(thermal.get("state"), 0)
-        notify = getattr(self.tray, "showMessage", None)
         value = thermal.get("current_c")
-        if not rank or value is None or notify is None:
+        if not rank or value is None:
             return
         previous, when = self._thermal_alert
         now = time.monotonic()
         interval = 300 if rank == 1 else 60
         if rank <= previous and now - when < interval:
             return
-        title = {1: "Fôlego · temperatura elevada",
-                 2: "Fôlego · reduza a carga agora",
-                 3: "Fôlego · limite térmico crítico"}[rank]
+        title = {1: "Recursos · temperatura elevada",
+                 2: "Recursos · reduza a carga agora",
+                 3: "Recursos · limite térmico crítico"}[rank]
         sensor = "ACPI" if thermal.get("sensor") == "acpitz" else thermal.get("sensor") or "Sensor"
         action = ("Salve o trabalho e peça aos agentes que reduzam a carga."
                   if rank >= 2 else "Revise as tarefas pesadas antes que o calor aumente.")
-        notify(title, f"{sensor}: {value:g} °C. {action}")
-        self._thermal_alert = (rank, now)
+        if self._notice('resources', title, f"{sensor}: {value:g} °C. {action}",
+                        'critical' if rank == 3 else 'normal'):
+            self._thermal_alert = (rank, now)
 
     def show_pressure_alert(self, alert: dict):
         """One bounded warning prepared from fresh, sustained PSI samples."""
-        notify = getattr(self.tray, "showMessage", None)
-        if notify is None:
-            return
         labels = {"memory": "memória", "io": "disco/I/O", "cpu": "CPU"}
         value = alert.get("value")
         if value is None:
@@ -174,20 +190,16 @@ class Tray:
         readings = [alert, *alert.get("also", ())]
         detail = "; ".join(f"{labels.get(item.get('kind'), 'recursos')} "
                            f"{item['value']:g}%" for item in readings)
-        notify("Fôlego · pressão sustentada",
-               f"PSI de espera em 60 s: {detail} "
-               f"(amostra {alert.get('sample_at') or 'sem horário'}{age_text}). "
-               "Salve o trabalho e reduza tarefas pelo aplicativo responsável.")
+        self._notice('resources', "Recursos · pressão sustentada",
+                     f"PSI de espera em 60 s: {detail} "
+                     f"(amostra {alert.get('sample_at') or 'sem horário'}{age_text}). "
+                     "Salve o trabalho e reduza tarefas pelo aplicativo responsável.")
 
     def show_web_mcp_report(self):
-        notify = getattr(self.tray, 'showMessage', None)
-        if notify is not None:
-            notify('Fôlego · Codex Web precisa de atenção',
-                   'O agente relatou “McpServerError: Session terminated”. '
-                   'Reconecte o Codex Native2 no ChatGPT e repita a operação após conferir o resultado anterior. '
-                   'O estado do serviço local, isoladamente, não confirma esse erro.')
+        self._notice('service', 'Codex Web precisa de atenção',
+                     'O agente relatou “McpServerError: Session terminated”. '
+                     'Reconecte o Codex Native2 no ChatGPT e repita a operação após conferir o resultado anterior. '
+                     'O estado do serviço local, isoladamente, não confirma esse erro.')
 
     def show_web_capacity_error(self, detail):
-        notify = getattr(self.tray, 'showMessage', None)
-        if notify is not None:
-            notify('Fôlego · erro de capacidade no Codex Web', detail)
+        self._notice('service', 'Codex Web · erro de capacidade', detail)

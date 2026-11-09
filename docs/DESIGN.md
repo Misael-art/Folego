@@ -44,6 +44,15 @@ Capturas recentes e resultados de execução fundamentam o registro de aceite.
 A diretriz também está registrada no AI Memory do projeto em
 `_rules/qualidade-visual-nos-minimos-detalhes.md`.
 
+## Identidade das notificações do desktop
+
+O Plasma mantém o formato nativo do pop-up e do histórico. O Fôlego fornece
+selo, título e urgência. A categoria conserva cor e silhueta nos temas da
+aplicação. Agentes usam bandeja violeta, serviços usam conector azul,
+recursos usam medidor laranja, entrada usa teclado verde-água e operações
+usam engrenagem grafite. O selo de recursos ganha um `!` no limite térmico
+crítico. Título e silhueta identificam o assunto também sem cor.
+
 ## Calor e pedidos de alívio aos agentes
 
 O alerta térmico usa o limite **do mesmo sensor** que fornece a temperatura.

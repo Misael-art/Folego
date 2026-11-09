@@ -359,6 +359,13 @@ fora da cauda legível deixam a observação parcial, sem amostragem silenciosa.
 
 ## Sons dos agentes e da franquia
 
+O Plasma recebe pop-ups identificados por categoria, com selo próprio e
+título curto. Uma entrega nova confirmada produz um aviso por provedor no
+ciclo, mesmo com os sons desativados. Entregas anteriores à abertura,
+recibos repetidos e erros estruturados não geram aviso de conclusão. Os
+avisos de Codex Web, pressão, temperatura, entrada e Desempenho têm seus
+próprios selos. O Plasma aplica as preferências de exibição da sessão.
+
 Na janela principal, abra **opções → Captura e avisos sonoros**. **Sons de
 conclusão dos agentes e de franquia** vem ligado. Codex, Codex Web, Claude e
 Grok têm quatro melodias curtas distintas. Escolha o aviso na lista e use

@@ -288,6 +288,7 @@ def test_capacity_requires_failed_native_web_completion(tmp_path, provider, erro
     append(path, complete)
     result = last_delivery(provider, path, NOW, NOW + 2)
     assert bool(result.get('web_capacity_error')) is trigger
+    assert bool(result.get('delivery_failed')) is (error is not None)
     assert 'message' not in result and 'error' not in result
     append(path, event('task_started', NOW + 2))
     assert last_delivery(provider, path, NOW, NOW + 3) is None

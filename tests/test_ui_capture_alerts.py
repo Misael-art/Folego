@@ -116,17 +116,23 @@ def test_completion_to_audio_pipeline_respects_mute_and_does_not_replay(qapp,tmp
         def close(self): return True
     backend=Backend();controller=DesktopController(backend=backend)
     sounds=AlertSounds(controller=controller)
-    def rows(*events): return [dict(provider='codex',count=len(events),pending=[dict(event=e) for e in events])]
+    deliveries = []
+    sounds.deliveries_observed.connect(deliveries.append)
+    def rows(*events):
+        return [dict(provider='codex', count=len(events),
+                     pending=[dict(event=e, at=time.time()) for e in events])]
     sounds.observe('deliveries',rows())
     sounds.observe('deliveries',rows('one'))
     wait(qapp,lambda:controller.future is None and len(backend.calls)==1)
     assert backend.calls[0]==('alert-play',dict(tone='codex',raise_volume=True))
     set_enabled(SOUNDS,False);sounds.observe('deliveries',rows('one','two'))
     assert len(backend.calls)==1
+    assert deliveries == [{'codex': 1}, {'codex': 1}]
     set_enabled(SOUNDS,True);sounds.observe('deliveries',rows('two'))
     assert len(backend.calls)==1
     sounds.observe('deliveries',rows('three'))
     wait(qapp,lambda:controller.future is None and len(backend.calls)==2)
+    assert deliveries == [{'codex': 1}, {'codex': 1}, {'codex': 1}]
     sounds.shutdown()
 
 

@@ -179,6 +179,39 @@ def test_web_mcp_report_names_client_action_without_claiming_local_outage():
     assert 'não confirma esse erro' in body
 
 
+def test_native_notices_group_by_provider_and_keep_urgency_separate():
+    from folego.adapters.desktop_notices import DesktopNotice
+
+    sent = []
+    tray = Tray(FakeWindow(), available_fn=lambda: True, tray_factory=FakeTray,
+                send_notice=lambda notice: sent.append(notice) or True)
+    tray.install()
+    tray.show_agent_deliveries({'grok': 2})
+    tray.show_accessibility({'alerts': ['Teclado <interno> & toque']})
+    tray.show_thermal({'state': 'critical', 'current_c': 105})
+    tray.show_web_mcp_report()
+    assert not tray.tray.messages
+    assert [notice.category for notice in sent] == ['agent', 'input', 'resources', 'service']
+    assert [notice.urgency for notice in sent] == ['normal', 'normal', 'critical', 'normal']
+    assert '2 novas entregas' in sent[0].body
+    assert sent[1].arguments()[-1] == 'Teclado &lt;interno&gt; &amp; toque'
+    assert sent[2].icon.name == 'notice-resources-critical.svg'
+    assert all(notice.icon.is_file() for notice in sent)
+    assert DesktopNotice('operation', 'Desempenho', 'aviso').icon.is_file()
+
+
+def test_offscreen_notice_does_not_reach_session_bus(qapp, monkeypatch):
+    from folego.adapters.desktop_notices import DesktopNotice
+    from folego.ui import desktop_notices
+
+    monkeypatch.setattr(desktop_notices.QGuiApplication, 'platformName', lambda: 'offscreen')
+    monkeypatch.setattr(desktop_notices.shutil, 'which',
+                        lambda name: pytest.fail(f'Iniciaria {name} fora da sessão gráfica'))
+    sender = desktop_notices.DesktopNotices(qapp)
+    assert not sender.send(DesktopNotice('agent', 'Agente de QA', 'Entrega sintética'))
+    sender.close()
+
+
 def test_the_tray_menu_offers_only_viewing_actions():
     tray, window = build()
     tray.install()

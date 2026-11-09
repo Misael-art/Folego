@@ -262,7 +262,10 @@ class MainWindow(QMainWindow):
         self.setMenuWidget(self.navigation_header)
         self.accessibility.options_requested.connect(self._open_options)
 
-        self.tray = Tray(self, thresholds=self._thresholds)
+        from .desktop_notices import DesktopNotices
+        self._desktop_notices = DesktopNotices(self)
+        self.tray = Tray(self, thresholds=self._thresholds, send_notice=self._desktop_notices.send)
+        self.ai_monitor.alerts.deliveries_observed.connect(self.tray.show_agent_deliveries)
         # atalhos locais da aplicação (não dependem de portal global do Wayland)
         self._compact_shortcut = QShortcut(QKeySequence("Ctrl+Shift+F"), self)
         self._compact_shortcut.activated.connect(self.show_compact)
@@ -886,6 +889,7 @@ class MainWindow(QMainWindow):
             self.hide()
             return
         if self._quitting or self.tray.tray is None:
+            self._desktop_notices.close()
             self._freshness_timer.stop()
             self._screen_timer.stop()
             self._screen_controller.close()
