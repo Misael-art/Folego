@@ -1,5 +1,43 @@
 # Passagem para o próximo agente — atualizada em 09/11/2026
 
+## Temas na mini e comandos do widget compacto — 09/11/2026
+
+A mini horizontal tem **Controles → Tema de cores**, com as oito amostras
+do seletor da Central e rótulo **em uso**. Ambos salvam a mesma preferência
+QSettings e preservam a transparência. Falha de gravação restaura a marca
+anterior e aparece no aviso da mini. O compacto usa **Monitoramento →
+Pausar monitoramento** ou **Retomar monitoramento**. O estado e a memória
+livre dividem o resumo. Laterais e topo mantêm a pausa na superfície.
+
+A gaveta do compacto mantém seis atalhos em duas linhas de 22 px. **D**,
+à direita, usa o comando nativo já usado por Custom. O worker consulta o
+KWin e confirma a exibição. Repetir o comando com a área de trabalho já
+visível conserva o estado. O teste em KWin Wayland com barramento e runtime
+privados partiu de `showingDesktop=false`, acionou o botão e verificou
+`true`, com duas janelas descartáveis abertas. O segundo clique confirmou
+o resultado idempotente após o worker ficar livre.
+
+Em janela própria Wayland de 948 × 593 px lógicos, a mesma amostra sintética
+com quatro medidores, bateria e marcadores foi comparada com a base
+`cac6764` nos temas SNES americano e PS2. O compacto recolhido passou de
+280 × 256 para **268 × 197 px**. Com a gaveta aberta passou de 280 × 303
+para **268 × 243 px**. Foram conferidos texto, dimensões dos marcadores,
+pausa/retomada, troca de tema e mini de 46 px. As capturas são do cliente;
+os acionamentos do ensaio foram Qt. Recibos e tentativas iniciais em
+`.scratch/widget-design-20261109.uiocmC/`.
+
+O foco inicial passou 146 testes e apontou uma expectativa antiga para o
+menu. A asserção passou a conferir os itens visíveis. O foco de regressão
+passou 10 testes, com 83 desmarcados. Evidência em `run-i0o_pqde` e
+`run-7j3_oqrt` sob `.scratch/dev-tests/`.
+
+`./dev check` passou com Python 3.14.7 e HOME/XDG privados. Foram
+**1357 + 2 skips** headless em 32,32 s e **1769 + 2 skips** Qt offscreen
+em 144,45 s, nos workspaces `run-dcbs8lq3` e `run-kz_1s0t9`.
+Código `90b0958402e6e3e09e8ab8b01d899a8afb38b4d6` confirmado no GitHub e
+no [PR #9](https://github.com/Misael-art/Folego/pull/9). Os seis jobs de
+produto estavam na fila na primeira consulta.
+
 ## Visibilidade de contas e entregas na mini — 09/11/2026
 
 A consulta somente leitura encontrou duas entregas do Grok para revisitar.
@@ -18,7 +56,8 @@ fazia. A regressão reproduziu 384 px com 587 px de conteúdo e passou após
 a correção. O foco de mini, compacto e cotas passou 71 testes antes desse
 ajuste. As execuções anteriores foram preservadas em
 `.scratch/dev-tests-reviewed/mini-delivery-initial-20261109/`. A regressão
-de posicionamento ficou em `run-jilf4__1` e `run-0_9pweiu`.
+de posicionamento ficou em `run-jilf4__1` e `run-0_9pweiu`, preservados
+em `.scratch/dev-tests-reviewed/mini-delivery-final-20261109/`.
 
 No KDE/Wayland, uma janela própria com dados sintéticos percorreu três
 estados em cada tema `snes-us` e `ps2`. A área útil real foi 948 × 593 px.
@@ -29,7 +68,8 @@ Recibo, falhas iniciais da QA e capturas de cliente estão em
 
 `./dev check` final, Python 3.14.7 e HOME/XDG privados, passou **1357 + 2 skips**
 headless em 29,32 s e **1768 + 2 skips** Qt offscreen em 126,70 s, em
-`.scratch/dev-tests/run-oyqmrc0s/` e `.scratch/dev-tests/run-v4off3md/`.
+`run-oyqmrc0s` e `run-v4off3md`, preservados em
+`.scratch/dev-tests-reviewed/mini-delivery-final-20261109/`.
 Código `7ff9c2dc2086860d5f71751890050b2a0faeacb0` confirmado no GitHub e no
 [PR #9](https://github.com/Misael-art/Folego/pull/9), com três jobs de produto
 em execução e três na fila na primeira consulta. A evidência de interface
