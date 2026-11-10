@@ -1,5 +1,29 @@
 # Passagem para o próximo agente — atualizada em 09/11/2026
 
+## Evidência de queda de tensão e carga do Codex Web — 09/11/2026
+
+- A linha do tempo grava e sincroniza o primeiro valor crítico em descarga e
+  cada mudança confirmada de alimentação externa assim que a coleta os entrega.
+  Cada evento guarda a tensão, a referência de projeto e a qualidade da fonte.
+  Uma leitura desconhecida não encerra o episódio. A atenção mantém o episódio
+  aberto e uma recuperação confirmada permite registrar a próxima queda.
+- O caso normal mantém o intervalo de 15 s e os limites existentes de
+  armazenamento. O worker de recursos é o mesmo. O `disk timeline` identifica
+  os eventos e o resumo de incidentes inclui o último evento na janela lida.
+  A coleta por amostras ainda pode perder transições breves, principalmente
+  quando a leitura de recursos demora sob contenção.
+- Na observação local somente leitura, um renderizador Codex Web liderou seis
+  de oito janelas curtas e chegou a 151,5% de um núcleo. O cgroup do launcher
+  chegou a 159%. Houve concorrência com Codex Desktop e Plasma. As métricas
+  de processo não identificam a operação que desencadeou o consumo.
+- Código `1458507e76d2f08155bf49f05d6d6a2329c760d6` no PR #9. Com Python
+  3.14.7 e HOME/XDG privados, `./dev test-headless tests/test_host_timeline.py
+  tests/test_host_guard.py tests/test_battery.py tests/test_cli_disk.py` teve
+  **71 passed** em `run-q1db2hcp`. A contenção local foi acompanhada por
+  amostragem breve; os gates amplos rodam no GitHub. A GUI residente ainda
+  compartilha a unit com o Claude Desktop e precisa de uma próxima abertura
+  segura para carregar a alteração.
+
 ## Prévia 0.2.0b10 · mini horizontal e modo de abertura — 09/11/2026
 
 - A mini recolhida fica em 46 px. A área **···** revela **Menu**, **D**,
