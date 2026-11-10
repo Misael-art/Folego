@@ -1,5 +1,46 @@
 # Passagem para o próximo agente — atualizada em 09/11/2026
 
+## Prévia 0.2.0b10 · mini horizontal e modo de abertura — 09/11/2026
+
+- A mini recolhida fica em 46 px. A área **···** revela **Menu**, **D**,
+  **Copiar**, **Colar** e **Prompts** em uma fileira curta. O worker existente
+  confere a posição ao abrir a gaveta e corrige somente a janela do widget
+  quando a área útil exige. A Central mostra os botões **Widget flutuante**
+  e **Mini horizontal**. **Opções → Modo de abertura** usa QSettings e vale
+  para a próxima abertura, com a Central como padrão.
+- O ensaio próprio KWin/Wayland de 948 × 593 verificou os seis modos de
+  abertura e o retorno à mini, o recolhimento e o comando de desktop com duas
+  janelas descartáveis. Na borda, a mini passou de 416 × 46 para 416 × 74
+  e deslocou 28 px para manter os atalhos dentro da área útil. Capturas e
+  recibo em `.scratch/mini-startup-wayland-20261109.MoTmJa/`. Os acionamentos
+  foram sintéticos. O fluxo de entrada física segue pendente.
+- Python 3.14.7 e HOME/XDG privados. O foco final teve **13 passed** em
+  `run-zndpiluc`. A suíte Qt local anterior registrou 1791 aprovados, 2 skips
+  e duas falhas por observar a animação antes do último quadro. O teste de
+  geometria passou a dirigir as animações ao fim, preservando as asserções.
+  Log anterior em `.scratch/dev-tests-reviewed/mini-startup-20261109/run-6nozb0ti/`.
+  No SHA final, os seis checks do código passaram, com **1368 headless** e
+  **1793 Qt**, 2 skips por perfil. Os três jobs da tag também passaram.
+- Fonte `da6d3cce548e96a04ca94b622860bb6b16cb9d0f` no
+  [PR #9](https://github.com/Misael-art/Folego/pull/9). Tag anotada
+  `318ef2603c5fd48578f10849143e7c3cc2397f00`. CI do
+  [PR](https://github.com/Misael-art/Folego/actions/runs/42724458064)
+  e da [tag](https://github.com/Misael-art/Folego/actions/runs/42724785982).
+- `./dev setup` confirmou `0.2.0b10` no ambiente GUI editável. A GUI residente
+  compartilha seu cgroup com processos do Claude Desktop e a unit usa
+  `KillMode=control-group`. O carregamento pelo processo residente ficou
+  para a próxima abertura segura. O diagnóstico dos reinícios foi somente
+  leitura, com registros locais em `.scratch/restart-review-20261109.X2vFro/`.
+  A causa dos cortes segue aberta. O aceite do guarda de energia segue
+  separado, especialmente a restauração e o orçamento.
+
+- A [prévia v0.2.0b10](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b10)
+  foi publicada com fonte completa, sdist, wheel e `SHA256SUMS`. Os tamanhos
+  e os quatro digests SHA-256 públicos correspondem aos arquivos locais.
+  O wheel confirmou a versão em venv isolada. A fonte completa contém os
+  1011 caminhos rastreados e os 169 módulos do wheel e do sdist correspondem
+  à fonte. Recibos em `.scratch/release-b10-20261109.bw69nw/`.
+
 ## Alerta de queda de voltagem da bateria e diagnóstico dos resets — 09/11/2026
 
 - Diagnóstico de 09/11 (journal + `host-timeline` + upower): 8 boots; 5 terminam
