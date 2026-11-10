@@ -129,7 +129,7 @@ cada minuto. A estimativa restante aparece quando o sistema informa tempo ou
 energia e consumo compatíveis. Ela varia conforme o uso. Os avisos seguem a
 preferência de sons em **opções**.
 
-A biblioteca oferece 13 prompts de desenvolvimento: escolha um título para copiar e cole no
+A biblioteca oferece 16 prompts de desenvolvimento: escolha um título para copiar e cole no
 agente desejado. O teclado virtual preserva o foco do campo de destino no KWin.
 O seletor organiza os títulos em seis blocos com faixas laterais coloridas,
 cabeçalhos horizontais e ícones de copiar. O painel tem até 480 × 540 px,

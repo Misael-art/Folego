@@ -19,9 +19,17 @@
   remoto. Suítes completas do CI ainda não consultadas para esse SHA. O
   `git fetch` local falha por uma ref `refs/codex/turn-diffs/...` sem objeto,
   anterior a este lote; `ls-remote` e `push` funcionam.
+- Segundo lote: estimativa local de ritmo (`pace_forecast`), som ao resgatar
+  no meio da janela, leitura de `spend` e lembrete de limite do Codex Web
+  (`ai limit-note`). Catálogo de prompts com 16 modelos: `evolve` e
+  `close-gaps` em Desenvolvimento, `optimize` em Desempenho; o contexto comum
+  trata texto de arquivos e ferramentas como dado, e `implant` condiciona
+  push/PR à autorização do projeto. Headless focado 127 (`run-f_jga585`), Qt
+  focado em `run-ejddu5sj`. Host reiniciou sozinho às 09:20 durante o lote,
+  sem perda de edições; mais quatro runs antigos foram para o mesmo arquivo.
 - Pendente: pop-up, som e diálogo no KDE/Wayland real, na próxima abertura
-  segura da GUI residente. Abertos no relatório: aviso de ritmo, som ao
-  resgatar no meio da janela, estrutura `spend`.
+  segura da GUI residente. Abertos no relatório: fonte do provedor para
+  reset do Claude, ritmo e limite Web; `limit`/`balance` de `spend`.
 
 ## Evidência de queda de tensão e carga do Codex Web — 09/11/2026
 

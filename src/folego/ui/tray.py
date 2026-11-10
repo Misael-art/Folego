@@ -148,14 +148,23 @@ class Tray:
                     else f'{count} novas entregas para revisitar.')
             self._notice('agent', title, body)
 
-    def show_reset_tickets(self, events):
+    def show_account_events(self, events):
         from ..core.ai_sessions import NAMES, stamp
         for event in events:
+            title = f"Contas · {NAMES[event['provider']]}"
+            if event['kind'] == 'pace':
+                self._notice('agent', title, f"Nesse ritmo, {event['window']} de {event['label']} esgota por volta de "
+                             + stamp(event['at']) + ', antes da reposição. Estimativa local.')
+                continue
+            if event['kind'] == 'limit-over':
+                self._notice('agent', title, f"O prazo do limite que você informou para {event['label']} passou ("
+                             + stamp(event['at']) + '). Confira no ChatGPT.')
+                continue
             count = event['count']
             body = ('Um reset disponível' if count == 1 else f'{count} resets disponíveis') + ' em ' + event['label']
             if event['expires_at']:
                 body += (' · vence em menos de 24 h (' if event['kind'] == 'expiring' else ' · vale até (') + stamp(event['expires_at']) + ')'
-            self._notice('agent', f"Contas · {NAMES[event['provider']]}", body + '. Resgate no cliente.')
+            self._notice('agent', title, body + '. Resgate no cliente.')
 
     def show_accessibility(self, report):
         alerts = report.get("alerts", [])

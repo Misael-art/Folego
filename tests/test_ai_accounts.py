@@ -136,3 +136,21 @@ def test_reset_reminder_is_personal_scoped_and_never_overrides_the_provider(tmp_
     assert 'reset_notes' not in json.loads(path.read_text())
     assert ai.parse_local_time('17/11/2026 04:59') == ai.parse_local_time('2026-11-17T04:59')
     with pytest.raises(ValueError): ai.parse_local_time('17 de nov')
+
+
+def test_web_limit_reminder_is_web_only_and_never_becomes_a_quota(tmp_path):
+    now = 1_793_534_400.0
+    rows = inventory(env(tmp_path))
+    web = next(a for a in rows if a['provider'] == 'web')['account_id']
+    other = next(a for a in rows if a['provider'] == 'claude')['account_id']
+    with pytest.raises(ValueError): ai.set_limit_note(other, now + 60, env=env(tmp_path), now=now)
+    with pytest.raises(ValueError): ai.set_reset_note(web, now + 60, env=env(tmp_path), now=now)
+    with pytest.raises(ValueError): ai.set_limit_note(web, now - 1, env=env(tmp_path), now=now)
+    assert 'salvo' in ai.set_limit_note(web, now + 3600, env=env(tmp_path), now=now)
+    item = next(i for i in ai.collect(env(tmp_path), now=now) if i['account_id'] == web)
+    assert item['declared_limit_until'] == now + 3600 and item['remaining'] is None and not item['windows']
+    assert 'Limite esgotado até' in ai.describe(item, now) and 'informado por você' in ai.describe(item, now)
+    assert 'Prazo do limite passou' in ai.describe(item, now + 3601)
+    old = next(i for i in ai.collect(env(tmp_path), now=now + 2 * 86400 + 3600) if i['account_id'] == web)
+    assert 'declared_limit_until' not in old
+    assert 'removido' in ai.set_limit_note(web, None, env=env(tmp_path), now=now)

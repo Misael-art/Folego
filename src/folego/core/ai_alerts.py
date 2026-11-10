@@ -13,6 +13,8 @@ class AlertTracker:
         self.deliveries = {}
         self.resets = {}
         self.reset_warned = {}
+        self.pace_warned = {}
+        self.limits = {}
 
     def quota_changes(self, items, now=None):
         sounds = []
@@ -35,7 +37,8 @@ class AlertTracker:
                         for name, (remaining, at) in current['windows'].items())
             if left == 0 and old > 0: sounds.append('empty')
             elif 0 < left <= 20 < old: sounds.append('low')
-            elif left > old and (old == 0 or old <= 20 < left or reset): sounds.append('restored')
+            # A jump of 20 points inside the same window is a redeemed reset.
+            elif left > old and (old == 0 or old <= 20 < left or reset or left - old >= 20): sounds.append('restored')
         return list(dict.fromkeys(sounds))
 
     def reset_changes(self, items, now=None):
@@ -62,6 +65,38 @@ class AlertTracker:
             elif count and expiry and expiry - now <= 86400 and self.reset_warned.get(key) != expiry:
                 self.reset_warned[key] = expiry
                 events.append(dict(event, kind='expiring'))
+        return events
+
+    def pace_changes(self, items, now=None):
+        """One notice per long window whose local estimate ends before its reset."""
+        now = time.time() if now is None else now
+        events = []
+        for item in items:
+            provider, account = item.get('provider'), item.get('account_id')
+            if provider not in ai_sessions.NAMES or not account: continue
+            for pace in ai_sessions.pace_forecast(item, now):
+                key = (provider, account, pace['name'])
+                if pace['duration_minutes'] < 1440 or self.pace_warned.get(key) == pace['resets_at']: continue
+                self.pace_warned[key] = pace['resets_at']
+                events.append(dict(kind='pace', provider=provider, window=pace['name'], at=pace['at'],
+                                   label=item.get('label') or ai_sessions.NAMES[provider]))
+        return events
+
+    def limit_changes(self, items, now=None):
+        """A declared Web limit date that passes while observed; never at startup."""
+        now = time.time() if now is None else now
+        events = []
+        for item in items:
+            provider, account, until = item.get('provider'), item.get('account_id'), item.get('declared_limit_until')
+            if provider not in ai_sessions.NAMES or not account: continue
+            key = (provider, account)
+            if not until:
+                self.limits.pop(key, None)
+            elif until > now:
+                self.limits[key] = until
+            elif self.limits.pop(key, None) == until:
+                events.append(dict(kind='limit-over', provider=provider, at=until,
+                                   label=item.get('label') or ai_sessions.NAMES[provider]))
         return events
 
     def delivery_changes(self, rows, now=None):

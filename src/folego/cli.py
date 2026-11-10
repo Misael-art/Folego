@@ -236,11 +236,11 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command")
 
     ai = commands.add_parser("ai", help="cotas, diagnóstico e recuperação pelo responsável Web")
-    ai.add_argument("sub", choices=["status", "recover-web", "reset-note"])
+    ai.add_argument("sub", choices=["status", "recover-web", "reset-note", "limit-note"])
     ai.add_argument("--account", help="com recover-web/reset-note: identidade da conta (account_id de status --json)")
-    ai.add_argument("--expires", help="com reset-note: validade 'DD/MM/AAAA HH:MM' (hora local)")
+    ai.add_argument("--expires", help="com reset-note/limit-note: validade ou retorno do limite Web 'DD/MM/AAAA HH:MM' (hora local)")
     ai.add_argument("--count", type=int, default=1, help="com reset-note: resets disponíveis")
-    ai.add_argument("--clear", action="store_true", help="com reset-note: remove o lembrete")
+    ai.add_argument("--clear", action="store_true", help="com reset-note/limit-note: remove o lembrete")
     ai.add_argument("--confirmar", action="store_true")
     ai.add_argument("--json", action="store_true")
 
@@ -2784,12 +2784,14 @@ def _dispatch(ns, argv) -> int:
             return (EXIT_UNKNOWN if any(p['web_recovery']['outcome'] == 'desconhecido' for p in receipts)
                     else EXIT_PARTIAL if any(p['web_recovery']['outcome'] == 'parcial' for p in receipts)
                     else EXIT_REFUSED)
-        if ns.sub == 'reset-note':
-            from .core.ai_sessions import parse_local_time, set_reset_note
+        if ns.sub in ('reset-note', 'limit-note'):
+            from .core.ai_sessions import parse_local_time, set_limit_note, set_reset_note
             try:
                 if not ns.account or bool(ns.expires) == ns.clear:
                     raise ValueError('Informe --account e --expires "DD/MM/AAAA HH:MM" ou --clear')
-                print(set_reset_note(ns.account, None if ns.clear else parse_local_time(ns.expires), ns.count))
+                moment = None if ns.clear else parse_local_time(ns.expires)
+                print(set_reset_note(ns.account, moment, ns.count) if ns.sub == 'reset-note'
+                      else set_limit_note(ns.account, moment))
             except (OSError, ValueError) as exc:
                 print(f'Lembrete não registrado: {exc}')
                 return EXIT_REFUSED

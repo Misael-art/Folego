@@ -114,3 +114,32 @@ def test_new_and_expiring_reset_tickets_are_reported_once():
     # A first observation already inside the last day still reminds once.
     first = tracker.reset_changes([ticket(2, 100, 5000, account='b')], now=100)
     assert [(e['kind'], e['count']) for e in first] == [('expiring', 2)]
+
+
+def test_redeemed_reset_inside_the_same_window_is_a_restoration():
+    tracker = AlertTracker()
+    tracker.quota_changes([item(56, 100)], now=100)
+    assert tracker.quota_changes([item(60, 101)], now=101) == []  # small drift is not a reset
+    assert tracker.quota_changes([item(100, 102)], now=102) == ['restored']
+    assert tracker.quota_changes([item(100, 103)], now=103) == []
+
+
+def test_pace_estimate_warns_once_per_long_window_and_web_limit_only_when_it_passes():
+    week = 10080 * 60
+    def account(used, at, reset):
+        return dict(provider='claude', account_id='a', label='Principal', observed_at=at,
+                    windows=[quota_window('Semana', used, reset, at, 10080),
+                             quota_window('Sessão', 90, at + 600, at, 300)])
+    tracker = AlertTracker()
+    start = 1_000_000
+    assert tracker.pace_changes([account(4, start + week * .05, start + week)], now=start + week * .05) == []
+    hot = tracker.pace_changes([account(45, start + week * .17, start + week)], now=start + week * .17)
+    assert [(e['kind'], e['window']) for e in hot] == [('pace', 'Semana')]  # the short session never notifies
+    assert start + week * .3 < hot[0]['at'] < start + week * .5
+    assert tracker.pace_changes([account(50, start + week * .2, start + week)], now=start + week * .2) == []
+    assert tracker.pace_changes([account(45, start + week * .6, start + week)], now=start + week * .6) == []
+    def web(until): return [dict(provider='web', account_id='w', label='Web', declared_limit_until=until)]
+    assert tracker.limit_changes(web(900), now=1000) == []  # already past at startup: silent
+    assert tracker.limit_changes(web(2000), now=1000) == []
+    assert [e['kind'] for e in tracker.limit_changes(web(2000), now=2001)] == ['limit-over']
+    assert tracker.limit_changes(web(2000), now=2002) == []

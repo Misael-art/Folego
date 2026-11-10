@@ -364,6 +364,50 @@ def http_json(url, headers):
     return value
 
 
+def money(value):
+    """Provider money object (minor units) as text; unknown shapes stay unknown."""
+    if not isinstance(value, dict): return None
+    amount, currency, exponent = value.get('amount_minor'), value.get('currency'), value.get('exponent')
+    if (type(amount) is not int or amount < 0 or type(exponent) is not int or not 0 <= exponent <= 6
+            or not isinstance(currency, str) or not currency.isalpha() or len(currency) > 8):
+        return None
+    return f'{currency.upper()} {amount / 10 ** exponent:.{exponent}f}'
+
+
+def usage_credits(spend):
+    """Claude's `spend` block: usage credits that cover work beyond the plan."""
+    if not isinstance(spend, dict) or type(spend.get('enabled')) is not bool: return None
+    result = dict(enabled=spend['enabled'])
+    for key in ('used', 'limit', 'balance'):
+        text = money(spend.get(key))
+        if text: result[key] = text
+    percent = spend.get('percent')
+    if type(percent) in (int, float) and math.isfinite(percent) and 0 <= percent <= 100:
+        result['percent'] = percent
+    return result
+
+
+def pace_forecast(item, now=None):
+    """Local linear estimate of windows that would run out before their reset.
+
+    Not a provider figure. Needs a confirmed window length, a tenth of the
+    window elapsed and 20% used, and a margin of a tenth before the reset.
+    """
+    now = time.time() if now is None else now
+    if effective(item, now) is None: return []
+    rows = []
+    for window in item['windows']:
+        minutes = window.get('duration_minutes')
+        if not minutes or not 20 <= window['used'] < 100: continue
+        length = minutes * 60
+        elapsed = length - (window['resets_at'] - now)
+        if not .1 * length <= elapsed < length: continue
+        at = now + (100 - window['used']) * elapsed / window['used']
+        if at < window['resets_at'] - .1 * length:
+            rows.append(dict(name=window['name'], at=at, resets_at=window['resets_at'], duration_minutes=minutes))
+    return rows
+
+
 def valid_scope(title):
     return isinstance(title, str) and bool(title.strip()) and all(ord(c) >= 32 for c in title)
 
@@ -470,6 +514,7 @@ def claude(config, now, fetch, *, cache=None):
             if value is None:
                 result["reason"] = "Resposta parcial: janela inválida"
                 return result
+            if key != "five_hour": value['duration_minutes'] = 10080
             result["windows"].append(value)
     # Model-scoped weekly limits (e.g. Fable) arrive only in `limits`; a scoped
     # window can be tighter than the general week and must not stay invisible.
@@ -486,6 +531,7 @@ def claude(config, now, fetch, *, cache=None):
             if value is None:
                 result["reason"] = "Resposta parcial: janela inválida"
                 return result
+            value['duration_minutes'] = 10080
             result["windows"].append(value)
     result.update(observed_at=now, plan=oauth.get("subscriptionType"),
                   access="aceito pelo provedor nesta observação", reason="")
@@ -497,6 +543,8 @@ def claude(config, now, fetch, *, cache=None):
             value = extra.get(key)
             if type(value) in (int, float) and math.isfinite(value) and value >= 0:
                 result['extra_usage'][key] = value
+    spend = usage_credits(payload.get('spend'))
+    if spend: result['usage_credits'] = spend
     if not 0 <= now - entry.get('profile_at', 0) < 21600:
         entry.update(profile_at=now, profile_day=None)
         try:
@@ -686,6 +734,11 @@ def collect(env=None, *, now=None, fetch=http_json, discover=None, grok_query=No
             expiry, count = timestamp(note.get('expires_at')), note.get('count')
             if expiry and expiry > now and type(count) is int and 1 <= count <= 99:
                 item['reset_credits'] = dict(available=count, expires_at=expiry, observed_at=now, declared=True)
+        limits = configuration.get('limit_notes', {})
+        note = limits.get(account['account_id']) if isinstance(limits, dict) else None
+        if isinstance(note, dict) and provider == 'web':
+            until = timestamp(note.get('until'))
+            if until and until > now - DAY: item['declared_limit_until'] = until
         day = reference.get('monthly_day') if isinstance(reference, dict) else None
         if type(day) is int and 1 <= day <= 31:
             item.update(billing_day=day, billing_source='referência pessoal; confirme no provedor')
@@ -725,30 +778,18 @@ def set_billing_day(provider, day, account=None, *, env=None):
     return 'Referência mensal salva' if day else 'Referência mensal removida'
 
 
-def set_reset_note(account, expires_at, count=1, *, env=None, now=None):
-    """Personal reminder of a redeemable reset the provider's source does not expose.
-
-    `expires_at=None` removes it. Nothing is redeemed, queried or inferred.
-    """
+def _save_note(field, account, entry, env, allowed):
     env = dict(os.environ if env is None else env)
-    now = time.time() if now is None else now
     from .ai_accounts import inventory, settings
     value = settings(env)
-    notes = value.setdefault('reset_notes', {})
+    notes = value.setdefault(field, {})
     if not isinstance(notes, dict):
-        raise ValueError('Lembretes de reset desconhecidos; arquivo preservado')
-    if not any(a['account_id'] == account and a['provider'] != 'web' for a in inventory(env)):
+        raise ValueError('Lembretes desconhecidos; arquivo preservado')
+    if not any(a['account_id'] == account and allowed(a['provider']) for a in inventory(env)):
         raise ValueError('Conta não identificada; lembrete preservado')
-    if expires_at is None:
-        notes.pop(account, None)
-    else:
-        expires_at = timestamp(expires_at)
-        if expires_at is None or not now < expires_at <= now + 366 * DAY:
-            raise ValueError('Validade do reset inválida ou já vencida')
-        if type(count) is not int or not 1 <= count <= 99:
-            raise ValueError('Quantidade de resets inválida')
-        notes[account] = dict(expires_at=expires_at, count=count)
-    if not notes: value.pop('reset_notes')
+    if entry is None: notes.pop(account, None)
+    else: notes[account] = entry
+    if not notes: value.pop(field)
     home = Path(env.get('HOME') or Path.home())
     path = Path(env.get('XDG_CONFIG_HOME') or home / '.config') / 'folego/ai-sessions.json'
     path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
@@ -756,7 +797,36 @@ def set_reset_note(account, expires_at, count=1, *, env=None, now=None):
         raise ValueError('Configuração simbólica; arquivo preservado')
     from ..safely.atomicfile import write_atomic
     write_atomic(path, (json.dumps(value, ensure_ascii=False, indent=2) + '\n').encode(), mode=0o600)
-    return 'Lembrete de reset removido' if expires_at is None else 'Lembrete de reset salvo · vale até ' + stamp(expires_at)
+
+
+def _future(value, now, message):
+    value = timestamp(value)
+    if value is None or not now < value <= now + 366 * DAY: raise ValueError(message)
+    return value
+
+
+def set_reset_note(account, expires_at, count=1, *, env=None, now=None):
+    """Personal reminder of a redeemable reset the provider's source does not expose.
+
+    `expires_at=None` removes it. Nothing is redeemed, queried or inferred.
+    """
+    now = time.time() if now is None else now
+    entry = None
+    if expires_at is not None:
+        expires_at = _future(expires_at, now, 'Validade do reset inválida ou já vencida')
+        if type(count) is not int or not 1 <= count <= 99:
+            raise ValueError('Quantidade de resets inválida')
+        entry = dict(expires_at=expires_at, count=count)
+    _save_note('reset_notes', account, entry, env, lambda provider: provider != 'web')
+    return 'Lembrete de reset removido' if entry is None else 'Lembrete de reset salvo · vale até ' + stamp(expires_at)
+
+
+def set_limit_note(account, until, *, env=None, now=None):
+    """Personal note of when ChatGPT Web said the limit returns; never a quota."""
+    now = time.time() if now is None else now
+    entry = None if until is None else dict(until=_future(until, now, 'Prazo do limite inválido ou já vencido'))
+    _save_note('limit_notes', account, entry, env, lambda provider: provider == 'web')
+    return 'Lembrete de limite removido' if entry is None else 'Lembrete de limite salvo · volta em ' + stamp(entry['until'])
 
 
 def parse_local_time(text):
@@ -823,7 +893,12 @@ def describe(item, now=None):
             if observation.get('checked_at'):
                 lines.append(title + ' verificado: ' + stamp(observation['checked_at']))
         lines.extend(['Resposta ChatGPT Web: não comprovada sem envio',
-                      'Limite, saldo e reposição da conta: não informados'])
+                      'Limite, saldo e reposição da conta: não informados pelo provedor'])
+        until = item.get('declared_limit_until')
+        if until:
+            lines.append(('Limite esgotado até ' + stamp(until) if until > now else
+                          'Prazo do limite passou em ' + stamp(until) + '; confira no ChatGPT')
+                         + ' · lembrete informado por você')
         if item.get('web_recovery'):
             lines.extend(web_recovery_lines(item['web_recovery'], now))
         usage = item.get('local_usage')
@@ -850,6 +925,8 @@ def describe(item, now=None):
         reset = window.get('resets_at')
         renewal = (' · repõe ' + date(reset) + (' (em ' + countdown(reset) + ')' if reset > now else ' · aguardando atualização')) if reset else ' · reposição não informada'
         lines.append(f"{window['name']}: {window['used']}% usado / {window['remaining']}% livre" + renewal + stale)
+    for pace in pace_forecast(item, now):
+        lines.append(f"Ritmo: {pace['name']} esgota por volta de {date(pace['at'])}, antes da reposição (estimativa local)")
     if not windows:
         lines.extend(['Uso da sessão: não informado nesta fonte', 'Reposição da sessão: não informada nesta fonte'])
     reset = item.get('reset_credits') or {}
@@ -873,6 +950,13 @@ def describe(item, now=None):
         if 'used_credits' in extra: text += f" · consumo {extra['used_credits']:g}"
         if 'monthly_limit' in extra: text += f" / teto {extra['monthly_limit']:g} (unidades do provedor)"
         lines.append('Uso extra: ' + text)
+    spend = item.get('usage_credits')
+    if spend:
+        lines.append('Créditos de uso: ' + ' · '.join(
+            [('habilitados' if spend['enabled'] else 'desabilitados')]
+            + [label + ' ' + str(spend[key]) + suffix for key, label, suffix in (
+                ('used', 'consumo', ''), ('limit', 'teto', ''), ('balance', 'saldo', ''), ('percent', '', '% do teto'))
+               if key in spend]).replace('  ', ' '))
     if item.get('plan'): lines.append('Plano: ' + str(item['plan']))
     day = item.get('billing_day')
     if day:

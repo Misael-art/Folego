@@ -260,6 +260,7 @@ class AIStrip(QWidget):
         panel.open_requested.connect(lambda p, a: (menu.close(), self.open_agent(p, a)))
         panel.billing_requested.connect(lambda p, a: (menu.close(), self.billing(p, a)))
         panel.reset_note_requested.connect(lambda p, a: (menu.close(), self.reset_note(p, a)))
+        panel.limit_note_requested.connect(lambda p, a: (menu.close(), self.reset_note(p, a, limit=True)))
         panel.refresh_requested.connect(self.refresh)
         action = QWidgetAction(menu)
         action.setDefaultWidget(panel)
@@ -293,21 +294,24 @@ class AIStrip(QWidget):
              'Dia da cobrança mensal (1–31; 0 remove).\nReferência pessoal, sem confirmação de cobrança pelo provedor.', current, 0, 31)
         if accepted: self.opener.request('agent-billing', (provider, day, account) if account else (provider, day))
 
-    def reset_note(self, provider, account=None):
+    def reset_note(self, provider, account=None, limit=False):
         item = next((i for i in self.items if account and i.get('account_id') == account), self.default_item(provider))
         account = item.get('account_id')
         if not account: return self._notice('Conta não identificada; lembrete não registrado')
-        current = item.get('reset_credits') or {}
-        text, accepted = QInputDialog.getText(self, 'Lembrete de reset · ' + ai_sessions.NAMES[provider],
-            'Validade do reset mostrado pelo cliente (DD/MM/AAAA HH:MM; vazio remove).\n'
-            'Lembrete pessoal: o Fôlego não consulta nem resgata o reset.',
-            text=ai_sessions.stamp(current['expires_at']) if current.get('declared') and current.get('expires_at') else '')
+        credits = item.get('reset_credits') or {}
+        current = (item.get('declared_limit_until') if limit else
+                   credits.get('expires_at') if credits.get('declared') else None)
+        text, accepted = QInputDialog.getText(
+            self, ('Lembrete de limite · ' if limit else 'Lembrete de reset · ') + ai_sessions.NAMES[provider],
+            ('Quando o ChatGPT informou que o limite volta' if limit else 'Validade do reset mostrado pelo cliente')
+            + ' (DD/MM/AAAA HH:MM; vazio remove).\nLembrete pessoal: o Fôlego não consulta nem altera a conta.',
+            text=ai_sessions.stamp(current) if current else '')
         if not accepted: return
         try:
-            expiry = ai_sessions.parse_local_time(text) if text.strip() else None
+            moment = ai_sessions.parse_local_time(text) if text.strip() else None
         except ValueError as exc:
             return self._notice(str(exc))
-        self.opener.request('agent-reset-note', (account, expiry))
+        self.opener.request('agent-limit-note' if limit else 'agent-reset-note', (account, moment))
 
     def _notice(self, message):
         # The compact card owns visible transient feedback, separate from alerts.

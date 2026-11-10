@@ -276,7 +276,7 @@ class MainWindow(QMainWindow):
         self._desktop_notices = DesktopNotices(self)
         self.tray = Tray(self, thresholds=self._thresholds, send_notice=self._desktop_notices.send)
         self.ai_monitor.alerts.deliveries_observed.connect(self.tray.show_agent_deliveries)
-        self.ai_monitor.alerts.resets_observed.connect(self.tray.show_reset_tickets)
+        self.ai_monitor.alerts.accounts_observed.connect(self.tray.show_account_events)
         # atalhos locais da aplicação (não dependem de portal global do Wayland)
         self._compact_shortcut = QShortcut(QKeySequence("Ctrl+Shift+F"), self)
         self._compact_shortcut.activated.connect(self.show_compact)

@@ -134,7 +134,7 @@ def test_completion_to_audio_pipeline_respects_mute_and_does_not_replay(qapp,tmp
     wait(qapp,lambda:controller.future is None and len(backend.calls)==2)
     assert deliveries == [{'codex': 1}, {'codex': 1}, {'codex': 1}]
     resets = []
-    sounds.resets_observed.connect(resets.append)
+    sounds.accounts_observed.connect(resets.append)
     def ticket(count):
         return [dict(provider='claude', account_id='a', label='Principal', windows=[], observed_at=time.time(),
                      reset_credits=dict(available=count, expires_at=None, observed_at=time.time()))]

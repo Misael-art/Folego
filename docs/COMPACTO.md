@@ -304,6 +304,10 @@ Quando o cliente mostra um reset gratuito que a fonte não expõe (caso do
 Claude), registre um lembrete em **Lembrete de reset…** no painel da conta ou
 com `./dev run ai reset-note --account ID --expires "DD/MM/AAAA HH:MM"`
 (`--clear` remove). O Fôlego só lembra; o resgate é feito no cliente.
+Para o Codex Web, **Lembrete de limite…** ou `ai limit-note` guardam quando o
+ChatGPT disse que o limite volta; o Fôlego avisa quando o prazo passa.
+O aviso de ritmo é uma estimativa local linear, exibida quando a janela
+esgotaria com folga antes da reposição.
 
 O painel aparece mesmo com outro aplicativo em foco. O botão direito no
 indicador abre **Atualizar dados**, **Contas, uso e renovação**,
@@ -523,9 +527,11 @@ assim, copiar nunca envia Ctrl+C para interromper um trabalho no terminal. O
 aplicativo de destino precisa aceitar esses atalhos. O Fôlego não lê nem grava
 o conteúdo da área de transferência ou as teclas em logs.
 
-**Prompts** abre uma lista de 13 títulos: diagnóstico real, implantação do
+**Prompts** abre uma lista de 16 títulos: diagnóstico real, implantação do
 diagnóstico item a item, continuidade, implementação de melhoria,
-investigação de erro, revisão, testes, desempenho, segurança,
+investigação de erro, exploração de melhorias e novas funções, resolução de
+todas as lacunas sem interrupções, revisão, testes, desempenho, otimização da
+execução sem perder funções, segurança,
 usabilidade, design com mockups, passagem de contexto e prontidão para PR/distribuição. Escolher um
 copia seu texto para a área de transferência; depois cole no agente desejado.
 Não cola, executa ou envia pedidos automaticamente. Os textos são genéricos,
