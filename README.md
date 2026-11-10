@@ -237,8 +237,10 @@ desconhecida, e uma falha nesse estado não é tratada como contador zerado.
 Avisos NTFS são buscados em janela limitada do journal, incluindo o número de
 índices identificados, sem percorrer o volume. Enquanto a GUI monitora, uma
 amostra privada e limitada de RAM, swap, PSI, temperatura e maior CPU é gravada
-a cada 15 segundos para investigar o período anterior a um reinício, incluindo
-estado da bateria do Deck e presença observada de alimentação externa; a CLI
+normalmente a cada 15 segundos para investigar o período anterior a um reinício.
+A primeira leitura crítica de tensão e as transições confirmadas de alimentação
+externa são sincronizadas com o disco assim que observadas, usando a mesma coleta.
+Eventos entre leituras podem escapar. A CLI
 `disk timeline` lê até 80 amostras recentes, ou de um boot preservado com
 `--boot-id`. O histórico possui limites de
 4 MiB por boot e 32 MiB no total; ao atingir o limite, a gravação para e o

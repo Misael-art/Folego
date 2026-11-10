@@ -1006,7 +1006,7 @@ def _cmd_ntfs_recovery(args) -> int:
 
 
 def _cmd_host_timeline(args) -> int:
-    from .adapters.host_timeline import read_timeline
+    from .adapters.host_timeline import POWER_EVENT_LABELS, read_timeline
     try:
         active_boot_id = (Path(paths.proc_root()) /
                           "sys/kernel/random/boot_id").read_text().strip()
@@ -1035,10 +1035,12 @@ def _cmd_host_timeline(args) -> int:
                 electrical += f" · potência {row['battery_power_uw'] / 1_000_000:.2f} W"
             external = (f" · energia externa {'sim' if row['external_power_online'] else 'não'}"
                         if row.get("external_power_online") is not None else "")
+            events = (row.get("power_events") or ()) if row.get("schema") == 2 else ()
+            event_text = "".join(f" · {POWER_EVENT_LABELS[event]}" for event in events)
             print(f"  {row['at']} · RAM {row['mem_available_kb']} KiB · "
                   f"PSI memória {row['psi_mem_avg10']}% · "
                   f"PSI I/O {row['psi_io_avg10']}% · "
-                  f"temperatura {row['temperature_c']} °C{battery}{electrical}{external}")
+                  f"temperatura {row['temperature_c']} °C{battery}{electrical}{external}{event_text}")
     return EXIT_OK
 
 

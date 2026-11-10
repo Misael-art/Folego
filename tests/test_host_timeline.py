@@ -1,5 +1,6 @@
 """Incident evidence stays small, private and never invents missing values."""
 import json
+import os
 import stat
 from dataclasses import replace
 
@@ -102,6 +103,56 @@ def test_timeline_energy_requires_valid_sources_and_preserves_old_schema(tmp_pat
     assert historical == old  # no electrical or source-quality proof invented
 
 
+def test_timeline_syncs_the_first_critical_reading_and_power_edges(tmp_path, monkeypatch):
+    folder = tmp_path / "timeline"
+    recorder = HostTimelineRecorder(folder)
+    synced = []
+    real_fsync = os.fsync
+
+    def sync(fd):
+        if stat.S_ISREG(os.fstat(fd).st_mode):
+            synced.append(fd)
+        real_fsync(fd)
+
+    monkeypatch.setattr(host_timeline.os, "fsync", sync)
+
+    def observe(mono, online, voltage, *, valid=True):
+        snapshot = _snapshot(mono)
+        status = "Charging" if online else "Discharging"
+        extra_sources = (SourceQuality("battery", OK), SourceQuality("external_power", OK))
+        recorder.record(replace(snapshot,
+                                sources=snapshot.sources + (extra_sources if valid else ()),
+                                external_power_online=online,
+                                battery=BatteryInfo(54, status, voltage_uv=voltage,
+                                                    voltage_min_design_uv=7_700_000)))
+
+    observe(100, True, 8_500_000)
+    observe(102, False, 6_500_000, valid=False)
+    observe(105, False, 6_560_000)
+    observe(106, False, 6_510_000)
+    observe(107, False, 7_050_000)  # still in attention, so the episode stays open
+    observe(108, False, 6_560_000)
+    observe(109, False, 7_500_000)  # valid recovery rearms even between writes
+    observe(110, False, 6_620_000)
+    observe(111, True, 8_500_000)
+    observe(126, True, 8_500_000)
+
+    report = read_timeline(folder)
+    assert report["quality"] == "ok"
+    assert [row["mono_ns"] // 10**9 for row in report["samples"]] == [100, 105, 110, 111, 126]
+    assert [row.get("power_events", []) for row in report["samples"]] == [
+        [], ["battery-voltage-critical", "external-power-disconnected"],
+        ["battery-voltage-critical"], ["external-power-connected"], [],
+    ]
+    assert len(synced) == 5  # initial, three power events, and periodic sync
+    critical = report["samples"][1]
+    assert critical["battery_voltage_uv"] == 6_560_000
+    assert critical["battery_voltage_min_design_uv"] == 7_700_000
+    summary = summarize_boot_timeline(folder, BOOT)
+    assert summary["last_power_event"]["power_events"] == ["external-power-connected"]
+    assert summary["last"]["power_events"] is None
+
+
 def test_timeline_rejects_new_schema_with_wrong_boot_or_electrical_quality(tmp_path):
     folder = tmp_path / 'timeline'
     HostTimelineRecorder(folder).record(_snapshot(100))
@@ -109,13 +160,14 @@ def test_timeline_rejects_new_schema_with_wrong_boot_or_electrical_quality(tmp_p
     original = json.loads(path.read_text())
     mismatched = dict(original, boot_id='c325bc6f-a6f8-4093-8b2d-5c10008de2e5')
     bad_power = dict(original, battery_voltage_uv=8_000_000)
+    unsupported_event = dict(original, power_events=["external-power-disconnected"])
     unknown_schema = dict(original, schema=99)
     path.write_text('\n'.join(json.dumps(row) for row in
-                      (original, mismatched, bad_power, unknown_schema)) + '\n')
+                      (original, mismatched, bad_power, unsupported_event, unknown_schema)) + '\n')
     report = read_timeline(folder)
     assert report['quality'] == 'partial'
     assert len(report['samples']) == 1
-    assert '3 amostra(s) ilegível(is)' in report['reason']
+    assert '4 amostra(s) ilegível(is)' in report['reason']
 
 
 def test_timeline_limit_is_visible_and_write_failure_reaches_snapshot(tmp_path, monkeypatch):
