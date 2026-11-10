@@ -194,6 +194,10 @@ def test_native_notices_group_by_provider_and_keep_urgency_separate():
     assert [notice.category for notice in sent] == ['agent', 'input', 'resources', 'service']
     assert [notice.urgency for notice in sent] == ['normal', 'normal', 'critical', 'normal']
     assert '2 novas entregas' in sent[0].body
+    tray.show_reset_tickets([dict(kind='expiring', provider='claude', label='Principal', count=1,
+                                  expires_at=1_793_534_400.0)])
+    assert sent[-1].category == 'agent' and sent[-1].title == 'Contas · Claude'
+    assert 'Um reset disponível em Principal' in sent[-1].body and 'menos de 24 h' in sent[-1].body
     assert sent[1].arguments()[-1] == 'Teclado &lt;interno&gt; &amp; toque'
     assert sent[2].icon.name == 'notice-resources-critical.svg'
     assert all(notice.icon.is_file() for notice in sent)

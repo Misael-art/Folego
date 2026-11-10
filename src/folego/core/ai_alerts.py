@@ -2,7 +2,7 @@
 from . import ai_sessions
 import time
 
-TONES = ('codex', 'web', 'claude', 'grok', 'low', 'empty', 'restored',
+TONES = ('codex', 'web', 'claude', 'grok', 'low', 'empty', 'restored', 'reset',
          'battery-75', 'battery-50', 'battery-25', 'battery-10')
 
 
@@ -11,6 +11,8 @@ class AlertTracker:
         self.started_at = time.time() if now is None else now
         self.quotas = {}
         self.deliveries = {}
+        self.resets = {}
+        self.reset_warned = {}
 
     def quota_changes(self, items, now=None):
         sounds = []
@@ -35,6 +37,32 @@ class AlertTracker:
             elif 0 < left <= 20 < old: sounds.append('low')
             elif left > old and (old == 0 or old <= 20 < left or reset): sounds.append('restored')
         return list(dict.fromkeys(sounds))
+
+    def reset_changes(self, items, now=None):
+        """New redeemable resets and a single last-day reminder per expiry.
+
+        An unknown count keeps the previous reference; it is never read as zero.
+        """
+        now = time.time() if now is None else now
+        events = []
+        for item in items:
+            provider, account = item.get('provider'), item.get('account_id')
+            if provider not in ai_sessions.NAMES or not account: continue
+            count = ai_sessions.available_resets(item, now)
+            if count is None: continue
+            key = (provider, account)
+            previous = self.resets.get(key)
+            self.resets[key] = count
+            expiry = ai_sessions.timestamp((item.get('reset_credits') or {}).get('expires_at'))
+            event = dict(provider=provider, label=item.get('label') or ai_sessions.NAMES[provider],
+                         count=count, expires_at=expiry)
+            if previous is not None and count > previous:  # startup is a silent baseline
+                events.append(dict(event, kind='available'))
+                if expiry and expiry - now <= 86400: self.reset_warned[key] = expiry
+            elif count and expiry and expiry - now <= 86400 and self.reset_warned.get(key) != expiry:
+                self.reset_warned[key] = expiry
+                events.append(dict(event, kind='expiring'))
+        return events
 
     def delivery_changes(self, rows, now=None):
         now = time.time() if now is None else now

@@ -141,3 +141,18 @@ def test_prompt_choice_only_copies_selected_portable_text(qapp, monkeypatch):
     assert all(len(text(p.key)) > 600 for p in PROMPTS)
     assert controller.future is None
     tabs.shutdown()
+
+
+def test_declared_reset_reminder_is_labelled_and_requested_per_account(qapp):
+    from PySide6.QtWidgets import QPushButton
+    rows = items()
+    rows[1]['reset_credits'] = dict(available=1, expires_at=time.time() + 3600,
+                                    observed_at=time.time(), declared=True)
+    panel = AccountPanel('codex', rows)
+    labels = '\n'.join(label.text() for label in panel.findChildren(QLabel))
+    assert 'Tickets de reset · 1 disponíveis' in labels and 'lembrete seu' in labels
+    requested = []
+    panel.reset_note_requested.connect(lambda provider, account: requested.append((provider, account)))
+    next(b for b in panel.findChildren(QPushButton) if b.text() == 'Lembrete de reset…').click()
+    assert requested == [('codex', 'principal')]
+    panel.close()

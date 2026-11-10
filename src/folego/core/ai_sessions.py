@@ -364,6 +364,10 @@ def http_json(url, headers):
     return value
 
 
+def valid_scope(title):
+    return isinstance(title, str) and bool(title.strip()) and all(ord(c) >= 32 for c in title)
+
+
 def claude_account_context(config):
     """Native account/organization metadata; no PhaseZero state is consulted."""
     path = Path(config).with_suffix('.json')
@@ -463,6 +467,22 @@ def claude(config, now, fetch, *, cache=None):
         if isinstance(data, dict):
             value = quota_window(name, data.get("utilization"), data.get("resets_at"), now,
                                  300 if key == "five_hour" else None)
+            if value is None:
+                result["reason"] = "Resposta parcial: janela inválida"
+                return result
+            result["windows"].append(value)
+    # Model-scoped weekly limits (e.g. Fable) arrive only in `limits`; a scoped
+    # window can be tighter than the general week and must not stay invisible.
+    scoped = payload.get('limits')
+    if isinstance(scoped, list) and len(scoped) <= 32:
+        for limit in scoped:
+            if not isinstance(limit, dict) or limit.get('kind') != 'weekly_scoped': continue
+            scope = limit.get('scope')
+            model = scope.get('model') if isinstance(scope, dict) else None
+            title = model.get('display_name') if isinstance(model, dict) else None
+            name = 'Semana ' + title.strip()[:24] if valid_scope(title) else 'Semana · escopo'
+            if any(w['name'] == name for w in result['windows']): continue
+            value = quota_window(name, limit.get('percent'), limit.get('resets_at'), now)
             if value is None:
                 result["reason"] = "Resposta parcial: janela inválida"
                 return result
@@ -659,6 +679,13 @@ def collect(env=None, *, now=None, fetch=http_json, discover=None, grok_query=No
         if isinstance(billing, dict) and account['account_id'] not in billing and account['default']:
             legacy = configuration.get('billing', {})
             reference = legacy.get(provider, {}) if isinstance(legacy, dict) else {}
+        notes = configuration.get('reset_notes', {})
+        note = notes.get(account['account_id']) if isinstance(notes, dict) else None
+        # A personal reminder never replaces or adds to a provider's own count.
+        if isinstance(note, dict) and 'reset_credits' not in item:
+            expiry, count = timestamp(note.get('expires_at')), note.get('count')
+            if expiry and expiry > now and type(count) is int and 1 <= count <= 99:
+                item['reset_credits'] = dict(available=count, expires_at=expiry, observed_at=now, declared=True)
         day = reference.get('monthly_day') if isinstance(reference, dict) else None
         if type(day) is int and 1 <= day <= 31:
             item.update(billing_day=day, billing_source='referência pessoal; confirme no provedor')
@@ -696,6 +723,51 @@ def set_billing_day(provider, day, account=None, *, env=None):
     from ..safely.atomicfile import write_atomic
     write_atomic(path, (json.dumps(value, ensure_ascii=False, indent=2) + '\n').encode(), mode=0o600)
     return 'Referência mensal salva' if day else 'Referência mensal removida'
+
+
+def set_reset_note(account, expires_at, count=1, *, env=None, now=None):
+    """Personal reminder of a redeemable reset the provider's source does not expose.
+
+    `expires_at=None` removes it. Nothing is redeemed, queried or inferred.
+    """
+    env = dict(os.environ if env is None else env)
+    now = time.time() if now is None else now
+    from .ai_accounts import inventory, settings
+    value = settings(env)
+    notes = value.setdefault('reset_notes', {})
+    if not isinstance(notes, dict):
+        raise ValueError('Lembretes de reset desconhecidos; arquivo preservado')
+    if not any(a['account_id'] == account and a['provider'] != 'web' for a in inventory(env)):
+        raise ValueError('Conta não identificada; lembrete preservado')
+    if expires_at is None:
+        notes.pop(account, None)
+    else:
+        expires_at = timestamp(expires_at)
+        if expires_at is None or not now < expires_at <= now + 366 * DAY:
+            raise ValueError('Validade do reset inválida ou já vencida')
+        if type(count) is not int or not 1 <= count <= 99:
+            raise ValueError('Quantidade de resets inválida')
+        notes[account] = dict(expires_at=expires_at, count=count)
+    if not notes: value.pop('reset_notes')
+    home = Path(env.get('HOME') or Path.home())
+    path = Path(env.get('XDG_CONFIG_HOME') or home / '.config') / 'folego/ai-sessions.json'
+    path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+    if path.is_symlink() or path.parent.is_symlink():
+        raise ValueError('Configuração simbólica; arquivo preservado')
+    from ..safely.atomicfile import write_atomic
+    write_atomic(path, (json.dumps(value, ensure_ascii=False, indent=2) + '\n').encode(), mode=0o600)
+    return 'Lembrete de reset removido' if expires_at is None else 'Lembrete de reset salvo · vale até ' + stamp(expires_at)
+
+
+def parse_local_time(text):
+    """`DD/MM/AAAA HH:MM` or ISO; a value without zone is local time."""
+    text = text.strip()
+    try:
+        parsed = dt.datetime.strptime(text, '%d/%m/%Y %H:%M')
+    except ValueError:
+        try: parsed = dt.datetime.fromisoformat(text)
+        except ValueError: raise ValueError('Use DD/MM/AAAA HH:MM') from None
+    return parsed.astimezone().timestamp()
 
 
 def next_monthly(day, now):
@@ -786,9 +858,12 @@ def describe(item, now=None):
     if available is not None:
         text = str(available) + ' disponíveis'
         if available: text += ' · validade: ' + (date(expiry) if expiry else 'não informada')
-        lines.append('Tickets de reposição: ' + text + ' · resgate na aplicação')
+        lines.append('Tickets de reposição: ' + text + (' · lembrete informado por você; confirme e resgate no cliente'
+                                                        if reset.get('declared') else ' · resgate na aplicação'))
     else:
-        lines.append('Tickets de reposição: ' + ('consulta vencida; aguardando atualização' if reset else 'não informados nesta fonte'))
+        lines.append('Tickets de reposição: ' + ('consulta vencida; aguardando atualização' if reset else
+                                                 'não expostos por esta fonte; confira Uso no cliente e registre um lembrete'
+                                                 if item.get('provider') == 'claude' else 'não informados nesta fonte'))
     balance = item.get('extra_credits')
     lines.append('Créditos extras: ' + (str(balance) + ' (saldo informado pelo provedor)' if balance is not None else 'não informados nesta fonte'))
     extra = item.get('extra_usage')

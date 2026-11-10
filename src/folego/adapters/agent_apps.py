@@ -112,6 +112,9 @@ class AgentApps:
         if action == 'agent-billing':
             from ..core.ai_sessions import set_billing_day
             return set_billing_day(*value, env=self.env)
+        if action == 'agent-reset-note':
+            from ..core.ai_sessions import set_reset_note
+            return set_reset_note(*value, env=self.env)
         provider, pending, *selected = value
         if action != 'agent-open' or provider not in CLASSES:
             raise ValueError('Aplicação desconhecida')

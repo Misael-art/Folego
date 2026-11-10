@@ -92,3 +92,25 @@ def test_structured_generic_failure_is_excluded_from_delivery_notice():
     ])]
     assert tracker.delivery_changes(rows, now=102) == {'codex': 1}
     assert tracker.delivery_changes(rows, now=103) == {}
+
+
+def test_new_and_expiring_reset_tickets_are_reported_once():
+    def ticket(count, at, expiry=None, account='a'):
+        return dict(provider='claude', account_id=account, label='Principal', observed_at=at, windows=[],
+                    reset_credits=dict(available=count, expires_at=expiry, observed_at=at))
+    tracker = AlertTracker()
+    assert tracker.reset_changes([ticket(1, 100, 500000)], now=100) == []  # silent baseline
+    assert tracker.reset_changes([dict(provider='claude', account_id='a')], now=101) == []
+    assert tracker.reset_changes([ticket(0, 102)], now=102) == []
+    # An unknown reading in between is not a zero that would replay the notice.
+    assert tracker.reset_changes([ticket(1, 99, 500000)], now=5000) == []
+    new = tracker.reset_changes([ticket(1, 5001, 500000)], now=5001)
+    assert [(e['kind'], e['count'], e['label']) for e in new] == [('available', 1, 'Principal')]
+    assert tracker.reset_changes([ticket(1, 5002, 500000)], now=5002) == []
+    last_day = tracker.reset_changes([ticket(1, 420000, 500000)], now=420000)
+    assert [e['kind'] for e in last_day] == ['expiring']
+    assert tracker.reset_changes([ticket(1, 420060, 500000)], now=420060) == []
+    assert tracker.reset_changes([ticket(1, 500001, 500000)], now=500001) == []
+    # A first observation already inside the last day still reminds once.
+    first = tracker.reset_changes([ticket(2, 100, 5000, account='b')], now=100)
+    assert [(e['kind'], e['count']) for e in first] == [('expiring', 2)]

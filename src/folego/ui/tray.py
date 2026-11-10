@@ -148,6 +148,15 @@ class Tray:
                     else f'{count} novas entregas para revisitar.')
             self._notice('agent', title, body)
 
+    def show_reset_tickets(self, events):
+        from ..core.ai_sessions import NAMES, stamp
+        for event in events:
+            count = event['count']
+            body = ('Um reset disponível' if count == 1 else f'{count} resets disponíveis') + ' em ' + event['label']
+            if event['expires_at']:
+                body += (' · vence em menos de 24 h (' if event['kind'] == 'expiring' else ' · vale até (') + stamp(event['expires_at']) + ')'
+            self._notice('agent', f"Contas · {NAMES[event['provider']]}", body + '. Resgate no cliente.')
+
     def show_accessibility(self, report):
         alerts = report.get("alerts", [])
         note = "; ".join(alerts)[:512] if alerts else ""

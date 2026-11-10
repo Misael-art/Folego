@@ -259,6 +259,7 @@ class AIStrip(QWidget):
         panel.setFixedSize(min(560, area.width() - 20), min(470, area.height() - 24))
         panel.open_requested.connect(lambda p, a: (menu.close(), self.open_agent(p, a)))
         panel.billing_requested.connect(lambda p, a: (menu.close(), self.billing(p, a)))
+        panel.reset_note_requested.connect(lambda p, a: (menu.close(), self.reset_note(p, a)))
         panel.refresh_requested.connect(self.refresh)
         action = QWidgetAction(menu)
         action.setDefaultWidget(panel)
@@ -291,6 +292,22 @@ class AIStrip(QWidget):
         day, accepted = QInputDialog.getInt(self, 'Renovação mensal · ' + ai_sessions.NAMES[provider],
              'Dia da cobrança mensal (1–31; 0 remove).\nReferência pessoal, sem confirmação de cobrança pelo provedor.', current, 0, 31)
         if accepted: self.opener.request('agent-billing', (provider, day, account) if account else (provider, day))
+
+    def reset_note(self, provider, account=None):
+        item = next((i for i in self.items if account and i.get('account_id') == account), self.default_item(provider))
+        account = item.get('account_id')
+        if not account: return self._notice('Conta não identificada; lembrete não registrado')
+        current = item.get('reset_credits') or {}
+        text, accepted = QInputDialog.getText(self, 'Lembrete de reset · ' + ai_sessions.NAMES[provider],
+            'Validade do reset mostrado pelo cliente (DD/MM/AAAA HH:MM; vazio remove).\n'
+            'Lembrete pessoal: o Fôlego não consulta nem resgata o reset.',
+            text=ai_sessions.stamp(current['expires_at']) if current.get('declared') and current.get('expires_at') else '')
+        if not accepted: return
+        try:
+            expiry = ai_sessions.parse_local_time(text) if text.strip() else None
+        except ValueError as exc:
+            return self._notice(str(exc))
+        self.opener.request('agent-reset-note', (account, expiry))
 
     def _notice(self, message):
         # The compact card owns visible transient feedback, separate from alerts.

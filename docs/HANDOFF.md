@@ -1,4 +1,23 @@
-# Passagem para o próximo agente — atualizada em 09/11/2026
+# Passagem para o próximo agente — atualizada em 10/11/2026
+
+## Resets e limites por modelo nas contas — 10/11/2026
+
+- Relatório em [DIAGNOSTICO-RESETS-CONTAS-2026-11-10.md](DIAGNOSTICO-RESETS-CONTAS-2026-11-10.md).
+  O reset gratuito do Claude visto no Desktop não vem em `oauth/usage`
+  (leitura de 10/11) nem em endpoint do cliente instalado. Não ler a sessão
+  web do Desktop para obtê-lo.
+- O coletor Claude cria janelas para `limits[].weekly_scoped`
+  (`Semana Fable`). `reset_notes` guarda um lembrete pessoal por conta, pela
+  GUI (**Lembrete de reset…**) ou `ai reset-note`. `AlertTracker.reset_changes`
+  avisa reset novo e últimas 24 h de validade, com pop-up e som `reset`.
+- Headless focado 86 aprovados (`run-c7qf0ch2`), Qt focado 198
+  (`run-ox_y14ut`) e 8 (`run-72t15vp5`). `ai status` real mostrou a janela
+  Fable e o lembrete da conta Claude principal, válido até 17/11 04:59.
+  Quatro runs antigos concluídos foram movidos, sem apagar, para
+  `.scratch/dev-tests-reviewed/20261110-reset-signals/`.
+- Pendente: pop-up, som e diálogo no KDE/Wayland real, na próxima abertura
+  segura da GUI residente. Abertos no relatório: aviso de ritmo, som ao
+  resgatar no meio da janela, estrutura `spend`.
 
 ## Evidência de queda de tensão e carga do Codex Web — 09/11/2026
 

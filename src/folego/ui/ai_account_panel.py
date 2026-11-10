@@ -24,6 +24,7 @@ def until(at, now):
 class AccountPanel(QWidget):
     open_requested = Signal(str, str)
     billing_requested = Signal(str, str)
+    reset_note_requested = Signal(str, str)
     refresh_requested = Signal()
 
     def __init__(self, provider, items, parent=None):
@@ -96,6 +97,11 @@ class AccountPanel(QWidget):
         billing.clicked.connect(lambda: self.billing_requested.emit(provider, self.selected))
         actions.addWidget(open_button)
         actions.addWidget(billing)
+        if provider != 'web':
+            note = QPushButton('Lembrete de reset…')
+            note.setToolTip('Registrar um reset resgatável que o cliente mostra e a fonte não expõe')
+            note.clicked.connect(lambda: self.reset_note_requested.emit(provider, self.selected))
+            actions.addWidget(note)
         outer.addLayout(actions)
         self.select(self.selected)
 
@@ -151,7 +157,7 @@ class AccountPanel(QWidget):
         if available is not None:
             self.line(f"Tickets de reset · {available} disponíveis", color='ok' if available else 'muted')
             if available:
-                self.line(('Valem até ' + date(expiry) if expiry else 'Validade não informada') + ' · resgate no cliente', color='muted')
+                self.line(('Valem até ' + date(expiry) if expiry else 'Validade não informada') + (' · lembrete seu; confirme e resgate no cliente' if tickets.get('declared') else ' · resgate no cliente'), color='muted')
         else:
             self.line('Tickets de reset · ' + ('consulta vencida' if tickets else 'não informados'), color='muted')
         day = item.get('billing_day')

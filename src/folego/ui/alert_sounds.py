@@ -11,6 +11,7 @@ from .desktop_preferences import enabled, SOUNDS, RAISE_VOLUME
 class AlertSounds(QObject):
     feedback = Signal(str)
     deliveries_observed = Signal(object)
+    resets_observed = Signal(object)
 
     def __init__(self, parent=None, *, controller=None):
         super().__init__(parent)
@@ -29,6 +30,10 @@ class AlertSounds(QObject):
             changes = (self.tracker.quota_changes(rows) if kind == 'quotas' else self.tracker.delivery_changes(rows))
             if kind == 'deliveries' and changes:
                 self.deliveries_observed.emit(changes)
+            resets = self.tracker.reset_changes(rows) if kind == 'quotas' else []
+            if resets:
+                self.resets_observed.emit(resets)
+                changes = list(changes) + ['reset']
             if not enabled(SOUNDS): return
             for tone in changes: self._enqueue(tone)
         except (ValueError, RuntimeError) as exc: self.feedback.emit(str(exc))

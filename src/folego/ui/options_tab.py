@@ -231,6 +231,7 @@ class OptionsTab(QWidget):
         for key, text in (('codex', 'Codex · entrega concluída'), ('web', 'Codex Web · entrega concluída'),
                           ('claude', 'Claude · entrega concluída'), ('grok', 'Grok · entrega concluída'),
                           ('low', 'Atenção · 20% restantes'), ('empty', 'Franquia esgotada'), ('restored', 'Franquia disponível novamente'),
+                          ('reset', 'Reset disponível ou perto de vencer'),
                           ('battery-75', 'Bateria · 75%'), ('battery-50', 'Bateria · 50%'),
                           ('battery-25', 'Bateria · 25%'), ('battery-10', 'Bateria · 10%')):
             self.sound_kind.addItem(text, key)

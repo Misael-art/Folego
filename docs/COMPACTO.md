@@ -300,6 +300,11 @@ a primeira raiz existente. A descoberta de processos fica no HOME selecionado;
 HOME privado não adota contas nativas do HOME físico.
 Para consultar sem Qt: `./dev run ai status --json`.
 
+Quando o cliente mostra um reset gratuito que a fonte não expõe (caso do
+Claude), registre um lembrete em **Lembrete de reset…** no painel da conta ou
+com `./dev run ai reset-note --account ID --expires "DD/MM/AAAA HH:MM"`
+(`--clear` remove). O Fôlego só lembra; o resgate é feito no cliente.
+
 O painel aparece mesmo com outro aplicativo em foco. O botão direito no
 indicador abre **Atualizar dados**, **Contas, uso e renovação**,
 **Definir dia da renovação mensal** e **Consultar no site do provedor**.
