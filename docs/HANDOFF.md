@@ -15,6 +15,10 @@
   Fable e o lembrete da conta Claude principal, válido até 17/11 04:59.
   Quatro runs antigos concluídos foram movidos, sem apagar, para
   `.scratch/dev-tests-reviewed/20261110-reset-signals/`.
+- Código `142d139c593bb7055acfb9392c203a9ef009b855` no PR #9, SHA conferido no
+  remoto. Suítes completas do CI ainda não consultadas para esse SHA. O
+  `git fetch` local falha por uma ref `refs/codex/turn-diffs/...` sem objeto,
+  anterior a este lote; `ls-remote` e `push` funcionam.
 - Pendente: pop-up, som e diálogo no KDE/Wayland real, na próxima abertura
   segura da GUI residente. Abertos no relatório: aviso de ritmo, som ao
   resgatar no meio da janela, estrutura `spend`.
