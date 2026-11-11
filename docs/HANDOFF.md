@@ -51,6 +51,19 @@
   habilitada em `balanced`, sem bloqueio. WirePlumber segue no PID 84948 da
   recuperação inicial. Recibos privados e configuração anterior em
   `.scratch/host-install-b11-20261111/`.
+- Código `c4641e56c4bd9e5940993b55ab911f2161b00690` enviado e confirmado
+  na continuidade do PR #9, com os seis checks aprovados. A tag anotada
+  `v0.2.0b11`, objeto `1421fc435360498e976b1a9c687278f99cc45e14`, aponta
+  para esse código. Os três jobs da tag passaram no run `43001052263`.
+  O registro central vincula explicitamente essa tag ao commit autorizado.
+  [PR #9](https://github.com/Misael-art/Folego/pull/9).
+- A prévia foi publicada em 11/11 às 07:10 -03 com fonte completa, sdist,
+  wheel e `SHA256SUMS`. Os quatro tamanhos e digests SHA-256 públicos foram
+  conferidos. A fonte completa contém 1015 arquivos rastreados. Os 170 módulos
+  do wheel e do sdist correspondem byte a byte à fonte commitada. O wheel
+  passou em ambiente isolado sem Qt, incluindo persistência da nova opção.
+  Recibos e artefatos em `.scratch/release-b11-20261111/`.
+  [Prévia v0.2.0b11](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b11).
 - Aceites físicos de falha natural e recuperação automática, cold boot,
   suspend/resume e uso prolongado permanecem pendentes. A voz foi confirmada
   pelo usuário na recuperação inicial. O diagnóstico da causa exata da
