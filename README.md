@@ -178,12 +178,12 @@ contas usam um fundo contínuo, com os elementos internos transparentes.
 O alvo é **Linux**, com KDE Plasma para a integração completa com o desktop.
 O wrapper gerencia Python **3.14.7**, uv e dependências fixadas em `uv.lock`.
 Não é necessário ativar um ambiente virtual ou instalar pacotes Python globalmente.
-A [prévia 0.2.0b11](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b11)
+A [prévia 0.2.0b12](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b12)
 oferece fonte completa, wheel, sdist e SHA256SUMS. A fonte completa inclui o wrapper
 e o lockfile; os pacotes Python exigem Python 3.14 e a dependência GUI opcional.
 
 ```bash
-git clone --branch v0.2.0b11 https://github.com/Misael-art/Folego.git
+git clone --branch v0.2.0b12 https://github.com/Misael-art/Folego.git
 cd Folego
 ./dev setup
 ./dev gui

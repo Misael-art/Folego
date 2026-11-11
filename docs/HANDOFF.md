@@ -1,5 +1,28 @@
 # Passagem para o próximo agente — atualizada em 11/11/2026
 
+## Candidata da prévia 0.2.0b12 — 11/11/2026
+
+- Pedido explícito do operador: fazer release do incremento de histórico e
+  diagnóstico. Mantida a série de prévias; sem merge do PR #9. A versão em
+  `pyproject.toml` e `uv.lock` passou para `0.2.0b12`, e o README aponta para a
+  nova tag. Nenhuma dependência ou contrato de automação foi ampliado.
+- A base `6565cbf247f90519b646c734ab5c13c5903e0578` tinha os seis jobs de produto
+  aprovados no GitHub antes da preparação. O código inclui fsync em cada amostra,
+  reconhecimento dos pedidos do logind e tratamento conservador de journal
+  desconhecido. A causa dos cortes permanece sem confirmação.
+- A nova execução local da candidata usa Python 3.14.7 e os perfis separados do
+  wrapper. Para respeitar o limite de QA, duas execuções próprias concluídas,
+  `run-j0esypl3` e `run-refa6np2`, foram preservadas integralmente com manifestos,
+  PIDs ausentes e hashes em `.scratch/dev-tests-reviewed/20261111-release-b12/`.
+  A evidência Wayland do incremento está em `.scratch/reboot-diagnosis-20261111/`.
+- Artefatos, notas e verificadores específicos desta entrega ficam em
+  `.scratch/release-b12-20261111/`. A publicação exige fonte completa, wheel,
+  sdist, `SHA256SUMS`, correspondência com o commit, smoke isolado e gates do SHA.
+- `./dev check` da candidata passou sequencialmente: **1421 passed, 2 skipped**
+  headless em `run-3fdlgnd6` (53,09 s), **1856 passed, 2 skipped** Qt em
+  `run-ygqbc67g` (189,88 s), Python 3.14.7, HOME/XDG/TMPDIR privados e diff check
+  aprovado. Nenhum limite foi ampliado e nenhuma instalação privilegiada foi feita.
+
 ## Diagnóstico distingue pedido de reinício e encerramento desconhecido — 11/11/2026
 
 - Continuidade do pedido de melhoria após os cortes. A sincronização de cada
