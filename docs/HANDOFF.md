@@ -1,5 +1,102 @@
 # Passagem para o próximo agente — atualizada em 11/11/2026
 
+## Cortes após abertura do Codex e durabilidade do histórico — 11/11/2026
+
+- Pedido atual: investigar e resolver os novos reinícios. Os boots abaixo
+  terminaram sem solicitação logind nem encerramento organizado preservados.
+  Os horários são os últimos registros disponíveis, não o instante físico do corte.
+
+  | Boot | Último journal | Última amostra Fôlego | Estado observado na amostra |
+  | --- | --- | --- | --- |
+  | `c43ce589` | 07:52:26 -03 | 07:52:20 -03 | 62 °C, RAM disponível 7.394.656 KiB, swap usada 202.732 KiB, 53%, carregando a 8,124 V, AC presente |
+  | `12ba3f73` | 08:03:42 -03 | 08:02:58 -03 | 50 °C, RAM disponível 9.941.828 KiB, sem swap usada, 62%, carregando a 8,273 V, AC presente |
+  | `fbb3ad10` | 08:11:53 -03 | 08:11:17 -03 | 48 °C, RAM disponível 9.975.588 KiB, sem swap usada, 63%, descarregando a 7,633 V, AC ausente |
+
+- PSI de memória/I/O em 10 s estava zerado nas três últimas amostras, com
+  fontes válidas. Os dois boots curtos registraram abertura do Codex Desktop
+  às 08:03:17 e 08:11:49. Essa associação temporal orienta a investigação,
+  mas não comprova defeito gráfico. Sem panic, OOM ou thermal trip preservados
+  na janela final consultada; transientes entre leituras continuam desconhecidos.
+  Os cortes com AC e em descarga impedem atribuir todos à bateria pelo percentual.
+- Consulta privilegiada somente de saúde: NVMe SMART aprovado, alerta 0,
+  erros de mídia 0, unsafe shutdowns acumulados 2796, temperatura 46 °C.
+  Btrfs segue em corrupção acumulada 6741, com escrita/leitura/flush/geração
+  zerados e sem delta observado. Pstore vazio, sem registro de crash recuperável.
+  Isso não certifica integridade integral nem exclui falha transitória de energia.
+- O launcher comunitário `/opt/codex-desktop/start.sh` lê a configuração oficial
+  desse pacote em `~/.config/codex-desktop/electron-flags.conf`. Foi acrescentado
+  somente `--disable-gpu`, com cópia prévia privada. O comando do launcher
+  `--diagnose-scaling` confirmou GPU e Vulkan desativados para a próxima abertura.
+  Não foi reaberto o app para provocar outro corte; o aceite de uso permanece
+  pendente. Reversão: remover a linha ativa `--disable-gpu` desse arquivo.
+- Lacuna reproduzida no Fôlego: em baixa pressão, fsync ocorria somente a cada
+  quatro gravações normais. Uma amostra podia ser exibida como gravada sem
+  sincronização por aproximadamente um minuto. Agora cada gravação solicita
+  fsync antes do sucesso; falha dessa barreira chega à qualidade da fonte na
+  CLI/GUI. Cadência, limites e tratamento imediato de eventos foram preservados.
+  A mudança reduz perda de evidência; não é reparo comprovado da causa dos cortes
+  e não certifica o comportamento físico do armazenamento durante falta de energia.
+- Os dois testes novos falharam contra a implementação anterior em
+  `run-vdj8cy7z`; com a correção, os 12 testes focados passaram em `run-c50q5tqk`.
+  `./dev check` passou sequencialmente com Python 3.14.7 e HOME/XDG/TMPDIR
+  privados: headless **1414 passed, 2 skipped** em `run-tn1ezrd1` (58,07 s)
+  e Qt **1848 passed, 2 skipped** em `run-24cyenvw` (151,29 s). Diff check verde.
+  O preflight inicial foi recusado por 20 diretórios QA. Seis execuções antigas
+  concluídas foram revisadas por manifesto, PID ausente e `lsof +D` privilegiado
+  sem referências nos destinos Btrfs. Avisos lsof eram de FUSE alheio a essas
+  árvores. Conteúdo integral e hashes dos recibos foram preservados em
+  `.scratch/dev-tests-reviewed/20261111-reset-durability/`; nenhum payload removido.
+- Após os gates, `./dev setup` confirmou o ambiente editable oficial. A GUI
+  `app-folego@autostart.service` foi revalidada no boot e com cgroup contendo
+  somente seu principal PID 4073, e recarregada para usar o novo gravador.
+  PID posterior 113008, unit ativa e `NRestarts=0`; amostras de 08:44:40 e
+  08:44:55 têm fontes válidas, leitura de 120/117 ms e temperatura de 52/51 °C.
+  O monitor de entrada não foi reiniciado. Isso comprova coleta viva; não prova
+  durabilidade numa falha física nem estabilidade por horas.
+- O fetch encontrou uma referência interna de captura Codex vazia, com mtime
+  de 09/11: `refs/codex/turn-diffs/captures/1794243476193/18227c2d-7ec3-4d08-b16e-7ef00cb8217d/base`.
+  Não havia SHA ou reflog recuperável nessa referência. O arquivo vazio foi
+  preservado no destino privado de evidências e retirado do namespace de refs,
+  sem alterar branches, objetos ou checkout. `git fsck --full --no-reflogs
+  --no-dangling` passou após a correção. Sua data não permite atribuí-la aos
+  cortes desta manhã. Os recibos antes/depois foram preservados.
+- Incidente causado pelo agente durante esta investigação: às 08:26:55, a
+  leitura indevida de `amdgpu_gpu_recover` acionou um reset da GPU. O kernel
+  registrou recuperação bem-sucedida e o host manteve o boot `fbbf00a5`.
+  Esse evento foi comunicado ao usuário e está excluído da atribuição dos
+  cortes anteriores. Não se certificou a preservação de trabalhos em GPU.
+  Debugfs possui arquivos com efeitos ao ler, conforme a
+  [documentação do kernel](https://docs.kernel.org/gpu/amdgpu/debugfs.html#amdgpu-gpu-recover).
+- Evidências privadas, logs limitados, amostras dos três boots e cópia da
+  configuração anterior: `.scratch/host-incident-20261111-0812/`. Acompanhamento:
+  uso natural com a mitigação gráfica, esclarecer se houve reset espontâneo ou
+  desligamento manual após travamento e correlacionar próximo evento com energia,
+  GPU/kernel. Revisão de firmware/boot e manutenção física exigem diagnóstico
+  próprio; não se provocou reboot, descarga, carga térmica ou enchimento de disco.
+
+## Memória compartilhada do host e base funcional — 11/11/2026
+
+- A pedido do operador, os aprendizados de comportamento, resets, energia,
+  microfone, concorrência de cargas, serviços e recuperação foram consolidados
+  em duas páginas no AI Memory compartilhado `default/_global`.
+  `procedures/host-jupiter-base-minima-e-diagnostico.md` fica fixada e reúne
+  a base funcional por capacidade. `gotchas/host-jupiter-incidentes-e-recuperacoes.md`
+  reúne cronologia, evidências, correções, SHAs e limites. Leitura integral
+  posterior confirmou persistência. Uma busca no escopo PhaseZero encontrou
+  ambas pelo contexto compartilhado.
+- O guia versionado registra hardware/armazenamento, núcleo e sessão, energia,
+  rede, áudio físico e filtros, acessibilidade, portais e serviços sob demanda.
+  O inventário foi conferido com units reais do sistema e usuário, dependências
+  do target, políticas, diagnóstico de microfone e documentação primária.
+  [BASE-DO-HOST.md](BASE-DO-HOST.md).
+- A omissão da dependência de energia no target Vibe Code é comprovada e possui
+  vínculo corretivo instalado no host. O gerador PhaseZero `linux/boot/vibe-code.sh`
+  ainda precisa incorporar essa dependência para novas instalações. A causa
+  exata da enumeração incompleta e a atribuição dos cortes físicos continuam
+  abertas. Um próximo boot natural no Vibe Code mantém seu aceite próprio.
+- Este incremento é documental. A revisão conferiu referências e coerência,
+  com `git diff --check`, além de leitura e busca das páginas persistidas.
+
 ## Revisão da autorrecuperação e instalação da prévia 0.2.0b11 — 11/11/2026
 
 - A varredura percorreu diagnóstico, diário, escopo de efeitos, políticas,

@@ -48,6 +48,37 @@ def test_timeline_throttles_and_preserves_private_boot_history(tmp_path):
     assert read_timeline(folder, boot_id="../other")["quality"] == "unknown"
 
 
+def test_timeline_syncs_each_normal_sample_before_reporting_success(tmp_path, monkeypatch):
+    folder = tmp_path / "timeline"
+    recorder = HostTimelineRecorder(folder)
+    durable_rows = []
+    real_fsync = os.fsync
+
+    def sync(fd):
+        real_fsync(fd)
+        if stat.S_ISREG(os.fstat(fd).st_mode):
+            durable_rows[:] = (folder / f"{BOOT}.jsonl").read_text().splitlines()
+
+    monkeypatch.setattr(host_timeline.os, "fsync", sync)
+    assert record_snapshot(recorder, _snapshot(100)).source("host_timeline").status == OK
+    assert record_snapshot(recorder, _snapshot(115)).source("host_timeline").status == OK
+    # A cut immediately after the second low-pressure sample must retain it too.
+    assert [json.loads(row)["mono_ns"] for row in durable_rows] == [100 * 10**9, 115 * 10**9]
+
+
+def test_timeline_exposes_sync_failure_on_a_normal_sample(tmp_path, monkeypatch):
+    recorder = HostTimelineRecorder(tmp_path / "timeline")
+    recorder.record(_snapshot(100))
+
+    def fail_sync(fd):
+        raise OSError("sync unavailable")
+
+    monkeypatch.setattr(host_timeline.os, "fsync", fail_sync)
+    observed = record_snapshot(recorder, _snapshot(115))
+    assert observed.source("host_timeline").status == "error"
+    assert "sync unavailable" in observed.source("host_timeline").detail
+
+
 def test_timeline_marks_corruption_unknown_and_keeps_existing_bytes(tmp_path):
     folder = tmp_path / "timeline"
     recorder = HostTimelineRecorder(folder)
@@ -144,7 +175,7 @@ def test_timeline_syncs_the_first_critical_reading_and_power_edges(tmp_path, mon
         [], ["battery-voltage-critical", "external-power-disconnected"],
         ["battery-voltage-critical"], ["external-power-connected"], [],
     ]
-    assert len(synced) == 5  # initial, three power events, and periodic sync
+    assert len(synced) == 5  # every recorded sample, including the three power events
     critical = report["samples"][1]
     assert critical["battery_voltage_uv"] == 6_560_000
     assert critical["battery_voltage_min_design_uv"] == 7_700_000

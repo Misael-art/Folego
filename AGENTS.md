@@ -1,7 +1,7 @@
 # Instruções portáteis para agentes
 
-Comece por `README.md`, `docs/HANDOFF.md`, `docs/DIAGNOSTICO-2026-10-24.md`
-e `docs/NOVO-HOST.md`. Esses arquivos descrevem a situação atual; os registros
+Comece por `README.md`, `docs/HANDOFF.md`, `docs/DIAGNOSTICO-2026-10-24.md`,
+`docs/NOVO-HOST.md` e `docs/BASE-DO-HOST.md`. Esses arquivos descrevem a situação atual; os registros
 de 17/18 de outubro preservam o histórico e não devem ser lidos como aceite total.
 Este projeto não depende do HOME, disco, venv, serviços ou skills do host anterior.
 

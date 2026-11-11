@@ -249,6 +249,8 @@ Avisos NTFS são buscados em janela limitada do journal, incluindo o número de
 índices identificados, sem percorrer o volume. Enquanto a GUI monitora, uma
 amostra privada e limitada de RAM, swap, PSI, temperatura e maior CPU é gravada
 normalmente a cada 15 segundos para investigar o período anterior a um reinício.
+Cada amostra gravada solicita sincronização com o disco antes de informar sucesso,
+inclusive quando não há pressão; falhas dessa sincronização ficam visíveis.
 A primeira leitura crítica de tensão e as transições confirmadas de alimentação
 externa são sincronizadas com o disco assim que observadas, usando a mesma coleta.
 Eventos entre leituras podem escapar. A CLI
@@ -264,6 +266,8 @@ de pressão a cada 5 minutos. O histórico registra também as médias PSI de
 recomenda reduzir tarefas pelo aplicativo responsável e não altera processos.
 O plano para
 continuidade e dossiês está no [roadmap de resiliência](docs/ROADMAP-RESILIENCIA-HOST.md).
+A base funcional para economia estável, os serviços por capacidade e o roteiro
+de novo diagnóstico estão no [guia do host Jupiter](docs/BASE-DO-HOST.md).
 `disk recovery` só verifica identidade da
 origem, montagem, acesso bruto, ferramenta e destino independente com espaço
 para imagem integral e margem. A checagem não abre o dispositivo nem concede

@@ -83,7 +83,7 @@ def _sample(snapshot: Snapshot) -> dict:
 
 
 class HostTimelineRecorder:
-    """Record power events durably on observation, with a 15 s normal cadence."""
+    """Sync each recorded sample, with power events bypassing the 15 s cadence."""
 
     def __init__(self, directory: Path | None = None, *, interval_s: float = 15.0):
         self.directory = Path(directory) if directory else paths.host_timeline_dir()
@@ -157,12 +157,11 @@ class HostTimelineRecorder:
                 with os.fdopen(fd, "ab", closefd=False) as stream:
                     stream.write(raw)
                     stream.flush()
-                pressure = ((item["psi_mem_avg10"] or 0) >= 5
-                            or (item["psi_io_avg10"] or 0) >= 5)
-                if self._written % 4 == 0 or pressure or events:
-                    os.fsync(fd)
-                    if self._written == 0:
-                        fsync_dir(self.directory)
+                # Low-pressure samples also precede abrupt resets. Do not report
+                # them as recorded while up to a minute still lives in page cache.
+                os.fsync(fd)
+                if self._written == 0:
+                    fsync_dir(self.directory)
             finally:
                 os.close(fd)
         except (OSError, ValueError) as exc:
