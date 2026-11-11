@@ -1,4 +1,39 @@
-# Passagem para o próximo agente — atualizada em 10/11/2026
+# Passagem para o próximo agente — atualizada em 11/11/2026
+
+## Energia disponível no Vibe Code e perfil equilibrado — 11/11/2026
+
+- O target `phasezero-vibe-code.target` iniciava `multi-user.target` e SDDM.
+  Os serviços de energia do BigLinux estavam habilitados em `graphical.target`,
+  que ficava inativo nesse modo. O mask da unit genérica existe desde a imagem
+  do sistema, e o owner instalado é `power-profiles-daemon-biglinux.service`.
+- Após o pedido de melhorar as configurações, o inicializador oficial do BigLinux
+  foi executado com intenção e cópias prévias. Ele mudou AMD P-State de `guided`
+  para `active`, com driver real `amd-pstate-epp`. O perfil-base foi salvo como
+  `balanced` antes da inicialização e confirmado por `powerprofilesctl get`.
+  `systemctl add-wants phasezero-vibe-code.target power-profiles-daemon-biglinux.service`
+  criou a dependência para as próximas entradas naturais nesse modo.
+- Às 05:35 -03, o owner estava `active/exited`, o daemon instalado
+  `power-profiles-daemon-biglinux-start.service` estava `active/running`, ambos
+  com `ExecMainStatus=0`. A listagem confirmou `CpuDriver=amd_pstate` nos três
+  perfis. A leitura da CPU mostrou governor `powersave` e preferência
+  `balance_power`, com perfil `balanced` confirmado em leituras sucessivas.
+- `./dev run disk health --json` confirmou `power_guard.enabled=true`,
+  `blocked=false`, perfil `balanced` e mensagem **Ativo. Perfil atual: equilibrado.**
+  A guarda continua configurada para equilibrado em atenção e economia em crítica.
+  A validação foi funcional no host, com consultas, journal e verificação das units.
+  `systemd-analyze verify` retornou 0, com avisos de acesso a diretórios e à unit
+  SteamZero protegida. O próximo boot natural ainda precisa confirmar a dependência.
+- Evidência e cópias em `.scratch/host-power-config-20261111/`, incluindo
+  `state.ini.before`, `starter.service.before`, intenção e resultado confirmado.
+  A reversão exige remover somente o link criado em
+  `/etc/systemd/system/phasezero-vibe-code.target.wants/`, parar os dois serviços
+  de energia ativados neste lote, restaurar as cópias e o modo `guided`, e
+  reconsultar o estado. As receitas e valores anteriores ficam nesta passagem.
+- O monitor está preservado em `2887457`, com passagem em `0b9da58`, ambos
+  confirmados no GitHub com os seis checks aprovados. Este lote ajusta o host e
+  a documentação. A captura de panic continua pendente de uma revisão própria
+  de boot pelo PhaseZero, com backend e recuperação verificados. O diagnóstico
+  atual mostra `pstore` sem backend e detectores de travamento desabilitados.
 
 ## Monitor de alimentação e proteção indisponível — 10/11/2026
 
