@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMessageBox,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..actions.disk.planner import fmt_bytes
-from ..core.host_guard import GUIDES
+from ..core.host_guard import GUIDES, boot_end_text
 
 PLAN_PENDING = "ainda não analisado — use Reconsultar o disco."
 PLAN_LOADING = "consultando o disco (dry-run, nada é escrito)…"
@@ -260,6 +260,8 @@ class HostHealthPanel(QWidget):
         else:
             boot_text = f"{count} {'boot' if count == 1 else 'boots'} no journal · " + boots.get("reason", "encerramento anterior desconhecido")
         previous = boots.get("items", [])[-2] if count >= 2 else None
+        if previous and (end_text := boot_end_text(previous)):
+            boot_text += f"\nBoot anterior: {end_text}"
         previous_timeline = previous.get("timeline", {}) if previous else {}
         if previous_timeline.get("last"):
             boot_text += f"\nBoot anterior: última amostra {previous_timeline['last']['at']}"

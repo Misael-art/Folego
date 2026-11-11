@@ -268,6 +268,10 @@ O plano para
 continuidade e dossiês está no [roadmap de resiliência](docs/ROADMAP-RESILIENCIA-HOST.md).
 A base funcional para economia estável, os serviços por capacidade e o roteiro
 de novo diagnóstico estão no [guia do host Jupiter](docs/BASE-DO-HOST.md).
+O diagnóstico diferencia pedidos de reinício, desligamento e parada registrados
+pelo logind. A solicitação registrada não comprova o fim do boot. Journal ausente
+ou ilegível mantém o encerramento desconhecido; ausência de registro não prova
+falha elétrica, térmica ou da GPU.
 `disk recovery` só verifica identidade da
 origem, montagem, acesso bruto, ferramenta e destino independente com espaço
 para imagem integral e margem. A checagem não abre o dispositivo nem concede

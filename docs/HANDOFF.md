@@ -1,5 +1,47 @@
 # Passagem para o próximo agente — atualizada em 11/11/2026
 
+## Diagnóstico distingue pedido de reinício e encerramento desconhecido — 11/11/2026
+
+- Continuidade do pedido de melhoria após os cortes. A sincronização de cada
+  amostra já estava aplicada no incremento anterior. Foi reproduzida uma falha
+  distinta no dossiê: o filtro reconhecia apenas `System is powering down.`,
+  deixando `System is rebooting.` inconclusivo. Além disso, todas as consultas
+  com erro ainda podiam produzir o texto “desligamento registrado”.
+- A mesma consulta limitada por boot agora reconhece os pedidos de desligamento,
+  reinício, parada, kexec e reinício do espaço de usuário do logind. O JSON mantém
+  `end=shutdown_recorded` e acrescenta `end_kind` e `end_source`. CLI e GUI usam
+  a mesma tradução e sempre ressalvam “conclusão não comprovada”. A mensagem
+  inteira precisa corresponder; frase contida em outra saída vira desconhecida.
+  Sem registro consultável, o resumo mantém causa desconhecida. Os limites de
+  quatro boots, uma entrada por consulta e orçamento global de 8 s permanecem.
+- Oito verificações falharam contra a base em `run-j0esypl3`; os 28 casos focados
+  de observador, CLI e interface passaram em `run-refa6np2`. As duas execuções
+  encerradas próprias `run-vdj8cy7z` e `run-c50q5tqk` foram preservadas integralmente,
+  com manifestos/PIDs ausentes e hashes, em
+  `.scratch/dev-tests-reviewed/20261111-reboot-diagnosis/`. Nenhum limite ampliado
+  ou conteúdo de fixture adotado como dado do produto.
+- O ensaio próprio KDE/Wayland consultou somente o journal real dos boots
+  históricos `f226e77c` e `c43ce589` e reconheceu o reboot das 05:41 como `reboot`.
+  Janela Qt própria de 800 × 650, painel desabilitado para interação, confirmou
+  mensagem completa e rolagem horizontal zerada. Captura de cliente, recibo e
+  roteiro em `.scratch/reboot-diagnosis-20261111/`. Isso valida apresentação e
+  leitura histórica; não certifica compositor, estabilidade prolongada ou fim
+  físico daquele boot. Nenhuma ação de reinício ou recuperação foi executada.
+- A CLI oficial `./dev run disk health --json` consultou o boot atual em 1107 ms
+  e preservou os três cortes recentes como inconclusivos, com causa desconhecida.
+  O relatório privado está no mesmo destino. A causa dos resets e o aceite da
+  mitigação gráfica aplicada anteriormente continuam pendentes de uso natural.
+- `./dev check` passou sequencialmente com Python 3.14.7 e HOME/XDG/TMPDIR
+  privados: headless **1421 passed, 2 skipped** em `run-8p8sn7jj` (43,92 s)
+  e Qt **1856 passed, 2 skipped** em `run-1h961wbi` (190,06 s). Diff check verde.
+  Na revisão final, somente o rótulo textual de halt passou de “parada” para
+  “encerramento”, conferido no formatador headless para manter a concordância.
+- `./dev setup` confirmou o ambiente oficial após os gates. A unit GUI foi
+  revalidada no boot atual, com apenas o PID principal 113008 no cgroup, e
+  recarregada. Novo PID 173119, estado ativo e `NRestarts=0`. O monitor de entrada
+  segue independente; nenhuma sessão do desktop foi reiniciada. A base remota
+  anterior `6b050e3` foi conferida antes da publicação deste incremento.
+
 ## Cortes após abertura do Codex e durabilidade do histórico — 11/11/2026
 
 - Pedido atual: investigar e resolver os novos reinícios. Os boots abaixo

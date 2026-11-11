@@ -6,6 +6,22 @@ KDE/BigLinux e serviços do sistema mantêm seus responsáveis. As intervençõe
 seguem contratos específicos de identidade, coordenação e confirmação.
 O diagnóstico de reinício abrupto permanece **indeterminado**.
 
+## Pedidos de encerramento e falhas de consulta — 11/11
+
+O dossiê agora reconhece o reinício normal registrado pelo logind, além de
+desligamento, parada, kexec e reinício do espaço de usuário. Os campos `end_kind`
+e `end_source` preservam o tipo e a origem no JSON. CLI e cartão Disco apresentam
+o tipo conhecido com a ressalva de conclusão não comprovada. Um pedido de
+encerramento não certifica desmontagem nem exclui uma falha posterior.
+
+A consulta mantém uma entrada por boot, escopo de unit, limites de tempo e
+orçamento global existentes. A saída precisa corresponder à mensagem completa;
+frases embutidas em outro texto continuam desconhecidas. Quando todas as consultas
+falham, o resumo informa a lacuna sem afirmar desligamento registrado. O registro
+real das 05:41 foi consultado somente para leitura; nenhum reboot foi provocado.
+Mensagens conferidas na
+[implementação do logind](https://github.com/systemd/systemd/blob/main/src/login/logind-action.c).
+
 ## Revisão dos caminhos de autorrecuperação de 11/11
 
 | Lacuna reproduzida | Correção e contrato exercitado |

@@ -971,6 +971,9 @@ def _cmd_host_health(args) -> int:
               f"({report['boots'].get('reason', '')})")
         items = report['boots'].get('items', [])
         if len(items) >= 2:
+            from .core.host_guard import boot_end_text
+            if end_text := boot_end_text(items[-2]):
+                print(f"Registro do boot anterior: {end_text}")
             evidence = items[-2].get('timeline', {})
             last = evidence.get('last')
             if last:
