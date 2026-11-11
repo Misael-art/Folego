@@ -41,6 +41,11 @@
   recarregada. Novo PID 173119, estado ativo e `NRestarts=0`. O monitor de entrada
   segue independente; nenhuma sessão do desktop foi reiniciada. A base remota
   anterior `6b050e3` foi conferida antes da publicação deste incremento.
+- Código `4cb6cac80688d1765c717b78be5855a5ae11ca02` enviado e confirmado no
+  remoto da continuidade do [PR #9](https://github.com/Misael-art/Folego/pull/9).
+  Na primeira consulta desse SHA, um job CLI estava aprovado e cinco jobs ainda
+  em execução; gates locais aprovados conforme acima. A amostra de 09:01:35
+  confirmou fontes válidas e ACPI 49 °C após carregar a melhoria.
 
 ## Cortes após abertura do Codex e durabilidade do histórico — 11/11/2026
 
