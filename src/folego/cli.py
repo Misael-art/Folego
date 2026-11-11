@@ -302,10 +302,10 @@ def build_parser() -> argparse.ArgumentParser:
     lease_run = access_sub.add_parser("lease-run", help="inicia aplicação cooperante sob propriedade durável de entrada")
     lease_run.add_argument("--provider", required=True)
     lease_run.add_argument("argv", nargs=argparse.REMAINDER)
-    for name in ("status", "plan", "transitions", "enable", "disable", "capture", "rearm", "install", "repair", "reconcile", "watch", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
+    for name in ("status", "plan", "transitions", "enable", "disable", "audio-reprobe-enable", "audio-reprobe-disable", "capture", "rearm", "install", "repair", "reconcile", "watch", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
         command = access_sub.add_parser(name)
         command.add_argument("--json", action="store_true")
-        if name in ("enable", "disable", "capture", "rearm", "install", "repair", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
+        if name in ("enable", "disable", "audio-reprobe-enable", "audio-reprobe-disable", "capture", "rearm", "install", "repair", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
             command.add_argument("--confirmar", action="store_true")
         if name == "repair":
             command.add_argument("--plan", required=True, help="plano imutável devolvido por plan --json")
@@ -2758,7 +2758,9 @@ def _cmd_accessibility(args):
                 result = reconcile_lease(args.lease_id, confirmed=True, supervisor=supervisor)
             else:
                 result = supervisor.configure(enabled=(args.sub == "enable") if args.sub in ("enable", "disable") else None,
-                                              capture=args.sub == "capture", rearm=args.sub == "rearm")
+                                              capture=args.sub == "capture", rearm=args.sub == "rearm",
+                                              audio_reprobe=(args.sub == 'audio-reprobe-enable')
+                                              if args.sub in ('audio-reprobe-enable', 'audio-reprobe-disable') else None)
         if hasattr(result, "outcome"):
             code = EXIT_BY_OUTCOME[result.outcome]
             payload = {**result.to_dict(), "ok": result.ok, "exit": code}

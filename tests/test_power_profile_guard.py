@@ -150,3 +150,80 @@ def test_read_only_status_preserves_receipt_and_disabled_choice_on_daemon_failur
     assert status['unavailable'] and status['enabled'] is False
     assert status['profile'] is None and 'mascarado' in status['message']
     assert g.path.read_bytes() == before
+
+
+def test_budget_survives_restarts_review_and_clock_regression(tmp_path):
+    daemon = Daemon()
+    for _ in range(4):
+        g = guard(tmp_path, daemon, clock=lambda: 100.0)
+        g.observe('attention'); g.observe('attention')
+        daemon.profile = 'performance'
+    g = guard(tmp_path, daemon, clock=lambda: 100.0)
+    g.perform('disable'); g.perform('enable')
+    g.observe('attention')
+    assert 'Limite' in g.observe('attention')['message']
+    assert len(daemon.sets) == 4
+    backwards = guard(tmp_path, daemon, clock=lambda: 99.0)
+    backwards.observe('attention')
+    assert 'regressou' in backwards.observe('attention')['message']
+    assert len(daemon.sets) == 4
+
+
+def test_restoration_has_its_own_durable_intent_and_lost_result_is_not_retried(tmp_path):
+    daemon = Daemon()
+    g = guard(tmp_path, daemon)
+    g.observe('attention'); g.observe('attention')
+    applied_id = g._load()['receipt']['id']
+    def interrupted(argv):
+        if argv[1] == 'set':
+            receipt = g._load()['receipt']
+            assert receipt['state'] == 'intended' and receipt['restore']
+            assert receipt['parent_id'] == applied_id and receipt['id'] != applied_id
+            raise SystemExit('simulated loss after intent')
+        return daemon(argv)
+    g.command = interrupted
+    with pytest.raises(SystemExit):
+        g.observe('external')
+    again = guard(tmp_path, daemon)
+    assert again.status()['blocked']
+    again.observe('external'); again.observe('critical')
+    assert daemon.sets == ['balanced']
+
+
+def test_completed_restoration_is_reconciled_without_reapplying(tmp_path):
+    daemon = Daemon()
+    g = guard(tmp_path, daemon)
+    g.observe('attention'); g.observe('attention')
+    original_save = g._save
+    def lose_final_receipt(state):
+        if state['receipt'] is None:
+            raise SystemExit('simulated loss after effect')
+        original_save(state)
+    g._save = lose_final_receipt
+    with pytest.raises(SystemExit):
+        g.observe('external')
+    again = guard(tmp_path, daemon)
+    assert not again.status()['managed'] and again._load()['receipt'] is None
+    again.observe('external')
+    assert daemon.sets == ['balanced', 'performance']
+
+
+def test_competing_writers_cannot_reuse_budget_or_change_the_profile(tmp_path):
+    from folego.orchestration import Coordinator
+    daemon = Daemon()
+    g = guard(tmp_path, daemon)
+    rival = Coordinator(lock_path=g.path.with_suffix('.lock'))
+    with rival.lock():
+        with pytest.raises(PowerProfileError, match='andamento'):
+            g.observe('critical')
+    assert not daemon.sets
+
+
+@pytest.mark.parametrize('value', [False, [], {'schema': 1, 'enabled': 'yes'},
+                                  {'schema': 1, 'enabled': True, 'receipt': {}}])
+def test_incomplete_state_never_becomes_an_empty_healthy_receipt(tmp_path, value):
+    from folego.safely.persist import write_json_atomic
+    g = guard(tmp_path, Daemon())
+    write_json_atomic(g.path, value)
+    with pytest.raises(PowerProfileError):
+        g.observe('critical')

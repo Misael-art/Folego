@@ -18,9 +18,11 @@ import subprocess
 import time
 import urllib.parse
 import urllib.request
+import configparser
 
-from .accessibility import bounded_command
+from .accessibility import bounded_command, ProbeError
 from .. import paths
+from .audio_recovery import AudioRecoveryError, WirePlumberRecovery
 
 DESKTOP_APP = 413080
 DESKTOP_URL = "template://retrofe_steamdeck_desktop.vdf"
@@ -205,13 +207,15 @@ class SteamClient:
 
 class DeckProfiles:
     def __init__(self, *, steam_factory=SteamClient, runner=bounded_command,
-                 data_home=None, state_home=None, model_path=Path("/sys/class/dmi/id/product_name")):
+                 data_home=None, state_home=None, model_path=Path("/sys/class/dmi/id/product_name"),
+                 audio_recovery=None):
         self.steam_factory, self.runner = steam_factory, runner
         self.data_home = Path(data_home) if data_home else paths._env_dir(
             "XDG_DATA_HOME", Path.home() / ".local/share")
         self.state_home = Path(state_home) if state_home else paths._env_dir(
             "XDG_STATE_HOME", Path.home() / ".local/state")
         self.model_path = Path(model_path)
+        self.audio_recovery = audio_recovery or WirePlumberRecovery(runner=runner, state_home=self.state_home)
 
     def supported(self):
         try:
@@ -261,6 +265,8 @@ class DeckProfiles:
             sources = json.loads(self._pactl("-f", "json", "list", "sources"))
             if not isinstance(cards, list) or not isinstance(sources, list) or len(cards) > 32 or len(sources) > 128:
                 raise ProfileUnknown("grafo de áudio desconhecido")
+            if not all(isinstance(row, dict) for row in (*cards, *sources)):
+                raise ProfileUnknown('grafo de áudio incompleto')
             matches = [c for c in cards if isinstance(c, dict) and
                        isinstance(c.get("name"), str) and c["name"].endswith(MIC_CARD_SUFFIX)]
             if len(matches) != 1:
@@ -271,6 +277,17 @@ class DeckProfiles:
                 raise ProfileUnknown("entrada padrão não comprovada")
             profiles = card.get("profiles")
             target = profiles.get(MIC_PROFILE) if isinstance(profiles, dict) else None
+            active = card.get('active_profile')
+            if (target is None and isinstance(profiles, dict) and active == 'off'
+                    and default == 'mic-biglinux' and self.supported()):
+                virtual = [source for source in sources if source.get('name') == default]
+                if len(virtual) != 1 or virtual[0].get('mute') is not False:
+                    raise ProfileUnknown('microfone virtual silenciado ou sem identidade comprovada')
+                owner = self.audio_recovery.probe(card, cards, sources, MIC_PROFILE)
+                return {'state': 'fault', 'code': 'audio-enumeration-incomplete',
+                        'detail': 'Placa interna desligada após enumeração incompleta; reenumerar WirePlumber',
+                        'identity': {'card': card['name'], 'active': active, 'target': MIC_PROFILE,
+                                     'default': default, 'recovery': 'wireplumber-reprobe', 'owner': owner}}
             if not isinstance(target, dict) or target.get("available") is not True or target.get("sources", 0) < 1:
                 raise ProfileUnknown("perfil de microfone interno indisponível")
             active = card.get("active_profile")
@@ -295,6 +312,8 @@ class DeckProfiles:
                     state, detail = "unknown", "perfil interno ativo, mas captura física não comprovada"
                 elif physical[0]["mute"]:
                     state, detail = "unknown", "microfone interno silenciado; escolha preservada para revisão manual"
+                elif default == 'mic-biglinux' and not self._capture_linked(physical[0], sources):
+                    state, detail = 'unknown', 'cadeia física → echo-cancel → mic-biglinux sem ligação comprovada'
                 else:
                     state, detail = "healthy", "perfil do microfone interno e fonte física habilitados; voz não testada"
             elif active == "pro-audio":
@@ -304,8 +323,26 @@ class DeckProfiles:
             else:
                 state, detail = "unknown", "outro perfil de áudio ativo; escolha preservada"
             return {"state": state, "detail": detail, "identity": identity}
-        except (ProfileUnknown, OSError, ValueError, TypeError, KeyError) as exc:
+        except (ProfileUnknown, ProbeError, AudioRecoveryError, configparser.Error, OSError, ValueError,
+                TypeError, KeyError, AttributeError, IndexError) as exc:
             return {"state": "unknown", "detail": str(exc)[:180], "identity": None}
+
+    def _capture_linked(self, physical, sources):
+        outputs = json.loads(self._pactl('-f', 'json', 'list', 'source-outputs'))
+        if not isinstance(outputs, list) or len(outputs) > 128:
+            return False
+        echo = [row for row in sources if row.get('name') == 'echo-cancel-source']
+        if len(echo) != 1:
+            return False
+        for name, source in (('echo-cancel-capture', physical), ('mic-biglinux-capture', echo[0])):
+            index = source.get('index')
+            matches = [row for row in outputs if isinstance(row, dict)
+                       and isinstance(row.get('properties'), dict)
+                       and row['properties'].get('node.name') == name]
+            if (type(index) is not int or index < 0 or len(matches) != 1
+                    or matches[0].get('source') != index or matches[0].get('mute') is not False):
+                return False
+        return True
 
     def observe(self):
         if not self.supported():
@@ -315,6 +352,9 @@ class DeckProfiles:
     def restore(self, key, before):
         """Caller must have recorded intent, checked ownership and reobserved."""
         if key == "microphone":
+            if before['identity'].get('recovery') == 'wireplumber-reprobe':
+                self.audio_recovery.restart(before['identity']['owner'])
+                return
             if before["identity"]["active"] not in ("pro-audio", "HiFi (Headset, Speaker)"):
                 raise ProfileUnknown("outro perfil de microfone preservado")
             self._pactl("set-card-profile", before["identity"]["card"], MIC_PROFILE)

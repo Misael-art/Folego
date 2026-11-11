@@ -1,5 +1,61 @@
 # Passagem para o próximo agente — atualizada em 11/11/2026
 
+## Revisão da autorrecuperação e instalação da prévia 0.2.0b11 — 11/11/2026
+
+- A varredura percorreu diagnóstico, diário, escopo de efeitos, políticas,
+  monitor, GUI/CLI, perfis de desktop e energia. A matriz de lacunas e correções
+  está em [ROADMAP-RESILIENCIA-HOST.md](ROADMAP-RESILIENCIA-HOST.md).
+  A enumeração incompleta do microfone recebe diagnóstico próprio e recuperação
+  WirePlumber pelo coordenador, com revalidação e preferência comprovada.
+  A automação exige referência saudável e opt-in separado. As configurações
+  migradas começam com esse novo opt-in desligado.
+- Pendências protegem os recursos efetivamente envolvidos. Delegação de entrada
+  cobre as entradas do protocolo. Troca de perfil de microfone e reenumeração
+  cobrem captura e saída de áudio. Escopo legado incompleto protege todas as
+  capacidades. O ID antigo `58176bdf86c94e759e43f661630c5ce8` segue incerto e
+  protege entrada. O diagnóstico pós-instalação confirmou áudio/microfone fora
+  desse escopo e disponíveis para recuperação independente.
+- Fonte virtual isolada perde a possibilidade de certificar sucesso. O resultado
+  verifica perfil, fonte física e ligações AEC/BigLinux. Duas amostras distintas
+  e recentes são exigidas para automação. Boot, domínio do relógio e lacunas
+  reiniciam a confirmação. Orçamento futuro é preservado. A GUI permite escolher
+  cada operação pendente, consultar recuperação de perfil e rearmar sua guarda
+  após estado saudável. Atualizar configuração preserva o ID do reparo anterior.
+- Energia grava orçamento horário e intenção própria da devolução do perfil,
+  com ID vinculado ao recibo anterior e trava entre instâncias. Interrupção sem
+  confirmação ou boot divergente preserva desconhecido. Escolhas manuais do
+  perfil seguem a reconciliação existente. Tentativas de versões anteriores eram
+  voláteis e sua contagem histórica não pode ser reconstruída.
+- `./dev check` final passou sequencialmente, Python 3.14.7 e HOME/XDG/TMPDIR
+  privados. Headless **1412 passed, 2 skipped** em `run-z1mja7qi` e Qt
+  **1846 passed, 2 skipped** em `run-ixlh8o8t`. `git diff --check` passou.
+  Foco anterior de 159 casos em `run-u4rpvs6f`. Esse foco e as tentativas
+  encerradas anteriores estão em `.scratch/dev-tests-reviewed/20261111-recovery-audit/`.
+  O primeiro Qt completo teve uma falha de geometria da mini durante animação
+  em `run-kq4s4e8u`. O ajuste inicial do teste tentou acessar a animação antes
+  de sua criação diferida e falhou em `run-0zoxjymt`. O teste final aguarda a
+  criação e dirige a animação ao último quadro, preservando as asserções.
+- `tools/verify_accessibility_wayland.py` exercitou uma janela própria de
+  800 × 565 no KDE/Wayland, com eventos Qt sintéticos, políticas e efeitos
+  descartáveis. Conferiu botão independente de microfone, IDs de entrada
+  preservados, opção persistente, seletor e rearme. Rolagem horizontal zerada.
+  Captura de cliente e recibo em `.scratch/accessibility-wayland-b11-painted-20261111/`.
+  A prova cobre apresentação e encaminhamento com backend simulado.
+- Após os gates, `./dev setup` confirmou a versão instalada. Cada unit foi
+  revalidada com apenas seu processo principal antes do carregamento. GUI
+  `app-folego@autostart.service` PID 303337 e monitor
+  `folego-accessibility.service` PID 303328 ficaram ativos, com `NRestarts=0`.
+  O opt-in foi habilitado pelo comando oficial neste host, conforme o pedido.
+  O diagnóstico posterior confirmou monitor recente, referência saudável,
+  perfil `HiFi (Mic, Speaker)`, cadeia física saudável e guarda de energia
+  habilitada em `balanced`, sem bloqueio. WirePlumber segue no PID 84948 da
+  recuperação inicial. Recibos privados e configuração anterior em
+  `.scratch/host-install-b11-20261111/`.
+- Aceites físicos de falha natural e recuperação automática, cold boot,
+  suspend/resume e uso prolongado permanecem pendentes. A voz foi confirmada
+  pelo usuário na recuperação inicial. O diagnóstico da causa exata da
+  enumeração incompleta e dos cortes físicos do host continua aberto.
+
 ## Microfone recuperado por nova enumeração às 06:02 — 11/11/2026
 
 - Após o boot `c43ce589`, a placa acp5x estava em `off`. O WirePlumber

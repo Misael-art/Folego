@@ -70,6 +70,12 @@ def never_change_the_host_power_profile(monkeypatch):
     monkeypatch.setattr(power_profile_guard, "_tool", lambda: None)
 
 
+@pytest.fixture(autouse=True)
+def never_restart_the_host_audio(monkeypatch):
+    from folego.adapters import audio_recovery
+    monkeypatch.setattr(audio_recovery, '_systemctl', lambda: None)
+
+
 @pytest.fixture
 def fake_home(tmp_path, monkeypatch):
     """Isolated HOME + XDG dirs; every path resolved through folego.paths lands here."""

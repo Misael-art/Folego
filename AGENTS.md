@@ -83,6 +83,19 @@ explícitas ativadas pelo usuário; fechamento pelo canal do app (bandeja, unit,
 janela) com intenção/ID, revalidação no ato, orçamento e disjuntor. Agentes,
 projetos e classes protegidas nunca são alvo. SIGKILL continua manual.
 
+### Recuperação de enumeração de áudio autorizada em 11/11
+
+O pedido de revisão da autorrecuperação autoriza reenumerar somente a unit de
+usuário `wireplumber.service` no defeito comprovado do Deck em que a placa
+interna está em `off` e o perfil interno persistido desapareceu da enumeração,
+com ALSA presente. Exige opt-in próprio, referência saudável para automação,
+unit de sistema sem drop-ins, executável/boot/PID/starttime/cgroup comprovados,
+ausência de outra placa/entrada física ativa, preferência externa compatível,
+intenção/ID, revalidação, orçamento e disjuntor. A solicitação manual pode usar
+a preferência persistida comprovada quando ainda faltar referência no Fôlego.
+Uma enumeração genérica desconhecida continua protegida. O usuário autorizou
+instalação no host, commit, PR e prévia deste incremento após os gates.
+
 ### Guarda de perfil de energia autorizado em 09/11
 
 Pedido do usuário após os desligamentos por queda de voltagem: o Fôlego pode

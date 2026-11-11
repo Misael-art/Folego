@@ -25,6 +25,8 @@ MUTATING = ("apply", "revert", "release", "restore", "expire", "recover",
             "startup-enable", "startup-disable", "startup-sync")
 MUTATING = (*MUTATING, "review-execute", "review-cancel", "review-reconcile", "jobs-retain")
 MUTATING = (*MUTATING, "accessibility-activate", "accessibility-save-profile")
+MUTATING = (*MUTATING, 'accessibility-audio-reprobe-enable', 'accessibility-audio-reprobe-disable')
+MUTATING = (*MUTATING, 'accessibility-profile-rearm')
 MUTATING = (*MUTATING, "performance-close", "performance-snooze", "performance-protect",
             "performance-resume", "performance-auto-off", "performance-auto-on",
             "performance-bridge-stop")

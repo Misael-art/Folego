@@ -5,9 +5,10 @@ entradas no KWin. No Steam Deck, a mesma política opcional pode restaurar dois
 perfis de desktop conhecidos: trackpad da Steam e microfone interno. Ele
 funciona sem PhaseZero, RetroFE, Docker ou Podman.
 Integrações presentes acrescentam evidência ou impedem uma intervenção
-concorrente. O reparo de perfil usa somente a API local da Steam ou `pactl`;
-não executa caminhos externos, não reinicia a sessão ou serviços e não grava
-áudio.
+concorrente. O reparo de perfil usa a API local da Steam ou `pactl`. A recuperação
+específica da enumeração incompleta de áudio pode solicitar nova enumeração
+pelo WirePlumber da sessão, com autorização própria e revalidação do responsável.
+O diagnóstico preserva a privacidade da captura de áudio.
 Uma solicitação **manual** pode chamar o backend registrado do responsável,
 validando schema, propriedade, permissões e hashes antes do efeito. Não há
 promessa de disponibilidade física universal.
@@ -21,7 +22,7 @@ promessa de disponibilidade física universal.
 | Outro desktop, X11 ou sessão sem compositor acessível | Inventário disponível; fonte indisponível fica desconhecida | Sem reparo nativo; não há fallback que reinicie o desktop |
 | Steam Deck Jupiter/Galileo observado por DMI | Toque ausente é indisponível; perfil de desktop da Steam e saídas mouse/teclado são consultados separadamente | Manual: reparador FTS registrado; automático: KWin e, quando conhecido, perfil `RetroFE Steam Deck Desktop` da Steam, sem trocar perfil durante jogo |
 | Teclado virtual KWin | Disponibilidade, modo e visibilidade | Manual: abre explicitamente e verifica visibilidade, restaurando modo por toque; não digita nem registra texto |
-| PulseAudio/PipeWire via `pactl` | Endpoint padrão, mute, ganho e perfil da placa interna acp5x | Manual: endpoint revisado; automático no Deck: perfil `HiFi (Mic, Speaker)` quando o atual é o `Pro Audio` conhecido ou headset indisponível, sem mexer em mute, volume ou fonte padrão |
+| PulseAudio/PipeWire via `pactl` | Endpoint padrão, mute, ganho, perfil acp5x e ligações da cadeia física/AEC/BigLinux | Endpoint revisado e recuperação do perfil interno conhecido. Com opt-in separado, reenumeração WirePlumber no defeito identificado descrito abaixo |
 | Controles | Enumeração no kernel e perfil da Steam quando API local está disponível | Manual: pede modo controle pela URI pública da Steam; o reparo automático de desktop não fecha a Steam |
 | Dispositivo removido ou identidade duplicada | Ausente/ambíguo; baseline anterior preservado | Sem inventar dispositivo ou resetar barramento |
 
@@ -67,6 +68,11 @@ diálogo do sistema e nunca passa pelo Fôlego. Exige as APIs `recover-touch` e
 O card **Teclado virtual** permanece disponível quando uma operação anterior
 está pendente: abrir o painel explicitamente é uma saída de emergência
 independente do reparo de hardware. Isso não encerra nem repete o ID incerto.
+Cada operação pendente protege as capacidades que pode afetar. Uma solicitação
+ao owner de entrada abrange todas as entradas do protocolo, preservando o reparo
+independente de áudio e microfone. Planos legados com escopo incompleto mantêm
+proteção de todas as capacidades. **Habilitar tudo** apresenta o resultado por
+capacidade e preserva cada operação pendente.
 Enquanto uma rotina está em voo, o próprio owner mantém o teclado durante a
 autenticação. O reparo FTS compartilha o orçamento durável de entrada: 60 s de
 intervalo e no máximo três intervenções por hora; disjuntor bloqueia repetição.
@@ -93,12 +99,54 @@ saudáveis, com a política habilitada. A referência da Steam inclui o hash do
 template Desktop instalado; a do microfone registra a placa, o perfil interno
 e se a entrada padrão é a física ou `mic-biglinux`. Duas observações da falha
 específica são necessárias antes de agir. Antes do efeito, o monitor revalida
-boot, KWin, identidade, perfil, jogo/lease e preferência de áudio do responsável.
+boot, identidade, perfil e responsável pertinente. Trackpads dependem de
+KWin, jogo e leases de entrada. Microfone depende da cadeia e da preferência
+de áudio, podendo ser diagnosticado e recuperado com KWin indisponível.
 Operações antigas de outra capacidade não escondem esses dois diagnósticos.
 O reparo tem limite de três tentativas por hora e intervalo de 120 s por perfil.
 Resultado incerto abre um disjuntor e nunca é repetido automaticamente.
 Mute, fonte externa, outro perfil da Steam, template alterado ou API ausente
 ficam para revisão; o Fôlego não interpreta isso como defeito recuperável.
+
+### Enumeração incompleta do microfone interno
+
+Em 11/11, o ALSA/UCM reconhecia a captura interna, enquanto o WirePlumber
+enumerava somente `off`, `pro-audio` e um perfil de fone indisponível. A
+preferência persistida continuava `HiFi (Mic, Speaker)`. O microfone virtual
+existia e estava sem mute, mas faltava a fonte física. Esse conjunto agora
+recebe o diagnóstico `audio-enumeration-incomplete` e um caminho de reparo.
+
+A opção **Reenumerar áudio automaticamente após falha conhecida** fica na aba
+acessibilidade. Novas instalações e configurações migradas começam com essa
+opção desligada. Para habilitar pelo terminal, com a supervisão já habilitada,
+
+```bash
+./dev run accessibility audio-reprobe-enable --confirmar --json
+./dev run accessibility audio-reprobe-disable --confirmar --json
+```
+
+O monitor exige duas amostras distintas e recentes do mesmo boot e referência
+saudável previamente aprendida. Lacunas de mais de 30 s reiniciam a confirmação.
+O reparo manual pelo cartão pode usar a preferência persistida comprovada.
+Reenumeração e troca de perfil compartilham três tentativas por hora e intervalo
+de 120 s. Relógio regressivo preserva o orçamento. Resultado incerto pausa
+novas solicitações até consulta e revisão.
+
+Quando houver mais de uma operação pendente, o seletor da aba permite consultar
+cada ID. A consulta confirma o estado atual e preserva o efeito já solicitado.
+Uma recuperação manual de microfone com resposta perdida pode ser conciliada
+depois de comprovado o encerramento do solicitante e a cadeia saudável estável.
+**Rearmar guarda de microfone/trackpads** aparece para o disjuntor correspondente
+e confere referência saudável e ausência de pendência nessa capacidade.
+
+Antes de solicitar `systemctl --user restart wireplumber.service`, o Fôlego
+confere o fragmento de sistema, ausência de drop-ins, executável root-owned,
+boot/PID/starttime e cgroup contendo apenas esse processo. Verifica a captura
+ALSA, a preferência salva, outras placas e fontes físicas e o owner opcional
+de áudio. Outro uso comprovado ou identidade insuficiente bloqueia o efeito.
+A reenumeração pode causar interrupção breve do áudio da sessão. O resultado
+exige retorno estável do perfil e da cadeia física → echo-cancel → mic-biglinux.
+Uma fonte virtual isolada permanece insuficiente para concluir sucesso.
 
 Se um reparo de perfil ficar incerto, consulte o ID e reconcilie **sem repetir**:
 

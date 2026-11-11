@@ -166,3 +166,66 @@ def test_pending_hardware_does_not_disable_keyboard_escape_or_lose_original_id(q
     view.completed({"operation_id":plan["operation_id"],"outcome":"parcial","reason":"teclado"})
     assert view._pending=="hardware-id" and view.cards["virtual-keyboard"].isEnabled()
     view.stop()
+
+
+def test_scoped_input_uncertainty_keeps_audio_repair_and_diagnosis_available(qapp):
+    jobs = Jobs()
+    view = AccessibilityTab(jobs=jobs)
+    value = sample()
+    value.update(pending_operations=['input-id'], pending_capabilities={'input-id': ['keyboard', 'touch']})
+    view.show_report(value)
+    assert not view.cards['keyboard'].isEnabled()
+    assert view.cards['microphone'].isEnabled() and view.cards['audio'].isEnabled()
+    assert view.enable_all_button.isEnabled()
+    view.activate('microphone')
+    assert jobs.calls[-1][0] == 'accessibility-activation-plan'
+    assert view._emergency_previous == 'input-id'
+    view.stop()
+
+
+def test_audio_reprobe_choice_is_persistent_and_cancellation_restores_display(qapp):
+    view = AccessibilityTab(jobs=Jobs(), confirm_fn=lambda *args: False)
+    value = sample()
+    value['policy']['audio_reprobe_enabled'] = True
+    view.show_report(value)
+    assert view.audio_reprobe_choice.isChecked()
+    view.audio_reprobe_choice.click()
+    assert view.audio_reprobe_choice.isChecked()
+    assert access_argv('accessibility-audio-reprobe-enable', '', True)[-4:] == [
+        'accessibility', 'audio-reprobe-enable', '--json', '--confirmar']
+    view.stop()
+
+
+def test_profile_breaker_and_each_pending_operation_have_an_actionable_path(qapp):
+    jobs = Jobs()
+    view = AccessibilityTab(jobs=jobs, confirm_fn=lambda *args: True)
+    value = sample()
+    value.update(pending_operations=['input-id', 'audio-id'],
+                 pending_capabilities={'input-id': ['touch'], 'audio-id': ['microphone']},
+                 profile_guard={'circuit': {'microphone': 'resultado incerto'}})
+    view.show_report(value)
+    assert view.pending_choice.isVisibleTo(view)
+    assert view.profile_rearm_buttons['microphone'].isVisibleTo(view)
+    assert not view.profile_rearm_buttons['microphone'].isEnabled()
+    view.pending_choice.setCurrentIndex(1)
+    view.reconcile()
+    assert jobs.calls[-1] == ('accessibility-reconcile', 'audio-id', False)
+    view.completed({'operation_id': 'audio-id', 'outcome': 'sucesso'})
+    assert view.profile_rearm_buttons['microphone'].isEnabled()
+    view._pending = 'input-id'
+    view.rearm_profile('microphone')
+    assert jobs.calls[-1] == ('accessibility-profile-rearm', 'microphone', True)
+    view.stop()
+
+
+def test_settings_result_preserves_an_unrelated_pending_operation(qapp):
+    jobs = Jobs({'outcome': 'sucesso', 'audio_reprobe_enabled': True})
+    view = AccessibilityTab(jobs=jobs, confirm_fn=lambda *args: True)
+    value = sample()
+    value.update(pending_operations=['input-id'], pending_capabilities={'input-id': ['touch']})
+    view.show_report(value)
+    view.configure('audio-reprobe-enable')
+    assert view._pending == 'input-id'
+    assert 'sucesso' in view.status.text()
+    assert view.cards['microphone'].isEnabled()
+    view.stop()

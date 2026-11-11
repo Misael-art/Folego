@@ -383,6 +383,21 @@ def test_cli_readonly_and_confirmed_policy_flow_use_same_supervisor(supervisor, 
     assert not supervisor.native.calls
 
 
+def test_cli_audio_reprobe_requires_confirmation_and_persists_its_own_choice(supervisor, monkeypatch, capsys):
+    from folego import cli
+    monkeypatch.setattr(action, 'Supervisor', lambda: supervisor)
+    assert cli.main(['accessibility', 'audio-reprobe-enable', '--json']) == 2
+    capsys.readouterr()
+    assert not supervisor.store.path.exists()
+    assert cli.main(['accessibility', 'audio-reprobe-enable', '--confirmar', '--json']) == 0
+    assert json.loads(capsys.readouterr().out)['audio_reprobe_enabled'] is True
+    policy = supervisor.store.read()
+    assert policy['audio_reprobe_enabled'] and not policy['enabled']
+    assert not supervisor.native.calls
+    assert cli.main(['accessibility', 'audio-reprobe-disable', '--confirmar', '--json']) == 0
+    assert json.loads(capsys.readouterr().out)['audio_reprobe_enabled'] is False
+
+
 def test_cli_repair_and_operation_query_share_stable_id(supervisor, monkeypatch, capsys):
     from folego import cli
     monkeypatch.setattr(action, "Supervisor", lambda: supervisor)

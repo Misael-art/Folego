@@ -14,11 +14,14 @@ import shutil
 import subprocess
 import time
 import uuid
+import math
+from functools import wraps
 from pathlib import Path
 
 from .. import paths
 from ..safely.audit import AuditLog
 from ..safely.persist import read_json, write_json_atomic
+from ..orchestration.coordinator import Coordinator, CoordinatorBusy
 
 RANK = {"performance": 0, "balanced": 1, "power-saver": 2}
 TARGETS = {"attention": "balanced", "critical": "power-saver"}
@@ -57,17 +60,28 @@ def _boot_id():
         return ""
 
 
+def _serialized(method):
+    @wraps(method)
+    def call(self, *args, **kwargs):
+        try:
+            with self.coordinator.lock(wait=.2):
+                return method(self, *args, **kwargs)
+        except CoordinatorBusy as exc:
+            raise PowerProfileError('Outra operação de energia está em andamento') from exc
+    return call
+
+
 class PowerProfileGuard:
     """Backend for ``DesktopController``; all calls run off the GUI thread."""
 
-    def __init__(self, *, path=None, command=_run, tool=None, audit=None, clock=time.monotonic):
+    def __init__(self, *, path=None, command=_run, tool=None, audit=None, clock=time.time):
         self.path = Path(path) if path else state_path()
         self.command = command
         self.tool = tool if tool is not None else _tool()
         self.audit = audit
         self.clock = clock
         self._streak = 0
-        self._requests = []
+        self.coordinator = Coordinator(lock_path=self.path.with_suffix('.lock'))
 
     def close(self):
         pass
@@ -92,9 +106,25 @@ class PowerProfileGuard:
     # --- state ------------------------------------------------------------
     def _load(self):
         value, problems = read_json(self.path)
-        if problems or (value is not None and (not isinstance(value, dict) or value.get("schema") != 1)):
+        if problems or (value is not None and (not isinstance(value, dict)
+                or type(value.get('schema')) is not int or value['schema'] != 1)):
             raise PowerProfileError("Estado do guarda de perfil ilegível; revisão manual necessária")
-        return value or {"schema": 1, "enabled": True, "receipt": None}
+        state = value if value is not None else {"schema": 1, "enabled": True, "receipt": None}
+        state.setdefault('requests', [])  # compatible with receipts from earlier previews
+        receipt = state.get('receipt')
+        if (type(state.get('enabled')) is not bool or 'receipt' not in state or not isinstance(state['requests'], list)
+                or len(state['requests']) > BUDGET
+                or any(type(at) not in (int, float) or not math.isfinite(at) or at < 0
+                       for at in state['requests'])
+                or (receipt is not None and (not isinstance(receipt, dict)
+                    or receipt.get('state') not in ('intended', 'applied', 'unknown')
+                    or not isinstance(receipt.get('original'), str) or receipt['original'] not in RANK
+                    or not isinstance(receipt.get('target'), str) or receipt['target'] not in RANK
+                    or not isinstance(receipt.get('id'), str)
+                    or not isinstance(receipt.get('boot_id'), str)
+                    or type(receipt.get('restore', False)) is not bool))):
+            raise PowerProfileError('Estado do guarda de perfil incompleto; revisão manual necessária')
+        return state
 
     def _save(self, state):
         write_json_atomic(self.path, state, keep_backup=False)
@@ -113,11 +143,16 @@ class PowerProfileGuard:
         receipt = state.get("receipt")
         if not receipt:
             return state
-        if receipt.get("state") == "intended":
-            if current == receipt["target"]:
+        if receipt.get('boot_id') != _boot_id() and receipt.get('state') != 'unknown':
+            receipt['state'] = 'unknown'
+            self._save(state)
+        elif receipt.get("state") == "intended":
+            if current == receipt['target'] and receipt.get('restore'):
+                state['receipt'] = None
+            elif current == receipt["target"]:
                 receipt["state"] = "applied"
-            else:  # the request never took effect, or somebody chose another profile
-                state["receipt"] = None
+            else:
+                receipt['state'] = 'unknown'
             self._save(state)
         elif receipt.get("state") == "applied" and current != receipt["target"]:
             state["receipt"] = None  # the user or another tool owns the profile now
@@ -144,6 +179,15 @@ class PowerProfileGuard:
 
     # --- actions ----------------------------------------------------------
     def status(self, *, reconcile=True):
+        if reconcile:
+            try:
+                with self.coordinator.lock(wait=.2):
+                    return self._status(reconcile=True)
+            except CoordinatorBusy as exc:
+                raise PowerProfileError('Outra operação de energia está em andamento') from exc
+        return self._status(reconcile=False)
+
+    def _status(self, *, reconcile):
         state = self._load()
         try:
             current = self._current()
@@ -153,6 +197,7 @@ class PowerProfileGuard:
             state = self._reconcile(state, current)
         return self._payload(state, current, self._describe(state, current))
 
+    @_serialized
     def set_enabled(self, enabled):
         current = self._current()
         state = self._load()
@@ -165,6 +210,7 @@ class PowerProfileGuard:
         self._streak = 0
         return self._payload(state, current, self._describe(state, current))
 
+    @_serialized
     def observe(self, level):
         """``level`` is 'attention', 'critical', 'external' or None (no opinion)."""
         if level not in TARGETS:
@@ -179,31 +225,39 @@ class PowerProfileGuard:
         current = self._current()
         state = self._reconcile(state, current)
         receipt = state.get("receipt")
+        if receipt and receipt['state'] == 'unknown':
+            return self._payload(state, current, self._describe(state, current))
         if level == "external":
             if not receipt:
                 return {"guard": True, "idle": True}
-            return self._switch(state, dict(receipt, target=receipt["original"],
-                                            original=receipt["target"]), restore=True)
+            restoration = dict(receipt, id=uuid.uuid4().hex, parent_id=receipt['id'],
+                               target=receipt['original'], original=receipt['target'], restore=True)
+            return self._switch(state, restoration, current=current)
         self._streak += 1
         target = TARGETS[level]
         if self._streak < SUSTAIN or RANK[current] >= RANK[target]:
             return {"guard": True, "idle": True}
         if target not in self._available():
             return {"guard": True, "idle": True}
-        now = self.clock()
-        self._requests = [at for at in self._requests if now - at < BUDGET_WINDOW_S]
-        if len(self._requests) >= BUDGET:
-            return self._payload(state, current, "Limite de trocas automáticas por hora atingido.")
-        self._requests.append(now)
         original = receipt["original"] if receipt else current
         return self._switch(state, {"id": uuid.uuid4().hex, "boot_id": _boot_id(),
-                                    "original": original, "target": target, "level": level})
+                                    "original": original, "target": target, "level": level}, current=current)
 
-    def _switch(self, state, receipt, *, restore=False):
+    def _switch(self, state, receipt, *, current):
         target = receipt["target"]
-        if not restore:
-            state["receipt"] = dict(receipt, state="intended")
-            self._save(state)  # intention is durable before the effect
+        if not receipt['boot_id']:
+            raise PowerProfileError('Boot desconhecido; nenhuma troca de perfil autorizada')
+        now = self.clock()
+        if any(at > now for at in state['requests']):
+            return self._payload(state, current, 'Relógio regressou; orçamento de energia preservado.')
+        recent = [at for at in state['requests'] if now - at < BUDGET_WINDOW_S]
+        if len(recent) >= BUDGET:
+            return self._payload(state, current, 'Limite de trocas automáticas por hora atingido.')
+        if self._current() != current:
+            return self._payload(state, current, 'Perfil mudou antes da solicitação; aguarde nova leitura.')
+        state['requests'] = [*recent, now]
+        state["receipt"] = dict(receipt, state="intended")
+        self._save(state)  # reserve the budget and intention before either effect
         error = None
         try:
             self.command([self.tool, "set", target])
@@ -216,6 +270,7 @@ class PowerProfileGuard:
             self._save(state)
             self._log("unknown", receipt, error or "perfil não confirmado")
             return self._payload(state, None, self._describe(state, target), failed=True)
+        restore = receipt.get('restore', False)
         if restore:
             state["receipt"] = None
         else:

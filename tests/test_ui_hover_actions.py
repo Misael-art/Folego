@@ -57,7 +57,11 @@ def test_mini_reveals_a_short_horizontal_drawer_at_the_right(qapp, monkeypatch):
 
     view, _ = make(qapp)
     view.show_compact(desired_mode='mini')
-    QTest.qWait(350)
+    # Geometry assertions require the final frame, even when timer delivery is delayed.
+    wait(qapp, lambda: hasattr(view, 'dock_animation'))
+    view.dock_animation.setCurrentTime(view.dock_animation.duration())
+    qapp.processEvents()
+    wait(qapp, lambda: not view.mini_fit_timer.isActive())
     closed = view.size()
     bottom = view._screen_area().bottom()
     view.move(20, bottom + 1 - closed.height())

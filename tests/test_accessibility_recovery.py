@@ -130,16 +130,39 @@ def test_active_game_is_never_stopped_and_cannot_be_made_green(supervisor):
     assert recovery.backend.effects == []
 
 
-def test_lost_delegate_response_blocks_next_operation_and_reconciliation_does_not_reapply(supervisor):
+def test_lost_delegate_response_protects_inputs_and_keeps_audio_independent(supervisor):
     recovery = controller(supervisor)
     recovery.backend.owner = {"name": "PhaseZero", "files": {}}
     recovery.backend.loss = True
     plan = recovery.prepare("keyboard")
     assert recovery.execute(plan, confirmed=True).outcome == Outcome.UNKNOWN
     assert recovery.reconcile(plan.operation_id).outcome == Outcome.UNKNOWN
-    assert recovery.execute(recovery.prepare("audio"), confirmed=True).outcome == Outcome.REFUSED
-    assert recovery.backend.effects == ["delegate"]
+    assert recovery.execute(recovery.prepare("touch"), confirmed=True).outcome == Outcome.PARTIAL
+    assert recovery.execute(recovery.prepare("audio"), confirmed=True).outcome == Outcome.OK
+    assert recovery.backend.effects == ["delegate", "audio"]
     assert plan.operation_id in supervisor.inspect()["pending_operations"]
+
+
+def test_virtual_microphone_cannot_certify_a_missing_physical_path(supervisor):
+    recovery = controller(supervisor)
+    supervisor.profile_guard = SimpleNamespace(
+        annotate=lambda report: None, manual_parameters=lambda report: None,
+        profiles=SimpleNamespace(microphone=lambda: {'state': 'unknown', 'detail': 'captura física ausente'}))
+    result = recovery.execute(recovery.prepare('microphone'), confirmed=True)
+    assert result.outcome == Outcome.PARTIAL
+    assert result.effects['capabilities'][0]['ready'] is False
+    assert 'captura física ausente' in result.reason
+
+
+def test_saving_all_preferences_preserves_every_pending_capability(supervisor):
+    recovery = controller(supervisor)
+    recovery.backend.owner = {'name': 'PhaseZero', 'files': {}}
+    recovery.backend.loss = True
+    assert recovery.execute(recovery.prepare('touch'), confirmed=True).outcome == Outcome.UNKNOWN
+    supervisor.native.report['devices'][0]['enabled'] = True
+    result = recovery.execute(recovery.prepare('all', save=True), confirmed=True)
+    assert result.outcome == Outcome.REFUSED
+    assert recovery.backend.effects == ['delegate']
 
 
 def test_emergency_keyboard_remains_possible_without_repeating_pending_hardware(supervisor):

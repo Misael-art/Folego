@@ -14,7 +14,7 @@ import uuid
 
 from .. import paths
 from ..adapters.accessibility import NativeInput, ProbeError, bounded_read, DEVICE_ROOT, DEVICE_IFACE, PROPERTIES
-from ..core.accessibility import SCHEMA, STALE_SECONDS, ACTION, sample_age
+from ..core.accessibility import SCHEMA, STALE_SECONDS, ACTION, LABELS, sample_age
 from ..core.sessions import read_boot_id
 from ..orchestration import Coordinator
 from ..orchestration.models import ActionPlan, ActionResult, ResourceIdentity, Outcome
@@ -124,6 +124,9 @@ class Store:
         value.setdefault("profile_baseline", {})
         value.setdefault("profile_attempts", [])
         value.setdefault("profile_circuit", {})
+        value.setdefault('audio_reprobe_enabled', False)
+        if type(value['audio_reprobe_enabled']) is not bool:
+            raise ValueError('política de reenumeração de áudio desconhecida')
         if (not isinstance(value["profile_baseline"], dict)
                 or not isinstance(value["profile_attempts"], list) or len(value["profile_attempts"]) > 64
                 or not isinstance(value["profile_circuit"], dict)
@@ -385,17 +388,21 @@ def plans(report, *, automatic=False, baseline=None):
     return result
 
 
-def unresolved(journal):
+def unresolved(journal, *, capabilities=None):
     records, errors = journal.load()
     if errors:
         raise ValueError("diário inconsistente; nenhuma ação autorizada")
     pending = {}
+    scopes = {}
+    from ..core.accessibility import recovery_scope, LABELS
     for row in records:
         if row.kind == "intent" and row.plan.action.startswith("accessibility."):
             pending[row.operation_id] = True
+            scopes[row.operation_id] = recovery_scope(row.plan)
         elif row.kind == "result" and row.result.action.startswith("accessibility."):
             pending[row.operation_id] = row.result.outcome == Outcome.UNKNOWN
-    return [key for key, value in pending.items() if value]
+    return [key for key, value in pending.items() if value and
+            (capabilities is None or set(capabilities).intersection(scopes.get(key, set(LABELS))))]
 
 
 class Supervisor:
@@ -430,7 +437,7 @@ class Supervisor:
                     self.coordinator.journal.path.stat()
                 except FileNotFoundError:
                     raise ValueError("diário ausente após tentativas registradas; efeitos desconhecidos")
-            report["policy"] = {key: policy[key] for key in ("enabled", "circuit")}
+            report["policy"] = {key: policy[key] for key in ("enabled", "circuit", 'audio_reprobe_enabled')}
             report["baseline_count"] = len(policy["baseline"])
             if self.profile_guard is not None:
                 report["profile_guard"] = {"enabled": policy["enabled"],
@@ -440,7 +447,9 @@ class Supervisor:
                     key = card.get("key")
                     if key not in report.get("desktop_profiles", {}):
                         continue
-                    if card["state"] == "observed":
+                    if policy['profile_circuit'].get(key):
+                        suffix = 'reparo suspenso: ' + policy['profile_circuit'][key]
+                    elif card["state"] == "observed":
                         suffix = ("guarda automática ativa" if key in policy["profile_baseline"] else
                                   "aprendendo referência saudável") if policy["enabled"] else "guarda automática desligada"
                     elif card["state"] != "degraded":
@@ -449,20 +458,26 @@ class Supervisor:
                         suffix = "recuperação automática desabilitada"
                     elif key not in policy["profile_baseline"]:
                         suffix = "sem referência saudável; correção automática bloqueada"
-                    elif policy["profile_circuit"].get(key):
-                        suffix = "reparo suspenso: " + policy["profile_circuit"][key]
                     else:
                         identity = report["desktop_profiles"][key].get("identity")
                         if identity is None:
                             suffix = "identidade de perfil não comprovada"
+                        elif identity.get('recovery') and not policy['audio_reprobe_enabled']:
+                            suffix = 'reenumeração automática desligada; reparo manual disponível no cartão'
                         else:
                             reason = self.profile_guard._blocker(key, report["desktop_profiles"][key], report)
-                            suffix = reason or "recuperação automática após nova confirmação"
+                            suffix = reason or self.profile_guard.budget_blocker(policy, key) or "recuperação automática após nova confirmação"
                     card["detail"] += "; " + suffix
             try:
                 self._pending_reader.ids()  # A partial/corrupt view never authorizes effects.
                 report["pending_operations"] = [key for key, (action, _) in self._pending_reader.pending.items()
                                                  if action.startswith("accessibility.")]
+                report['pending_capabilities'] = {
+                    key: self._pending_reader.pending_scopes.get(key, list(LABELS))
+                    for key in report['pending_operations']}
+                for card in report['cards']:
+                    if any(card['key'] in scope for scope in report['pending_capabilities'].values()):
+                        card['detail'] += '; operação anterior desta capacidade incerta; consultar o código'
                 if report["pending_operations"]:
                     report["blockers"].append("operação desconhecida; verificar antes de repetir")
                 report["plans"] = [plan.to_dict() for plan in plans(report)]
@@ -501,10 +516,12 @@ class Supervisor:
             report["alerts"].append("Entrada aguardando responsável há mais de cinco minutos; revisar motivo sem forçar liberação.")
         return report
 
-    def configure(self, *, enabled=None, capture=False, rearm=False):
+    def configure(self, *, enabled=None, capture=False, rearm=False, audio_reprobe=None):
         report = self.native.collect() if capture or rearm else None
         with self.coordinator.lock(wait=.2):
             policy = self.store.read()
+            if audio_reprobe is not None:
+                policy['audio_reprobe_enabled'] = bool(audio_reprobe)
             if capture or rearm:
                 if not fresh(report) or report["blockers"] or lease_blockers(self.store.root):
                     raise ValueError("leitura incompleta/antiga; baseline preservado")
@@ -528,7 +545,7 @@ class Supervisor:
                 policy["enabled"] = bool(enabled)
             self.store.save(policy)
             return {"ok": True, "enabled": policy["enabled"], "baseline_count": len(policy["baseline"]),
-                    "circuit": policy["circuit"]}
+                    "circuit": policy["circuit"], 'audio_reprobe_enabled': policy['audio_reprobe_enabled']}
 
     def repair(self, plan, *, confirm=False):
         def verdict(outcome, reason, **effects):
@@ -584,6 +601,10 @@ class Supervisor:
 
     def reconcile(self, operation_id):
         state = self.coordinator.journal.state_of(operation_id)
+        if state and state.intent and state.intent.action == 'accessibility.restore-desktop-profile':
+            if self.profile_guard is None:
+                raise ValueError('supervisão de perfis indisponível')
+            return self.profile_guard.reconcile(operation_id, confirmed=True)
         if state and state.intent and state.intent.action in ("accessibility.activate", "accessibility.save-profile"):
             from .accessibility_recovery import Recovery
             return Recovery(self).reconcile(operation_id)
