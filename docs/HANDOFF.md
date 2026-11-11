@@ -1,5 +1,47 @@
 # Passagem para o próximo agente — atualizada em 11/11/2026
 
+## Prévia 0.2.0b12 publicada — 11/11/2026
+
+- [Release pública v0.2.0b12](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b12),
+  publicada às **09:19:30 -03**, ID `441651225`, como prévia. Pedido do operador
+  atendido sem merge do PR #9. Fonte imutável
+  `0c46524d78157744ad71bd45212a5bcccb5d3cc2`; tag anotada
+  `ddd25c81cfe0135f05fd8a16e8091cb1f4d8f9f9`. Tag e commit foram conferidos no
+  remoto; o registro central vincula exclusivamente esta tag a este commit.
+- Os seis jobs de produto do commit passaram. Os três jobs da tag passaram no
+  run `43018853891`. A candidata local também passou em `./dev check`, com
+  **1421 passed, 2 skipped** headless e **1856 passed, 2 skipped** Qt, conforme
+  os recibos abaixo. A evidência Wayland pertence ao incremento anterior, cujo
+  código de interface corresponde aos módulos empacotados.
+- Pacotes construídos com uv gerenciado, cache local, backend fixado e Python
+  3.14.7, por `uv build --offline --python .dev/venv-headless/bin/python` com
+  saída no staging da release. Fonte completa por `git archive` do commit
+  acima, com wrapper e lockfile. A verificação comparou os **1016 arquivos
+  rastreados** da fonte completa e os **170 módulos** de wheel/sdist aos blobs
+  do Git; inventários extras ficaram limitados aos metadados esperados.
+- O wheel foi instalado sem dependências em `.dev/venv-release-b12`, com HOME/XDG
+  e temporários privados, sem Qt e sem importar o checkout. Confirmou versão,
+  classificação de reboot, fsync de cada amostra e orientação CLI sem efeito.
+  Ambientes editáveis GUI/headless também informam `0.2.0b12`. A GUI residente
+  segue ativa no PID 173119 e o monitor no PID 4150, ambos com `NRestarts=0`;
+  este lote de release não reiniciou esses processos.
+- Os quatro assets foram conferidos no rascunho por metadados e, após publicar,
+  baixados pelos links públicos sem autenticação. Tamanhos e SHA-256 coincidem:
+
+  | Asset | Bytes | SHA-256 |
+  | --- | ---: | --- |
+  | `Folego-0.2.0b12-source.tar.gz` | 22255579 | `2171fccb81050c68e24676791bab9b5c9062a2c70853a89d310bad011b0844ea` |
+  | `folego-0.2.0b12-py3-none-any.whl` | 560334 | `c981deb9388bae465db3a20f7fe1735684ea9a5d5479776fc384cf62296c8a00` |
+  | `folego-0.2.0b12.tar.gz` | 785053 | `18e90deb6a5414dfff21fe2f3e42ab508d0c8d0e7d749e9dc0c5fa6c5bd1801f` |
+  | `SHA256SUMS` | 284 | `b878a5d2b98152e6dce31fc920f46036d2c31fd33b0f18359ec3c6670c1c278b` |
+
+- Notas, verificadores, metadados, logs de QA referenciados e cópias públicas
+  conferidas em `.scratch/release-b12-20261111/`. A consulta REST por tag enquanto
+  a release ainda era rascunho retornou 404; foi preservada e a leitura autenticada
+  pela lista de releases confirmou o rascunho. Publicação e downloads passaram.
+- A entrega melhora durabilidade e diagnóstico; a causa dos cortes, estabilidade
+  prolongada e aceites físicos após nova falha natural permanecem abertos.
+
 ## Candidata da prévia 0.2.0b12 — 11/11/2026
 
 - Pedido explícito do operador: fazer release do incremento de histórico e
