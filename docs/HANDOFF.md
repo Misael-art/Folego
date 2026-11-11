@@ -1,5 +1,27 @@
 # Passagem para o próximo agente — atualizada em 11/11/2026
 
+## Reinício solicitado pelo KDE às 05:41 — 11/11/2026
+
+- O boot `f226e77c-d92b-441a-b43c-da02cacd2942` registrou às 05:41:40 -03
+  `reboot requested from client PID 103190 ('plasma-shutdown')`, via logind,
+  após iniciar a unit D-Bus `org.kde.Shutdown`. Os serviços encerraram e os
+  volumes foram desmontados até 05:41:43. O novo boot,
+  `c43ce589-1ca6-4f01-b1d5-5f676635a9bb`, começou a registrar às 05:42:08.
+  O solicitante identificado foi o componente do KDE. A origem do acionamento
+  dentro da sessão permanece indeterminada.
+- Última amostra Fôlego às 05:41:27: bateria 89%, descarregando a 7,764 V e
+  1,111 A, ACPI 48 °C, RAM disponível 8.140.256 KiB, swap usada 16 KiB e
+  PSI de memória/I/O em 10 s zerado, com fontes válidas. O journal do boot
+  consultado não registrou panic, OOM ou falha térmica antecedendo a solicitação.
+- O boot atual usa o Desktop padrão, com `graphical.target` ativo e Vibe Code
+  inativo. O gerenciador BigLinux iniciou automaticamente às 05:42:11,
+  manteve perfil `balanced` e AMD P-State `active`; a unit residente do Fôlego
+  ficou ativa, PID 3900, sem reinício por falha. Isso confirma a energia no
+  Desktop padrão. A dependência específica do Vibe Code aguarda um boot desse modo.
+- Investigação somente leitura, com `journalctl`, `last`, histórico do Fôlego,
+  `powerprofilesctl` e consultas das units. A documentação foi revisada com
+  `git diff --check`. O SHA anterior `13eb15f` tinha seis checks aprovados.
+
 ## Energia disponível no Vibe Code e perfil equilibrado — 11/11/2026
 
 - O target `phasezero-vibe-code.target` iniciava `multi-user.target` e SDDM.
