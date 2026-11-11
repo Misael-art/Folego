@@ -1,5 +1,44 @@
 # Passagem para o próximo agente — atualizada em 10/11/2026
 
+## Monitor de alimentação e proteção indisponível — 10/11/2026
+
+- A coleta existente alimenta o estado permanente na Central e em **Disco ›
+  Saúde do host › Alimentação e proteção**, com energia externa, percentual,
+  tensão, corrente e proteção de perfil. A bandeja avisa uma desconexão observada,
+  descarga na presença de energia externa em duas leituras consecutivas e falha
+  ou pausa da proteção. Cada tipo tem intervalo mínimo de 5 min. Dados antigos,
+  lacunas de coleta e fontes desconhecidas interrompem a comprovação de transições.
+- O worker reconsulta o guarda a cada 60 s. Falha do daemon preserva o opt-out
+  persistido e aparece fora de Opções. A consulta periódica preserva escolhas
+  manuais na fila; restaurar o perfil exige alimentação externa confirmada.
+  `disk health [--json]` apresenta alimentação e proteção por consulta sem
+  reconciliar/escrever recibos; `disk guide power` oferece orientação manual.
+- Código `2887457f30f498a330ac7b67b4b5e78d2e2b8eb4` enviado e confirmado
+  na branch do [PR #9](https://github.com/Misael-art/Folego/pull/9). Os seis checks
+  do código passaram no GitHub. Gate local com Python 3.14.7 e HOME/XDG/TMPDIR
+  privados: foco de 47 testes em `run-gpfiu72c`; headless completo **1383 passed,
+  2 skipped** em `run-tn0up2fw`; Qt completo **1813 passed, 2 skipped** em
+  `.scratch/dev-tests/run-as8odgya`. `git diff --check` passou.
+- A primeira execução Qt, `run-0_4x0js8`, terminou com 1812 aprovados, 2 skips e
+  uma falha em `test_ui_history::test_slow_history_never_runs_on_gui_thread_or_builds_a_queue`
+  (1 disparo do timer em vez dos 3 exigidos em 150 ms). O reteste focado passou
+  6 casos em `run-wbha3m32`, e a nova suíte Qt passou integralmente com o mesmo
+  código e as mesmas asserções. Os dois primeiros runs citados e a tentativa Qt
+  falha foram preservados em `.scratch/dev-tests-reviewed/20261110-power-monitor/`.
+- `tools/verify_host_guard_wayland.py` abriu uma janela própria de 800 × 593,
+  sem rolagem horizontal, com dados sintéticos e backend de energia descartável.
+  O ensaio conferiu dois payloads de notificação, com captura de cliente e
+  recibo em `.scratch/power-monitor-wayland-20261110.mIWOrM/`.
+  Essa prova cobre layout e encaminhamento; leitura física dos pop-ups e corte
+  real de energia continuam pendentes.
+- CLI real confirmou energia externa conectada, carga a 63%, 8,43 V, 2,15 A e
+  proteção habilitada porém indisponível pelo daemon. Após validar que a unit
+  continha apenas seu processo principal, o serviço existente foi recarregado
+  às 23:16:43 -03. Ficou `active/running`, PID 154344, `ExecMainStatus=0`,
+  `NRestarts=0`, com novas amostras. A causa física dos resets continua aberta.
+  Próximo passo é observar a alimentação no uso normal e revisar o serviço de
+  perfis pelo seu responsável, preservando os registros dos próximos episódios.
+
 ## Resets e limites por modelo nas contas — 10/11/2026
 
 - Relatório em [DIAGNOSTICO-RESETS-CONTAS-2026-11-10.md](DIAGNOSTICO-RESETS-CONTAS-2026-11-10.md).
