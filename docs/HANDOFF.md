@@ -1,5 +1,29 @@
 # Passagem para o próximo agente — atualizada em 11/11/2026
 
+## Microfone recuperado por nova enumeração às 06:02 — 11/11/2026
+
+- Após o boot `c43ce589`, a placa acp5x estava em `off`. O WirePlumber
+  apresentava somente `off`, `pro-audio` e `HiFi (Headphones, Mic)` indisponível.
+  O ALSA/UCM reconhecia Speaker e Mic, e a preferência persistida era
+  `HiFi (Mic, Speaker)`, ausente da enumeração PipeWire. A fonte virtual
+  `mic-biglinux` existia, mas o AEC registrava ausência de fonte física.
+  `Int Mic` e `DMIC Enable` estavam desligados.
+- Recuperação manual solicitada pelo usuário. Após cópias do estado e intenção
+  em `.scratch/microphone-recovery-20261111/`, foi revalidada a unit
+  `wireplumber.service` com seu único processo, PID 2117, e executado
+  `systemctl --user restart wireplumber.service` às 06:02:53 -03.
+  O novo gerenciador, PID 84948, enumerou todos os perfis e restaurou a
+  preferência `HiFi (Mic, Speaker)`. PipeWire, filtro e Pulse mantiveram os
+  PIDs 2111, 2190 e 3720, iniciados às 05:42.
+- Verificação confirmou fonte física HiFi, controles `Int Mic` e `DMIC Enable`
+  ligados, cadeia físico → echo-cancel → mic-biglinux, fonte padrão `mic-biglinux`
+  a 94% e ambas as entradas com `mute=false`. O usuário confirmou voz funcionando.
+  A preferência correta permanece no estado do WirePlumber. Consultas nativas,
+  journal, grafo e teste físico validaram a recuperação, com diff documental revisado.
+- O journal mostra WirePlumber do usuário e do greeter enumerando ALSA durante
+  o login. A causa exata da enumeração incompleta permanece indeterminada.
+  O perfil correto indisponível explica a guarda do Fôlego permanecer desconhecida.
+
 ## Reinício solicitado pelo KDE às 05:41 — 11/11/2026
 
 - O boot `f226e77c-d92b-441a-b43c-da02cacd2942` registrou às 05:41:40 -03
