@@ -275,6 +275,10 @@ class DashboardTab(QWidget):
         self.host_status.setTextFormat(Qt.TextFormat.PlainText)
         self.host_status.setWordWrap(True)
         self.host_status.setAccessibleName("Saúde do host e integridade dos volumes")
+        self.power_status = QLabel('Alimentação aguardando leitura.')
+        self.power_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.power_status.setWordWrap(True)
+        self.power_status.setAccessibleName('Alimentação e proteção de energia')
         self.host_button = QPushButton("Ver saúde")
         self.host_button.setAccessibleName("Abrir os detalhes de saúde do host na aba Disco")
         self.host_button.clicked.connect(lambda: self._jump("disco"))
@@ -359,6 +363,7 @@ class DashboardTab(QWidget):
         host_row.addWidget(self.host_status, 1)
         host_row.addWidget(self.host_button)
         activity_layout.addLayout(host_row)
+        activity_layout.addWidget(self.power_status)
         input_row = QHBoxLayout()
         input_row.addWidget(self.input_status, 1)
         input_row.addWidget(self.input_button)
@@ -631,8 +636,11 @@ class DashboardTab(QWidget):
             *(f'{label.accessibleName()}: {label.text()}' for label in self.summary_values.values()),
             self.hero_alert.text(), self.details.text(), self.resources.text(),
             self.last_operation.text(), self.automation_status.text(),
-            self.host_status.text(), self.input_status.text(),
+            self.host_status.text(), self.power_status.text(), self.input_status.text(),
             self.status.text()) if text)
+
+    def show_power_status(self, report: dict):
+        self.power_status.setText(report['message'])
 
     def show_host_report(self, report: dict):
         alerts = 0

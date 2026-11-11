@@ -39,7 +39,8 @@ from .screen_energy import ScreenEnergy
 from ..actions.power_profile_guard import PowerProfileGuard
 from .theme import TOKENS, _background_color, set_control_icon, prepare_surface
 from ..core import health
-from ..core.battery_alerts import BatteryAlertTracker, VoltageSagNotice, voltage_level
+from ..core.battery_alerts import (BatteryAlertTracker, ExternalPowerTracker,
+                                   VoltageSagNotice, power_supply_status, voltage_level)
 from ..core.host_guard import PressureAlertTracker, ThermalTracker
 from ..core.agent_pressure import PressureBackend
 from ..core.exclusions import ExclusionError, ExclusionList
@@ -164,6 +165,9 @@ class MainWindow(QMainWindow):
         self.ai_monitor = AIMonitor(self)
         self._battery_alerts = BatteryAlertTracker()
         self._voltage_notice = VoltageSagNotice()
+        self._external_power_tracker = ExternalPowerTracker()
+        self._power_state = {'pending': True, 'message': 'Verificando proteção de energia.'}
+        self._power_warning_at = None
         self._jobs = jobs if jobs is not None else TuneJobs(parent=self)
         self._disk_jobs = disk_jobs if disk_jobs is not None else TuneJobs(
             parent=self, argv_factory=plan_argv, timeout_ms=DISK_TIMEOUT_MS)
@@ -208,6 +212,10 @@ class MainWindow(QMainWindow):
         self._power_controller.failed.connect(self._power_error)
         self._power_key = self._power_pending = None
         self._power_asked_at = 0.0
+        self._power_timer = QTimer(self)
+        self._power_timer.setInterval(60_000)
+        self._power_timer.timeout.connect(lambda: self._power_request('status'))
+        self._power_timer.start()
         self.options.power_guard_requested.connect(self._power_request)
         QTimer.singleShot(0, lambda: self._power_request('status'))
         self._pressure_controller = DesktopController(self, backend=PressureBackend())
@@ -323,17 +331,17 @@ class MainWindow(QMainWindow):
         if self._quitting: return
         if self._power_controller.future is None:
             self._power_controller.request(action, value)
-        elif action != 'observe':
+        elif action != 'observe' and (action != 'status' or self._power_pending is None):
             self._power_pending = action  # a user choice is never dropped behind a sample
 
-    def _observe_power_profile(self, battery):
+    def _observe_power_profile(self, battery, external_power=None):
         """Hand sustained sag, or the return of external power, to the profile guard."""
         key = None
         if battery is not None:
             level = voltage_level(battery)
             if level in ('attention', 'critical'):
                 key = level
-            elif battery.status in ('Charging', 'Full', 'Not charging'):
+            elif external_power is True and battery.status in ('Charging', 'Full', 'Not charging'):
                 key = 'external'
         now = time.monotonic()
         # Sagging samples are re-sent at a slow pace; the charger only on its edge.
@@ -347,14 +355,55 @@ class MainWindow(QMainWindow):
         if result.get('changed'):
             self.tray.show_power_profile(result['changed'])
         if 'enabled' in result:
+            self._power_state = result
             self.options.show_power_guard(result)
+            self._show_power_status()
+            self._notify_power_guard()
         pending, self._power_pending = self._power_pending, None
         if pending:
             QTimer.singleShot(0, lambda: self._power_request(pending))
 
     def _power_error(self, message):
         self._power_pending = None
-        self.options.show_power_guard({'enabled': False, 'unavailable': True, 'message': message})
+        self._power_state = {**self._power_state, 'pending': False,
+                             'unavailable': True, 'message': message}
+        self.options.show_power_guard(self._power_state)
+        self._show_power_status()
+        self._notify_power_guard()
+
+    def _notify_power_guard(self):
+        state = self._power_state
+        if state.get('enabled') is False and not state.get('blocked'):
+            return
+        if not (state.get('unavailable') or state.get('blocked')):
+            return
+        now = time.monotonic()
+        if self._power_warning_at is not None and now - self._power_warning_at < 300:
+            return
+        self._power_warning_at = now
+        self.tray.show_power_warning({
+            'title': 'Alimentação · proteção de energia indisponível',
+            'message': state['message'] + '. Confira Bateria · perfil de energia em Opções.'})
+
+    def _show_power_status(self, *, now_mono=None):
+        report = (power_supply_status(self._last_snapshot, now_mono=now_mono)
+                  if self._last_snapshot is not None else
+                  {'state': 'unknown', 'message': 'Alimentação aguardando leitura.'})
+        if self._paused or self._collection_error:
+            report = {'state': 'unknown',
+                      'message': 'Alimentação desconhecida · monitoramento pausado ou coleta indisponível.'}
+        state = self._power_state
+        if state.get('enabled') is False and not state.get('blocked'):
+            guard = 'Proteção de energia desligada · ' + state['message']
+        elif state.get('unavailable') or state.get('blocked'):
+            guard = 'Proteção de energia indisponível · ' + state['message']
+        elif state.get('pending'):
+            guard = state['message']
+        else:
+            guard = 'Proteção de energia · ' + state['message']
+        report = {**report, 'guard': state, 'message': report['message'] + '\n' + guard}
+        self.dashboard.show_power_status(report)
+        self.disk.host_health.show_power_status(report)
 
     def _screen_energy_request(self, action):
         self.options.screen_energy_choice.setEnabled(False)
@@ -554,6 +603,7 @@ class MainWindow(QMainWindow):
         Only a new snapshot can restore the health indicator.
         """
         snapshot = self._last_snapshot
+        self._show_power_status(now_mono=now_mono)
         if snapshot is None and not (self._paused or self._collection_error):
             return
         now = time.monotonic() if now_mono is None else now_mono
@@ -593,10 +643,16 @@ class MainWindow(QMainWindow):
             self.ai_monitor.alerts.battery_cue(cue)
         if self._voltage_notice.observe(battery):
             self.tray.show_battery_voltage(battery)
-        self._observe_power_profile(battery)
+        online = (snapshot.external_power_online
+                  if snapshot.source('external_power').status == 'ok' else None)
+        self._observe_power_profile(battery, online)
+        power_notice = self._external_power_tracker.observe(snapshot)
+        if power_notice and not self._paused:
+            self.tray.show_power_warning(power_notice)
         signal = title_signal.compute(snapshot, self._thresholds,
                                       engine=self._health)
         self._last_snapshot = snapshot
+        self._show_power_status()
         thermal = self._thermal_tracker.observe(snapshot)
         self.disk.show_thermal(thermal)
         self.tray.show_thermal(thermal)
@@ -948,6 +1004,7 @@ class MainWindow(QMainWindow):
             self._desktop_notices.close()
             self._freshness_timer.stop()
             self._screen_timer.stop()
+            self._power_timer.stop()
             self._screen_controller.close()
             self._power_controller.close()
             self._pressure_controller.close()

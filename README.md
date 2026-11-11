@@ -129,6 +129,17 @@ cada minuto. A estimativa restante aparece quando o sistema informa tempo ou
 energia e consumo compatíveis. Ela varia conforme o uso. Os avisos seguem a
 preferência de sons em **opções**.
 
+A Central e **Disco › Saúde do host › Alimentação e proteção** mostram energia
+externa, percentual, tensão e corrente da bateria, junto do estado da proteção
+de perfil. A bandeja avisa a desconexão observada do carregador, descarga com
+energia externa presente em duas leituras consecutivas e proteção indisponível
+ou pausada por resultado sem confirmação. Cada tipo de aviso tem intervalo
+mínimo de cinco minutos. Leituras ausentes ou com mais de 15 segundos aparecem
+como desconhecidas. O serviço de perfis é reconsultado a cada minuto em worker,
+preservando a opção persistida quando ele falha. A CLI `./dev run disk health`
+oferece a mesma leitura sob demanda, também com `--json`; `disk guide power`
+mostra a orientação. Os eventos de alimentação continuam no histórico existente.
+
 A biblioteca oferece 16 prompts de desenvolvimento: escolha um título para copiar e cole no
 agente desejado. O teclado virtual preserva o foco do campo de destino no KWin.
 O seletor organiza os títulos em seis blocos com faixas laterais coloridas,

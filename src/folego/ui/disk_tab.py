@@ -39,6 +39,7 @@ class HostHealthPanel(QWidget):
         super().__init__(parent)
         self._report = None
         self._thermal = None
+        self._power = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 10)
         title = QLabel("Saúde do host")
@@ -91,6 +92,7 @@ class HostHealthPanel(QWidget):
         grouped.setSpacing(7)
         self.rows = {}
         for index, (key, label) in enumerate((
+                ("power", "Alimentação e proteção"),
                 ("pressure", "Pressão de CPU e I/O"),
                 ("ntfs", "Volumes NTFS"), ("service", "Serviços do usuário"),
                 ("btrfs", "Disco Btrfs"), ("reboot", "Reinícios registrados"))):
@@ -159,8 +161,14 @@ class HostHealthPanel(QWidget):
     def copy_diagnostic(self):
         clipboard = QGuiApplication.clipboard()
         if clipboard is not None:
-            clipboard.setText(json.dumps({"host": self._report, "thermal": self._thermal},
+            clipboard.setText(json.dumps({"host": self._report, "thermal": self._thermal,
+                                          "power": self._power},
                                          ensure_ascii=False, indent=2))
+
+    def show_power_status(self, report: dict):
+        self._power = report
+        self.rows['power'].setText(report['message'])
+        self.copy_button.setEnabled(True)
 
     def show_error(self, message: str):
         self.updated.setText(f"Verificação indisponível: {message[:180]}")

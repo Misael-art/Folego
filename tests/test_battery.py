@@ -1,10 +1,72 @@
 from pathlib import Path
+from dataclasses import replace
 
 from folego.core.battery_alerts import BatteryAlertTracker, battery_band, remaining_text
 from folego.core.snapshot import BatteryInfo
 from folego.core.sysfs import read_battery, read_external_power
 from folego.core.collector import MetricsCollector
 from folego.core.notification_tones import pcm
+
+
+def power_snapshot(mono, *, online=True, status='Charging', voltage=7_700_000):
+    from folego.core.snapshot import Snapshot, SourceQuality
+    return Snapshot(ts=1_700_000_000 + mono, mono=mono, boot_id='boot-1', mem=None,
+                    swap_used_kb=0, swap_total_kb=0, pressure_memory=None,
+                    pressure_io=None, pressure_cpu=None, load=None, apps=(), self_rss_kb=0,
+                    battery=BatteryInfo(75, status, voltage_uv=voltage, current_ua=2_000_000,
+                                        voltage_min_design_uv=7_700_000),
+                    external_power_online=online,
+                    sources=(SourceQuality('battery', 'ok'), SourceQuality('external_power', 'ok')))
+
+
+def test_power_status_preserves_unknown_sources_and_reports_voltage_attention():
+    from folego.core.battery_alerts import power_supply_status
+    sample = power_snapshot(100, online=False, status='Discharging', voltage=7_000_000)
+    report = power_supply_status(sample, now_mono=100)
+    assert report['state'] == 'attention'
+    assert '7,00 V' in report['message'] and '75%' in report['message']
+    assert '2,00 A' in report['message'] and 'desconectada' in report['message']
+    unknown = power_supply_status(replace(sample, sources=()), now_mono=100)
+    assert unknown['state'] == 'unknown' and '7,00 V' not in unknown['message']
+    assert 'desconhecida' in unknown['message']
+    stale = power_supply_status(sample, now_mono=116)
+    assert stale['state'] == 'unknown' and 'antiga' in stale['message']
+
+
+def test_external_disconnect_needs_observed_edge_and_limits_repeated_notices():
+    from folego.core.battery_alerts import ExternalPowerTracker
+    tracker = ExternalPowerTracker()
+    assert tracker.observe(power_snapshot(100, online=False), now_mono=100) is None
+    assert tracker.observe(power_snapshot(105), now_mono=105) is None
+    notice = tracker.observe(power_snapshot(110, online=False), now_mono=110)
+    assert 'desconectado' in notice['title']
+    assert tracker.observe(power_snapshot(115), now_mono=115) is None
+    assert tracker.observe(power_snapshot(120, online=False), now_mono=120) is None
+    # Another boot establishes its own baseline and notification budget.
+    assert tracker.observe(replace(power_snapshot(125), boot_id='boot-2'), now_mono=125) is None
+    assert tracker.observe(replace(power_snapshot(130, online=False), boot_id='boot-2'),
+                           now_mono=130) is not None
+
+
+def test_external_power_never_bridges_missing_stale_or_delayed_observations():
+    from folego.core.battery_alerts import ExternalPowerTracker
+    for broken in (replace(power_snapshot(105), sources=()),
+                   power_snapshot(80), power_snapshot(135, online=False)):
+        tracker = ExternalPowerTracker()
+        assert tracker.observe(power_snapshot(100), now_mono=100) is None
+        assert tracker.observe(broken, now_mono=135) is None
+        assert tracker.observe(power_snapshot(140, online=False), now_mono=140) is None
+
+
+def test_discharge_on_external_needs_distinct_consecutive_fresh_samples():
+    from folego.core.battery_alerts import ExternalPowerTracker
+    tracker = ExternalPowerTracker()
+    first = power_snapshot(100, status='Discharging')
+    assert tracker.observe(first, now_mono=100) is None
+    assert tracker.observe(first, now_mono=101) is None
+    second = power_snapshot(105, status='Discharging')
+    assert 'descarregando na tomada' in tracker.observe(second, now_mono=105)['title']
+    assert tracker.observe(power_snapshot(110, status='Discharging'), now_mono=110) is None
 
 
 def supply(root: Path, *, percent='75', status='Discharging', **fields):

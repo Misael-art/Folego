@@ -143,9 +143,14 @@ class PowerProfileGuard:
         return f"Ativo. Perfil atual: {NAMES[current]}."
 
     # --- actions ----------------------------------------------------------
-    def status(self):
-        current = self._current()
-        state = self._reconcile(self._load(), current)
+    def status(self, *, reconcile=True):
+        state = self._load()
+        try:
+            current = self._current()
+        except PowerProfileError as exc:
+            return self._payload(state, None, str(exc), unavailable=True)
+        if reconcile:
+            state = self._reconcile(state, current)
         return self._payload(state, current, self._describe(state, current))
 
     def set_enabled(self, enabled):

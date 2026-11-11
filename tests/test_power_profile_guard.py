@@ -114,8 +114,9 @@ def test_budget_unknown_profile_missing_tool_and_bad_state_fail_closed(tmp_path)
     odd = guard(tmp_path / "odd", Daemon("turbo"))
     with pytest.raises(PowerProfileError, match="desconhecido"):
         odd.observe("critical")
-    with pytest.raises(PowerProfileError, match="ausente"):
-        PowerProfileGuard(path=tmp_path / "none.json", command=daemon).status()  # conftest hides the tool
+    missing = PowerProfileGuard(path=tmp_path / "none.json", command=daemon).status()
+    assert missing['unavailable'] and missing['enabled']
+    assert 'ausente' in missing['message']
     limited = Daemon(listing="* performance:\n  balanced:\n")
     g2 = guard(tmp_path / "limited", limited)
     g2.observe("critical"); g2.observe("critical")
@@ -125,3 +126,27 @@ def test_budget_unknown_profile_missing_tool_and_bad_state_fail_closed(tmp_path)
         g.observe("critical")
     with pytest.raises(ValueError):
         g.perform("reset")
+
+
+def test_read_only_status_preserves_receipt_and_disabled_choice_on_daemon_failure(tmp_path):
+    daemon = Daemon()
+    g = guard(tmp_path, daemon)
+    g.observe('attention'); g.observe('attention')
+    state = g._load()
+    state['receipt']['state'] = 'intended'
+    g._save(state)
+    before = g.path.read_bytes()
+    assert not g.status(reconcile=False)['managed']
+    assert g.path.read_bytes() == before
+    assert g.status()['managed']
+    g.perform('disable')
+    before = g.path.read_bytes()
+
+    def unavailable(argv):
+        raise PowerProfileError('Serviço mascarado')
+
+    g.command = unavailable
+    status = g.status(reconcile=False)
+    assert status['unavailable'] and status['enabled'] is False
+    assert status['profile'] is None and 'mascarado' in status['message']
+    assert g.path.read_bytes() == before

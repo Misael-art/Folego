@@ -1,6 +1,8 @@
 """Battery threshold transitions, independent of Qt and audio effects."""
 import time
 
+from .snapshot import OK, Snapshot
+
 
 def battery_band(percent: int) -> str:
     if percent <= 10:
@@ -54,6 +56,90 @@ def voltage_sag(battery) -> bool:
 
 def voltage_text(battery) -> str:
     return f'{battery.voltage_uv / 1_000_000:.2f} V'.replace('.', ',')
+
+
+def power_supply_status(snapshot: Snapshot, *, now_mono=None) -> dict:
+    """Describe observed power without inferring charger health or reset cause."""
+    if snapshot.is_stale(15, now_mono):
+        return {'state': 'unknown', 'message': 'Alimentação desconhecida · amostra antiga.'}
+    battery = snapshot.battery if snapshot.source('battery').status == OK else None
+    online = (snapshot.external_power_online
+              if snapshot.source('external_power').status == OK else None)
+    parts = ['Energia externa ' + {True: 'conectada', False: 'desconectada',
+                                  None: 'desconhecida'}[online]]
+    level = voltage_level(battery)
+    if battery:
+        parts.append(f'bateria {battery.percent}%')
+        if battery.voltage_uv is not None:
+            parts.append(voltage_text(battery))
+        if battery.current_ua is not None:
+            parts.append(f'{battery.current_ua / 1_000_000:.2f} A'.replace('.', ','))
+        if level in ('attention', 'critical'):
+            parts.append(f'tensão em {VOLTAGE_NAMES[level]}')
+        elif battery.status == 'Discharging':
+            parts.append('descarregando')
+        elif battery.status == 'Charging':
+            parts.append('carregando')
+    else:
+        parts.append('bateria desconhecida')
+    if online is True and battery and battery.status == 'Discharging':
+        parts.append('bateria em descarga com energia externa presente')
+    state = (level if level in ('attention', 'critical') else
+             'unknown' if online is None or battery is None else 'observed')
+    return {'state': state, 'message': ' · '.join(parts)}
+
+
+class ExternalPowerTracker:
+    """Notify on observed disconnection or sustained discharge on external power."""
+
+    def __init__(self):
+        self.boot_id = ''
+        self.previous_mono = None
+        self.online = None
+        self.discharge_streak = 0
+        self.last_notice = {}
+
+    def observe(self, snapshot: Snapshot, *, now_mono=None) -> dict | None:
+        now = time.monotonic() if now_mono is None else now_mono
+        if snapshot.boot_id != self.boot_id:
+            self.boot_id = snapshot.boot_id
+            self.previous_mono = self.online = None
+            self.discharge_streak = 0
+            self.last_notice.clear()
+        if snapshot.is_stale(15, now) or snapshot.source('external_power').status != OK:
+            self.online = None
+            self.discharge_streak = 0
+            return None
+        if self.previous_mono is not None:
+            if snapshot.mono <= self.previous_mono:
+                return None
+            if snapshot.mono - self.previous_mono > 20:
+                self.online = None
+                self.discharge_streak = 0
+        self.previous_mono = snapshot.mono
+        online, previous = snapshot.external_power_online, self.online
+        self.online = online
+        battery = snapshot.battery if snapshot.source('battery').status == OK else None
+        discharging = online is True and battery and battery.status == 'Discharging'
+        self.discharge_streak = self.discharge_streak + 1 if discharging else 0
+        kind = None
+        if previous is True and online is False:
+            kind = 'disconnected'
+            title = 'Alimentação · carregador desconectado'
+            detail = ('A alimentação externa deixou de ser detectada. Confira o cabo e '
+                      'o carregador e salve o trabalho se a tensão cair.')
+        elif self.discharge_streak >= 2:
+            kind = 'discharging-on-external'
+            title = 'Alimentação · bateria descarregando na tomada'
+            detail = ('A energia externa está presente, mas a bateria continua descarregando '
+                      'em leituras consecutivas. Confira o carregador, cabo e dock.')
+        if kind is None:
+            return None
+        last = self.last_notice.get(kind)
+        if last is not None and now - last < 300:
+            return None
+        self.last_notice[kind] = now
+        return {'title': title, 'message': detail}
 
 
 class VoltageSagNotice:

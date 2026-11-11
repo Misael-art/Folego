@@ -288,3 +288,36 @@ def test_thermal_guard_uses_only_matching_acpi_limits_and_fresh_samples(tmp_path
     failed = tracker.observe(Snapshot(**base, mono=now + 35, temperature_c=105,
                                       sources=(SourceQuality("temperature", ERROR),)))
     assert failed["state"] == "unknown"
+
+
+def test_health_cli_reports_power_and_protection_without_writing_receipts(
+        fake_home, fake_proc, tmp_path, monkeypatch, capsys):
+    from folego.cli import main
+    from fixtures_proc import build_proc
+    from folego.actions.power_profile_guard import PowerProfileGuard
+    from folego.safely.persist import write_json_atomic
+    from folego import paths
+
+    build_proc(fake_proc, pids=[])
+    battery = tmp_path / 'sys/class/power_supply/BAT0'
+    battery.mkdir(parents=True)
+    for name, value in {'type': 'Battery', 'capacity': '75', 'status': 'Discharging',
+                        'voltage_now': '7000000', 'voltage_min_design': '7700000'}.items():
+        (battery / name).write_text(value)
+    adapter = battery.parent / 'ACAD'
+    adapter.mkdir()
+    (adapter / 'type').write_text('Mains')
+    (adapter / 'online').write_text('0')
+    monkeypatch.setenv('DECKWELLNESS_SYS_ROOT', str(tmp_path / 'sys'))
+    state = paths.state_dir() / 'power-profile-guard.json'
+    write_json_atomic(state, {'schema': 1, 'enabled': False, 'receipt': None})
+    before = state.read_bytes()
+    monkeypatch.setattr('folego.adapters.host_guard._command',
+                        lambda argv, timeout: (1, '', 'indisponível'))
+    assert main(['disk', 'health', '--json']) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result['power']['state'] == 'attention'
+    assert '7,00 V' in result['power']['message']
+    assert result['power_guard']['unavailable'] and result['power_guard']['enabled'] is False
+    assert state.read_bytes() == before
+    assert not PowerProfileGuard(path=state).status(reconcile=False)['enabled']

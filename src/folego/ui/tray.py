@@ -233,6 +233,9 @@ class Tray:
             f"perfil trocado de {NAMES[change['from']]} para {NAMES[change['to']]} para aliviar a "
             "bateria. Volta ao anterior com o carregador; desligue em Opções.")
 
+    def show_power_warning(self, notice):
+        return self._notice('resources', notice['title'], notice['message'])
+
     def show_web_mcp_report(self):
         self._notice('service', 'Codex Web precisa de atenção',
                      'O agente relatou “McpServerError: Session terminated”. '

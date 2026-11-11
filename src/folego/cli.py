@@ -330,7 +330,7 @@ def build_parser() -> argparse.ArgumentParser:
     health = disk_sub.add_parser("health", help="integridade e riscos do host (somente leitura)")
     health.add_argument("--json", action="store_true", help="saída para máquinas")
     guide = disk_sub.add_parser("guide", help="orientação manual para um risco; não repara")
-    guide.add_argument("issue", choices=("thermal", "pressure", "ntfs", "btrfs", "service", "reboot"))
+    guide.add_argument("issue", choices=("thermal", "pressure", "power", "ntfs", "btrfs", "service", "reboot"))
     guide.add_argument("--json", action="store_true", help="saída para máquinas")
     recovery = disk_sub.add_parser("recovery", help="pré-checagem NTFS para cópia de resgate; não repara")
     recovery.add_argument("source", help="dispositivo NTFS, por exemplo /dev/mmcblk0p1")
@@ -939,8 +939,16 @@ def _cmd_host_health(args) -> int:
     from .adapters.host_guard import HostObserver
     from .core.collector import MetricsCollector
     from .core.host_guard import ThermalTracker
+    from .core.battery_alerts import power_supply_status
+    from .actions.power_profile_guard import PowerProfileGuard, PowerProfileError
     report = HostObserver(record=False).observe()
-    report["thermal"] = ThermalTracker().observe(MetricsCollector().collect())
+    snapshot = MetricsCollector().collect()
+    report["thermal"] = ThermalTracker().observe(snapshot)
+    report["power"] = power_supply_status(snapshot)
+    try:
+        report["power_guard"] = PowerProfileGuard().status(reconcile=False)
+    except (PowerProfileError, OSError, ValueError) as exc:
+        report["power_guard"] = {"unavailable": True, "enabled": None, "message": str(exc)}
     if args.json:
         _emit_machine({"ok": True, "outcome": "observado", **report})
     else:
@@ -948,6 +956,8 @@ def _cmd_host_health(args) -> int:
         print("Saúde do host — somente leitura")
         print(f"Temperatura: {thermal['sensor'] or 'fonte desconhecida'} "
               f"{thermal['current_c'] if thermal['current_c'] is not None else '—'} °C")
+        print(f"Alimentação: {report['power']['message']}")
+        print(f"Proteção de energia: {report['power_guard']['message']}")
         for row in report["btrfs"]:
             print(f"Btrfs {row['id']}: "
                   + (f"corrupção {row['counters']['corruption_errs']}; tendência {row['trend']}"
@@ -976,7 +986,7 @@ def _cmd_host_health(args) -> int:
                 print(f"Amostras daquele boot: {evidence.get('quality', 'desconhecido')} "
                       f"({evidence.get('reason', 'sem evidência local')})")
         print(f"Custo desta observação: {report['observer_duration_ms']:.1f} ms")
-        print("Orientações: folego disk guide thermal|pressure|ntfs|btrfs|service|reboot")
+        print("Orientações: folego disk guide thermal|pressure|power|ntfs|btrfs|service|reboot")
     return EXIT_OK
 
 
