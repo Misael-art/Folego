@@ -73,6 +73,14 @@
   desligamento manual após travamento e correlacionar próximo evento com energia,
   GPU/kernel. Revisão de firmware/boot e manutenção física exigem diagnóstico
   próprio; não se provocou reboot, descarga, carga térmica ou enchimento de disco.
+- Incremento `188bae0e114fd66b3ef9d7b6e9c9e1bda5b131e4` enviado para
+  `codex/web-mcp-session-alert-20261108` e confirmado por `git ls-remote`.
+  [PR #9](https://github.com/Misael-art/Folego/pull/9) reutilizado. Na primeira
+  consulta desse SHA, os seis jobs de CI estavam em fila/em execução; nenhum
+  resultado pendente foi promovido a aprovado. Os gates locais acima passaram.
+  A última amostra conferida às 08:46:20 tem fontes válidas, ACPI 49 °C e RAM
+  disponível 8.833.060 KiB, no mesmo boot. A causa final e o aceite da mitigação
+  continuam abertos, sem afirmar eliminação do defeito físico.
 
 ## Memória compartilhada do host e base funcional — 11/11/2026
 
