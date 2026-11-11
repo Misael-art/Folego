@@ -1,5 +1,42 @@
 # Passagem para o próximo agente — atualizada em 11/11/2026
 
+## Abertura monitorada do Codex Desktop ficou sem janela — 11/11/2026
+
+- Pedido do operador: abrir o Codex Desktop e monitorar. O lançamento normal
+  foi solicitado por `gtk-launch codex-desktop` às 09:34, com o arquivo pessoal
+  ainda contendo `--disable-gpu`. O launcher confirmou `gpu_enabled=0`, e o
+  processo principal 300538 recebeu `--disable-gpu`, `--disable-features=Vulkan`
+  e a opção preexistente de composição desativada.
+- O aplicativo permaneceu sem janela nas consultas KWin. O log registrou
+  `GPU access not allowed` durante consulta de informações da GPU, com rejeição
+  de Promise sem tratamento. Essa abertura não certifica a mitigação anterior
+  como solução; a causa dos cortes históricos continua indeterminada.
+- Coleta própria de **600,47 s**, de 09:34:34 a 09:44:34 -03, com 293 amostras
+  duráveis. Boot permaneceu `fbbf00a5-8987-48b6-8845-71e36b560575`, ACPI 53–93 °C,
+  RAM disponível mínima 8.058.400 KiB e média do principal em cerca de 97,33%
+  de um núcleo. Nenhum evento filtrado foi capturado pelo leitor de kernel.
+  A coleta começou antes de lançar o app; não é aceite de uso normal com janela.
+  O observador finito terminou e encerrou apenas seu próprio leitor de journal.
+- Às 09:40, foi solicitado SIGTERM somente ao principal recém-iniciado, após
+  revalidar boot, executável `/opt/codex-desktop/electron`, PID/starttime 482017,
+  filhos diretos Electron e obter pidfd. A saída não foi confirmada após 10 s.
+  Nenhum SIGKILL foi executado. Foi solicitada confirmação manual específica
+  para esse processo, conforme AGENTS.md, e a repetição da abertura está pendente.
+  O cgroup é compartilhado com a sessão de terminal; **não parar essa scope**.
+  Toda ação futura exige nova revalidação, inclusive se o operador autorizar.
+- Consulta GLX separada e somente por filho próprio confirmou Mesa llvmpipe
+  26.2.2, `Accelerated: no`, usando `LIBGL_ALWAYS_SOFTWARE=true`,
+  `GALLIUM_DRIVER=llvmpipe` e `LP_NUM_THREADS=2`. Isso prepara outra abertura
+  pelo launcher, sem editar arquivos da distribuição ou enfraquecer WebGL.
+  O teste inicial de GLX faltou Xauthority; a consulta corrigida reutilizou o
+  ambiente oficial da sessão, sem copiar credenciais. A nova abertura ainda não
+  foi executada; não somar sua duração eventual à tentativa sem janela.
+- Evidência privada em `.scratch/codex-desktop-monitor-20261111-0933/`:
+  manifestos, métricas, resumo, trecho do log, flags e recibo de SIGTERM.
+  Somente documentação foi alterada; diff e coerência revisados. A captura
+  pelo backend Computer Use falhou neste KDE; a ausência de janela foi conferida
+  diretamente pela listagem KWin, sem alegar imagem do compositor.
+
 ## Prévia 0.2.0b12 publicada — 11/11/2026
 
 - [Release pública v0.2.0b12](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b12),
