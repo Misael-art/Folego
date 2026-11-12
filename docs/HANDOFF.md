@@ -1,5 +1,58 @@
 # Passagem para o próximo agente — atualizada em 12/11/2026
 
+## Orientação opcional e automática dos agentes — 0.2.0b14
+
+- Pedido de 12/11: integrar a orientação de uso cuidadoso ao produto, habilitar
+  neste host e publicar/instalar a versão atual. GUI em Opções, CLI `ai care-*`
+  e uma preferência independente. Catálogo limitado aos homes conhecidos e
+  perfis nativos/Web existentes; nenhum projeto ou agente é executado.
+- Com a opção habilitada, descoberta ao abrir e a cada três minutos por worker
+  sem fila acumulada. A varredura periódica reutiliza `Poller`, sem criar um
+  diretório temporário de subprocesso a cada ciclo. Só acrescenta um bloco
+  `FOLEGO HOST CARE v1`; desligar retira a inserção e preserva texto/permissões
+  pessoais, inclusive edições posteriores. Novas instalações começam desligadas;
+  este host recebe enable explícito na instalação. Não amplia grants ou impõe
+  limites de recursos pelo kernel. [Contrato e recuperação](BASE-DO-HOST.md#recurso-opcional-no-fôlego-020b14).
+- Recibo privado com originais, intenção/ID antes do efeito, coordenador,
+  revalidação e readback. Resultado incerto bloqueia replay; reconciliação só
+  consulta o mesmo ID. Migração dos blocos manuais exige manifesto e hashes,
+  incluindo prova de que nada fora da inserção foi substituído. Opt-out fica
+  salvo mesmo se um arquivo alterado impedir a restauração.
+- Gates finais da fonte congelada: **1475 passed, 2 skipped** headless,
+  47,04 s, `run-q7hfwx_l`; **1913 passed, 2 skipped** Qt, 161,29 s,
+  `run-hk28rikm`. Comandos `./dev test-headless <fonte>/tests -o
+  pythonpath=<fonte>/src` e `./dev test` com os mesmos alvos absolutos.
+  Fonte em `.scratch/agent-care-b14/source`, árvore
+  `05bc107f0c45d45ca3773381d1e42025b9f83777`; os 191 arquivos do runtime foram
+  conferidos contra essa árvore. Código anterior de renderização Codex fica
+  preservado e fora da fonte da release; não foi incluída a sua falha preexistente.
+- Fluxo real KDE/Wayland em janela própria, **800×387**, sem rolagem horizontal:
+  checkbox/worker aplicam, novo cliente é descoberto, texto acrescentado depois
+  e modo 0640 permanecem ao desligar, arquivos criados são restaurados e timer
+  para. Somente HOME/XDG descartáveis. A primeira tentativa do harness falhou
+  por geometria de scroll ainda não estabilizada; a prova final aguarda essa
+  geometria. Recibo/captura em `.scratch/agent-care-b14/wayland-release/`.
+- QA sequencial, CPU limitada a um núcleo e memória a 2 GiB. Na janela de
+  cinco amostras a cada 20 s, máximo 60 °C, mínimo 7,51 GiB disponíveis e
+  máximo 206 MiB de memória/cache no scope. Sem teste de carga física ou aceite
+  de estabilidade prolongada. Adoção somente leitura comprovou 15 arquivos
+  globais e nenhuma preferência/recibo anterior deste recurso no host.
+- O wrapper recusou 20 slots de QA. Seis runs concluídos, com runner ausente
+  e consulta privilegiada `lsof +D` sem referências, foram preservados em
+  `.scratch/dev-tests-reviewed/20261112-agent-care/`. Os avisos lsof referiam-se
+  a mounts externos `/run/user/{doc,gvfs}`, sem mounts sob os alvos. Manifesto
+  conserva origens, logs e hashes integrais. Arquivos esparsos têm tamanho
+  lógico de GiB: a conferência foi concluída em blocos de 1 MiB, CPU 50% e
+  memória 256 MiB, sem apagar payloads ou ampliar o teto. O primeiro verificador
+  de leitura integral foi interrompido somente no processo próprio.
+- Quatro focos próprios encerrados também foram preservados no subdiretório
+  `focused`, com manifests, hashes, identidade/inodes e consulta lsof do UID
+  sem referências. Avisos sobre mounts Docker externos ficaram no recibo
+  privado; nenhum processo de Docker ou de outra tarefa foi interrompido.
+- Publicação/instalação: recibo final será registrado após conferir o SHA remoto,
+  os pacotes, a migração no host e os checks. Evidência sanitizada em
+  [agent-care-b14.json](handoff/validation/agent-care-b14.json).
+
 ## Cuidados de recursos nos IDEs e CLIs — 12/11/2026
 
 - Pedido: percorrer os agentes instalados e incorporar cuidados preventivos

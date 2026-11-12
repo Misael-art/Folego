@@ -236,7 +236,9 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command")
 
     ai = commands.add_parser("ai", help="cotas, diagnóstico e recuperação pelo responsável Web")
-    ai.add_argument("sub", choices=["status", "recover-web", "reset-note", "limit-note"])
+    ai.add_argument("sub", choices=["status", "recover-web", "reset-note", "limit-note", "care-status", "care-enable", "care-disable",
+                                    "care-sync", "care-reconcile"])
+    ai.add_argument("--adopt-legacy", help="com care-enable: manifesto privado da orientação manual anterior")
     ai.add_argument("--account", help="com recover-web/reset-note: identidade da conta (account_id de status --json)")
     ai.add_argument("--expires", help="com reset-note/limit-note: validade ou retorno do limite Web 'DD/MM/AAAA HH:MM' (hora local)")
     ai.add_argument("--count", type=int, default=1, help="com reset-note: resets disponíveis")
@@ -2782,6 +2784,29 @@ def _dispatch(ns, argv) -> int:
     if ns.command == "performance":
         return _cmd_performance(ns)
     if ns.command == "ai":
+        if ns.sub.startswith('care-'):
+            from .actions.agent_guidelines import AgentGuidelines
+            from .orchestration import CoordinatorBusy
+            action = ns.sub.removeprefix('care-')
+            if action in ('enable', 'disable') and not ns.confirmar:
+                return _emit_gate_refusal(ns, 'agent-guidelines', 'operação exige --confirmar', EXIT_NEEDS_CONFIRM)
+            manager = AgentGuidelines()
+            try:
+                if ns.adopt_legacy and action != 'enable':
+                    raise ValueError('Migração manual exige care-enable --confirmar')
+                result = (manager.status() if action == 'status' else
+                          manager.configure(reconcile=True) if action == 'reconcile' else
+                          manager.configure(None if action == 'sync' else action == 'enable',
+                                            adopt=ns.adopt_legacy))
+            except (OSError, ValueError, KeyError, TypeError, RuntimeError, CoordinatorBusy) as exc:
+                result = {'ok': False, 'state': 'busy' if isinstance(exc, CoordinatorBusy) else 'conflict',
+                          'outcome': 'recusa', 'message': str(exc)}
+                try:
+                    result['enabled'] = manager.preference()
+                except (OSError, ValueError):
+                    pass
+            print(json.dumps(result, ensure_ascii=False))
+            return EXIT_BY_OUTCOME.get(result.get('outcome'), EXIT_OK if result.get('ok') else EXIT_REFUSED)
         if ns.sub == 'recover-web':
             if not ns.confirmar:
                 print('Use --confirmar para solicitar o ciclo ao responsável Web já habilitado')

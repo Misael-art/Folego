@@ -182,12 +182,12 @@ contas usam um fundo contínuo, com os elementos internos transparentes.
 O alvo é **Linux**, com KDE Plasma para a integração completa com o desktop.
 O wrapper gerencia Python **3.14.7**, uv e dependências fixadas em `uv.lock`.
 Não é necessário ativar um ambiente virtual ou instalar pacotes Python globalmente.
-A [prévia 0.2.0b13](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b13)
+A [prévia 0.2.0b14](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b14)
 oferece fonte completa, wheel, sdist e SHA256SUMS. A fonte completa inclui o wrapper
 e o lockfile; os pacotes Python exigem Python 3.14 e a dependência GUI opcional.
 
 ```bash
-git clone --branch v0.2.0b13 https://github.com/Misael-art/Folego.git
+git clone --branch v0.2.0b14 https://github.com/Misael-art/Folego.git
 cd Folego
 ./dev setup
 ./dev gui
@@ -498,3 +498,17 @@ Problemas reproduzíveis e propostas bem delimitadas são bem-vindos em
 O código do Fôlego é disponibilizado sob a [licença MIT](LICENSE).
 Dependências mantêm suas próprias licenças; veja [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md),
 incluindo os avisos de Qt/PySide6.
+
+### Orientação de cuidado nos agentes
+
+Em **Opções → Cuidado do host pelos agentes**, habilite a orientação para que
+o Fôlego procure os clientes compatíveis a cada três minutos enquanto estiver
+aberto. Ele acrescenta um bloco identificado nas instruções globais; desligar
+retira somente esse bloco, preservando as diretrizes pessoais e edições posteriores.
+O recurso começa desligado em novas instalações; neste Jupiter foi habilitado.
+Não inicia/reinicia agentes nem impõe limites de CPU/RAM pelo sistema.
+
+CLI: `folego ai care-status --json`, `care-enable --confirmar`,
+`care-disable --confirmar`, `care-sync` e `care-reconcile`.
+Arquivos, limites, migração da aplicação manual e recuperação em
+[BASE-DO-HOST.md](docs/BASE-DO-HOST.md).

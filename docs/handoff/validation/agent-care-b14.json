@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "version": "0.2.0b14",
+  "scope": "Orientação opcional, automática e reversível nos arquivos globais dos agentes compatíveis",
+  "tested_tree": "05bc107f0c45d45ca3773381d1e42025b9f83777",
+  "runtime_files_checked": 191,
+  "tests": {
+    "headless": {"passed": 1475, "skipped": 2, "elapsed_s": 47.04, "run": "run-q7hfwx_l"},
+    "qt": {"passed": 1913, "skipped": 2, "elapsed_s": 161.29, "run": "run-hk28rikm"},
+    "source": "Frozen Git index artifact, absolute pytest pythonpath, managed ./dev environments",
+    "host_limits": {"cpu_quota_percent_of_one_core": 100, "memory_max_gib": 2, "parallel_suites": 1},
+    "working_tree_rendering_changes": "preserved and excluded from candidate"
+  },
+  "wayland": {
+    "mapped": true,
+    "logical_size": [800, 387],
+    "horizontal_scroll": 0,
+    "checkbox_and_cli_worker": true,
+    "background_discovery_of_new_client": true,
+    "later_edits_and_mode_preserved_on_disable": true,
+    "created_instruction_files_restored": true,
+    "disabled_preference_and_timer_verified": true,
+    "real_host_agent_files_modified_for_qa": 0,
+    "receipt": ".scratch/agent-care-b14/wayland-release/receipt.json"
+  },
+  "resource_observation": {
+    "samples": 5,
+    "interval_s": 20,
+    "temperature_max_c": 60,
+    "mem_available_min_kib": 7878024,
+    "scope_memory_and_cache_max_bytes": 215355392,
+    "limit": "bounded sample window, not a stability soak or physical cause diagnosis"
+  },
+  "host_migration_preflight": {"discovered_global_files": 15, "legacy_files_proved": 15, "read_only": true},
+  "contracts": [
+    "Default off on new installations; this host is explicitly enabled during installation",
+    "Bounded configured-client discovery while Folego is open, every three minutes",
+    "Only the marked Folego insertion is added or removed; personal instructions and later edits remain",
+    "Intent and original bytes precede effects; coordinator, readback and same-ID reconciliation",
+    "Unknown schema, ambiguous blocks, unsafe ownership/links/permissions and uncertain effects preserve instructions",
+    "Periodic worker does not allocate a new subprocess temporary tree every cycle",
+    "No agent restart, grants expansion or kernel resource enforcement"
+  ],
+  "delivery": "pending package and host receipts"
+}

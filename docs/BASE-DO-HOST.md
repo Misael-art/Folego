@@ -269,6 +269,58 @@ não provam obediência do modelo; a próxima tarefa real deve conferir a mediç
 antes da carga. Instruções não impõem limites de recursos pelo kernel nem
 certificam a correção da causa física dos cortes.
 
+### Recurso opcional no Fôlego 0.2.0b14
+
+**Opções → Cuidado do host pelos agentes → Orientar agentes a usar o host com
+cuidado** controla a preferência persistente. Habilitado, o Fôlego descobre os
+caminhos compatíveis ao iniciar e a cada três minutos enquanto estiver aberto,
+por um worker sem fila acumulada, sem executar agentes nem criar temporários
+recorrentes de subprocessos. Configurações novas começam desligadas;
+a instalação neste Jupiter habilita explicitamente a preferência.
+
+O catálogo inclui os homes padrão da tabela, os homes Web/nativos existentes
+do PhaseZero e o override global efetivo do Codex. Diretórios de configuração
+existentes comprovam a presença do cliente; a busca não entra nos projetos,
+caches, credenciais ou sessões. Homes arbitrários definidos só por variáveis
+de ambiente, remotos e containers precisam de integração própria. Este recurso
+gerencia instruções de usuário; não retira regras dos repositórios.
+
+Cada inserção é delimitada por `BEGIN/END FOLEGO HOST CARE v1`. O texto fora
+dela não é reformatado ou substituído. Desligar restaura bytes/modo originais
+quando o arquivo ficou intacto; com edições posteriores, retira a inserção e
+preserva essas edições e o modo atual. Arquivo criado somente para a orientação
+é removido se continuar intacto. Bloco editado, duplicado ou desconhecido,
+symlink, hardlink, encoding desconhecido ou propriedade/permissão inadequada
+protegem o arquivo e suspendem a aplicação. O opt-out permanece salvo mesmo
+quando uma restauração não pode ser concluída.
+
+Comandos:
+
+```bash
+./dev run ai care-status --json
+./dev run ai care-enable --confirmar --json
+./dev run ai care-disable --confirmar --json
+./dev run ai care-sync --json
+./dev run ai care-reconcile --json
+```
+
+O sync automático só atua com a preferência já habilitada. O coordenador
+serializa as mutações, e intenção/ID e originais são persistidos antes do
+primeiro efeito. Uma interrupção bloqueia repetição; `care-reconcile` apenas
+confere os efeitos do mesmo ID e confirma o recibo, sem reescrever diretrizes.
+Desativação explícita pode recuperar efeitos parciais conhecidos. Limites:
+64 alvos, 64 KiB por arquivo e 2 MiB no recibo privado, sem aumentar o orçamento
+quando houver uma recusa. A preferência fica em `config/folego/agent-guidelines.json`
+e o recibo em `state/folego/agent-guidelines.json`, conforme XDG.
+
+A orientação manual de 12/11 usa outro marcador. Para incorporá-la sem dupla
+inserção e conservar a recuperação anterior, a instalação deste host executa
+`ai care-enable --confirmar --adopt-legacy <manifest.json>`. O produto verifica
+o bloco conhecido, os hashes, os modos, os originais e a correspondência do
+texto fora do bloco com o manifesto privado. Não importa arquivos de projetos
+nem aceita um arquivo antigo divergente como base segura. Sem essa prova, o
+bloco manual continua protegido. O recibo antigo permanece no seu destino.
+
 ## Roteiro de uma nova investigação
 
 1. Registrar horário, boot, modo de entrada, carregador, periféricos e sintoma.

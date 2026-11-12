@@ -112,6 +112,16 @@ ou pausar processos, suspender, alterar brilho/TDP nem elevar o perfil.
 
 ## Organização do desenvolvimento
 
+Pedido de 12/11: autoriza a orientação de cuidado como recurso opcional do
+Fôlego, com descoberta periódica de IDEs/CLIs compatíveis e gravação somente de
+um bloco próprio identificado. Desligar retira esse bloco, preservando demais
+diretrizes, edições posteriores e permissões. Neste host deve ficar habilitado;
+em outras instalações começa desligado. Migração da aplicação manual exige
+manifesto e hashes comprovados. Intenção/ID, revalidação, reconciliação e orçamento
+precedem efeitos; resultado incerto não permite replay automático. Não ampliar
+grants, reiniciar agentes ou varrer projetos. Autoriza instalação neste host e
+publicação da prévia após os gates.
+
 Pedido posterior de 11/11, após os novos cortes: autoriza a opção **Sessão básica
 do Plasma**, ligada por padrão, com controle persistente GUI/CLI, aplicação no
 host, commit, PR e prévia após os gates. Reduzir autostart de aplicativos e
