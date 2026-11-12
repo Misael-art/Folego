@@ -30,7 +30,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-folego = ["ui/icons/*.svg", "ui/icons/LICENSE", "ui/icons/README.md"]
+folego = ["ui/icons/*.svg", "ui/icons/LICENSE", "ui/icons/README.md", "windows/*.ps1", "windows/*.cs"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,5 +1,34 @@
 # Passagem para o próximo agente — atualizada em 11/11/2026
 
+## Port nativo Windows e preparação do cartão — 12/11/2026
+
+- Pedido: portar o Fôlego ao contexto Windows do microSD e preparar seu início.
+  Implementação em `src/folego/windows`, pacote em `Program Files\Folego` no
+  cartão; [guia Windows](WINDOWS.md). Sem Python/Qt/WSL no runtime Windows.
+- RAM/CPU/commit/bateria/espaço por Win32, sensores e saúde por consulta Windows;
+  uma coleta em worker, alertas limitados, estado pequeno e manual por padrão.
+  Regras compartilhadas extraídas para `core/policy.py`, com reexports Linux
+  preservados e `policy.json` gerado. Não copia estado/grants/owners Linux.
+- Primeiro início preparado no dispatcher existente do cartão; depois uma
+  entrada própria HKCU Run, bandeja e atraso de 30 s. Desativável nas Opções.
+  Energia manual com intenção/readback/recibo e restauração por host/boot;
+  guarda automático por carga é opt-in, distinto do guarda Linux por tensão.
+- Local: 40 contratos PowerShell/C# simulados; 62 testes focados de pacote,
+  implantação e regras existentes passaram; integração do cartão: 64 checks.
+  Suites do working tree: 1462 headless e 1900 Qt passaram, 2 skips em cada;
+  ambas tiveram a mesma falha preexistente em
+  `test_codex_rendering.py::test_external_changes_preserve_contents_and_permissions[permissions]`,
+  código/teste que já estavam untracked antes deste lote e permanecem fora dele.
+  Logs: `.scratch/dev-tests/run-1lbcymtv`, `run-luq1b7mv`, foco `run-0pqcwich`.
+- Testes serializados, 50–100% de um núcleo e 768 MiB–2 GiB. Nenhuma VM,
+  benchmark, mudança de energia Linux ou interrupção de processos de trabalho.
+  Backups da integração: `SteamDeck\recovery\folego-startup-original` no cartão;
+  inventário canônico em `SteamDeck\preparacao.json`.
+- CI Windows adicionada para PowerShell 5.1, probe Win32 somente leitura e
+  ciclo Forms com coleta real em pasta descartável. Resultado remoto será
+  registrado após o push. Aceite físico de login, APU, toque, sensores e energia
+  no Steam Deck permanece pendente; sem merge ou nova release neste lote.
+
 ## Prévia 0.2.0b13 publicada e sessão básica aplicada — 11/11/2026
 
 - [Prévia pública v0.2.0b13](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b13),

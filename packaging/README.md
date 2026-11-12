@@ -2,6 +2,10 @@
 
 ## Versões suportadas
 
+- [Windows nativo em prévia](../docs/WINDOWS.md): Windows PowerShell 5.1,
+  .NET Framework e Forms, pacote gerado por `tools/build_windows.py`. Não requer
+  o ambiente Python/Qt abaixo nem instala WSL.
+
 - Linux com `/proc` e `/sys` (BigLinux/KDE, SteamOS/Steam Deck).
 - Python **3.14.x** (bootstrap fixado em 3.14.7).
 - CLI: sem Qt (usa só a biblioteca padrão).

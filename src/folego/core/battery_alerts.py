@@ -2,16 +2,7 @@
 import time
 
 from .snapshot import OK, Snapshot
-
-
-def battery_band(percent: int) -> str:
-    if percent <= 10:
-        return 'red'
-    if percent <= 25:
-        return 'orange'
-    if percent <= 50:
-        return 'yellow'
-    return 'green'
+from .policy import battery_band
 
 
 def remaining_text(seconds: int | None) -> str:

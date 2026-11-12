@@ -20,6 +20,10 @@ CPU, swap e temporários em uma visão clara e ajuda a investigar o que está
 pressionando a máquina — inclusive quando há agentes de IA, builds e várias
 aplicações trabalhando ao mesmo tempo.
 
+O [port nativo para Windows](docs/WINDOWS.md) está em prévia: monitoramento,
+diagnóstico e energia reversível, com início na sessão e sem depender de WSL.
+O guia distingue as capacidades Windows das integrações exclusivas do Linux.
+
 As ações de recursos são manuais e passam por confirmação e verificações de
 proteção. **O executor automático de recursos permanece desligado.** A supervisão
 de entrada tem uma política própria, opcional, para reabilitar dispositivos
