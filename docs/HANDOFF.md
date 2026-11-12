@@ -25,8 +25,15 @@
   de conta foi publicado. Próximo passo: em uma nova sessão de cada cliente,
   conferir a descoberta e a medição na tarefa real, sem lançar várias cargas
   para QA. A sessão atual e os trabalhos residentes foram preservados.
-- Publicação documental: SHA e checks serão registrados após o push no PR #9;
-  sem release de produto por manutenção destas diretrizes.
+- Publicação documental: **319d17910fcac689cd4cb3c57fbd05fea6cf7823**,
+  remoto confirmado no [PR #9](https://github.com/Misael-art/Folego/pull/9).
+  Na consulta após publicar, núcleo/CLI/Windows da primeira rodada passaram;
+  [Qt offscreen](https://github.com/Misael-art/Folego/actions/runs/43182938947)
+  seguia em execução e a atualização do PR iniciou outra rodada. CodeRabbit
+  e Sourcery ficaram skipped. Gates locais documentais passaram; sem release
+  de produto por manutenção destas diretrizes. Preferência também registrada
+  e relida na memória entre projetos em
+  `profile/habits/poupar-host-em-todos-ides-e-clis.md`.
 
 ## Port nativo Windows e preparação do cartão — 12/11/2026
 

@@ -5,6 +5,14 @@
   "policy_source": "AGENTS.md: BEGIN/END HOST RESOURCE CHECK",
   "policy_sha256_utf8_without_final_newline": "daec1f224f6b2112bd955d6e8a23494447e0f7819fd3384d9826ccaddc22dcf2",
   "files_updated_and_read_back": 17,
+  "publication": {
+    "implementation_commit": "319d17910fcac689cd4cb3c57fbd05fea6cf7823",
+    "remote_sha_confirmed": true,
+    "pull_request": "https://github.com/Misael-art/Folego/pull/9",
+    "ci_observed": "first round: core/CLI/Windows passed, Qt in progress; PR update started another round; CodeRabbit/Sourcery skipped",
+    "new_product_release": false,
+    "memory_profile_written_and_read_back": "profile/habits/poupar-host-em-todos-ides-e-clis.md"
+  },
   "coverage": {
     "collection_and_project": 2,
     "codex_homes": 4,
