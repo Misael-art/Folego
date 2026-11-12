@@ -1,5 +1,48 @@
 # Passagem para o próximo agente — atualizada em 12/11/2026
 
+## Codex Desktop e Web juntos — observação de 12/11/2026
+
+- Pedido: abrir Desktop, observar recursos e depois abrir o Web em conjunto.
+  Launchers instalados, KDE/Wayland real, sem stress artificial, builds,
+  instalações ou prompts submetidos pelo observador. O backend Web já estava
+  residente/oculto desde o boot; a primeira etapa não foi Desktop isolado.
+- Etapa conjunta válida: **11:12:39–11:23:11 UTC**, **43 amostras** a cada
+  15 s, **631,56 s** entre a primeira e a última; maior intervalo 15,05 s.
+  Temperatura **48–65 °C**, mínimo **6,332 GiB disponíveis**, CPU do host
+  média **23,25%**, máximo **36,85%**. Zero escrita de swap; houve leituras
+  pontuais de até 1421,27 KiB/s. PSI some/avg60 máximo: memória **0,18%**,
+  I/O **0,23%**. Trip passivo/crítico do sensor: 100/105 °C.
+- Desktop normal, janela do perfil Web e backend preservaram PID/starttime;
+  mesmo boot e ambas as janelas presentes ao concluir. Capturas privadas
+  confirmaram conteúdo do Desktop, campo de mensagem e modelo Web renderizados.
+  Sem OOM, reset/fault de GPU ou coredump Codex nos journals consultados até
+  11:23:14 UTC. Isso cobre abertura/uso normal por minutos, não tarefas longas,
+  recuperação do provedor ou causa resolvida dos cortes anteriores.
+- Limitações preservadas: o coletor inicial não reconhecia argv[0] agregado
+  do Electron; identidade foi corrigida pelo executável, com uma lacuna
+  registrada na primeira etapa. O primeiro lançamento Web em unit transiente
+  `Type=exec` perdeu o filho quando o wrapper terminou; só após confirmar sua
+  ausência, repetiu-se com `ExitType=cgroup`. Não foi crash atribuído ao app.
+- Um helper de diagnóstico leu indevidamente um log preexistente de **1,126 GB**
+  inteiro e adicionou pressão transitória de RAM/swap; terminou normalmente.
+  A folga se recuperou sem sinalizar apps. Esse intervalo inicial inteiro foi
+  excluído da etapa conjunta válida, mas suas métricas estão no recibo.
+  Leituras posteriores limitaram bytes por seek/tail. Não repetir leitura
+  integral/splitlines de logs sem conferir tamanho e orçamento de memória.
+- A captura Computer Use falhou no KDE; Spectacle instalado capturou a janela
+  ativa. O primeiro frame Desktop tinha conversa em branco e o tail histórico
+  continha avisos ResizeObserver; captura posterior mostrou conteúdo e os
+  trechos novos acompanhados não repetiram o aviso. Sem alterar flags ou usar
+  sessões/conversas como fixtures de envio.
+- Coletor temporário encerrado; os dois aplicativos permanecem abertos por
+  pedido do usuário, sem habilitar autostart novo. Evidência sanitizada em
+  [codex-desktop-web-observation-2026-11-12.json](handoff/validation/codex-desktop-web-observation-2026-11-12.json).
+  Capturas, amostras detalhadas e logs privados em
+  `.scratch/codex-stability-20261112/`; nenhum conteúdo de conta/conversa foi
+  publicado. Alterações preexistentes de renderização Codex continuam fora
+  deste lote documental. Próximo passo: observar uso prolongado normal,
+  preservando margem e reavaliando os recursos antes de qualquer build.
+
 ## Orientação opcional e automática dos agentes — 0.2.0b14
 
 - Pedido de 12/11: integrar a orientação de uso cuidadoso ao produto, habilitar
