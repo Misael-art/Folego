@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-12",
+  "scope": "Diretrizes de recursos dos agentes neste host; sem alteração do runtime do produto",
+  "policy_source": "AGENTS.md: BEGIN/END HOST RESOURCE CHECK",
+  "policy_sha256_utf8_without_final_newline": "daec1f224f6b2112bd955d6e8a23494447e0f7819fd3384d9826ccaddc22dcf2",
+  "files_updated_and_read_back": 17,
+  "coverage": {
+    "collection_and_project": 2,
+    "codex_homes": 4,
+    "claude": 1,
+    "opencode": 1,
+    "antigravity": 1,
+    "hermes": 1,
+    "cursor": 1,
+    "continue": 1,
+    "prime_agent": 1,
+    "zcode": 1,
+    "qoder": 1,
+    "copilot": 1,
+    "vscode_local": 1
+  },
+  "checks": {
+    "identical_managed_block": "passed: 17 files",
+    "readback_sha256": "passed: 17 files",
+    "preserved_file_modes": "passed: 17 files",
+    "preserved_content_outside_block": "passed: existing contents compared with byte snapshots",
+    "idempotent_transformation": "passed: prepared result unchanged by second transformation",
+    "prime_native_loader": "passed: global file and both project/ancestor files discovered by installed loadProjectContextFiles export",
+    "frontmatter": "passed: installed yaml parser, Cursor and Continue alwaysApply=true, VS Code Local applyTo=**",
+    "git_diff_check": "passed: git diff --check",
+    "local_document_links": "passed: referenced local destinations exist",
+    "extension_inventory": "passed: Continue found in VS Code/Cursor; Copilot found bundled with VS Code"
+  },
+  "private_recovery": {
+    "directory": "~/.local/state/host-agent-guidelines/20261112T081950Z/",
+    "contents": "original instruction bytes, modes, before/after hashes, target inventory, policy block",
+    "published": false,
+    "remote_recovery": "versioned policy and sanitized client mapping; private previous configurations require separate recovery before reinstall"
+  },
+  "host_readonly_sample": {
+    "mem_available_kib": 8874456,
+    "persistent_disk_available_gib": 61.29,
+    "acpi_temperature_c": 57,
+    "passive_trip_c": 100,
+    "critical_trip_c": 105,
+    "load_1_5_15_min": [2.32, 1.95, 1.65],
+    "memory_psi_some_avg60_percent": 0.05,
+    "io_psi_some_avg60_percent": 2.25,
+    "interpretation": "sample only; no stress or stability certification"
+  },
+  "limits": [
+    "No IDE/session restart or model request performed for verification",
+    "Rules are context guidance, not kernel-enforced resource caps or proof of model compliance",
+    "Existing sessions may require a supported context reload or a new session",
+    "Future profiles, newly installed agents, containers and remote environments require their own propagation",
+    "Old PhaseZero launcher wrappers with missing target were not repaired",
+    "No claim that these changes fix the physical cause of abrupt resets"
+  ]
+}

@@ -1,4 +1,32 @@
-# Passagem para o próximo agente — atualizada em 11/11/2026
+# Passagem para o próximo agente — atualizada em 12/11/2026
+
+## Cuidados de recursos nos IDEs e CLIs — 12/11/2026
+
+- Pedido: percorrer os agentes instalados e incorporar cuidados preventivos
+  para não pressionar o host. Aplicados 17 arquivos: coleção/projeto, quatro
+  homes Codex e regras globais de Claude, OpenCode, Antigravity, Hermes,
+  Cursor, Continue, Prime Agent, ZCode, Qoder e Copilot/Local do VS Code.
+  Caminhos, loaders, fontes oficiais e recuperação em
+  [BASE-DO-HOST.md](BASE-DO-HOST.md#diretrizes-globais-dos-agentes--12112026).
+- Mesmo bloco gerenciado, com medição prévia, concorrentes por RSS/comando
+  completo, uma carga pesada por host, um job inicial, reserva de RAM/disco,
+  margem térmica e reavaliação em execução. Sem encerrar trabalho alheio,
+  limpar caches compartilhados ou ampliar permissões. 90 °C é prevenção
+  conservadora neste host, não conclusão sobre a causa dos resets.
+- Validação documental/configuração: 17 readbacks com hashes/modos e conteúdo
+  anterior preservados; transformação idempotente; YAML e ativação dos três
+  formatos de regra conferidos; descoberta nativa do Prime Agent sem inferência.
+  Sem código do produto, GUI/launcher alterado, instalação,
+  build ou suíte pesada. As alterações preexistentes de renderização Codex
+  continuam fora do lote. Recibo sanitizado em
+  [agent-host-care-2026-11-12.json](handoff/validation/agent-host-care-2026-11-12.json).
+- Backup privado em `~/.local/state/host-agent-guidelines/20261112T081950Z/`.
+  Receita no bloco `HOST RESOURCE CHECK` do `AGENTS.md`; nenhum config privado
+  de conta foi publicado. Próximo passo: em uma nova sessão de cada cliente,
+  conferir a descoberta e a medição na tarefa real, sem lançar várias cargas
+  para QA. A sessão atual e os trabalhos residentes foram preservados.
+- Publicação documental: SHA e checks serão registrados após o push no PR #9;
+  sem release de produto por manutenção destas diretrizes.
 
 ## Port nativo Windows e preparação do cartão — 12/11/2026
 

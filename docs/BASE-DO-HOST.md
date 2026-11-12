@@ -209,6 +209,66 @@ funcional. A contagem de processos isolada é insuficiente para avaliar o custo.
   desconhecido exige diagnóstico e retenção comprovada. O material útil possui
   caminho de recuperação próprio, com fonte/receita preservadas no GitHub.
 
+## Diretrizes globais dos agentes — 12/11/2026
+
+O pedido de percorrer os IDEs e CLIs autorizou aplicar os cuidados de recursos
+nos arquivos de instruções que cada agente carrega. O bloco delimitado por
+`BEGIN/END HOST RESOURCE CHECK` em [AGENTS.md](../AGENTS.md) e no
+`Projects/AGENTS.md` é a receita preservada. Ele exige medição antes de carga
+pesada, uma carga por vez no host, um job inicial e reavaliação durante a execução.
+Neste Jupiter, a reserva planejada é o maior valor entre 4 GiB e 25% da RAM,
+depois do pico previsto; o disco precisa guardar 10 GiB além da saída estimada.
+90 °C é um ponto preventivo para adiar carga, sem atribuição causal dos cortes.
+
+Foram atualizados 17 arquivos: os dois `AGENTS.md` da coleção/projeto e os
+15 arquivos de usuário/perfis abaixo. A coluna de carregamento registra a
+documentação oficial e, quando disponível, a implementação instalada examinada.
+
+| Agente ou integração instalada | Arquivo de usuário | Carregamento verificado |
+| --- | --- | --- |
+| Codex CLI/Desktop | `~/.codex/AGENTS.md` e `AGENTS.md` dos três homes isolados existentes | [CODEX_HOME](https://learn.chatgpt.com/docs/agent-configuration/agents-md); nenhum override encontrado; homes ativos conferidos |
+| Claude Code/Desktop e frontends que usam Claude Code | `~/.claude/CLAUDE.md` | [Memória e instruções](https://code.claude.com/docs/en/memory); bloco inline, arquivo regular e import RTK preservado |
+| OpenCode CLI/Desktop | `~/.config/opencode/AGENTS.md` | [Regras globais](https://opencode.ai/v1/docs/rules/); instruções anteriores preservadas |
+| Antigravity CLI/IDE | `~/.gemini/GEMINI.md` | [Regras globais](https://antigravity.google/docs/rules/); arquivo global independente |
+| Hermes CLI/ACP/Desktop com o mesmo home | `~/.hermes/SOUL.md` | [Configuração](https://hermes-agent.nousresearch.com/docs/user-guide/configuration) e `agent/context_file_sources.py` instalado; identidade anterior preservada |
+| Cursor 3.12.17 | `~/.cursor/rules/host-care.mdc` | Implementação instalada de `getRuleTargetDirectory(true)` usa `~/.cursor/rules`; `alwaysApply: true` |
+| Continue 2.0.0 no VS Code/Cursor | `~/.continue/rules/host-care.md` | [Regras](https://docs.continue.dev/customize/rules) e loader instalado; `alwaysApply: true` |
+| Prime Agent 0.7.1 | `~/.prime/agent/AGENTS.md` | Documentação instalada `docs/usage.md` e chamada real a `loadProjectContextFiles`, sem inferência |
+| ZCode | `~/.zcode/AGENTS.md` | [Fontes de instruções](https://zcode.z.ai/en/docs/agents); global somado ao workspace |
+| Qoder Desktop/CLI | `~/.qoder/AGENTS.md` | [Memória estática](https://docs.qoder.com/cli/memory); sem alteração de providers, permissões ou memória automática |
+| Copilot no VS Code | `~/.copilot/copilot-instructions.md` | [Instruções de usuário](https://code.visualstudio.com/docs/agents/reference/custom-instructions-reference) e descoberta no Copilot 0.69.0 instalado |
+| Harness Local do VS Code | `~/.config/Code/User/prompts/host-care.instructions.md` | Instruções do perfil, com `applyTo: '**'`; o alias `code-insiders` aponta ao mesmo Code instalado |
+
+Os três homes isolados do Codex abrangem o frontend Web e os dois perfis nativos
+existentes; seus identificadores ficam no inventário privado. Bonsai é frontend
+de outros agentes e recebe a regra do engine escolhido. Wrappers antigos do
+PhaseZero que apontam a um launcher ausente não foram reparados neste lote.
+Não foram encontrados outros engines ativos com home alternativo nos seletores
+de ambiente consultados. Isso não certifica ambientes remotos, containers,
+perfis futuros nem extensões instaladas depois desta data.
+
+Para recuperar a regra em outra instalação, copie apenas o bloco gerenciado
+para o arquivo global suportado pelo cliente, preservando o conteúdo existente
+e o frontmatter próprio de Cursor/Continue/VS Code. Confira overrides, homes
+alternativos, descoberta e ausência de duplicação. Não substitua configurações
+de conta nem crie aliases ou hooks para simular um mecanismo não suportado.
+
+A aplicação guardou originais byte a byte e manifesto com hashes/modos em
+`~/.local/state/host-agent-guidelines/20261112T081950Z/`, privado e persistente.
+A reversão exige conferir o hash atual contra o manifesto e restaurar somente
+o arquivo correspondente, preservando qualquer edição posterior. A receita e
+o inventário sanitizado ficam no Git; as configurações privadas anteriores
+continuam no backup local e precisam de recuperação própria antes de reinstalar.
+
+A revisão conferiu os 17 blocos, hashes, permissões, conteúdo externo ao bloco
+e idempotência da transformação. O recibo está em
+[agent-host-care-2026-11-12.json](handoff/validation/agent-host-care-2026-11-12.json).
+As diretrizes entram em novas sessões ou recargas suportadas. Não houve restart
+de IDE, inferência de teste, suíte pesada ou novo serviço. Arquivos descobertos
+não provam obediência do modelo; a próxima tarefa real deve conferir a medição
+antes da carga. Instruções não impõem limites de recursos pelo kernel nem
+certificam a correção da causa física dos cortes.
+
 ## Roteiro de uma nova investigação
 
 1. Registrar horário, boot, modo de entrada, carregador, periféricos e sintoma.
