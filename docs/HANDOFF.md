@@ -42,6 +42,14 @@
   publicado. Alterações preexistentes de renderização Codex continuam fora
   deste lote documental. Próximo passo: observar uso prolongado normal,
   preservando margem e reavaliando os recursos antes de qualquer build.
+- Registro **ad951f590702065abb37d2314d87c567f26f16b2**, SHA remoto
+  confirmado no [PR #9](https://github.com/Misael-art/Folego/pull/9).
+  JSON, contagens, identidades, unidades, janelas temporais, referências,
+  exclusão de conteúdo privado e `git diff --check` conferidos; sem suíte
+  local por ser documentação. [CI deste SHA](https://github.com/Misael-art/Folego/actions/runs/43209197113)
+  estava **queued** na consulta de publicação. Na base `4e75a21`, CI e
+  Windows estavam concluídos com sucesso. Aprendizados salvos e relidos na
+  memória em `gotchas/codex-observation-bounded-logs-and-launch-lifetime-20261112.md`.
 
 ## Orientação opcional e automática dos agentes — 0.2.0b14
 
