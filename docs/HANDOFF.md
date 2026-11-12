@@ -1,6 +1,44 @@
 # Passagem para o próximo agente — atualizada em 11/11/2026
 
-## Sessão básica do Plasma, padrão ligado e candidata b13 — 11/11/2026
+## Prévia 0.2.0b13 publicada e sessão básica aplicada — 11/11/2026
+
+- [Prévia pública v0.2.0b13](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b13),
+  publicada em **11/11 às 23:34:48 -03**, ID `442426196`. Fonte imutável
+  `b1a44b299e6f375b70283063eb3716de7d566da3`; tag anotada
+  `8abdeaf8c882a0dd60f426257dceb1b7e3a6e7da`. Branch e tag conferidas no remoto.
+  Os seis jobs do código passaram; os três da tag passaram no run
+  [43142068880](https://github.com/Misael-art/Folego/actions/runs/43142068880).
+  [PR #9](https://github.com/Misael-art/Folego/pull/9) atualizado e aberto, sem merge.
+- Fonte completa com **1021 arquivos** conferidos contra o Git; os **171 módulos**
+  do wheel e do sdist também correspondem ao commit. Build offline pelo uv
+  gerenciado, com backend fixado e um job, a partir do artefato desse commit.
+  Wheel instalado em `.dev/venv-release-b13`, sem dependências/Qt e fora do
+  checkout, confirmou versão, CLI real, aplicação/restauração em HOME privado
+  e bytes originais exatos. Metadados/hash do servidor e quatro downloads
+  públicos sem autenticação coincidiram, inclusive `SHA256SUMS`.
+
+  | Asset | Bytes | SHA-256 |
+  | --- | ---: | --- |
+  | `Folego-0.2.0b13-source.tar.gz` | 22281153 | `8ef715f48198f8cd9342086d89f440b0000ef9b4746e78613a30968c5c5b1cb8` |
+  | `folego-0.2.0b13-py3-none-any.whl` | 567697 | `ce88135678a0403a8bfd9bb31ab04ae25d78d85b01fad1071514291c38e43f5d` |
+  | `folego-0.2.0b13.tar.gz` | 790694 | `19a3b5fa67837249cafa7cfe207848937469b86f166b46520cf481de11adb23c` |
+
+- Às **23:32:59**, depois dos gates, foi recarregada somente a GUI existente
+  do Fôlego, após comprovar executável, boot, PID/starttime e cgroup com apenas
+  seu principal. PID posterior **222229**, ativa, `NRestarts=0`. O monitor de
+  entrada manteve PID **4382** e os mesmos estados. Consulta posterior da
+  sessão básica confirmou o mesmo ID, ligada/configurada e sem conflito.
+  O perfil segue em economia; última consulta térmica em 50 °C.
+- A primeira tentativa de publicar a tag foi recusada pelo guard porque
+  faltava a autorização por SHA no registro central. O pedido explícito de
+  release foi registrado como **somente** `v0.2.0b13 → b1a44b2…`; a segunda
+  tentativa passou pelo mesmo guard. Não houve mudança do mecanismo de proteção.
+  Notas, recibos, logs, fonte de QA, pacotes e downloads verificados permanecem
+  limitados a `.scratch/release-b13-20261111/`. Alterações locais de renderização
+  e o trabalho Windows encontrado ao final não foram incluídos nem descartados.
+  Os aceites físicos de login/boot e redução de carga abaixo continuam pendentes.
+
+## Sessão básica do Plasma e validação da b13 — 11/11/2026
 
 - Pedido posterior do operador: reduzir a pressão do login, criar a opção
   persistente ligada por padrão, aplicar, fazer commit/PR e publicar prévia.
