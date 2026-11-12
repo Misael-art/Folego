@@ -24,10 +24,21 @@
   benchmark, mudança de energia Linux ou interrupção de processos de trabalho.
   Backups da integração: `SteamDeck\recovery\folego-startup-original` no cartão;
   inventário canônico em `SteamDeck\preparacao.json`.
-- CI Windows adicionada para PowerShell 5.1, probe Win32 somente leitura e
-  ciclo Forms com coleta real em pasta descartável. Resultado remoto será
-  registrado após o push. Aceite físico de login, APU, toque, sensores e energia
-  no Steam Deck permanece pendente; sem merge ou nova release neste lote.
+- Código **fc1725d89bea1cfe3ceaed8a90e0a5f5c27ef12e**, remoto conferido,
+  no [PR #9](https://github.com/Misael-art/Folego/pull/9). A
+  [CI Windows](https://github.com/Misael-art/Folego/actions/runs/43145864298)
+  passou em Windows-2025: 40 contratos no PowerShell 5.1, probe Win32 real
+  somente leitura (incluindo planos) e Forms por 25 s com pelo menos uma
+  coleta entregue/renderizada, estado descartável e sem registrar autostart.
+  Efeitos de energia e registro permanecem simulados nos contratos.
+- [CI Linux da fonte commitada](https://github.com/Misael-art/Folego/actions/runs/43145864356):
+  **1444 passed, 2 skipped** headless; **1881 passed, 2 skipped** Qt offscreen;
+  CLI isolada aprovada. Os testes/código Codex Rendering locais preexistentes
+  não entram nesse SHA, explicando a diferença da suite no working tree.
+  Os módulos do pacote no cartão foram conferidos contra esse commit, com BOM
+  UTF-8 gerado para PowerShell 5.1; manifesto e backup íntegros.
+- Aceite físico de login, APU, toque, sensores, execução prolongada e mudança
+  real de energia no Steam Deck permanece pendente. Sem merge ou nova release.
 
 ## Prévia 0.2.0b13 publicada e sessão básica aplicada — 11/11/2026
 
