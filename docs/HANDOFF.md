@@ -71,6 +71,13 @@
   versus desligamento forçado após travamento e revisar refrigeração/energia e
   captura de crash com os responsáveis pelo hardware/boot. Flags de watchdog/MCE
   e firmware foram preservadas. Este lote não certifica eliminação do defeito.
+- Registro `bf47024b4e4ac8a90401eba9b3cc3efadbf7931e` enviado e confirmado
+  por `git ls-remote` na branch `codex/web-mcp-session-alert-20261108`;
+  [PR #9](https://github.com/Misael-art/Folego/pull/9) reutilizado e aberto.
+  Na consulta desse SHA, os dois jobs de contratos CLI passaram e os quatro
+  de núcleo/Qt estavam em execução. Revisão de JSON/fontes, referências,
+  segredos/tamanho e `git diff --check` passaram localmente. A última consulta
+  do host confirmou economia e ACPI 49 °C no mesmo boot. Sem merge ou release.
 
 ## Abertura monitorada do Codex Desktop ficou sem janela — 11/11/2026
 
