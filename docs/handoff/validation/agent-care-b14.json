@@ -5,15 +5,32 @@
   "tested_tree": "05bc107f0c45d45ca3773381d1e42025b9f83777",
   "runtime_files_checked": 191,
   "tests": {
-    "headless": {"passed": 1475, "skipped": 2, "elapsed_s": 47.04, "run": "run-q7hfwx_l"},
-    "qt": {"passed": 1913, "skipped": 2, "elapsed_s": 161.29, "run": "run-hk28rikm"},
+    "headless": {
+      "passed": 1475,
+      "skipped": 2,
+      "elapsed_s": 47.04,
+      "run": "run-q7hfwx_l"
+    },
+    "qt": {
+      "passed": 1913,
+      "skipped": 2,
+      "elapsed_s": 161.29,
+      "run": "run-hk28rikm"
+    },
     "source": "Frozen Git index artifact, absolute pytest pythonpath, managed ./dev environments",
-    "host_limits": {"cpu_quota_percent_of_one_core": 100, "memory_max_gib": 2, "parallel_suites": 1},
+    "host_limits": {
+      "cpu_quota_percent_of_one_core": 100,
+      "memory_max_gib": 2,
+      "parallel_suites": 1
+    },
     "working_tree_rendering_changes": "preserved and excluded from candidate"
   },
   "wayland": {
     "mapped": true,
-    "logical_size": [800, 387],
+    "logical_size": [
+      800,
+      387
+    ],
     "horizontal_scroll": 0,
     "checkbox_and_cli_worker": true,
     "background_discovery_of_new_client": true,
@@ -31,7 +48,11 @@
     "scope_memory_and_cache_max_bytes": 215355392,
     "limit": "bounded sample window, not a stability soak or physical cause diagnosis"
   },
-  "host_migration_preflight": {"discovered_global_files": 15, "legacy_files_proved": 15, "read_only": true},
+  "host_migration_preflight": {
+    "discovered_global_files": 15,
+    "legacy_files_proved": 15,
+    "read_only": true
+  },
   "contracts": [
     "Default off on new installations; this host is explicitly enabled during installation",
     "Bounded configured-client discovery while Folego is open, every three minutes",
@@ -41,5 +62,106 @@
     "Periodic worker does not allocate a new subprocess temporary tree every cycle",
     "No agent restart, grants expansion or kernel resource enforcement"
   ],
-  "delivery": "pending package and host receipts"
+  "delivery": {
+    "release": {
+      "release_id": 442756974,
+      "url": "https://github.com/Misael-art/Folego/releases/tag/v0.2.0b14",
+      "published_at": "2026-11-12T10:00:07Z",
+      "source_sha": "859c7cce155235de02a58d25e70cedfebf370229",
+      "prerelease": true,
+      "assets": [
+        {
+          "name": "folego-0.2.0b14-py3-none-any.whl",
+          "bytes": 597751,
+          "sha256": "dc578b9af59e8021ce38a046fc86773476ad881a7e36aa30b10c27cdc3af2944",
+          "public_download_verified": true
+        },
+        {
+          "name": "Folego-0.2.0b14-source.tar.gz",
+          "bytes": 22331254,
+          "sha256": "4cb90b48f843d26f88ce16e994dcaa57967d83e2e5c8ee2263ad59a7ab70ff74",
+          "public_download_verified": true
+        },
+        {
+          "name": "folego-0.2.0b14.tar.gz",
+          "bytes": 822331,
+          "sha256": "59082ee029276bf31324a54d45221046d4b6d6e5144fc4456e6827f7798fcb3e",
+          "public_download_verified": true
+        },
+        {
+          "name": "SHA256SUMS",
+          "bytes": 284,
+          "sha256": "59f1f5a6190da3a2068b5720714a47fb9222f2adbc00f966ffa479bce924a66f",
+          "public_download_verified": true
+        }
+      ]
+    },
+    "annotated_tag_oid": "fd028429ab0441da9fb792eff37d7cbed3622523",
+    "source_ci": "8 product jobs passed; CodeRabbit and Sourcery skipped",
+    "tag_ci": "4 product jobs passed",
+    "tag_ci_runs": [
+      43195773544,
+      43195773632
+    ],
+    "installed": {
+      "version": "0.2.0b14",
+      "runtime": ".dev/venv-host-b14",
+      "gui_pid_historical": 1690432,
+      "input_monitor_pid_historical": 4382,
+      "performance_monitor_pid_historical": 4383,
+      "monitors_restarted": false,
+      "menu_desktop_autostart_updated": true,
+      "future_monitor_units_use_installed_wheel": true,
+      "feature_enabled": true,
+      "managed_global_agent_files": 15,
+      "guideline_operation_id": "a11499be-0be7-4cef-a073-dc0d4e26673e",
+      "restore_projection_matches_originals": 15,
+      "noop_sync_instruction_writes": 0,
+      "noop_sync_elapsed_s": 0.0862,
+      "private_installation_receipt": "~/.local/state/folego/install-receipts/0.2.0b14.json"
+    },
+    "wheel_cli_qa": {
+      "version": "0.2.0b14",
+      "package_in_site_packages": true,
+      "qt_in_headless_environment": false,
+      "cli_apply_sync_and_restore": true,
+      "preserved_later_edit_and_mode": true,
+      "new_client_discovered": true,
+      "original_created_file_removed": true
+    },
+    "wheel_gui_qa": {
+      "platform": "wayland",
+      "mapped": true,
+      "size": [
+        800,
+        565
+      ],
+      "horizontal_scroll": 0,
+      "worker_apply": true,
+      "discovery_of_new_client": true,
+      "preserved_later_edits_and_mode": true,
+      "restored_created_files": true,
+      "disabled_preference_persisted": true,
+      "timer_stopped": true,
+      "host_agent_files_modified": 0
+    },
+    "natural_timer_qa": {
+      "natural_timer_interval_ms": 180000,
+      "natural_timer_wait_s": 179.98377785200137,
+      "platform": "wayland",
+      "mapped": true,
+      "size": [
+        800,
+        565
+      ],
+      "horizontal_scroll": 0,
+      "worker_apply": true,
+      "discovery_of_new_client": true,
+      "preserved_later_edits_and_mode": true,
+      "restored_created_files": true,
+      "disabled_preference_persisted": true,
+      "timer_stopped": true,
+      "host_agent_files_modified": 0
+    }
+  }
 }

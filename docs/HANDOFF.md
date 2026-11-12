@@ -49,9 +49,54 @@
   `focused`, com manifests, hashes, identidade/inodes e consulta lsof do UID
   sem referências. Avisos sobre mounts Docker externos ficaram no recibo
   privado; nenhum processo de Docker ou de outra tarefa foi interrompido.
-- Publicação/instalação: recibo final será registrado após conferir o SHA remoto,
-  os pacotes, a migração no host e os checks. Evidência sanitizada em
+- **Publicada e instalada**: [v0.2.0b14](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b14),
+  ID `442756974`, em **2026-11-12T10:00:07Z**. Fonte imutável
+  **859c7cce155235de02a58d25e70cedfebf370229**, tag anotada
+  `fd028429ab0441da9fb792eff37d7cbed3622523`; SHA remoto conferido.
+  Oito jobs do código e quatro da tag passaram, incluindo Windows:
+  [CI da tag](https://github.com/Misael-art/Folego/actions/runs/43195773544) e
+  [Windows](https://github.com/Misael-art/Folego/actions/runs/43195773632).
+  CodeRabbit/Sourcery ficaram skipped. [PR #9](https://github.com/Misael-art/Folego/pull/9)
+  permanece aberto, sem merge.
+- Fonte completa com **1039 arquivos** conferidos contra o commit e **191
+  arquivos de runtime** iguais no wheel/sdist. Build offline, backend fixado e
+  um job. Quatro assets: fonte completa 22.331.254 bytes, wheel 597.751 bytes,
+  sdist 822.331 bytes e SHA256SUMS 284 bytes. Metadados/digests do servidor e
+  downloads públicos **sem autenticação** coincidiram com todos os tamanhos
+  e hashes locais. Valores completos em
   [agent-care-b14.json](handoff/validation/agent-care-b14.json).
+- Wheel testado fora do checkout em `.dev/venv-release-b14`, sem Qt: CLI
+  aplica/sincroniza/restaura arquivos descartáveis com edição posterior e modo
+  preservados. GUI do mesmo wheel validada no Wayland em ambiente próprio
+  `.dev/venv-host-b14`, com Qt 6.12.0 do cache e hashes do lockfile; nenhum
+  download de dependência ou instalação global.
+- Neste host: **15 arquivos globais migrados**, habilitado/configurado,
+  operação `a11499be-0be7-4cef-a073-dc0d4e26673e`, sem conflitos. A projeção
+  de desabilitar confere exatamente com os 15 originais/ausências anteriores;
+  não se desligou a orientação real como QA. Sync sem mudança manteve o mesmo
+  ID e os mtimes, em 0,0862 s. As instruções do Codex apareceram no contexto
+  ativo com o marcador novo; isso não certifica obediência de todos os modelos.
+- Menu, Desktop e autostart apontam ao entrypoint do wheel, independente do
+  working tree. Somente a GUI própria foi recarregada, após identidade de
+  boot/PID/starttime/executável e cgroup com um principal: SIGTERM acompanhado,
+  sem SIGKILL. GUI histórica **1690432**, ativa, `NRestarts=0`. Monitores de
+  entrada **4382** e desempenho **4383** permaneceram ativos, sem restart ou
+  alteração de habilitação; as units futuras apontam ao ambiente do wheel.
+  Originais da instalação e recibo privado em
+  `~/.local/state/folego/install-receipts/0.2.0b14.json`. PIDs são históricos e
+  exigem nova identidade antes de qualquer ação.
+- Acionamento periódico **natural** também comprovado com o wheel instalado,
+  sem reduzir o intervalo nem chamar sync manual: o novo cliente apareceu
+  após **179,98 s**, com timer de 180.000 ms, no Wayland. A edição pessoal/modo
+  foi preservada ao desligar e os arquivos criados foram restaurados. Janela
+  própria 800×565, zero arquivos reais de agentes usados como fixture.
+  Recibo em `.scratch/agent-care-b14/wheel-natural-timer/receipt.json`.
+  Uma ocorrência real não equivale a um soak de horas.
+- Ao fechar, quatro suítes próprias preliminares encerradas foram preservadas
+  em `preliminary-full`, com runner ausente, lsof/environ do UID sem referências
+  e os mesmos inodes/metadados antes/depois do rename no Btrfs. Não se releu
+  payload esparso nem se apagou conteúdo. Restaram **16 slots ativos** no
+  wrapper, com os dois gates finais preservados em seus caminhos originais.
 
 ## Cuidados de recursos nos IDEs e CLIs — 12/11/2026
 
