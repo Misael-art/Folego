@@ -108,6 +108,15 @@ ou pausar processos, suspender, alterar brilho/TDP nem elevar o perfil.
 
 ## Organização do desenvolvimento
 
+Pedido posterior de 11/11, após os novos cortes: autoriza a opção **Sessão básica
+do Plasma**, ligada por padrão, com controle persistente GUI/CLI, aplicação no
+host, commit, PR e prévia após os gates. Reduzir autostart de aplicativos e
+serviços opcionais identificados e a restauração de aplicativos do Plasma,
+preservando originais e restauração verificável. Preservar a base funcional,
+Fôlego e seu monitor de entrada. Não parar aplicações/agentes em andamento,
+alterar serviços de sistema, reiniciar a sessão física para QA nem ampliar
+grants de efeitos. Itens desconhecidos permanecem protegidos e visíveis.
+
 Pedido de 08/11: autoriza, para o erro nativo Web `Selected model is at capacity.
 Please try a different model.`, solicitar automaticamente o ciclo do responsável
 de recuperação já habilitado e verificado da mesma conta. Usar diário/ID,

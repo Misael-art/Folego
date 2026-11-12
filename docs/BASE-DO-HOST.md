@@ -248,6 +248,13 @@ destino privado apropriado.
 
 ## Aceite de um modo econômico
 
+Em 11/11, a opção **Sessão básica do Plasma** do Fôlego passou a configurar
+34 autostarts/units opcionais reconhecidos neste usuário, sem encerrar os
+processos já residentes. Ela começa ligada e guarda os originais para restaurar
+quando desligada. `Linger=yes` permite que trabalhos atuais atravessem logout;
+esta configuração não os termina. O próximo login/boot físico e a comparação
+de pressão preservam aceite pendente. Recibo e gates estão no [HANDOFF](HANDOFF.md).
+
 A revisão deve demonstrar login/saída e recuperação por console, teclado e
 ponteiro, método de entrada acessível, rede/DNS/HTTPS/horário, voz e reprodução,
 controle de energia/bateria e portais requeridos pelas aplicações. Deve medir

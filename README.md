@@ -178,16 +178,35 @@ contas usam um fundo contínuo, com os elementos internos transparentes.
 O alvo é **Linux**, com KDE Plasma para a integração completa com o desktop.
 O wrapper gerencia Python **3.14.7**, uv e dependências fixadas em `uv.lock`.
 Não é necessário ativar um ambiente virtual ou instalar pacotes Python globalmente.
-A [prévia 0.2.0b12](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b12)
+A [prévia 0.2.0b13](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b13)
 oferece fonte completa, wheel, sdist e SHA256SUMS. A fonte completa inclui o wrapper
 e o lockfile; os pacotes Python exigem Python 3.14 e a dependência GUI opcional.
 
 ```bash
-git clone --branch v0.2.0b12 https://github.com/Misael-art/Folego.git
+git clone --branch v0.2.0b13 https://github.com/Misael-art/Folego.git
 cd Folego
 ./dev setup
 ./dev gui
 ```
+
+Em **Opções → Sessão básica do Plasma**, a opção **Iniciar o Plasma com o básico
+funcional e o Fôlego** começa ligada. Ela configura uma sessão vazia do Plasma,
+adia autostarts e serviços opcionais reconhecidos e preserva entrada nativa,
+rede, áudio, energia, autenticação, portais e o Fôlego. Aplicativos em execução
+continuam abertos. Os originais ficam em recibo privado com hashes; desligar
+restaura os bytes e links anteriores, sem iniciar aplicativos imediatamente.
+Mudanças externas e resultados incertos bloqueiam repetição. Itens desconhecidos
+ficam preservados e aparecem no diagnóstico. Serviços opcionais suprimidos não
+podem ser iniciados por unit enquanto a opção estiver ligada; os aplicativos
+continuam disponíveis para abertura manual. O próximo login físico precisa de
+validação própria; a opção não certifica a causa nem a eliminação dos reinícios.
+
+Na CLI: `./dev run startup basic-status --json` consulta;
+`./dev run startup basic-enable --confirmar` aplica;
+`./dev run startup basic-disable --confirmar` restaura e
+`./dev run startup basic-reconcile --json` verifica o recibo sem repetir efeitos.
+O início normal da GUI sincroniza a preferência no KDE. A configuração é por
+usuário; não altera o boot nem serviços de sistema.
 
 Na primeira abertura, o Fôlego configura o **início automático com a sessão**,
 ligado por padrão. A aba **opções** permite desligar e mantém sua escolha nas

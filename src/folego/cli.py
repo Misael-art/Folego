@@ -280,7 +280,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     startup = commands.add_parser("startup", help="início automático com a sessão, ligado por padrão")
     startup_sub = startup.add_subparsers(dest="sub", required=True)
-    for name in ("status", "enable", "disable", "sync"):
+    for name in ("status", "enable", "disable", "sync", "basic-status", "basic-enable",
+                 "basic-disable", "basic-sync", "basic-reconcile"):
         command = startup_sub.add_parser(name)
         command.add_argument("--json", action="store_true")
         command.add_argument("--confirmar", action="store_true")
@@ -2853,7 +2854,19 @@ def _dispatch(ns, argv) -> int:
         return EXIT_REFUSED if blocked else EXIT_OK
     if ns.command == "startup":
         from . import startup
-        if ns.sub == "status":
+        if ns.sub.startswith('basic-'):
+            from .basic_session import BasicSession
+            action = ns.sub.removeprefix('basic-')
+            if action not in ('status', 'reconcile') and not ns.confirmar:
+                return _emit_gate_refusal(ns, 'startup', 'operação exige --confirmar', EXIT_NEEDS_CONFIRM)
+            try:
+                manager = BasicSession()
+                result = (manager.status() if action == 'status' else
+                          manager.configure(reconcile=True) if action == 'reconcile' else
+                          manager.configure(None if action == 'sync' else action == 'enable'))
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                result = {'ok': False, 'state': 'unknown', 'outcome': 'recusa', 'message': str(exc)}
+        elif ns.sub == "status":
             result = startup.status()
         else:
             if ns.sub != "sync" and not ns.confirmar:

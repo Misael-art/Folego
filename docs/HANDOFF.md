@@ -1,5 +1,69 @@
 # Passagem para o próximo agente — atualizada em 11/11/2026
 
+## Sessão básica do Plasma, padrão ligado e candidata b13 — 11/11/2026
+
+- Pedido posterior do operador: reduzir a pressão do login, criar a opção
+  persistente ligada por padrão, aplicar, fazer commit/PR e publicar prévia.
+  **Opções → Sessão básica do Plasma** e a CLI `startup basic-status`,
+  `basic-enable --confirmar`, `basic-disable --confirmar` e `basic-reconcile`
+  usam a mesma implementação. O início normal da GUI sincroniza a preferência
+  no KDE; a preferência de iniciar o próprio Fôlego continua independente.
+- A configuração usa `Hidden=true` pelo mecanismo XDG, máscaras de units
+  opcionais somente do usuário e `General/loginMode=emptySession` no Plasma.
+  Não altera serviços de sistema. O catálogo explícito preserva Plasma,
+  autenticação, portais, entrada nativa, PipeWire/WirePlumber, rede, energia,
+  Fôlego e seu monitor. Launchers, atualizadores, indexação e monitores auxiliares
+  reconhecidos ficam para abertura manual. Serviços mascarados exigem desligar
+  a opção antes de uma ativação por unit. Itens sem classificação são preservados.
+  Mecanismos oficiais: [XDG Autostart](https://specifications.freedesktop.org/autostart/latest/)
+  e [systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html).
+- Recibo privado limitado a 64 KiB, até 64 efeitos, originais com SHA-256,
+  modos e links; intenção durável antes do primeiro efeito e revalidação em
+  cada escrita. Arquivos alterados externamente bloqueiam restauração.
+  Interrupção não permite replay; a consulta confirma o mesmo ID quando todos
+  os efeitos são comprovados. Restauração explícita permite recuperar um lote
+  parcial conhecido, sem iniciar aplicativos. Preferência em `startup.json`,
+  recibo em `state/basic-session.json`; a CLI não revela os originais.
+- Aplicado no host: **34 itens**, ID `1ad4de70-c461-46b0-9418-8511914637aa`,
+  habilitado/configurado, sem conflito e sem item desconhecido no plano.
+  `ksmserverrc` já tinha sessão vazia. Oito units observadas mantiveram os mesmos
+  PIDs, estados e contagens de reinício antes/depois, incluindo GUI, entrada,
+  agentes e áudio. A saída de áudio física era a padrão, sem depender do sink
+  JamesDSP. Não se fechou Steam, agente ou sessão para testar a opção.
+  O usuário tem `Linger=yes`: processos já residentes podem atravessar logout;
+  configurar o próximo início não encerra esse trabalho. O próximo login/boot
+  físico e a redução efetiva de carga conservam aceite próprio pendente.
+- Fonte congelada para QA por `git write-tree`/`git archive`, como artefato de
+  preparação da release, sem outro checkout, Git ou ambiente instalado nela.
+  Os cinco módulos de produção conferem byte a byte com o índice revisado.
+  O ajuste de renderização do Codex que já estava local permaneceu fora deste
+  incremento e dos pacotes. Os dois perfis oficiais foram executados
+  sequencialmente sobre `source/tests`, com `-o pythonpath=` absoluto apontando
+  para `source/src`, usando `./dev test-headless` e `./dev test`:
+  **1437 passed, 2 skipped** em 47,33 s (`run-3hzli4ve`) e
+  **1874 passed, 2 skipped** em 177,66 s (`run-ot6_c_83`). Diff check passou.
+  Uma passagem headless anterior passou, mas seu caminho de importação relativo
+  não provava isolamento da fonte; o gate acima a substitui, sem somar execuções.
+- Foco inicial: 39 testes headless, 53 Qt e, após as regressões adicionais,
+  18 casos da nova opção/GUI. Testam originais exatos, links, configurações
+  imutáveis, preferência desconhecida, conflito, interrupção, ausência de replay,
+  reconciliação, corrupção do backup e extensão do catálogo aplicado.
+  QA KDE/Wayland em janela própria de 800 × 565 confirmou checkbox, workers
+  reais, persistência, restauração exata e ausência de rolagem horizontal,
+  usando somente configurações descartáveis. A primeira tentativa não acertou
+  a área clicável do checkbox; o harness passou a clicar no indicador visível.
+  A captura final usa a pintura de superfície do produto. Essas provas não são
+  login físico nem medição de carga após boot.
+- O preflight recusou o limite de 20 workspaces. Seis execuções concluídas
+  foram revistas por manifesto, PID ausente e `lsof +D` privilegiado sem
+  referências; conteúdos integrais e hashes foram movidos no mesmo Btrfs para
+  `.scratch/dev-tests-reviewed/20261111-basic-session/`. Legados e JSONs
+  ilegíveis foram preservados. Nenhum limite foi ampliado ou payload apagado.
+  QA e preparação em `.scratch/release-b13-20261111/`, janela final em
+  `.scratch/basic-session-wayland-20261111-final/`. Antes dos gates havia cerca
+  de 8 GiB disponíveis, 63 GiB em disco, PSI baixo e ACPI 49–50 °C; a leitura
+  após Qt foi 65 °C. Execução sequencial, sem instalação global ou carga artificial.
+
 ## Novos cortes à noite: calor, falha anterior de kernel e mitigação — 11/11/2026
 
 - Pedido do operador: investigar, registrar e atuar após vários reinícios.

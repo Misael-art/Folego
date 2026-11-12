@@ -44,6 +44,20 @@ class OptionsTab(QWidget):
         self.status.setWordWrap(True)
         self.verify = QPushButton("Verificar configuração")
         self.verify.clicked.connect(lambda: self.start())
+        self.basic_choice = QCheckBox('Iniciar o Plasma com o básico funcional e o Fôlego')
+        self.basic_choice.setChecked(True)
+        self.basic_choice.setAccessibleName('Sessão básica do Plasma, ligada por padrão')
+        self.basic_choice.clicked.connect(self.change_basic_session)
+        self.basic_status = QLabel('Ligado por padrão; aguardando verificação.')
+        self.basic_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.basic_status.setWordWrap(True)
+        self.basic_verify = QPushButton('Verificar sessão básica')
+        self.basic_verify.clicked.connect(lambda: self.jobs.run(
+            'startup-basic-reconcile', '', done=self.show_basic_session))
+        basic_text = QLabel('Preserva Plasma, entrada nativa, rede, áudio, energia e o Fôlego. '
+                            'Adia aplicativos e serviços opcionais reconhecidos. '
+                            'Desligar restaura a configuração anterior. Aplicativos abertos continuam em execução.')
+        basic_text.setWordWrap(True)
         self.pending = QComboBox()
         self.pending.setAccessibleName("Operações com resultado pendente")
         self.operation_id = QLineEdit()
@@ -94,6 +108,8 @@ class OptionsTab(QWidget):
         for title, controls in (
             ('Modo de abertura', (self.startup_view_choice, self.startup_view_status)),
             ("Início com a sessão", (self.choice, text, self.status, self.verify)),
+            ('Sessão básica do Plasma', (self.basic_choice, basic_text,
+                                         self.basic_status, self.basic_verify)),
             ("Operações pendentes", (self.pending, self.operation_id, self.reconcile, self.cancel,
                                      self.operation_status)),
             ("Temporários do Fôlego", (self.retention, self.retain, self.retained_runs,
@@ -327,8 +343,34 @@ class OptionsTab(QWidget):
         if self._stopped: return
         self.choice.setEnabled(False)
         self.jobs.run("startup-sync" if sync else "startup-status", "", done=self.done)
+        if sync:
+            self.basic_choice.setEnabled(False)
+        else:
+            self.jobs.run('startup-basic-status', '', done=self.show_basic_session)
         self.jobs.run("review-pending", "", done=self.show_pending)
         self.jobs.run("jobs-status", "", done=self.show_retention)
+
+    def change_basic_session(self, checked):
+        self.basic_choice.setEnabled(False)
+        self.jobs.run('startup-basic-enable' if checked else 'startup-basic-disable',
+                      '', confirm=True, done=self.show_basic_session)
+
+    def show_basic_session(self, payload):
+        if self._stopped: return
+        payload = payload or {}
+        known = type(payload.get('enabled')) is bool
+        if known:
+            with QSignalBlocker(self.basic_choice):
+                self.basic_choice.setChecked(payload['enabled'])
+        self.basic_choice.setEnabled(known and payload.get('state') not in ('unknown', 'conflict'))
+        text = payload.get('message') or payload.get('reason') or 'Configuração desconhecida; preservada.'
+        if payload.get('targets'):
+            text += '\nItens adiados: ' + ', '.join(payload['targets'])
+        if payload.get('preserved'):
+            text += '\nItens sem classificação, preservados: ' + ', '.join(payload['preserved'])
+        if payload.get('operation_id'):
+            text += '\nOperação: ' + payload['operation_id']
+        self.basic_status.setText(text)
 
     def show_pending(self, payload):
         if self._stopped: return
@@ -400,6 +442,8 @@ class OptionsTab(QWidget):
 
     def done(self, payload):
         if self._stopped: return
+        if isinstance((payload or {}).get('basic_session'), dict):
+            self.show_basic_session(payload['basic_session'])
         self.choice.setEnabled(True)
         if type((payload or {}).get("enabled")) is bool:
             self.choice.setTristate(False)
