@@ -11,7 +11,8 @@ reconsultados após atualização da distribuição ou mudança de host.
 - Kernel `6.18.49-1-MANJARO`, plataforma Jupiter e aproximadamente 14,5 GiB de
   RAM utilizável pelo Linux. A GPU usa memória compartilhada.
 - Raiz e HOME em Btrfs no NVMe de 932 GiB. A consulta de 11/11 mostrou 118 GiB
-  livres e 88% ocupado. Capacidade livre e integridade exigem consultas distintas.
+  livres e 88% ocupado; à noite, 63 GiB livres e 94% ocupado. Capacidade livre e
+  integridade exigem consultas distintas; os valores são de momentos diferentes.
 - `/tmp` e `/run/user/1000` são tmpfs. `/var/tmp` fica no Btrfs. Builds, ambientes
   e temporários grandes precisam de destino persistente comprovado.
 - Swap observada em zram de cerca de 6,9 GiB e arquivo de 512 MiB, administrada
@@ -137,6 +138,27 @@ funcional. A contagem de processos isolada é insuficiente para avaliar o custo.
 
 ## Aprendizados de estabilidade e gargalos
 
+- Na sequência da noite de 11/11, quatro boots em `6.18.49-1-MANJARO`
+  terminaram sem encerramento organizado preservado. As últimas amostras eram
+  21:21:10, 21:57:19, 21:59:46 e 22:05:30 -03; a primeira sequência tinha
+  cerca de 4 h 32 min de uptime. ACPI atingiu 101 °C em uma amostra, com limite
+  passivo 100 °C e crítico 105 °C. Havia RAM disponível e PSI de memória baixo;
+  três boots estavam carregando. A carga do Steam durante sua atualização é
+  observação concorrente, sem atribuição causal. Às 22:41, o perfil ativo foi
+  reduzido manualmente de equilibrado para economia, com intenção e confirmação.
+  É mitigação reversível; não há aceite de estabilidade. Recibo, valores e
+  reversão estão no [HANDOFF](HANDOFF.md) e na
+  [evidência sanitizada](handoff/validation/reset-2026-11-11-noite.json).
+- Um boot anterior, `bda19752`, estava em `6.1.182-1-rt67-MANJARO` e preservou
+  falhas `Bad page cache/state` no contexto do KWin, com páginas shmem ainda
+  mapeadas ao serem removidas. Isso mantém kernel/driver/hardware na investigação;
+  não diagnostica RAM física nem explica automaticamente os boots em 6.18.
+  A presença de falha registrada distingue esse incidente dos cortes silenciosos.
+- O SD estava novamente montado à noite, com avisos NTFS na janela consultada.
+  Esse volume tem recuperação própria; não se deve fazer reparo ou desmontagem
+  como teste de estabilidade. Btrfs manteve delta zero; SMART passou com erros
+  de mídia zero e 2819 desligamentos inseguros acumulados. Contadores históricos
+  e pstore vazio não excluem defeito transitório nem comprovam a causa de um corte.
 - Em 07/11, um build chegou a aproximadamente 3,4 GiB de RSS e coincidiu com
   QA do Fôlego, ACPI a 100 °C e pressão de memória/I/O. Depois a pressão caiu,
   e o boot terminou abruptamente. A causalidade física permanece aberta.

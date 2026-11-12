@@ -1,5 +1,77 @@
 # Passagem para o próximo agente — atualizada em 11/11/2026
 
+## Novos cortes à noite: calor, falha anterior de kernel e mitigação — 11/11/2026
+
+- Pedido do operador: investigar, registrar e atuar após vários reinícios.
+  **Causa raiz ainda indeterminada.** A evidência sanitizada está em
+  [reset-2026-11-11-noite.json](handoff/validation/reset-2026-11-11-noite.json),
+  com sete boots, últimas amostras, extremos da janela recente, SMART e recibo.
+  Os horários abaixo são registros retidos, não instantes físicos dos cortes.
+
+  | Boot | Último journal | Última amostra | Observado na amostra |
+  | --- | --- | --- | --- |
+  | `12743ce8` | 21:20:27 -03 | 21:21:10 -03 | ACPI 97 °C, RAM disponível 7.762.816 KiB, 95%, descarga a 7,652 V, AC ausente |
+  | `9360859f` | 21:57:11 -03 | 21:57:19 -03 | ACPI 99 °C, RAM disponível 7.910.272 KiB, 79%, carregando a 8,369 V, AC presente |
+  | `17bda0bb` | 21:59:30 -03 | 21:59:46 -03 | ACPI 84 °C, RAM disponível 9.646.288 KiB, 81%, carregando a 8,463 V, AC presente |
+  | `dd3dc45b` | 22:05:25 -03 | 22:05:30 -03 | ACPI 87 °C, RAM disponível 9.669.224 KiB, 85%, carregando a 8,482 V, AC presente |
+
+- Esses quatro boots usaram `6.18.49-1-MANJARO` e não preservaram encerramento
+  do logind. O boot `12743ce8` teve cerca de 4 h 32 min até a última amostra.
+  A janela final de `17bda0bb` chegou a **101 °C às 21:59:30**; os limites
+  atuais do sensor são passivo 100 °C e crítico 105 °C. Steam atualizava nos
+  três boots curtos e apareceu como maior CPU nas amostras finais. Calor e
+  carga são riscos observados; não comprovam desligamento térmico nem culpa
+  do aplicativo. PSI de memória em 60 s nas últimas amostras era 0–0,03%.
+  Não apareceu panic, OOM ou falha conclusiva de GPU na consulta filtrada
+  desses boots. Os cortes com AC presente impedem explicar todos por descarga.
+- Há um incidente diferente à tarde: `bda19752`, com kernel
+  **`6.1.182-1-rt67-MANJARO`**, registrou `BUG: Bad page cache` e `Bad page state`
+  no contexto de `kwin_wayland`, com `still mapped when deleted`, caminho shmem
+  e 13.088 mensagens suprimidas no aviso final. Isso é evidência de falha no
+  kernel/gerenciamento de páginas; não identifica o responsável nem prova RAM
+  defeituosa. O taint `B` admite problema de hardware ou bug do kernel, segundo
+  a [documentação oficial](https://docs.kernel.org/admin-guide/tainted-kernels.html).
+  Não transportar essa atribuição para os boots posteriores em outro kernel.
+  Já `deb94112` registrou desligamento solicitado por `plasma-shutdown`
+  às **16:41:01**, separado da sequência sem encerramento preservado.
+- Mitigação manual aplicada pelo owner instalado: `powerprofilesctl set power-saver`
+  às **22:41:22–23 -03**, de `balanced` para `power-saver`, sem holds presentes.
+  Intenção e resultado sincronizados antes/depois, ID
+  `4bfcf74a1236494f8de28be096564bb2`, boot `f8a649f9`.
+  Leitura posterior confirmou economia; o guarda permanece habilitado, sem
+  bloqueio e sem recibo automático aplicado. Reversão manual: `powerprofilesctl
+  set balanced`, somente se o perfil ainda for economia e não houver escolha
+  posterior do operador. A temperatura já estava perto de 50 °C antes da troca;
+  não atribuir a ela uma melhora térmica nem certificar estabilidade prolongada.
+- Consulta SMART autenticada: aprovado, alerta crítico 0, erros de mídia 0,
+  temperatura 43 °C, `unsafe_shutdowns=2819` e oito entradas acumuladas no log
+  de erros. Btrfs continua com corrupção acumulada 6741 e delta observado zero.
+  Esses números não certificam integridade completa. `/sys/fs/pstore` e o
+  diretório `/var/lib/systemd/pstore` estavam sem entradas;
+  não há crash recuperável nesta consulta.
+  A primeira consulta SMART expirou em 25 s; a posterior terminou com código 0.
+- O SD voltou a estar montado em `/mnt/WindowsSD`, `/dev/mmcblk0p3`, `fuseblk`.
+  Saúde do host contou 80 avisos NTFS na janela de dez minutos, com atribuição
+  parcial ao único candidato. Não se reparou nem desmontou volume em uso;
+  os erros não demonstram a causa dos reinícios. NVMe com 63 GiB livres (94%
+  ocupado), RAM disponível cerca de 8,4 GiB, sem troca ativa de swap na janela
+  medida, ACPI 49–50 °C e PSI baixo permitiram somente consultas e documentação.
+- Verificação no host: CLI oficial `disk health`/`disk timeline`, journal,
+  leituras de energia/temperatura, SMART e units. A consulta inicial sem
+  barramento foi marcada desconhecida; com runtime/barramento oficiais,
+  GUI PID 4312 e entrada PID 4382 estavam ativas, sem reinícios por falha.
+  Não houve mudança de código deste lote, teste de estresse, reboot, reparo de
+  filesystem ou encerramento de aplicações. Revisar JSON, referências e diff
+  é o gate deste incremento documental; não revalidar a implementação anterior
+  de renderização por inferência. Seus sete arquivos locais foram preservados.
+- Logs brutos privados e manifestos em `.scratch/host-incident-20261111-2236/`
+  (cerca de 1 MiB). O JSON versionado preserva a evidência sanitizada fora deste
+  disco; os brutos locais não são um backup independente. Próximo passo:
+  observar uso natural em economia, obter o relato de apagamento espontâneo
+  versus desligamento forçado após travamento e revisar refrigeração/energia e
+  captura de crash com os responsáveis pelo hardware/boot. Flags de watchdog/MCE
+  e firmware foram preservadas. Este lote não certifica eliminação do defeito.
+
 ## Abertura monitorada do Codex Desktop ficou sem janela — 11/11/2026
 
 - Pedido do operador: abrir o Codex Desktop e monitorar. O lançamento normal
