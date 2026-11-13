@@ -29,8 +29,8 @@
     "heavy_operations": "sequential"
   },
   "resources_observed": {
-    "samples": 32,
-    "available_gib_min": 7.51,
+    "samples": 114,
+    "available_gib_min": 7.071,
     "temperature_c_max": 60.0,
     "swap_pages_in_out_max_per_second": {
       "pswpin": 0,
@@ -75,10 +75,41 @@
     ],
     "final": "Indicator and native Yes button were clicked and the flow passed."
   },
-  "host_installation": "prepared; active installation receipt pending",
+  "host_installation": {
+    "version": "0.2.0b15",
+    "runtime": ".dev/venv-host-b15",
+    "phase": "installed",
+    "automatic_audio_enabled": true,
+    "supervision_enabled": true,
+    "healthy_reference_present": true,
+    "microphone_healthy": true,
+    "microphone_circuit_empty": true,
+    "input_monitor_pid": 238080,
+    "gui_pid": 238092,
+    "performance_pid_preserved": 4069,
+    "wireplumber_pid_preserved": 170788,
+    "NRestarts": 0,
+    "graceful_reload": "Tracked SIGTERM of the two identified product principals, followed by start of their verified units.",
+    "private_receipt": "~/.local/state/folego/install-receipts/0.2.0b15.json"
+  },
   "limits": [
     "Natural recurrence and recovery of this exact condition remains pending.",
     "Voice confirmation belongs to the user.",
     "Raw device graphs and runtime receipts remain private."
-  ]
+  ],
+  "source_sha": "77a0c0d878169ee25d1ce43cb738deff5276af62",
+  "tracked_runtime_and_tests_matched": 339,
+  "github": {
+    "pr": 9,
+    "source_sha_remote_confirmed": true,
+    "ci": {
+      "id": 43475137274,
+      "conclusion": "success"
+    },
+    "windows": {
+      "id": 43475137451,
+      "conclusion": "success"
+    },
+    "pr_update": "Local gh succeeded after the connector explicitly rejected update with HTTP 403."
+  }
 }

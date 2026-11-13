@@ -36,10 +36,25 @@
   diálogo sem escolher o botão. A prova final clicou no indicador e em Yes.
   As três tentativas anteriores ficam como falhas preservadas. Recibo/capturas
   em `.scratch/microphone-auto-b15/wayland-confirmed/`.
-- Instalação ativa e leitura da política serão registradas após o carregamento
-  dos entrypoints. A próxima falha natural continua sendo o aceite físico da
-  nova condição. As alterações preexistentes de renderização Codex permanecem
-  preservadas no working tree e fora da fonte do pacote.
+- **Instalado e ativo neste host**, com política e referência saudável
+  preservadas. Monitor passou de 4067 para **238080** e GUI de 4048 para
+  **238092**, ambos em `.dev/venv-host-b15`, ativos e `NRestarts=0`. Recarga
+  por SIGTERM acompanhado após boot/PID/starttime/executável/cgroup com um
+  principal. Menu, Desktop, autostart e units futuras apontam ao wheel.
+  Desempenho **4069** e WirePlumber **170788** mantiveram seus PIDs. O comando
+  instalado, fora do checkout, confirmou microfone saudável, guarda ativa,
+  opt-in de reenumeração ligado e disjuntor vazio após a recarga.
+- Originais dos cinco entrypoints, intenção/ID, hashes antes/depois e readback
+  em `~/.local/state/folego/install-receipts/0.2.0b15.json`. Evidência sanitizada
+  em [audio-busy-b15.json](handoff/validation/audio-busy-b15.json). A próxima
+  falha natural continua sendo o aceite físico da nova condição. As alterações
+  preexistentes de renderização Codex permanecem preservadas no working tree.
+- Fonte **77a0c0d878169ee25d1ce43cb738deff5276af62**, SHA remoto conferido,
+  com [CI](https://github.com/Misael-art/Folego/actions/runs/43475137274) e
+  [Windows](https://github.com/Misael-art/Folego/actions/runs/43475137451)
+  aprovados. O [PR #9](https://github.com/Misael-art/Folego/pull/9) foi atualizado
+  pela CLI autenticada após o conector retornar HTTP 403 na edição. Coletor
+  temporário de recursos encerrado após a instalação.
 
 ## Microfone sem fonte física após dispositivo ocupado no login — 13/11/2026
 
