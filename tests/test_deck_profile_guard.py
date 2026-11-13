@@ -286,10 +286,15 @@ def reprobe_fault(profiles):
     row['identity'].update(active='off', recovery='wireplumber-reprobe', owner={'pid': 123})
 
 
-def test_reprobe_requires_opt_in_and_ignores_unrelated_kwin_failure(tmp_path, monkeypatch):
+@pytest.mark.parametrize('active', ['off', MIC_PROFILE])
+def test_reprobe_requires_opt_in_and_ignores_unrelated_kwin_failure(tmp_path, monkeypatch, active):
     supervisor, profiles = guard(tmp_path, monkeypatch)
     supervisor.tick(); supervisor.tick()
     reprobe_fault(profiles)
+    profiles.rows['microphone']['identity']['active'] = active
+    if active == MIC_PROFILE:
+        profiles.rows['microphone']['code'] = 'audio-nodes-missing-after-busy'
+        profiles.rows['microphone']['identity']['busy_evidence'] = {'pipewire': {'pid': 124}}
     supervisor.native.report['errors'] = ['KWin indisponível']
     supervisor.native.report['backend'] = 'unknown'
     supervisor.tick(); supervisor.tick()

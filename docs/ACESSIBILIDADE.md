@@ -116,6 +116,16 @@ preferência persistida continuava `HiFi (Mic, Speaker)`. O microfone virtual
 existia e estava sem mute, mas faltava a fonte física. Esse conjunto agora
 recebe o diagnóstico `audio-enumeration-incomplete` e um caminho de reparo.
 
+Em 13/11, o perfil `HiFi (Mic, Speaker)` estava ativo e os PCMs ALSA livres,
+com as rotas físicas ausentes após falha de abertura por dispositivo ocupado
+no login. O diagnóstico `audio-nodes-missing-after-busy` usa a mesma opção de
+recuperação. Confere os erros de captura e reprodução acp5x no journal do boot,
+com PID/UID/unit do PipeWire atual e timestamps posteriores ao início dos dois
+responsáveis atuais. Leitura limitada a 64 registros e 64 KiB, com prazo de 2 s.
+Também exige a preferência salva, todos os PCMs internos livres e ausência de
+outra rota física. Revalida a falha e o uso do áudio imediatamente antes do
+efeito. Históricos antigos, incompletos ou indisponíveis deixam o caso em revisão.
+
 A opção **Reenumerar áudio automaticamente após falha conhecida** fica na aba
 acessibilidade. Novas instalações e configurações migradas começam com essa
 opção desligada. Para habilitar pelo terminal, com a supervisão já habilitada,

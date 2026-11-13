@@ -1,5 +1,46 @@
 # Passagem para o próximo agente — atualizada em 13/11/2026
 
+## Recuperação automática das rotas de áudio após dispositivo ocupado — 0.2.0b15
+
+- Pedido posterior ao reparo manual de 13/11 autoriza colocar essa recuperação
+  no automático neste host. O novo diagnóstico `audio-nodes-missing-after-busy`
+  integra `DeckProfiles` ao monitor, CLI e cartão existentes pela mesma opção
+  de reenumeração, já habilitada aqui.
+- Exige perfil ativo e persistido `HiFi (Mic, Speaker)`, captura ALSA, fontes
+  virtuais identificadas, PCMs internos livres e ausência de outra rota física.
+  Prova os dois erros de abertura acp5x no journal do boot e PID/UID/unit do
+  PipeWire atual, após o início dos responsáveis atuais. Consulta limitada a
+  64 registros, 64 KiB e dois segundos. Erro, histórico antigo, outro owner,
+  dispositivo ocupado ou rota externa deixam o estado para revisão.
+- O fluxo compartilha opt-in, referência saudável, duas amostras frescas,
+  intenção/ID, coordenador, revalidação no ato, orçamento de três por hora,
+  intervalo de 120 s e disjuntor. Confirma a cadeia física → echo-cancel →
+  mic-biglinux após o efeito. O caso com perfil ativo reconsulta também a falha
+  e o uso dos PCMs imediatamente antes do restart.
+- Fonte congelada para o pacote em `.scratch/microphone-auto-b15/source`.
+  Foco inicial **56 passed** em 10,79 s, `run-hebwgenr`. Gates finais com o
+  caso de timeout incluído, `./dev test-headless <fonte>/tests -o pythonpath=<fonte>/src`
+  e `./dev test` com os mesmos alvos absolutos, **1502 passed, 2 skipped** em
+  49,69 s (`run-dc_bkqkw`) e **1940 passed, 2 skipped** em 167,65 s
+  (`run-0wo0ba0c`). Python 3.14.7, HOME/XDG privados, um núcleo e 2 GiB por
+  scope, execução sequencial. Permanecem 19 slots de QA, com evidências retidas.
+- Wheel **599107 bytes**, SHA-256
+  `a79ac99a690b58532aa5928ff4de36b2999ca7ed6df1013af546b4006b5f20f6`,
+  com 191 arquivos de runtime iguais à fonte testada. Build offline, backend
+  fixado e dependências Qt 6.12.0 reutilizadas do cache com hashes do lockfile.
+  Ambiente instalado preparado em `.dev/venv-host-b15`.
+- Fluxo real KDE/Wayland com esse wheel em janela própria **800×565**, efeito
+  descartável e diálogo nativo. A confirmação apresenta o caso de dispositivo
+  ocupado e habilita a opção pelo mesmo encaminhamento. Sem rolagem horizontal.
+  O harness inicial clicou no centro sem área de clique e depois encerrou o
+  diálogo sem escolher o botão. A prova final clicou no indicador e em Yes.
+  As três tentativas anteriores ficam como falhas preservadas. Recibo/capturas
+  em `.scratch/microphone-auto-b15/wayland-confirmed/`.
+- Instalação ativa e leitura da política serão registradas após o carregamento
+  dos entrypoints. A próxima falha natural continua sendo o aceite físico da
+  nova condição. As alterações preexistentes de renderização Codex permanecem
+  preservadas no working tree e fora da fonte do pacote.
+
 ## Microfone sem fonte física após dispositivo ocupado no login — 13/11/2026
 
 - Investigação solicitada pelo usuário. No boot `70f177c8`, às 13:07:02 -03,

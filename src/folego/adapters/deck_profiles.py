@@ -308,6 +308,17 @@ class DeckProfiles:
                 return {"state": "unknown", "detail": "entrada BigLinux ausente ou silenciada; revisar sem alterar mute",
                         "identity": identity}
             if active == MIC_PROFILE:
+                if not physical and default == 'mic-biglinux' and self.supported():
+                    sinks = json.loads(self._pactl('-f', 'json', 'list', 'sinks'))
+                    if (not isinstance(sinks, list) or len(sinks) > 128
+                            or not all(isinstance(row, dict) for row in sinks)):
+                        raise ProfileUnknown('saídas de áudio incompletas')
+                    owner, evidence = self.audio_recovery.probe_missing_nodes(
+                        card, cards, sources, sinks, MIC_PROFILE)
+                    return {'state': 'fault', 'code': 'audio-nodes-missing-after-busy',
+                            'detail': 'Rotas físicas ausentes após dispositivo ocupado; reenumerar WirePlumber',
+                            'identity': {**identity, 'recovery': 'wireplumber-reprobe',
+                                         'owner': owner, 'busy_evidence': evidence}}
                 if len(physical) != 1 or type(physical[0].get("mute")) is not bool:
                     state, detail = "unknown", "perfil interno ativo, mas captura física não comprovada"
                 elif physical[0]["mute"]:
@@ -353,6 +364,8 @@ class DeckProfiles:
         """Caller must have recorded intent, checked ownership and reobserved."""
         if key == "microphone":
             if before['identity'].get('recovery') == 'wireplumber-reprobe':
+                if before['identity'].get('busy_evidence') is not None and self.microphone() != before:
+                    raise ProfileUnknown('falha de abertura ou uso do áudio mudou antes do reparo')
                 self.audio_recovery.restart(before['identity']['owner'])
                 return
             if before["identity"]["active"] not in ("pro-audio", "HiFi (Headset, Speaker)"):

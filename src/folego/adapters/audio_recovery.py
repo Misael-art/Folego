@@ -1,6 +1,7 @@
 """Revalidate the user WirePlumber owner before recovering an incomplete ALSA probe."""
 import configparser
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -23,11 +24,12 @@ class WirePlumberRecovery:
     unit = 'wireplumber.service'
 
     def __init__(self, *, runner=bounded_command, proc_root='/proc', cgroup_root='/sys/fs/cgroup',
-                 state_home=None, tool=None):
+                 state_home=None, tool=None, journal_tool=None):
         self.runner = runner
         self.proc_root, self.cgroup_root = Path(proc_root), Path(cgroup_root)
         self.state_home = Path(state_home) if state_home else Path.home() / '.local/state'
         self.tool = tool if tool is not None else _systemctl()
+        self.journal_tool = journal_tool if journal_tool is not None else shutil.which('journalctl')
 
     def command(self, args, *, timeout=2):
         if not self.tool:
@@ -111,3 +113,74 @@ class WirePlumberRecovery:
         if self.owner() != dict(expected_owner):
             raise AudioRecoveryError('responsável de áudio mudou antes da recuperação')
         self.command(['restart', self.unit], timeout=8)
+
+    def _pipewire_owner(self):
+        text = self.command(['show', 'pipewire.service', '--property=MainPID,ActiveState,SubState'])
+        values = dict(line.split('=', 1) for line in text.splitlines() if '=' in line)
+        if values.get('ActiveState') != 'active' or values.get('SubState') != 'running':
+            raise AudioRecoveryError('PipeWire ativo não comprovado')
+        pid = int(values.get('MainPID', '0'))
+        if pid <= 1:
+            raise AudioRecoveryError('processo PipeWire desconhecido')
+        proc = self.proc_root / str(pid)
+        executable = (proc / 'exe').resolve(strict=True)
+        argv = bounded_read(proc / 'cmdline', 8192).rstrip('\0').split('\0')
+        if (proc.stat().st_uid != os.getuid() or executable.name != 'pipewire'
+                or not self._system_file(executable)
+                or argv not in (['/usr/bin/pipewire'], ['/usr/sbin/pipewire'])):
+            raise AudioRecoveryError('identidade do PipeWire não comprovada')
+        fields = bounded_read(proc / 'stat', 8192).rsplit(')', 1)[1].split()
+        return {'pid': pid, 'start_ticks': int(fields[19])}
+
+    def probe_missing_nodes(self, card, cards, sources, sinks, expected_profile):
+        """Prove the login ALSA-busy failure while the intended HiFi profile is active."""
+        owner = self.probe(card, cards, sources, expected_profile)
+        if card.get('active_profile') != expected_profile:
+            raise AudioRecoveryError('perfil interno mudou durante a consulta')
+        if any(str(row.get('name', '')).startswith('alsa_output.') for row in sinks):
+            raise AudioRecoveryError('saída física presente; revisar o uso de áudio')
+        number = int(card['properties']['api.alsa.card'])
+        alsa = self.proc_root / f'asound/card{number}'
+        if bounded_read(alsa / 'id', 64).strip() != 'acp5x':
+            raise AudioRecoveryError('identidade da placa ALSA divergente')
+        for pcm in ('pcm0c', 'pcm0p', 'pcm1p'):
+            if bounded_read(alsa / pcm / 'sub0/status', 1024).strip() != 'closed':
+                raise AudioRecoveryError('PCM interno em uso; recuperação adiada')
+        pipewire = self._pipewire_owner()
+        if not self.journal_tool:
+            raise AudioRecoveryError('histórico da falha de abertura indisponível')
+        try:
+            answer = self.runner([
+                self.journal_tool, '--user', '--boot=' + owner['boot_id'].replace('-', ''),
+                '--unit=pipewire.service', f'_PID={pipewire["pid"]}',
+                '--output=json', '--no-pager', '--lines=64'], timeout=2,
+                env={**os.environ, 'LC_ALL': 'C'})
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise AudioRecoveryError('histórico da falha de abertura indisponível') from exc
+        if answer.returncode or len(answer.stdout) > 65536:
+            raise AudioRecoveryError('histórico de abertura do áudio incompleto')
+        since = max(owner['start_ticks'], pipewire['start_ticks']) * 1000000 // os.sysconf('SC_CLK_TCK')
+        events = {}
+        for line in answer.stdout.splitlines():
+            record = json.loads(line)
+            if (record.get('_BOOT_ID') != owner['boot_id'].replace('-', '')
+                    or record.get('_PID') != str(pipewire['pid'])
+                    or record.get('_UID') != str(os.getuid())
+                    or record.get('_SYSTEMD_USER_UNIT') != 'pipewire.service'):
+                raise AudioRecoveryError('origem do histórico de áudio divergente')
+            stamp = int(record['__MONOTONIC_TIMESTAMP'])
+            message = record.get('MESSAGE')
+            if not isinstance(message, str):
+                raise AudioRecoveryError('registro de abertura desconhecido')
+            if stamp < since or not any(text in message.lower() for text in (
+                    'device or resource busy', 'dispositivo ou recurso está ocupado')):
+                continue
+            for key, text in (('capture', "hw:acp5x,0': capture open failed:"),
+                              ('playback', "hw:acp5x,1': playback open failed:")):
+                if text in message:
+                    events.setdefault(key, stamp)
+        if set(events) != {'capture', 'playback'}:
+            raise AudioRecoveryError('falha de abertura ocupada não comprovada neste boot e responsáveis')
+        if self.owner() != owner or self._pipewire_owner() != pipewire:
+            raise AudioRecoveryError('responsável do áudio mudou durante a consulta')
+        return owner, {'pipewire': pipewire, 'events': events}

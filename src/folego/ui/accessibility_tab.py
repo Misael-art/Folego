@@ -451,7 +451,8 @@ class AccessibilityTab(QWidget):
             return
         messages = {
             'audio-reprobe-enable': ('Recuperar enumeração de áudio',
-                'Autorizar a reenumeração do WirePlumber quando o perfil saudável registrado desaparecer? '
+                'Autorizar a reenumeração do WirePlumber quando o perfil saudável registrado desaparecer '
+                'ou as rotas físicas faltarem após falha comprovada por dispositivo ocupado? '
                 'O Fôlego verifica a unit, processo, placas, preferência persistida, orçamento e resultado.'),
             'audio-reprobe-disable': ('Pausar reenumeração automática',
                 'Desativar a recuperação automática da enumeração de áudio?'),

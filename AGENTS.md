@@ -100,6 +100,14 @@ a preferência persistida comprovada quando ainda faltar referência no Fôlego.
 Uma enumeração genérica desconhecida continua protegida. O usuário autorizou
 instalação no host, commit, PR e prévia deste incremento após os gates.
 
+Pedido de 13/11 amplia a mesma opção para a falha comprovada em que o perfil
+interno saudável está ativo e suas rotas físicas faltam após erro de dispositivo
+ocupado. Exige preferência salva, captura ALSA, PCMs internos livres e os erros
+de captura e reprodução da placa no journal do boot e dos responsáveis atuais.
+Mantém opt-in, referência saudável, duas amostras recentes, diário/coordenador,
+revalidação no ato, orçamento, disjuntor e confirmação da cadeia física.
+O incremento deve ser instalado neste host com a opção habilitada.
+
 ### Guarda de perfil de energia autorizado em 09/11
 
 Pedido do usuário após os desligamentos por queda de voltagem: o Fôlego pode
