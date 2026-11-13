@@ -27,6 +27,9 @@
   Alteração deste lote exclusivamente documental, com revisão de diff e
   referências. As mudanças locais anteriores de renderização Codex seguem
   fora do commit.
+- Diagnóstico preservado em **6598d0092a2537da0730f8d5d724813143a289f4**,
+  SHA remoto conferido no PR #9. A consulta inicial do novo SHA retornou zero
+  execuções de CI. CI e Windows da base `f5ea713` estavam aprovados.
 
 ## Codex Desktop e Web juntos — observação de 12/11/2026
 
