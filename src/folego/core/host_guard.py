@@ -14,6 +14,17 @@ _PRESSURE_LIMITS = (("memory", "pressure_memory", 5.0),
                     ("cpu", "pressure_cpu", 25.0))
 
 
+def boot_end_text(boot: dict) -> str | None:
+    """A logind request is evidence of initiation, never of completed shutdown."""
+    labels = {"poweroff": "desligamento", "reboot": "reinício", "halt": "encerramento",
+              "kexec": "reinício via kexec", "soft-reboot": "reinício do espaço de usuário"}
+    label = labels.get(boot.get("end_kind"))
+    if (label is None or boot.get("end") != "shutdown_recorded"
+            or boot.get("end_source") != "systemd-logind.service"):
+        return None
+    return f"{label} registrado pelo logind; conclusão não comprovada"
+
+
 @dataclass
 class PressureAlertTracker:
     """Warn on sustained kernel PSI already present in resource snapshots."""
@@ -136,6 +147,12 @@ class ThermalTracker:
 
 
 GUIDES = {
+    "power": (
+        "Alimentação e proteção", "Confira energia externa, tensão e corrente junto do percentual. "
+        "Uma descarga com carregador conectado pede revisão do carregador, cabo e dock. "
+        "Com tensão em atenção ou crítica, salve o trabalho e reduza tarefas pelo aplicativo "
+        "responsável. Confira em Opções se a proteção de perfil está disponível. "
+        "Essas leituras não determinam a causa de um reinício."),
     "thermal": (
         "Calor e carga", "Confira a leitura e sua origem (ACPI pode medir uma zona do sistema, não a CPU). "
         "Observe as tarefas com CPU alta; se a temperatura continuar próxima do limite, "

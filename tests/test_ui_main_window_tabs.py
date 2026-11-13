@@ -13,7 +13,7 @@ from folego.core.exclusions import ExclusionError
 from folego.core.sessions import ACTIVE, Session, SessionError
 from folego.core.snapshot import AppRSS, BatteryInfo, MemInfo, Pressure, Snapshot, SourceQuality
 from folego.orchestration.config import ConfigError
-from folego.ui.compact import CompactWindow
+from folego.ui.compact import COMPACT_WIDTH, CompactWindow
 from folego.ui.main_window import MainWindow
 from fixtures_automation import StaticConfig, StaticGrants, stores
 from fixtures_proc import proc_info
@@ -404,7 +404,7 @@ def test_dashboard_widget_button_restores_floating_mode(window, qapp, monkeypatc
     if compact.dock_animation.state() != compact.dock_animation.State.Stopped:
         assert QSignalSpy(compact.dock_animation.finished).wait(1000)
     assert compact.isVisible() and compact._dock_mode == 'compact'
-    assert compact.width() == 280
+    assert compact.width() == COMPACT_WIDTH
     window.quit()
 
 
@@ -415,8 +415,8 @@ def test_central_opens_mini_and_mini_returns_to_same_central(window, qapp):
         owner, caps=detect(session_type='x11', platform='xcb', tray=True))
     window.tabs.setCurrentWidget(window.options)
     window.show()
-    next(action for action in window.widget_position_menu.actions()
-         if action.text() == 'Mini horizontal').trigger()
+    assert window.dashboard.mini_button.isVisibleTo(window.dashboard)
+    window.dashboard.mini_button.click()
     QTest.qWait(350)
     widget = window._compact
     assert widget.isVisible() and widget._dock_mode == 'mini'
@@ -425,6 +425,37 @@ def test_central_opens_mini_and_mini_returns_to_same_central(window, qapp):
     qapp.processEvents()
     assert window.isVisible() and not widget.isVisible()
     assert window.tabs.currentWidget() is window.options
+    window.quit()
+
+
+@pytest.mark.parametrize('mode', ('central', 'mini', 'compact', 'left', 'right', 'top'))
+def test_launch_uses_the_view_saved_in_options(window, qapp, tmp_path, monkeypatch, mode):
+    from PySide6.QtCore import QSettings
+    from PySide6.QtTest import QTest
+    from folego.ui import desktop_preferences
+    from folego.ui.desktop_caps import detect
+
+    class PrivateSettings(QSettings):
+        def __init__(self, *_):
+            super().__init__(str(tmp_path / 'views.ini'), QSettings.Format.IniFormat)
+
+    monkeypatch.setattr(desktop_preferences, 'QSettings', PrivateSettings)
+    window._compact_factory = lambda owner, _: CompactWindow(
+        owner, caps=detect(session_type='x11', platform='xcb', tray=True))
+    assert desktop_preferences.startup_view() == 'central'
+    choice = window.options.startup_view_choice
+    choice.setCurrentIndex(choice.findData(mode))
+    assert desktop_preferences.startup_view() == mode
+    if mode != 'central':
+        assert 'Preferência salva' in window.options.startup_view_status.text()
+    assert not window.isVisible() and window._compact is None
+    window.show_startup_view()
+    QTest.qWait(350)
+    if mode == 'central':
+        assert window.isVisible() and window._compact is None
+    else:
+        assert not window.isVisible() and window._compact.isVisible()
+        assert window._compact._dock_mode == mode
     window.quit()
 
 

@@ -53,8 +53,8 @@ def main() -> int:
         win = MainWindow(collector_factory=resource_collector, accessibility_factory=Supervisor,
                          startup_defaults=True,
                          host_guard_factory=lambda: HostObserver(record=True))
-        win.show()
         win.start()
+        win.show_startup_view()
         try:
             return app.exec()
         finally:

@@ -25,7 +25,7 @@ def test_every_grouped_choice_copies_full_text_once_and_closes(qapp, monkeypatch
     for prompt in PROMPTS:
         tabs.show_prompts()
         panel = tabs.prompt_panel
-        assert panel.count.text() == '13 modelos'
+        assert panel.count.text() == '16 modelos'
         assert [h.text() for h in panel.headings.values()] == [title for _, title, _ in PROMPT_CATEGORIES]
         assert set(panel.buttons) == {p.key for p in PROMPTS}
         button = panel.buttons[prompt.key]
@@ -33,7 +33,7 @@ def test_every_grouped_choice_copies_full_text_once_and_closes(qapp, monkeypatch
         button.click()
         assert tabs.prompt_menu is None and tabs.prompt_panel is None
         assert copied == [text(p.key) for p in PROMPTS[:len(copied)]]
-    assert len(copied) == 13
+    assert len(copied) == 16
     tabs.shutdown()
 
 

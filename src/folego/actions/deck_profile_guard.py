@@ -22,6 +22,9 @@ class DeckProfileGuard:
         self.store, self.coordinator, self.now = store, coordinator, now
         self._fault_seen = {key: 0 for key in KEYS}
         self._healthy_seen = {key: 0 for key in KEYS}
+        self._last_sample = None
+        self._boot = None
+        self._clock = None
 
     def annotate(self, report):
         observed = self.profiles.observe()
@@ -36,22 +39,9 @@ class DeckProfileGuard:
         return observed
 
     def _pending(self, key, *, ignore=None):
-        records, errors = self.coordinator.journal.load()
-        if errors:
-            raise ValueError("diário inconsistente; reparo de perfil bloqueado")
-        pending = set()
-        for row in records:
-            obj = row.plan if row.kind == "intent" else row.result
-            if obj.action != ACTION:
-                continue
-            target = obj.target.key if row.kind == "intent" else obj.target_key
-            if target != key:
-                continue
-            if row.kind == "intent" or row.result.outcome == Outcome.UNKNOWN:
-                pending.add(row.operation_id)
-            else:
-                pending.discard(row.operation_id)
-        return [item for item in pending if item != ignore]
+        from .accessibility import unresolved
+        scope = ('microphone', 'audio') if key == 'microphone' else ('touchpad', 'pointer', 'keyboard')
+        return [item for item in unresolved(self.coordinator.journal, capabilities=scope) if item != ignore]
 
     @staticmethod
     def _game_blocker():
@@ -137,7 +127,12 @@ class DeckProfileGuard:
             return "preferência do responsável externo desconhecida"
 
     def _blocker(self, key, current, report):
-        if report.get("backend") != "kwin" or report.get("errors") or not report.get("boot_id"):
+        from .accessibility import fresh
+        if not fresh(report):
+            return 'amostra de sessão antiga ou incompleta'
+        if key == 'microphone':
+            return self._phasezero_audio_blocker(current['identity'])
+        if report.get("backend") != "kwin" or report.get("errors"):
             return "sessão KDE/entrada não comprovada"
         from .accessibility import lease_blockers
         leases = lease_blockers(self.store.root)
@@ -145,7 +140,51 @@ class DeckProfileGuard:
             return "recurso em uso ou reparo por outro responsável: " + leases[0]
         if key == "touchpad":
             return self._game_blocker()
-        return self._phasezero_audio_blocker(current["identity"])
+        return ''
+
+    def manual_parameters(self, report):
+        current = report.get('desktop_profiles', {}).get('microphone', {})
+        if current.get('state') != 'fault' or not current.get('identity'):
+            return None
+        policy = self.store.read()
+        baseline = policy['profile_baseline'].get('microphone')
+        if baseline is None and current['identity'].get('recovery') == 'wireplumber-reprobe':
+            baseline = {'card': current['identity']['card'], 'profile': MIC_PROFILE,
+                        'default': 'mic-biglinux'}
+        if baseline is None:
+            return None
+        return {'boot_id': report['boot_id'], 'before': current['identity'], 'baseline': baseline}
+
+    def manual_repair(self, parent):
+        state = self.coordinator.journal.state_of(parent.operation_id)
+        if state is None or state.intent is None or state.intent.to_dict() != parent.to_dict():
+            raise ValueError('intenção da recuperação manual não comprovada')
+        plan = ActionPlan(ACTION, ResourceIdentity.entry('microphone'),
+                          dict(parent.params['profile_recovery']), operation_id=parent.operation_id)
+        return self._execute(plan, automatic=False)
+
+    def manual_recovered(self, parent):
+        """Observe a settled manual audio request without repeating its effect."""
+        from .accessibility import fresh
+        params = parent.params['profile_recovery']
+        checked = self._native.collect()
+        if (not fresh(checked) or checked['boot_id'] != params['boot_id']
+                or not self._baseline_allowed('microphone', params, self.store.read(), automatic=False)):
+            return False
+        first = self.profiles.microphone()
+        time.sleep(1)
+        second = self.profiles.microphone()
+        return (first == second and second.get('state') == 'healthy'
+                and self._matches('microphone', second, params['baseline']) and fresh(checked))
+
+    @staticmethod
+    def _baseline_allowed(key, params, policy, *, automatic):
+        baseline = policy['profile_baseline'].get(key)
+        return baseline == params['baseline'] or (
+            not automatic and baseline is None and key == 'microphone'
+            and params['before'].get('recovery') == 'wireplumber-reprobe'
+            and params['baseline'] == {'card': params['before']['card'],
+                                       'profile': MIC_PROFILE, 'default': 'mic-biglinux'})
 
     def _baseline(self, key, current):
         identity = current.get("identity") or {}
@@ -165,6 +204,18 @@ class DeckProfileGuard:
         return (identity.get("card") == baseline.get("card") and baseline.get("profile") == MIC_PROFILE
                 and ("mic-biglinux" if identity.get("default") == "mic-biglinux" else "internal") == baseline.get("default"))
 
+    def budget_blocker(self, policy, key):
+        now = self.now()
+        if any(row['ts'] > now for row in policy['profile_attempts']):
+            return 'relógio regressou; orçamento de reparo preservado'
+        recent = [row for row in policy['profile_attempts'] if row['key'] == key
+                  and 0 <= now - row['ts'] < 3600]
+        if len(recent) >= 3:
+            return 'três reparos em uma hora; conflito persistente'
+        if recent and now - recent[-1]['ts'] < 120:
+            return 'intervalo de 120 s entre reparos desta capacidade'
+        return ''
+
     def tick(self, report):
         observed = report.get("desktop_profiles", {})
         if not observed:
@@ -175,6 +226,25 @@ class DeckProfileGuard:
                                    "circuit": dict(policy["profile_circuit"])}
         if not policy["enabled"]:
             return None
+        from .accessibility import fresh
+        if not fresh(report):
+            self._fault_seen = {key: 0 for key in KEYS}
+            self._healthy_seen = {key: 0 for key in KEYS}
+            return None
+        clock = report.get('clock', 'monotonic')
+        if report['boot_id'] != self._boot or clock != self._clock:
+            self._clock = clock
+            self._boot, self._last_sample = report['boot_id'], None
+            self._fault_seen = {key: 0 for key in KEYS}
+            self._healthy_seen = {key: 0 for key in KEYS}
+        mono = report['mono']
+        if self._last_sample is not None:
+            if mono <= self._last_sample:
+                return None
+            if mono - self._last_sample > 30:
+                self._fault_seen = {key: 0 for key in KEYS}
+                self._healthy_seen = {key: 0 for key in KEYS}
+        self._last_sample = mono
         for key in KEYS:
             current = observed.get(key, {})
             if current.get("state") != "fault":
@@ -196,19 +266,20 @@ class DeckProfileGuard:
             baseline = policy["profile_baseline"].get(key)
             if not baseline or policy["profile_circuit"].get(key):
                 continue
+            if current.get('identity', {}).get('recovery') and not policy['audio_reprobe_enabled']:
+                continue
             if not self._matches(key, current, baseline) or self._blocker(key, current, report):
                 continue
             if self._pending(key):
                 continue
-            attempts = [a for a in policy["profile_attempts"] if a["key"] == key
-                        and 0 <= self.now() - a["ts"] < 3600]
-            if len(attempts) >= 3:
-                with self.coordinator.lock(wait=.2):
-                    latest = self.store.read()
-                    latest["profile_circuit"][key] = "três reparos em uma hora; conflito persistente"
-                    self.store.save(latest)
-                continue
-            if attempts and self.now() - attempts[-1]["ts"] < 120:
+            budget = self.budget_blocker(policy, key)
+            if budget:
+                if budget == 'três reparos em uma hora; conflito persistente':
+                    with self.coordinator.lock(wait=.2):
+                        latest = self.store.read()
+                        if self.budget_blocker(latest, key) == budget:
+                            latest['profile_circuit'][key] = budget
+                            self.store.save(latest)
                 continue
             plan = ActionPlan(ACTION, ResourceIdentity.entry(key),
                               {"boot_id": report["boot_id"], "before": current["identity"],
@@ -222,14 +293,17 @@ class DeckProfileGuard:
                     "reason": result.reason, "profile": key}
         return None
 
-    def _execute(self, plan):
+    def _execute(self, plan, *, automatic=True):
         key = plan.target.key
         def result(outcome, reason):
             return ActionResult(ACTION, outcome, plan.operation_id, target_key=key, reason=reason)
         policy = self.store.read()
-        if not policy["enabled"] or policy["profile_circuit"].get(key):
+        if (automatic and not policy["enabled"]) or policy["profile_circuit"].get(key):
             return result(Outcome.REFUSED, "supervisão de perfis desligada ou suspensa")
-        if policy["profile_baseline"].get(key) != plan.params["baseline"]:
+        if (automatic and plan.params['before'].get('recovery')
+                and not policy['audio_reprobe_enabled']):
+            return result(Outcome.REFUSED, 'reenumeração automática de áudio desligada')
+        if not self._baseline_allowed(key, plan.params, policy, automatic=automatic):
             return result(Outcome.REFUSED, "baseline de perfil mudou")
         if self._pending(key, ignore=plan.operation_id):
             return result(Outcome.REFUSED, "reparo anterior de perfil ainda incerto")
@@ -237,8 +311,8 @@ class DeckProfileGuard:
         from .accessibility import fresh
         native = self._native
         checked = native.collect()
-        if (not fresh(checked) or checked.get("errors") or checked.get("backend") != "kwin"
-                or checked.get("boot_id") != plan.params["boot_id"]):
+        if (not fresh(checked) or checked.get("boot_id") != plan.params["boot_id"]
+                or (key == 'touchpad' and (checked.get('errors') or checked.get('backend') != 'kwin'))):
             return result(Outcome.REFUSED, "sessão/compositor mudou antes do reparo")
         before = self.profiles.steam() if key == "touchpad" else self.profiles.microphone()
         if (before.get("state") != "fault" or before.get("identity") != plan.params["before"]
@@ -248,16 +322,16 @@ class DeckProfileGuard:
         if blocker:
             return result(Outcome.REFUSED, blocker)
         now = self.now()
+        blocker = self.budget_blocker(policy, key)
+        if blocker:
+            return result(Outcome.REFUSED, blocker)
         attempts = [a for a in policy["profile_attempts"] if 0 <= now - a["ts"] < 3600]
-        same = [a for a in attempts if a["key"] == key]
-        if len(same) >= 3 or (same and now - same[-1]["ts"] < 120):
-            return result(Outcome.REFUSED, "orçamento/intervalo de reparo")
         attempts.append({"key": key, "ts": now, "operation_id": plan.operation_id})
         policy["profile_attempts"] = attempts
         self.store.save(policy)  # The journal already contains the intent.
         try:
             self.profiles.restore(key, before)
-            deadline = time.monotonic() + 4
+            deadline = time.monotonic() + (8 if before['identity'].get('recovery') else 4)
             stable_since = None
             while time.monotonic() < deadline:
                 after = self.profiles.steam() if key == "touchpad" else self.profiles.microphone()
@@ -334,7 +408,8 @@ class DeckProfileGuard:
         first = observe()
         time.sleep(.5)
         second = observe()
-        if (not fresh(checked) or checked.get("backend") != "kwin" or checked.get("errors")
+        if (not fresh(checked)
+                or (key == 'touchpad' and (checked.get('backend') != 'kwin' or checked.get('errors')))
                 or first.get("state") != "healthy" or second != first
                 or self._blocker(key, second, checked)):
             raise ValueError("perfil saudável/sem dono não confirmado duas vezes")

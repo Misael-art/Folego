@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 
 from ... import paths
+from ...adapters.desktop_notices import DesktopNotice
 from ...core import perf_auto, perf_model, perf_rules, procfs
 from ...core.sessions import read_boot_id
 from . import executor
@@ -33,10 +34,13 @@ def notify(item, *, run=subprocess.run) -> None:
     binary = shutil.which("notify-send")
     if not binary:
         return
-    run([binary, "--app-name=Fôlego", "--icon=folego", "Fôlego · Modo Desempenho",
-         f"{item.title}: {item.label} será fechado em {perf_auto.GRACE_S:.0f} s. "
-         "Abra a aba desempenho para adiar ou proteger."],
-        capture_output=True, timeout=5, check=False)
+    notice = DesktopNotice('operation', 'Desempenho · fechamento previsto',
+                           f"{item.title}: {item.label} será fechado em {perf_auto.GRACE_S:.0f} s. "
+                           "Abra a aba desempenho para adiar ou proteger.")
+    try:
+        run([binary, *notice.arguments()], capture_output=True, timeout=5, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return  # the existing in-app state still owns this announcement
 
 
 def cycle(*, collector, tracker, store, rules_path, protected_fn=None, notify_fn=notify,

@@ -5,8 +5,10 @@
 Use Linux em disco persistente, x86_64 ou aarch64, com Bash, acesso HTTPS e pelo
 menos 4 GiB livres para o primeiro setup. KDE/Wayland é necessário para repetir
 o aceite físico do compositor. Em outro desktop/servidor, o núcleo e Qt
-offscreen continuam testáveis. Windows nativo não é alvo; WSL2 serve ao núcleo,
-mas não certifica o KWin físico. Não usar `/run/user` ou tmpfs para o checkout.
+offscreen continuam testáveis. Esses wrappers são Linux; WSL2 serve ao núcleo,
+mas não certifica o KWin físico. O [port Windows nativo em prévia](WINDOWS.md)
+tem pacote e aceite próprios, sem executar os adaptadores Linux.
+Não usar `/run/user` ou tmpfs para o checkout.
 
 Não é preciso instalar Python, pip, Qt do sistema ou uv previamente. O wrapper
 baixa uv 0.12.10, verifica SHA-256 dos arquivos oficiais, instala Python 3.14.7

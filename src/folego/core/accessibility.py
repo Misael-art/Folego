@@ -26,6 +26,28 @@ LABELS = {"keyboard": "⌨ Teclado físico", "pointer": "🖱 Mouse / ponteiro",
           "audio": "♪ Saída de áudio", "microphone": "🎙 Microfone"}
 
 
+def recovery_scope(plan):
+    """Capabilities an outstanding operation may still affect, including legacy plans."""
+    inputs = set(LABELS) - {'audio', 'microphone'}
+    if plan.action == 'accessibility.enable-input':
+        return inputs
+    if plan.action == 'accessibility.restore-desktop-profile' and plan.target.key in ('touchpad', 'microphone'):
+        return {'touchpad', 'pointer', 'keyboard'} if plan.target.key == 'touchpad' else {'audio', 'microphone'}
+    if plan.action == 'accessibility.activate':
+        scope = plan.params.get('capabilities')
+        if (isinstance(scope, (tuple, list)) and scope
+                and all(isinstance(key, str) and key in LABELS for key in scope)):
+            result = set(scope)
+            if 'touchpad' in result:
+                result.add('pointer')
+            if 'microphone' in result and plan.params.get('profile_recovery'):
+                result.add('audio')
+            if plan.params.get('peer') and result.intersection(inputs):
+                result.update(inputs)  # The registered reconcile-input API covers input devices.
+            return result
+    return set(LABELS)
+
+
 def parse_devices(text):
     devices = []
     for block in text.split("\n\n"):

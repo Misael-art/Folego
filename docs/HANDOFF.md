@@ -1,4 +1,1436 @@
-# Passagem para o próximo agente — atualizada em 07/11/2026
+# Passagem para o próximo agente — atualizada em 13/11/2026
+
+## Recuperação automática das rotas de áudio após dispositivo ocupado — 0.2.0b15
+
+- Pedido posterior ao reparo manual de 13/11 autoriza colocar essa recuperação
+  no automático neste host. O novo diagnóstico `audio-nodes-missing-after-busy`
+  integra `DeckProfiles` ao monitor, CLI e cartão existentes pela mesma opção
+  de reenumeração, já habilitada aqui.
+- Exige perfil ativo e persistido `HiFi (Mic, Speaker)`, captura ALSA, fontes
+  virtuais identificadas, PCMs internos livres e ausência de outra rota física.
+  Prova os dois erros de abertura acp5x no journal do boot e PID/UID/unit do
+  PipeWire atual, após o início dos responsáveis atuais. Consulta limitada a
+  64 registros, 64 KiB e dois segundos. Erro, histórico antigo, outro owner,
+  dispositivo ocupado ou rota externa deixam o estado para revisão.
+- O fluxo compartilha opt-in, referência saudável, duas amostras frescas,
+  intenção/ID, coordenador, revalidação no ato, orçamento de três por hora,
+  intervalo de 120 s e disjuntor. Confirma a cadeia física → echo-cancel →
+  mic-biglinux após o efeito. O caso com perfil ativo reconsulta também a falha
+  e o uso dos PCMs imediatamente antes do restart.
+- Fonte congelada para o pacote em `.scratch/microphone-auto-b15/source`.
+  Foco inicial **56 passed** em 10,79 s, `run-hebwgenr`. Gates finais com o
+  caso de timeout incluído, `./dev test-headless <fonte>/tests -o pythonpath=<fonte>/src`
+  e `./dev test` com os mesmos alvos absolutos, **1502 passed, 2 skipped** em
+  49,69 s (`run-dc_bkqkw`) e **1940 passed, 2 skipped** em 167,65 s
+  (`run-0wo0ba0c`). Python 3.14.7, HOME/XDG privados, um núcleo e 2 GiB por
+  scope, execução sequencial. Permanecem 19 slots de QA, com evidências retidas.
+- Wheel **599107 bytes**, SHA-256
+  `a79ac99a690b58532aa5928ff4de36b2999ca7ed6df1013af546b4006b5f20f6`,
+  com 191 arquivos de runtime iguais à fonte testada. Build offline, backend
+  fixado e dependências Qt 6.12.0 reutilizadas do cache com hashes do lockfile.
+  Ambiente instalado preparado em `.dev/venv-host-b15`.
+- Fluxo real KDE/Wayland com esse wheel em janela própria **800×565**, efeito
+  descartável e diálogo nativo. A confirmação apresenta o caso de dispositivo
+  ocupado e habilita a opção pelo mesmo encaminhamento. Sem rolagem horizontal.
+  O harness inicial clicou no centro sem área de clique e depois encerrou o
+  diálogo sem escolher o botão. A prova final clicou no indicador e em Yes.
+  As três tentativas anteriores ficam como falhas preservadas. Recibo/capturas
+  em `.scratch/microphone-auto-b15/wayland-confirmed/`.
+- **Instalado e ativo neste host**, com política e referência saudável
+  preservadas. Monitor passou de 4067 para **238080** e GUI de 4048 para
+  **238092**, ambos em `.dev/venv-host-b15`, ativos e `NRestarts=0`. Recarga
+  por SIGTERM acompanhado após boot/PID/starttime/executável/cgroup com um
+  principal. Menu, Desktop, autostart e units futuras apontam ao wheel.
+  Desempenho **4069** e WirePlumber **170788** mantiveram seus PIDs. O comando
+  instalado, fora do checkout, confirmou microfone saudável, guarda ativa,
+  opt-in de reenumeração ligado e disjuntor vazio após a recarga.
+- Originais dos cinco entrypoints, intenção/ID, hashes antes/depois e readback
+  em `~/.local/state/folego/install-receipts/0.2.0b15.json`. Evidência sanitizada
+  em [audio-busy-b15.json](handoff/validation/audio-busy-b15.json). A próxima
+  falha natural continua sendo o aceite físico da nova condição. As alterações
+  preexistentes de renderização Codex permanecem preservadas no working tree.
+- Fonte **77a0c0d878169ee25d1ce43cb738deff5276af62**, SHA remoto conferido,
+  com [CI](https://github.com/Misael-art/Folego/actions/runs/43475137274) e
+  [Windows](https://github.com/Misael-art/Folego/actions/runs/43475137451)
+  aprovados. O [PR #9](https://github.com/Misael-art/Folego/pull/9) foi atualizado
+  pela CLI autenticada após o conector retornar HTTP 403 na edição. Coletor
+  temporário de recursos encerrado após a instalação.
+
+## Microfone sem fonte física após dispositivo ocupado no login — 13/11/2026
+
+- Investigação solicitada pelo usuário. No boot `70f177c8`, às 13:07:02 -03,
+  PipeWire registrou falha ao abrir captura acp5x/0 e reprodução acp5x/1 por
+  dispositivo ocupado. WirePlumber abortou a criação dos dois endpoints HiFi
+  e o AEC passou a informar ausência da fonte física.
+- ALSA reconhece a captura e os alto-falantes. Perfil ativo e persistido
+  `HiFi (Mic, Speaker)`, controles `Int Mic`/`DMIC Enable` ligados e entrada
+  padrão `mic-biglinux`, sem mute e a 94%. O grafo contém apenas as fontes
+  virtuais e a saída falsa. Às 13:22–13:25, os três PCMs internos estavam
+  `closed`. O responsável pela ocupação inicial permanece indeterminado.
+  O journal registra gerenciadores dos UIDs 1000 e 949 durante o login.
+- Diagnóstico do Fôlego instalado b14 mantém microfone em `unknown`, com
+  perfil interno ativo e captura física ausente. A reenumeração automática
+  está habilitada, mas o detector autorizado cobre perfil ausente e placa
+  desligada. O caso observado exige revisão manual específica.
+- Plano privado `513d8c0f-b1cb-4631-85f8-587b344f1a37` preparado com o adaptador
+  instalado `WirePlumberRecovery.probe`. Conferiu preferência salva, captura
+  ALSA, outras rotas, unit de sistema sem drop-ins, executável root-owned e
+  cgroup com um processo. Identidade histórica WirePlumber PID 2144,
+  starttime 1586. Qualquer efeito exige nova revalidação no ato.
+- O usuário autorizou o reparo manual. Às **14:16:44 -03**, o adaptador
+  instalado reiniciou `wireplumber.service` após revalidar a identidade,
+  preferência salva, PCMs livres, ausência de outras rotas/leases/pendências
+  de áudio, orçamento e responsável externo. O coordenador e diário existentes
+  registraram intenção antes do efeito e resultado **sucesso** no mesmo ID.
+  Houve uma tentativa manual, contabilizada no orçamento do microfone.
+- WirePlumber passou de PID 2144 para **170788**, starttime 419929. A fonte
+  física HiFi e os alto-falantes reapareceram. Cadeia física → echo-cancel →
+  mic-biglinux confirmada saudável em amostras estáveis, padrão mic-biglinux,
+  sem mute e a 94%. PipeWire **2142**, Pulse **3854** e monitor Fôlego **4067**
+  mantiveram seus PIDs. A saída física reapareceu com mute/volume zero salvos.
+  A validação de voz pelo usuário permanece pendente.
+- Recibos anterior/posterior, perfis salvos, grafo e resultado em
+  `.scratch/microphone-20261113/`, privado. Alteração versionada deste lote
+  exclusivamente documental, com revisão de diff e referências. As mudanças
+  locais anteriores de renderização Codex seguem fora do commit.
+- Reparo documentado em **1c41e91fe33d08dae68b949b412efaeaf78489c5**,
+  SHA remoto confirmado no PR #9. `git diff --check` passou e o comando
+  instalado confirmou microfone saudável, guarda ativa e disjuntor vazio
+  às 14:17:41 -03. A consulta inicial de CI desse SHA retornou zero execuções.
+  CI e Windows da base `5fcdd95` estavam aprovados.
+- Diagnóstico preservado em **6598d0092a2537da0730f8d5d724813143a289f4**,
+  SHA remoto conferido no PR #9. A consulta inicial do novo SHA retornou zero
+  execuções de CI. CI e Windows da base `f5ea713` estavam aprovados.
+
+## Codex Desktop e Web juntos — observação de 12/11/2026
+
+- Pedido: abrir Desktop, observar recursos e depois abrir o Web em conjunto.
+  Launchers instalados, KDE/Wayland real, sem stress artificial, builds,
+  instalações ou prompts submetidos pelo observador. O backend Web já estava
+  residente/oculto desde o boot; a primeira etapa não foi Desktop isolado.
+- Etapa conjunta válida: **11:12:39–11:23:11 UTC**, **43 amostras** a cada
+  15 s, **631,56 s** entre a primeira e a última; maior intervalo 15,05 s.
+  Temperatura **48–65 °C**, mínimo **6,332 GiB disponíveis**, CPU do host
+  média **23,25%**, máximo **36,85%**. Zero escrita de swap; houve leituras
+  pontuais de até 1421,27 KiB/s. PSI some/avg60 máximo: memória **0,18%**,
+  I/O **0,23%**. Trip passivo/crítico do sensor: 100/105 °C.
+- Desktop normal, janela do perfil Web e backend preservaram PID/starttime;
+  mesmo boot e ambas as janelas presentes ao concluir. Capturas privadas
+  confirmaram conteúdo do Desktop, campo de mensagem e modelo Web renderizados.
+  Sem OOM, reset/fault de GPU ou coredump Codex nos journals consultados até
+  11:23:14 UTC. Isso cobre abertura/uso normal por minutos, não tarefas longas,
+  recuperação do provedor ou causa resolvida dos cortes anteriores.
+- Limitações preservadas: o coletor inicial não reconhecia argv[0] agregado
+  do Electron; identidade foi corrigida pelo executável, com uma lacuna
+  registrada na primeira etapa. O primeiro lançamento Web em unit transiente
+  `Type=exec` perdeu o filho quando o wrapper terminou; só após confirmar sua
+  ausência, repetiu-se com `ExitType=cgroup`. Não foi crash atribuído ao app.
+- Um helper de diagnóstico leu indevidamente um log preexistente de **1,126 GB**
+  inteiro e adicionou pressão transitória de RAM/swap; terminou normalmente.
+  A folga se recuperou sem sinalizar apps. Esse intervalo inicial inteiro foi
+  excluído da etapa conjunta válida, mas suas métricas estão no recibo.
+  Leituras posteriores limitaram bytes por seek/tail. Não repetir leitura
+  integral/splitlines de logs sem conferir tamanho e orçamento de memória.
+- A captura Computer Use falhou no KDE; Spectacle instalado capturou a janela
+  ativa. O primeiro frame Desktop tinha conversa em branco e o tail histórico
+  continha avisos ResizeObserver; captura posterior mostrou conteúdo e os
+  trechos novos acompanhados não repetiram o aviso. Sem alterar flags ou usar
+  sessões/conversas como fixtures de envio.
+- Coletor temporário encerrado; os dois aplicativos permanecem abertos por
+  pedido do usuário, sem habilitar autostart novo. Evidência sanitizada em
+  [codex-desktop-web-observation-2026-11-12.json](handoff/validation/codex-desktop-web-observation-2026-11-12.json).
+  Capturas, amostras detalhadas e logs privados em
+  `.scratch/codex-stability-20261112/`; nenhum conteúdo de conta/conversa foi
+  publicado. Alterações preexistentes de renderização Codex continuam fora
+  deste lote documental. Próximo passo: observar uso prolongado normal,
+  preservando margem e reavaliando os recursos antes de qualquer build.
+- Registro **ad951f590702065abb37d2314d87c567f26f16b2**, SHA remoto
+  confirmado no [PR #9](https://github.com/Misael-art/Folego/pull/9).
+  JSON, contagens, identidades, unidades, janelas temporais, referências,
+  exclusão de conteúdo privado e `git diff --check` conferidos; sem suíte
+  local por ser documentação. [CI deste SHA](https://github.com/Misael-art/Folego/actions/runs/43209197113)
+  estava **queued** na consulta de publicação. Na base `4e75a21`, CI e
+  Windows estavam concluídos com sucesso. Aprendizados salvos e relidos na
+  memória em `gotchas/codex-observation-bounded-logs-and-launch-lifetime-20261112.md`.
+
+## Orientação opcional e automática dos agentes — 0.2.0b14
+
+- Pedido de 12/11: integrar a orientação de uso cuidadoso ao produto, habilitar
+  neste host e publicar/instalar a versão atual. GUI em Opções, CLI `ai care-*`
+  e uma preferência independente. Catálogo limitado aos homes conhecidos e
+  perfis nativos/Web existentes; nenhum projeto ou agente é executado.
+- Com a opção habilitada, descoberta ao abrir e a cada três minutos por worker
+  sem fila acumulada. A varredura periódica reutiliza `Poller`, sem criar um
+  diretório temporário de subprocesso a cada ciclo. Só acrescenta um bloco
+  `FOLEGO HOST CARE v1`; desligar retira a inserção e preserva texto/permissões
+  pessoais, inclusive edições posteriores. Novas instalações começam desligadas;
+  este host recebe enable explícito na instalação. Não amplia grants ou impõe
+  limites de recursos pelo kernel. [Contrato e recuperação](BASE-DO-HOST.md#recurso-opcional-no-fôlego-020b14).
+- Recibo privado com originais, intenção/ID antes do efeito, coordenador,
+  revalidação e readback. Resultado incerto bloqueia replay; reconciliação só
+  consulta o mesmo ID. Migração dos blocos manuais exige manifesto e hashes,
+  incluindo prova de que nada fora da inserção foi substituído. Opt-out fica
+  salvo mesmo se um arquivo alterado impedir a restauração.
+- Gates finais da fonte congelada: **1475 passed, 2 skipped** headless,
+  47,04 s, `run-q7hfwx_l`; **1913 passed, 2 skipped** Qt, 161,29 s,
+  `run-hk28rikm`. Comandos `./dev test-headless <fonte>/tests -o
+  pythonpath=<fonte>/src` e `./dev test` com os mesmos alvos absolutos.
+  Fonte em `.scratch/agent-care-b14/source`, árvore
+  `05bc107f0c45d45ca3773381d1e42025b9f83777`; os 191 arquivos do runtime foram
+  conferidos contra essa árvore. Código anterior de renderização Codex fica
+  preservado e fora da fonte da release; não foi incluída a sua falha preexistente.
+- Fluxo real KDE/Wayland em janela própria, **800×387**, sem rolagem horizontal:
+  checkbox/worker aplicam, novo cliente é descoberto, texto acrescentado depois
+  e modo 0640 permanecem ao desligar, arquivos criados são restaurados e timer
+  para. Somente HOME/XDG descartáveis. A primeira tentativa do harness falhou
+  por geometria de scroll ainda não estabilizada; a prova final aguarda essa
+  geometria. Recibo/captura em `.scratch/agent-care-b14/wayland-release/`.
+- QA sequencial, CPU limitada a um núcleo e memória a 2 GiB. Na janela de
+  cinco amostras a cada 20 s, máximo 60 °C, mínimo 7,51 GiB disponíveis e
+  máximo 206 MiB de memória/cache no scope. Sem teste de carga física ou aceite
+  de estabilidade prolongada. Adoção somente leitura comprovou 15 arquivos
+  globais e nenhuma preferência/recibo anterior deste recurso no host.
+- O wrapper recusou 20 slots de QA. Seis runs concluídos, com runner ausente
+  e consulta privilegiada `lsof +D` sem referências, foram preservados em
+  `.scratch/dev-tests-reviewed/20261112-agent-care/`. Os avisos lsof referiam-se
+  a mounts externos `/run/user/{doc,gvfs}`, sem mounts sob os alvos. Manifesto
+  conserva origens, logs e hashes integrais. Arquivos esparsos têm tamanho
+  lógico de GiB: a conferência foi concluída em blocos de 1 MiB, CPU 50% e
+  memória 256 MiB, sem apagar payloads ou ampliar o teto. O primeiro verificador
+  de leitura integral foi interrompido somente no processo próprio.
+- Quatro focos próprios encerrados também foram preservados no subdiretório
+  `focused`, com manifests, hashes, identidade/inodes e consulta lsof do UID
+  sem referências. Avisos sobre mounts Docker externos ficaram no recibo
+  privado; nenhum processo de Docker ou de outra tarefa foi interrompido.
+- **Publicada e instalada**: [v0.2.0b14](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b14),
+  ID `442756974`, em **2026-11-12T10:00:07Z**. Fonte imutável
+  **859c7cce155235de02a58d25e70cedfebf370229**, tag anotada
+  `fd028429ab0441da9fb792eff37d7cbed3622523`; SHA remoto conferido.
+  Oito jobs do código e quatro da tag passaram, incluindo Windows:
+  [CI da tag](https://github.com/Misael-art/Folego/actions/runs/43195773544) e
+  [Windows](https://github.com/Misael-art/Folego/actions/runs/43195773632).
+  CodeRabbit/Sourcery ficaram skipped. [PR #9](https://github.com/Misael-art/Folego/pull/9)
+  permanece aberto, sem merge.
+- Fonte completa com **1039 arquivos** conferidos contra o commit e **191
+  arquivos de runtime** iguais no wheel/sdist. Build offline, backend fixado e
+  um job. Quatro assets: fonte completa 22.331.254 bytes, wheel 597.751 bytes,
+  sdist 822.331 bytes e SHA256SUMS 284 bytes. Metadados/digests do servidor e
+  downloads públicos **sem autenticação** coincidiram com todos os tamanhos
+  e hashes locais. Valores completos em
+  [agent-care-b14.json](handoff/validation/agent-care-b14.json).
+- Wheel testado fora do checkout em `.dev/venv-release-b14`, sem Qt: CLI
+  aplica/sincroniza/restaura arquivos descartáveis com edição posterior e modo
+  preservados. GUI do mesmo wheel validada no Wayland em ambiente próprio
+  `.dev/venv-host-b14`, com Qt 6.12.0 do cache e hashes do lockfile; nenhum
+  download de dependência ou instalação global.
+- Neste host: **15 arquivos globais migrados**, habilitado/configurado,
+  operação `a11499be-0be7-4cef-a073-dc0d4e26673e`, sem conflitos. A projeção
+  de desabilitar confere exatamente com os 15 originais/ausências anteriores;
+  não se desligou a orientação real como QA. Sync sem mudança manteve o mesmo
+  ID e os mtimes, em 0,0862 s. As instruções do Codex apareceram no contexto
+  ativo com o marcador novo; isso não certifica obediência de todos os modelos.
+- Menu, Desktop e autostart apontam ao entrypoint do wheel, independente do
+  working tree. Somente a GUI própria foi recarregada, após identidade de
+  boot/PID/starttime/executável e cgroup com um principal: SIGTERM acompanhado,
+  sem SIGKILL. GUI histórica **1690432**, ativa, `NRestarts=0`. Monitores de
+  entrada **4382** e desempenho **4383** permaneceram ativos, sem restart ou
+  alteração de habilitação; as units futuras apontam ao ambiente do wheel.
+  Originais da instalação e recibo privado em
+  `~/.local/state/folego/install-receipts/0.2.0b14.json`. PIDs são históricos e
+  exigem nova identidade antes de qualquer ação.
+- Acionamento periódico **natural** também comprovado com o wheel instalado,
+  sem reduzir o intervalo nem chamar sync manual: o novo cliente apareceu
+  após **179,98 s**, com timer de 180.000 ms, no Wayland. A edição pessoal/modo
+  foi preservada ao desligar e os arquivos criados foram restaurados. Janela
+  própria 800×565, zero arquivos reais de agentes usados como fixture.
+  Recibo em `.scratch/agent-care-b14/wheel-natural-timer/receipt.json`.
+  Uma ocorrência real não equivale a um soak de horas.
+- Ao fechar, quatro suítes próprias preliminares encerradas foram preservadas
+  em `preliminary-full`, com runner ausente, lsof/environ do UID sem referências
+  e os mesmos inodes/metadados antes/depois do rename no Btrfs. Não se releu
+  payload esparso nem se apagou conteúdo. Restaram **16 slots ativos** no
+  wrapper, com os dois gates finais preservados em seus caminhos originais.
+
+## Cuidados de recursos nos IDEs e CLIs — 12/11/2026
+
+- Pedido: percorrer os agentes instalados e incorporar cuidados preventivos
+  para não pressionar o host. Aplicados 17 arquivos: coleção/projeto, quatro
+  homes Codex e regras globais de Claude, OpenCode, Antigravity, Hermes,
+  Cursor, Continue, Prime Agent, ZCode, Qoder e Copilot/Local do VS Code.
+  Caminhos, loaders, fontes oficiais e recuperação em
+  [BASE-DO-HOST.md](BASE-DO-HOST.md#diretrizes-globais-dos-agentes--12112026).
+- Mesmo bloco gerenciado, com medição prévia, concorrentes por RSS/comando
+  completo, uma carga pesada por host, um job inicial, reserva de RAM/disco,
+  margem térmica e reavaliação em execução. Sem encerrar trabalho alheio,
+  limpar caches compartilhados ou ampliar permissões. 90 °C é prevenção
+  conservadora neste host, não conclusão sobre a causa dos resets.
+- Validação documental/configuração: 17 readbacks com hashes/modos e conteúdo
+  anterior preservados; transformação idempotente; YAML e ativação dos três
+  formatos de regra conferidos; descoberta nativa do Prime Agent sem inferência.
+  Sem código do produto, GUI/launcher alterado, instalação,
+  build ou suíte pesada. As alterações preexistentes de renderização Codex
+  continuam fora do lote. Recibo sanitizado em
+  [agent-host-care-2026-11-12.json](handoff/validation/agent-host-care-2026-11-12.json).
+- Backup privado em `~/.local/state/host-agent-guidelines/20261112T081950Z/`.
+  Receita no bloco `HOST RESOURCE CHECK` do `AGENTS.md`; nenhum config privado
+  de conta foi publicado. Próximo passo: em uma nova sessão de cada cliente,
+  conferir a descoberta e a medição na tarefa real, sem lançar várias cargas
+  para QA. A sessão atual e os trabalhos residentes foram preservados.
+- Publicação documental: **319d17910fcac689cd4cb3c57fbd05fea6cf7823**,
+  remoto confirmado no [PR #9](https://github.com/Misael-art/Folego/pull/9).
+  Na consulta após publicar, núcleo/CLI/Windows da primeira rodada passaram;
+  [Qt offscreen](https://github.com/Misael-art/Folego/actions/runs/43182938947)
+  seguia em execução e a atualização do PR iniciou outra rodada. CodeRabbit
+  e Sourcery ficaram skipped. Gates locais documentais passaram; sem release
+  de produto por manutenção destas diretrizes. Preferência também registrada
+  e relida na memória entre projetos em
+  `profile/habits/poupar-host-em-todos-ides-e-clis.md`.
+
+## Port nativo Windows e preparação do cartão — 12/11/2026
+
+- Pedido: portar o Fôlego ao contexto Windows do microSD e preparar seu início.
+  Implementação em `src/folego/windows`, pacote em `Program Files\Folego` no
+  cartão; [guia Windows](WINDOWS.md). Sem Python/Qt/WSL no runtime Windows.
+- RAM/CPU/commit/bateria/espaço por Win32, sensores e saúde por consulta Windows;
+  uma coleta em worker, alertas limitados, estado pequeno e manual por padrão.
+  Regras compartilhadas extraídas para `core/policy.py`, com reexports Linux
+  preservados e `policy.json` gerado. Não copia estado/grants/owners Linux.
+- Primeiro início preparado no dispatcher existente do cartão; depois uma
+  entrada própria HKCU Run, bandeja e atraso de 30 s. Desativável nas Opções.
+  Energia manual com intenção/readback/recibo e restauração por host/boot;
+  guarda automático por carga é opt-in, distinto do guarda Linux por tensão.
+- Local: 40 contratos PowerShell/C# simulados; 62 testes focados de pacote,
+  implantação e regras existentes passaram; integração do cartão: 64 checks.
+  Suites do working tree: 1462 headless e 1900 Qt passaram, 2 skips em cada;
+  ambas tiveram a mesma falha preexistente em
+  `test_codex_rendering.py::test_external_changes_preserve_contents_and_permissions[permissions]`,
+  código/teste que já estavam untracked antes deste lote e permanecem fora dele.
+  Logs: `.scratch/dev-tests/run-1lbcymtv`, `run-luq1b7mv`, foco `run-0pqcwich`.
+- Testes serializados, 50–100% de um núcleo e 768 MiB–2 GiB. Nenhuma VM,
+  benchmark, mudança de energia Linux ou interrupção de processos de trabalho.
+  Backups da integração: `SteamDeck\recovery\folego-startup-original` no cartão;
+  inventário canônico em `SteamDeck\preparacao.json`.
+- Código **fc1725d89bea1cfe3ceaed8a90e0a5f5c27ef12e**, remoto conferido,
+  no [PR #9](https://github.com/Misael-art/Folego/pull/9). A
+  [CI Windows](https://github.com/Misael-art/Folego/actions/runs/43145864298)
+  passou em Windows-2025: 40 contratos no PowerShell 5.1, probe Win32 real
+  somente leitura (incluindo planos) e Forms por 25 s com pelo menos uma
+  coleta entregue/renderizada, estado descartável e sem registrar autostart.
+  Efeitos de energia e registro permanecem simulados nos contratos.
+- [CI Linux da fonte commitada](https://github.com/Misael-art/Folego/actions/runs/43145864356):
+  **1444 passed, 2 skipped** headless; **1881 passed, 2 skipped** Qt offscreen;
+  CLI isolada aprovada. Os testes/código Codex Rendering locais preexistentes
+  não entram nesse SHA, explicando a diferença da suite no working tree.
+  Os módulos do pacote no cartão foram conferidos contra esse commit, com BOM
+  UTF-8 gerado para PowerShell 5.1; manifesto e backup íntegros.
+- Aceite físico de login, APU, toque, sensores, execução prolongada e mudança
+  real de energia no Steam Deck permanece pendente. Sem merge ou nova release.
+
+## Prévia 0.2.0b13 publicada e sessão básica aplicada — 11/11/2026
+
+- [Prévia pública v0.2.0b13](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b13),
+  publicada em **11/11 às 23:34:48 -03**, ID `442426196`. Fonte imutável
+  `b1a44b299e6f375b70283063eb3716de7d566da3`; tag anotada
+  `8abdeaf8c882a0dd60f426257dceb1b7e3a6e7da`. Branch e tag conferidas no remoto.
+  Os seis jobs do código passaram; os três da tag passaram no run
+  [43142068880](https://github.com/Misael-art/Folego/actions/runs/43142068880).
+  [PR #9](https://github.com/Misael-art/Folego/pull/9) atualizado e aberto, sem merge.
+- Fonte completa com **1021 arquivos** conferidos contra o Git; os **171 módulos**
+  do wheel e do sdist também correspondem ao commit. Build offline pelo uv
+  gerenciado, com backend fixado e um job, a partir do artefato desse commit.
+  Wheel instalado em `.dev/venv-release-b13`, sem dependências/Qt e fora do
+  checkout, confirmou versão, CLI real, aplicação/restauração em HOME privado
+  e bytes originais exatos. Metadados/hash do servidor e quatro downloads
+  públicos sem autenticação coincidiram, inclusive `SHA256SUMS`.
+
+  | Asset | Bytes | SHA-256 |
+  | --- | ---: | --- |
+  | `Folego-0.2.0b13-source.tar.gz` | 22281153 | `8ef715f48198f8cd9342086d89f440b0000ef9b4746e78613a30968c5c5b1cb8` |
+  | `folego-0.2.0b13-py3-none-any.whl` | 567697 | `ce88135678a0403a8bfd9bb31ab04ae25d78d85b01fad1071514291c38e43f5d` |
+  | `folego-0.2.0b13.tar.gz` | 790694 | `19a3b5fa67837249cafa7cfe207848937469b86f166b46520cf481de11adb23c` |
+
+- Às **23:32:59**, depois dos gates, foi recarregada somente a GUI existente
+  do Fôlego, após comprovar executável, boot, PID/starttime e cgroup com apenas
+  seu principal. PID posterior **222229**, ativa, `NRestarts=0`. O monitor de
+  entrada manteve PID **4382** e os mesmos estados. Consulta posterior da
+  sessão básica confirmou o mesmo ID, ligada/configurada e sem conflito.
+  O perfil segue em economia; última consulta térmica em 50 °C.
+- A primeira tentativa de publicar a tag foi recusada pelo guard porque
+  faltava a autorização por SHA no registro central. O pedido explícito de
+  release foi registrado como **somente** `v0.2.0b13 → b1a44b2…`; a segunda
+  tentativa passou pelo mesmo guard. Não houve mudança do mecanismo de proteção.
+  Notas, recibos, logs, fonte de QA, pacotes e downloads verificados permanecem
+  limitados a `.scratch/release-b13-20261111/`. Alterações locais de renderização
+  e o trabalho Windows encontrado ao final não foram incluídos nem descartados.
+  Os aceites físicos de login/boot e redução de carga abaixo continuam pendentes.
+
+## Sessão básica do Plasma e validação da b13 — 11/11/2026
+
+- Pedido posterior do operador: reduzir a pressão do login, criar a opção
+  persistente ligada por padrão, aplicar, fazer commit/PR e publicar prévia.
+  **Opções → Sessão básica do Plasma** e a CLI `startup basic-status`,
+  `basic-enable --confirmar`, `basic-disable --confirmar` e `basic-reconcile`
+  usam a mesma implementação. O início normal da GUI sincroniza a preferência
+  no KDE; a preferência de iniciar o próprio Fôlego continua independente.
+- A configuração usa `Hidden=true` pelo mecanismo XDG, máscaras de units
+  opcionais somente do usuário e `General/loginMode=emptySession` no Plasma.
+  Não altera serviços de sistema. O catálogo explícito preserva Plasma,
+  autenticação, portais, entrada nativa, PipeWire/WirePlumber, rede, energia,
+  Fôlego e seu monitor. Launchers, atualizadores, indexação e monitores auxiliares
+  reconhecidos ficam para abertura manual. Serviços mascarados exigem desligar
+  a opção antes de uma ativação por unit. Itens sem classificação são preservados.
+  Mecanismos oficiais: [XDG Autostart](https://specifications.freedesktop.org/autostart/latest/)
+  e [systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html).
+- Recibo privado limitado a 64 KiB, até 64 efeitos, originais com SHA-256,
+  modos e links; intenção durável antes do primeiro efeito e revalidação em
+  cada escrita. Arquivos alterados externamente bloqueiam restauração.
+  Interrupção não permite replay; a consulta confirma o mesmo ID quando todos
+  os efeitos são comprovados. Restauração explícita permite recuperar um lote
+  parcial conhecido, sem iniciar aplicativos. Preferência em `startup.json`,
+  recibo em `state/basic-session.json`; a CLI não revela os originais.
+- Aplicado no host: **34 itens**, ID `1ad4de70-c461-46b0-9418-8511914637aa`,
+  habilitado/configurado, sem conflito e sem item desconhecido no plano.
+  `ksmserverrc` já tinha sessão vazia. Oito units observadas mantiveram os mesmos
+  PIDs, estados e contagens de reinício antes/depois, incluindo GUI, entrada,
+  agentes e áudio. A saída de áudio física era a padrão, sem depender do sink
+  JamesDSP. Não se fechou Steam, agente ou sessão para testar a opção.
+  O usuário tem `Linger=yes`: processos já residentes podem atravessar logout;
+  configurar o próximo início não encerra esse trabalho. O próximo login/boot
+  físico e a redução efetiva de carga conservam aceite próprio pendente.
+- Fonte congelada para QA por `git write-tree`/`git archive`, como artefato de
+  preparação da release, sem outro checkout, Git ou ambiente instalado nela.
+  Os cinco módulos de produção conferem byte a byte com o índice revisado.
+  O ajuste de renderização do Codex que já estava local permaneceu fora deste
+  incremento e dos pacotes. Os dois perfis oficiais foram executados
+  sequencialmente sobre `source/tests`, com `-o pythonpath=` absoluto apontando
+  para `source/src`, usando `./dev test-headless` e `./dev test`:
+  **1437 passed, 2 skipped** em 47,33 s (`run-3hzli4ve`) e
+  **1874 passed, 2 skipped** em 177,66 s (`run-ot6_c_83`). Diff check passou.
+  Uma passagem headless anterior passou, mas seu caminho de importação relativo
+  não provava isolamento da fonte; o gate acima a substitui, sem somar execuções.
+- Foco inicial: 39 testes headless, 53 Qt e, após as regressões adicionais,
+  18 casos da nova opção/GUI. Testam originais exatos, links, configurações
+  imutáveis, preferência desconhecida, conflito, interrupção, ausência de replay,
+  reconciliação, corrupção do backup e extensão do catálogo aplicado.
+  QA KDE/Wayland em janela própria de 800 × 565 confirmou checkbox, workers
+  reais, persistência, restauração exata e ausência de rolagem horizontal,
+  usando somente configurações descartáveis. A primeira tentativa não acertou
+  a área clicável do checkbox; o harness passou a clicar no indicador visível.
+  A captura final usa a pintura de superfície do produto. Essas provas não são
+  login físico nem medição de carga após boot.
+- O preflight recusou o limite de 20 workspaces. Seis execuções concluídas
+  foram revistas por manifesto, PID ausente e `lsof +D` privilegiado sem
+  referências; conteúdos integrais e hashes foram movidos no mesmo Btrfs para
+  `.scratch/dev-tests-reviewed/20261111-basic-session/`. Legados e JSONs
+  ilegíveis foram preservados. Nenhum limite foi ampliado ou payload apagado.
+  QA e preparação em `.scratch/release-b13-20261111/`, janela final em
+  `.scratch/basic-session-wayland-20261111-final/`. Antes dos gates havia cerca
+  de 8 GiB disponíveis, 63 GiB em disco, PSI baixo e ACPI 49–50 °C; a leitura
+  após Qt foi 65 °C. Execução sequencial, sem instalação global ou carga artificial.
+
+## Novos cortes à noite: calor, falha anterior de kernel e mitigação — 11/11/2026
+
+- Pedido do operador: investigar, registrar e atuar após vários reinícios.
+  **Causa raiz ainda indeterminada.** A evidência sanitizada está em
+  [reset-2026-11-11-noite.json](handoff/validation/reset-2026-11-11-noite.json),
+  com sete boots, últimas amostras, extremos da janela recente, SMART e recibo.
+  Os horários abaixo são registros retidos, não instantes físicos dos cortes.
+
+  | Boot | Último journal | Última amostra | Observado na amostra |
+  | --- | --- | --- | --- |
+  | `12743ce8` | 21:20:27 -03 | 21:21:10 -03 | ACPI 97 °C, RAM disponível 7.762.816 KiB, 95%, descarga a 7,652 V, AC ausente |
+  | `9360859f` | 21:57:11 -03 | 21:57:19 -03 | ACPI 99 °C, RAM disponível 7.910.272 KiB, 79%, carregando a 8,369 V, AC presente |
+  | `17bda0bb` | 21:59:30 -03 | 21:59:46 -03 | ACPI 84 °C, RAM disponível 9.646.288 KiB, 81%, carregando a 8,463 V, AC presente |
+  | `dd3dc45b` | 22:05:25 -03 | 22:05:30 -03 | ACPI 87 °C, RAM disponível 9.669.224 KiB, 85%, carregando a 8,482 V, AC presente |
+
+- Esses quatro boots usaram `6.18.49-1-MANJARO` e não preservaram encerramento
+  do logind. O boot `12743ce8` teve cerca de 4 h 32 min até a última amostra.
+  A janela final de `17bda0bb` chegou a **101 °C às 21:59:30**; os limites
+  atuais do sensor são passivo 100 °C e crítico 105 °C. Steam atualizava nos
+  três boots curtos e apareceu como maior CPU nas amostras finais. Calor e
+  carga são riscos observados; não comprovam desligamento térmico nem culpa
+  do aplicativo. PSI de memória em 60 s nas últimas amostras era 0–0,03%.
+  Não apareceu panic, OOM ou falha conclusiva de GPU na consulta filtrada
+  desses boots. Os cortes com AC presente impedem explicar todos por descarga.
+- Há um incidente diferente à tarde: `bda19752`, com kernel
+  **`6.1.182-1-rt67-MANJARO`**, registrou `BUG: Bad page cache` e `Bad page state`
+  no contexto de `kwin_wayland`, com `still mapped when deleted`, caminho shmem
+  e 13.088 mensagens suprimidas no aviso final. Isso é evidência de falha no
+  kernel/gerenciamento de páginas; não identifica o responsável nem prova RAM
+  defeituosa. O taint `B` admite problema de hardware ou bug do kernel, segundo
+  a [documentação oficial](https://docs.kernel.org/admin-guide/tainted-kernels.html).
+  Não transportar essa atribuição para os boots posteriores em outro kernel.
+  Já `deb94112` registrou desligamento solicitado por `plasma-shutdown`
+  às **16:41:01**, separado da sequência sem encerramento preservado.
+- Mitigação manual aplicada pelo owner instalado: `powerprofilesctl set power-saver`
+  às **22:41:22–23 -03**, de `balanced` para `power-saver`, sem holds presentes.
+  Intenção e resultado sincronizados antes/depois, ID
+  `4bfcf74a1236494f8de28be096564bb2`, boot `f8a649f9`.
+  Leitura posterior confirmou economia; o guarda permanece habilitado, sem
+  bloqueio e sem recibo automático aplicado. Reversão manual: `powerprofilesctl
+  set balanced`, somente se o perfil ainda for economia e não houver escolha
+  posterior do operador. A temperatura já estava perto de 50 °C antes da troca;
+  não atribuir a ela uma melhora térmica nem certificar estabilidade prolongada.
+- Consulta SMART autenticada: aprovado, alerta crítico 0, erros de mídia 0,
+  temperatura 43 °C, `unsafe_shutdowns=2819` e oito entradas acumuladas no log
+  de erros. Btrfs continua com corrupção acumulada 6741 e delta observado zero.
+  Esses números não certificam integridade completa. `/sys/fs/pstore` e o
+  diretório `/var/lib/systemd/pstore` estavam sem entradas;
+  não há crash recuperável nesta consulta.
+  A primeira consulta SMART expirou em 25 s; a posterior terminou com código 0.
+- O SD voltou a estar montado em `/mnt/WindowsSD`, `/dev/mmcblk0p3`, `fuseblk`.
+  Saúde do host contou 80 avisos NTFS na janela de dez minutos, com atribuição
+  parcial ao único candidato. Não se reparou nem desmontou volume em uso;
+  os erros não demonstram a causa dos reinícios. NVMe com 63 GiB livres (94%
+  ocupado), RAM disponível cerca de 8,4 GiB, sem troca ativa de swap na janela
+  medida, ACPI 49–50 °C e PSI baixo permitiram somente consultas e documentação.
+- Verificação no host: CLI oficial `disk health`/`disk timeline`, journal,
+  leituras de energia/temperatura, SMART e units. A consulta inicial sem
+  barramento foi marcada desconhecida; com runtime/barramento oficiais,
+  GUI PID 4312 e entrada PID 4382 estavam ativas, sem reinícios por falha.
+  Não houve mudança de código deste lote, teste de estresse, reboot, reparo de
+  filesystem ou encerramento de aplicações. Revisar JSON, referências e diff
+  é o gate deste incremento documental; não revalidar a implementação anterior
+  de renderização por inferência. Seus sete arquivos locais foram preservados.
+- Logs brutos privados e manifestos em `.scratch/host-incident-20261111-2236/`
+  (cerca de 1 MiB). O JSON versionado preserva a evidência sanitizada fora deste
+  disco; os brutos locais não são um backup independente. Próximo passo:
+  observar uso natural em economia, obter o relato de apagamento espontâneo
+  versus desligamento forçado após travamento e revisar refrigeração/energia e
+  captura de crash com os responsáveis pelo hardware/boot. Flags de watchdog/MCE
+  e firmware foram preservadas. Este lote não certifica eliminação do defeito.
+- Registro `bf47024b4e4ac8a90401eba9b3cc3efadbf7931e` enviado e confirmado
+  por `git ls-remote` na branch `codex/web-mcp-session-alert-20261108`;
+  [PR #9](https://github.com/Misael-art/Folego/pull/9) reutilizado e aberto.
+  Na consulta desse SHA, os dois jobs de contratos CLI passaram e os quatro
+  de núcleo/Qt estavam em execução. Revisão de JSON/fontes, referências,
+  segredos/tamanho e `git diff --check` passaram localmente. A última consulta
+  do host confirmou economia e ACPI 49 °C no mesmo boot. Sem merge ou release.
+
+## Abertura monitorada do Codex Desktop ficou sem janela — 11/11/2026
+
+- Pedido do operador: abrir o Codex Desktop e monitorar. O lançamento normal
+  foi solicitado por `gtk-launch codex-desktop` às 09:34, com o arquivo pessoal
+  ainda contendo `--disable-gpu`. O launcher confirmou `gpu_enabled=0`, e o
+  processo principal 300538 recebeu `--disable-gpu`, `--disable-features=Vulkan`
+  e a opção preexistente de composição desativada.
+- O aplicativo permaneceu sem janela nas consultas KWin. O log registrou
+  `GPU access not allowed` durante consulta de informações da GPU, com rejeição
+  de Promise sem tratamento. Essa abertura não certifica a mitigação anterior
+  como solução; a causa dos cortes históricos continua indeterminada.
+- Coleta própria de **600,47 s**, de 09:34:34 a 09:44:34 -03, com 293 amostras
+  duráveis. Boot permaneceu `fbbf00a5-8987-48b6-8845-71e36b560575`, ACPI 53–93 °C,
+  RAM disponível mínima 8.058.400 KiB e média do principal em cerca de 97,33%
+  de um núcleo. Nenhum evento filtrado foi capturado pelo leitor de kernel.
+  A coleta começou antes de lançar o app; não é aceite de uso normal com janela.
+  O observador finito terminou e encerrou apenas seu próprio leitor de journal.
+- Às 09:40, foi solicitado SIGTERM somente ao principal recém-iniciado, após
+  revalidar boot, executável `/opt/codex-desktop/electron`, PID/starttime 482017,
+  filhos diretos Electron e obter pidfd. A saída não foi confirmada após 10 s.
+  Nenhum SIGKILL foi executado. Foi solicitada confirmação manual específica
+  para esse processo, conforme AGENTS.md, e a repetição da abertura está pendente.
+  O cgroup é compartilhado com a sessão de terminal; **não parar essa scope**.
+  Toda ação futura exige nova revalidação, inclusive se o operador autorizar.
+- Consulta GLX separada e somente por filho próprio confirmou Mesa llvmpipe
+  26.2.2, `Accelerated: no`, usando `LIBGL_ALWAYS_SOFTWARE=true`,
+  `GALLIUM_DRIVER=llvmpipe` e `LP_NUM_THREADS=2`. Isso prepara outra abertura
+  pelo launcher, sem editar arquivos da distribuição ou enfraquecer WebGL.
+  O teste inicial de GLX faltou Xauthority; a consulta corrigida reutilizou o
+  ambiente oficial da sessão, sem copiar credenciais. A nova abertura ainda não
+  foi executada; não somar sua duração eventual à tentativa sem janela.
+- Evidência privada em `.scratch/codex-desktop-monitor-20261111-0933/`:
+  manifestos, métricas, resumo, trecho do log, flags e recibo de SIGTERM.
+  Somente documentação foi alterada; diff e coerência revisados. A captura
+  pelo backend Computer Use falhou neste KDE; a ausência de janela foi conferida
+  diretamente pela listagem KWin, sem alegar imagem do compositor.
+
+## Prévia 0.2.0b12 publicada — 11/11/2026
+
+- [Release pública v0.2.0b12](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b12),
+  publicada às **09:19:30 -03**, ID `441651225`, como prévia. Pedido do operador
+  atendido sem merge do PR #9. Fonte imutável
+  `0c46524d78157744ad71bd45212a5bcccb5d3cc2`; tag anotada
+  `ddd25c81cfe0135f05fd8a16e8091cb1f4d8f9f9`. Tag e commit foram conferidos no
+  remoto; o registro central vincula exclusivamente esta tag a este commit.
+- Os seis jobs de produto do commit passaram. Os três jobs da tag passaram no
+  run `43018853891`. A candidata local também passou em `./dev check`, com
+  **1421 passed, 2 skipped** headless e **1856 passed, 2 skipped** Qt, conforme
+  os recibos abaixo. A evidência Wayland pertence ao incremento anterior, cujo
+  código de interface corresponde aos módulos empacotados.
+- Pacotes construídos com uv gerenciado, cache local, backend fixado e Python
+  3.14.7, por `uv build --offline --python .dev/venv-headless/bin/python` com
+  saída no staging da release. Fonte completa por `git archive` do commit
+  acima, com wrapper e lockfile. A verificação comparou os **1016 arquivos
+  rastreados** da fonte completa e os **170 módulos** de wheel/sdist aos blobs
+  do Git; inventários extras ficaram limitados aos metadados esperados.
+- O wheel foi instalado sem dependências em `.dev/venv-release-b12`, com HOME/XDG
+  e temporários privados, sem Qt e sem importar o checkout. Confirmou versão,
+  classificação de reboot, fsync de cada amostra e orientação CLI sem efeito.
+  Ambientes editáveis GUI/headless também informam `0.2.0b12`. A GUI residente
+  segue ativa no PID 173119 e o monitor no PID 4150, ambos com `NRestarts=0`;
+  este lote de release não reiniciou esses processos.
+- Os quatro assets foram conferidos no rascunho por metadados e, após publicar,
+  baixados pelos links públicos sem autenticação. Tamanhos e SHA-256 coincidem:
+
+  | Asset | Bytes | SHA-256 |
+  | --- | ---: | --- |
+  | `Folego-0.2.0b12-source.tar.gz` | 22255579 | `2171fccb81050c68e24676791bab9b5c9062a2c70853a89d310bad011b0844ea` |
+  | `folego-0.2.0b12-py3-none-any.whl` | 560334 | `c981deb9388bae465db3a20f7fe1735684ea9a5d5479776fc384cf62296c8a00` |
+  | `folego-0.2.0b12.tar.gz` | 785053 | `18e90deb6a5414dfff21fe2f3e42ab508d0c8d0e7d749e9dc0c5fa6c5bd1801f` |
+  | `SHA256SUMS` | 284 | `b878a5d2b98152e6dce31fc920f46036d2c31fd33b0f18359ec3c6670c1c278b` |
+
+- Notas, verificadores, metadados, logs de QA referenciados e cópias públicas
+  conferidas em `.scratch/release-b12-20261111/`. A consulta REST por tag enquanto
+  a release ainda era rascunho retornou 404; foi preservada e a leitura autenticada
+  pela lista de releases confirmou o rascunho. Publicação e downloads passaram.
+- A entrega melhora durabilidade e diagnóstico; a causa dos cortes, estabilidade
+  prolongada e aceites físicos após nova falha natural permanecem abertos.
+
+## Candidata da prévia 0.2.0b12 — 11/11/2026
+
+- Pedido explícito do operador: fazer release do incremento de histórico e
+  diagnóstico. Mantida a série de prévias; sem merge do PR #9. A versão em
+  `pyproject.toml` e `uv.lock` passou para `0.2.0b12`, e o README aponta para a
+  nova tag. Nenhuma dependência ou contrato de automação foi ampliado.
+- A base `6565cbf247f90519b646c734ab5c13c5903e0578` tinha os seis jobs de produto
+  aprovados no GitHub antes da preparação. O código inclui fsync em cada amostra,
+  reconhecimento dos pedidos do logind e tratamento conservador de journal
+  desconhecido. A causa dos cortes permanece sem confirmação.
+- A nova execução local da candidata usa Python 3.14.7 e os perfis separados do
+  wrapper. Para respeitar o limite de QA, duas execuções próprias concluídas,
+  `run-j0esypl3` e `run-refa6np2`, foram preservadas integralmente com manifestos,
+  PIDs ausentes e hashes em `.scratch/dev-tests-reviewed/20261111-release-b12/`.
+  A evidência Wayland do incremento está em `.scratch/reboot-diagnosis-20261111/`.
+- Artefatos, notas e verificadores específicos desta entrega ficam em
+  `.scratch/release-b12-20261111/`. A publicação exige fonte completa, wheel,
+  sdist, `SHA256SUMS`, correspondência com o commit, smoke isolado e gates do SHA.
+- `./dev check` da candidata passou sequencialmente: **1421 passed, 2 skipped**
+  headless em `run-3fdlgnd6` (53,09 s), **1856 passed, 2 skipped** Qt em
+  `run-ygqbc67g` (189,88 s), Python 3.14.7, HOME/XDG/TMPDIR privados e diff check
+  aprovado. Nenhum limite foi ampliado e nenhuma instalação privilegiada foi feita.
+
+## Diagnóstico distingue pedido de reinício e encerramento desconhecido — 11/11/2026
+
+- Continuidade do pedido de melhoria após os cortes. A sincronização de cada
+  amostra já estava aplicada no incremento anterior. Foi reproduzida uma falha
+  distinta no dossiê: o filtro reconhecia apenas `System is powering down.`,
+  deixando `System is rebooting.` inconclusivo. Além disso, todas as consultas
+  com erro ainda podiam produzir o texto “desligamento registrado”.
+- A mesma consulta limitada por boot agora reconhece os pedidos de desligamento,
+  reinício, parada, kexec e reinício do espaço de usuário do logind. O JSON mantém
+  `end=shutdown_recorded` e acrescenta `end_kind` e `end_source`. CLI e GUI usam
+  a mesma tradução e sempre ressalvam “conclusão não comprovada”. A mensagem
+  inteira precisa corresponder; frase contida em outra saída vira desconhecida.
+  Sem registro consultável, o resumo mantém causa desconhecida. Os limites de
+  quatro boots, uma entrada por consulta e orçamento global de 8 s permanecem.
+- Oito verificações falharam contra a base em `run-j0esypl3`; os 28 casos focados
+  de observador, CLI e interface passaram em `run-refa6np2`. As duas execuções
+  encerradas próprias `run-vdj8cy7z` e `run-c50q5tqk` foram preservadas integralmente,
+  com manifestos/PIDs ausentes e hashes, em
+  `.scratch/dev-tests-reviewed/20261111-reboot-diagnosis/`. Nenhum limite ampliado
+  ou conteúdo de fixture adotado como dado do produto.
+- O ensaio próprio KDE/Wayland consultou somente o journal real dos boots
+  históricos `f226e77c` e `c43ce589` e reconheceu o reboot das 05:41 como `reboot`.
+  Janela Qt própria de 800 × 650, painel desabilitado para interação, confirmou
+  mensagem completa e rolagem horizontal zerada. Captura de cliente, recibo e
+  roteiro em `.scratch/reboot-diagnosis-20261111/`. Isso valida apresentação e
+  leitura histórica; não certifica compositor, estabilidade prolongada ou fim
+  físico daquele boot. Nenhuma ação de reinício ou recuperação foi executada.
+- A CLI oficial `./dev run disk health --json` consultou o boot atual em 1107 ms
+  e preservou os três cortes recentes como inconclusivos, com causa desconhecida.
+  O relatório privado está no mesmo destino. A causa dos resets e o aceite da
+  mitigação gráfica aplicada anteriormente continuam pendentes de uso natural.
+- `./dev check` passou sequencialmente com Python 3.14.7 e HOME/XDG/TMPDIR
+  privados: headless **1421 passed, 2 skipped** em `run-8p8sn7jj` (43,92 s)
+  e Qt **1856 passed, 2 skipped** em `run-1h961wbi` (190,06 s). Diff check verde.
+  Na revisão final, somente o rótulo textual de halt passou de “parada” para
+  “encerramento”, conferido no formatador headless para manter a concordância.
+- `./dev setup` confirmou o ambiente oficial após os gates. A unit GUI foi
+  revalidada no boot atual, com apenas o PID principal 113008 no cgroup, e
+  recarregada. Novo PID 173119, estado ativo e `NRestarts=0`. O monitor de entrada
+  segue independente; nenhuma sessão do desktop foi reiniciada. A base remota
+  anterior `6b050e3` foi conferida antes da publicação deste incremento.
+- Código `4cb6cac80688d1765c717b78be5855a5ae11ca02` enviado e confirmado no
+  remoto da continuidade do [PR #9](https://github.com/Misael-art/Folego/pull/9).
+  Na primeira consulta desse SHA, um job CLI estava aprovado e cinco jobs ainda
+  em execução; gates locais aprovados conforme acima. A amostra de 09:01:35
+  confirmou fontes válidas e ACPI 49 °C após carregar a melhoria.
+
+## Cortes após abertura do Codex e durabilidade do histórico — 11/11/2026
+
+- Pedido atual: investigar e resolver os novos reinícios. Os boots abaixo
+  terminaram sem solicitação logind nem encerramento organizado preservados.
+  Os horários são os últimos registros disponíveis, não o instante físico do corte.
+
+  | Boot | Último journal | Última amostra Fôlego | Estado observado na amostra |
+  | --- | --- | --- | --- |
+  | `c43ce589` | 07:52:26 -03 | 07:52:20 -03 | 62 °C, RAM disponível 7.394.656 KiB, swap usada 202.732 KiB, 53%, carregando a 8,124 V, AC presente |
+  | `12ba3f73` | 08:03:42 -03 | 08:02:58 -03 | 50 °C, RAM disponível 9.941.828 KiB, sem swap usada, 62%, carregando a 8,273 V, AC presente |
+  | `fbb3ad10` | 08:11:53 -03 | 08:11:17 -03 | 48 °C, RAM disponível 9.975.588 KiB, sem swap usada, 63%, descarregando a 7,633 V, AC ausente |
+
+- PSI de memória/I/O em 10 s estava zerado nas três últimas amostras, com
+  fontes válidas. Os dois boots curtos registraram abertura do Codex Desktop
+  às 08:03:17 e 08:11:49. Essa associação temporal orienta a investigação,
+  mas não comprova defeito gráfico. Sem panic, OOM ou thermal trip preservados
+  na janela final consultada; transientes entre leituras continuam desconhecidos.
+  Os cortes com AC e em descarga impedem atribuir todos à bateria pelo percentual.
+- Consulta privilegiada somente de saúde: NVMe SMART aprovado, alerta 0,
+  erros de mídia 0, unsafe shutdowns acumulados 2796, temperatura 46 °C.
+  Btrfs segue em corrupção acumulada 6741, com escrita/leitura/flush/geração
+  zerados e sem delta observado. Pstore vazio, sem registro de crash recuperável.
+  Isso não certifica integridade integral nem exclui falha transitória de energia.
+- O launcher comunitário `/opt/codex-desktop/start.sh` lê a configuração oficial
+  desse pacote em `~/.config/codex-desktop/electron-flags.conf`. Foi acrescentado
+  somente `--disable-gpu`, com cópia prévia privada. O comando do launcher
+  `--diagnose-scaling` confirmou GPU e Vulkan desativados para a próxima abertura.
+  Não foi reaberto o app para provocar outro corte; o aceite de uso permanece
+  pendente. Reversão: remover a linha ativa `--disable-gpu` desse arquivo.
+- Lacuna reproduzida no Fôlego: em baixa pressão, fsync ocorria somente a cada
+  quatro gravações normais. Uma amostra podia ser exibida como gravada sem
+  sincronização por aproximadamente um minuto. Agora cada gravação solicita
+  fsync antes do sucesso; falha dessa barreira chega à qualidade da fonte na
+  CLI/GUI. Cadência, limites e tratamento imediato de eventos foram preservados.
+  A mudança reduz perda de evidência; não é reparo comprovado da causa dos cortes
+  e não certifica o comportamento físico do armazenamento durante falta de energia.
+- Os dois testes novos falharam contra a implementação anterior em
+  `run-vdj8cy7z`; com a correção, os 12 testes focados passaram em `run-c50q5tqk`.
+  `./dev check` passou sequencialmente com Python 3.14.7 e HOME/XDG/TMPDIR
+  privados: headless **1414 passed, 2 skipped** em `run-tn1ezrd1` (58,07 s)
+  e Qt **1848 passed, 2 skipped** em `run-24cyenvw` (151,29 s). Diff check verde.
+  O preflight inicial foi recusado por 20 diretórios QA. Seis execuções antigas
+  concluídas foram revisadas por manifesto, PID ausente e `lsof +D` privilegiado
+  sem referências nos destinos Btrfs. Avisos lsof eram de FUSE alheio a essas
+  árvores. Conteúdo integral e hashes dos recibos foram preservados em
+  `.scratch/dev-tests-reviewed/20261111-reset-durability/`; nenhum payload removido.
+- Após os gates, `./dev setup` confirmou o ambiente editable oficial. A GUI
+  `app-folego@autostart.service` foi revalidada no boot e com cgroup contendo
+  somente seu principal PID 4073, e recarregada para usar o novo gravador.
+  PID posterior 113008, unit ativa e `NRestarts=0`; amostras de 08:44:40 e
+  08:44:55 têm fontes válidas, leitura de 120/117 ms e temperatura de 52/51 °C.
+  O monitor de entrada não foi reiniciado. Isso comprova coleta viva; não prova
+  durabilidade numa falha física nem estabilidade por horas.
+- O fetch encontrou uma referência interna de captura Codex vazia, com mtime
+  de 09/11: `refs/codex/turn-diffs/captures/1794243476193/18227c2d-7ec3-4d08-b16e-7ef00cb8217d/base`.
+  Não havia SHA ou reflog recuperável nessa referência. O arquivo vazio foi
+  preservado no destino privado de evidências e retirado do namespace de refs,
+  sem alterar branches, objetos ou checkout. `git fsck --full --no-reflogs
+  --no-dangling` passou após a correção. Sua data não permite atribuí-la aos
+  cortes desta manhã. Os recibos antes/depois foram preservados.
+- Incidente causado pelo agente durante esta investigação: às 08:26:55, a
+  leitura indevida de `amdgpu_gpu_recover` acionou um reset da GPU. O kernel
+  registrou recuperação bem-sucedida e o host manteve o boot `fbbf00a5`.
+  Esse evento foi comunicado ao usuário e está excluído da atribuição dos
+  cortes anteriores. Não se certificou a preservação de trabalhos em GPU.
+  Debugfs possui arquivos com efeitos ao ler, conforme a
+  [documentação do kernel](https://docs.kernel.org/gpu/amdgpu/debugfs.html#amdgpu-gpu-recover).
+- Evidências privadas, logs limitados, amostras dos três boots e cópia da
+  configuração anterior: `.scratch/host-incident-20261111-0812/`. Acompanhamento:
+  uso natural com a mitigação gráfica, esclarecer se houve reset espontâneo ou
+  desligamento manual após travamento e correlacionar próximo evento com energia,
+  GPU/kernel. Revisão de firmware/boot e manutenção física exigem diagnóstico
+  próprio; não se provocou reboot, descarga, carga térmica ou enchimento de disco.
+- Incremento `188bae0e114fd66b3ef9d7b6e9c9e1bda5b131e4` enviado para
+  `codex/web-mcp-session-alert-20261108` e confirmado por `git ls-remote`.
+  [PR #9](https://github.com/Misael-art/Folego/pull/9) reutilizado. Na primeira
+  consulta desse SHA, os seis jobs de CI estavam em fila/em execução; nenhum
+  resultado pendente foi promovido a aprovado. Os gates locais acima passaram.
+  A última amostra conferida às 08:46:20 tem fontes válidas, ACPI 49 °C e RAM
+  disponível 8.833.060 KiB, no mesmo boot. A causa final e o aceite da mitigação
+  continuam abertos, sem afirmar eliminação do defeito físico.
+
+## Memória compartilhada do host e base funcional — 11/11/2026
+
+- A pedido do operador, os aprendizados de comportamento, resets, energia,
+  microfone, concorrência de cargas, serviços e recuperação foram consolidados
+  em duas páginas no AI Memory compartilhado `default/_global`.
+  `procedures/host-jupiter-base-minima-e-diagnostico.md` fica fixada e reúne
+  a base funcional por capacidade. `gotchas/host-jupiter-incidentes-e-recuperacoes.md`
+  reúne cronologia, evidências, correções, SHAs e limites. Leitura integral
+  posterior confirmou persistência. Uma busca no escopo PhaseZero encontrou
+  ambas pelo contexto compartilhado.
+- O guia versionado registra hardware/armazenamento, núcleo e sessão, energia,
+  rede, áudio físico e filtros, acessibilidade, portais e serviços sob demanda.
+  O inventário foi conferido com units reais do sistema e usuário, dependências
+  do target, políticas, diagnóstico de microfone e documentação primária.
+  [BASE-DO-HOST.md](BASE-DO-HOST.md).
+- A omissão da dependência de energia no target Vibe Code é comprovada e possui
+  vínculo corretivo instalado no host. O gerador PhaseZero `linux/boot/vibe-code.sh`
+  ainda precisa incorporar essa dependência para novas instalações. A causa
+  exata da enumeração incompleta e a atribuição dos cortes físicos continuam
+  abertas. Um próximo boot natural no Vibe Code mantém seu aceite próprio.
+- Este incremento é documental. A revisão conferiu referências e coerência,
+  com `git diff --check`, além de leitura e busca das páginas persistidas.
+
+## Revisão da autorrecuperação e instalação da prévia 0.2.0b11 — 11/11/2026
+
+- A varredura percorreu diagnóstico, diário, escopo de efeitos, políticas,
+  monitor, GUI/CLI, perfis de desktop e energia. A matriz de lacunas e correções
+  está em [ROADMAP-RESILIENCIA-HOST.md](ROADMAP-RESILIENCIA-HOST.md).
+  A enumeração incompleta do microfone recebe diagnóstico próprio e recuperação
+  WirePlumber pelo coordenador, com revalidação e preferência comprovada.
+  A automação exige referência saudável e opt-in separado. As configurações
+  migradas começam com esse novo opt-in desligado.
+- Pendências protegem os recursos efetivamente envolvidos. Delegação de entrada
+  cobre as entradas do protocolo. Troca de perfil de microfone e reenumeração
+  cobrem captura e saída de áudio. Escopo legado incompleto protege todas as
+  capacidades. O ID antigo `58176bdf86c94e759e43f661630c5ce8` segue incerto e
+  protege entrada. O diagnóstico pós-instalação confirmou áudio/microfone fora
+  desse escopo e disponíveis para recuperação independente.
+- Fonte virtual isolada perde a possibilidade de certificar sucesso. O resultado
+  verifica perfil, fonte física e ligações AEC/BigLinux. Duas amostras distintas
+  e recentes são exigidas para automação. Boot, domínio do relógio e lacunas
+  reiniciam a confirmação. Orçamento futuro é preservado. A GUI permite escolher
+  cada operação pendente, consultar recuperação de perfil e rearmar sua guarda
+  após estado saudável. Atualizar configuração preserva o ID do reparo anterior.
+- Energia grava orçamento horário e intenção própria da devolução do perfil,
+  com ID vinculado ao recibo anterior e trava entre instâncias. Interrupção sem
+  confirmação ou boot divergente preserva desconhecido. Escolhas manuais do
+  perfil seguem a reconciliação existente. Tentativas de versões anteriores eram
+  voláteis e sua contagem histórica não pode ser reconstruída.
+- `./dev check` final passou sequencialmente, Python 3.14.7 e HOME/XDG/TMPDIR
+  privados. Headless **1412 passed, 2 skipped** em `run-z1mja7qi` e Qt
+  **1846 passed, 2 skipped** em `run-ixlh8o8t`. `git diff --check` passou.
+  Foco anterior de 159 casos em `run-u4rpvs6f`. Esse foco e as tentativas
+  encerradas anteriores estão em `.scratch/dev-tests-reviewed/20261111-recovery-audit/`.
+  O primeiro Qt completo teve uma falha de geometria da mini durante animação
+  em `run-kq4s4e8u`. O ajuste inicial do teste tentou acessar a animação antes
+  de sua criação diferida e falhou em `run-0zoxjymt`. O teste final aguarda a
+  criação e dirige a animação ao último quadro, preservando as asserções.
+- `tools/verify_accessibility_wayland.py` exercitou uma janela própria de
+  800 × 565 no KDE/Wayland, com eventos Qt sintéticos, políticas e efeitos
+  descartáveis. Conferiu botão independente de microfone, IDs de entrada
+  preservados, opção persistente, seletor e rearme. Rolagem horizontal zerada.
+  Captura de cliente e recibo em `.scratch/accessibility-wayland-b11-painted-20261111/`.
+  A prova cobre apresentação e encaminhamento com backend simulado.
+- Após os gates, `./dev setup` confirmou a versão instalada. Cada unit foi
+  revalidada com apenas seu processo principal antes do carregamento. GUI
+  `app-folego@autostart.service` PID 303337 e monitor
+  `folego-accessibility.service` PID 303328 ficaram ativos, com `NRestarts=0`.
+  O opt-in foi habilitado pelo comando oficial neste host, conforme o pedido.
+  O diagnóstico posterior confirmou monitor recente, referência saudável,
+  perfil `HiFi (Mic, Speaker)`, cadeia física saudável e guarda de energia
+  habilitada em `balanced`, sem bloqueio. WirePlumber segue no PID 84948 da
+  recuperação inicial. Recibos privados e configuração anterior em
+  `.scratch/host-install-b11-20261111/`.
+- Código `c4641e56c4bd9e5940993b55ab911f2161b00690` enviado e confirmado
+  na continuidade do PR #9, com os seis checks aprovados. A tag anotada
+  `v0.2.0b11`, objeto `1421fc435360498e976b1a9c687278f99cc45e14`, aponta
+  para esse código. Os três jobs da tag passaram no run `43001052263`.
+  O registro central vincula explicitamente essa tag ao commit autorizado.
+  [PR #9](https://github.com/Misael-art/Folego/pull/9).
+- A prévia foi publicada em 11/11 às 07:10 -03 com fonte completa, sdist,
+  wheel e `SHA256SUMS`. Os quatro tamanhos e digests SHA-256 públicos foram
+  conferidos. A fonte completa contém 1015 arquivos rastreados. Os 170 módulos
+  do wheel e do sdist correspondem byte a byte à fonte commitada. O wheel
+  passou em ambiente isolado sem Qt, incluindo persistência da nova opção.
+  Recibos e artefatos em `.scratch/release-b11-20261111/`.
+  [Prévia v0.2.0b11](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b11).
+- Aceites físicos de falha natural e recuperação automática, cold boot,
+  suspend/resume e uso prolongado permanecem pendentes. A voz foi confirmada
+  pelo usuário na recuperação inicial. O diagnóstico da causa exata da
+  enumeração incompleta e dos cortes físicos do host continua aberto.
+
+## Microfone recuperado por nova enumeração às 06:02 — 11/11/2026
+
+- Após o boot `c43ce589`, a placa acp5x estava em `off`. O WirePlumber
+  apresentava somente `off`, `pro-audio` e `HiFi (Headphones, Mic)` indisponível.
+  O ALSA/UCM reconhecia Speaker e Mic, e a preferência persistida era
+  `HiFi (Mic, Speaker)`, ausente da enumeração PipeWire. A fonte virtual
+  `mic-biglinux` existia, mas o AEC registrava ausência de fonte física.
+  `Int Mic` e `DMIC Enable` estavam desligados.
+- Recuperação manual solicitada pelo usuário. Após cópias do estado e intenção
+  em `.scratch/microphone-recovery-20261111/`, foi revalidada a unit
+  `wireplumber.service` com seu único processo, PID 2117, e executado
+  `systemctl --user restart wireplumber.service` às 06:02:53 -03.
+  O novo gerenciador, PID 84948, enumerou todos os perfis e restaurou a
+  preferência `HiFi (Mic, Speaker)`. PipeWire, filtro e Pulse mantiveram os
+  PIDs 2111, 2190 e 3720, iniciados às 05:42.
+- Verificação confirmou fonte física HiFi, controles `Int Mic` e `DMIC Enable`
+  ligados, cadeia físico → echo-cancel → mic-biglinux, fonte padrão `mic-biglinux`
+  a 94% e ambas as entradas com `mute=false`. O usuário confirmou voz funcionando.
+  A preferência correta permanece no estado do WirePlumber. Consultas nativas,
+  journal, grafo e teste físico validaram a recuperação, com diff documental revisado.
+- O journal mostra WirePlumber do usuário e do greeter enumerando ALSA durante
+  o login. A causa exata da enumeração incompleta permanece indeterminada.
+  O perfil correto indisponível explica a guarda do Fôlego permanecer desconhecida.
+
+## Reinício solicitado pelo KDE às 05:41 — 11/11/2026
+
+- O boot `f226e77c-d92b-441a-b43c-da02cacd2942` registrou às 05:41:40 -03
+  `reboot requested from client PID 103190 ('plasma-shutdown')`, via logind,
+  após iniciar a unit D-Bus `org.kde.Shutdown`. Os serviços encerraram e os
+  volumes foram desmontados até 05:41:43. O novo boot,
+  `c43ce589-1ca6-4f01-b1d5-5f676635a9bb`, começou a registrar às 05:42:08.
+  O solicitante identificado foi o componente do KDE. A origem do acionamento
+  dentro da sessão permanece indeterminada.
+- Última amostra Fôlego às 05:41:27: bateria 89%, descarregando a 7,764 V e
+  1,111 A, ACPI 48 °C, RAM disponível 8.140.256 KiB, swap usada 16 KiB e
+  PSI de memória/I/O em 10 s zerado, com fontes válidas. O journal do boot
+  consultado não registrou panic, OOM ou falha térmica antecedendo a solicitação.
+- O boot atual usa o Desktop padrão, com `graphical.target` ativo e Vibe Code
+  inativo. O gerenciador BigLinux iniciou automaticamente às 05:42:11,
+  manteve perfil `balanced` e AMD P-State `active`; a unit residente do Fôlego
+  ficou ativa, PID 3900, sem reinício por falha. Isso confirma a energia no
+  Desktop padrão. A dependência específica do Vibe Code aguarda um boot desse modo.
+- Investigação somente leitura, com `journalctl`, `last`, histórico do Fôlego,
+  `powerprofilesctl` e consultas das units. A documentação foi revisada com
+  `git diff --check`. O SHA anterior `13eb15f` tinha seis checks aprovados.
+
+## Energia disponível no Vibe Code e perfil equilibrado — 11/11/2026
+
+- O target `phasezero-vibe-code.target` iniciava `multi-user.target` e SDDM.
+  Os serviços de energia do BigLinux estavam habilitados em `graphical.target`,
+  que ficava inativo nesse modo. O mask da unit genérica existe desde a imagem
+  do sistema, e o owner instalado é `power-profiles-daemon-biglinux.service`.
+- Após o pedido de melhorar as configurações, o inicializador oficial do BigLinux
+  foi executado com intenção e cópias prévias. Ele mudou AMD P-State de `guided`
+  para `active`, com driver real `amd-pstate-epp`. O perfil-base foi salvo como
+  `balanced` antes da inicialização e confirmado por `powerprofilesctl get`.
+  `systemctl add-wants phasezero-vibe-code.target power-profiles-daemon-biglinux.service`
+  criou a dependência para as próximas entradas naturais nesse modo.
+- Às 05:35 -03, o owner estava `active/exited`, o daemon instalado
+  `power-profiles-daemon-biglinux-start.service` estava `active/running`, ambos
+  com `ExecMainStatus=0`. A listagem confirmou `CpuDriver=amd_pstate` nos três
+  perfis. A leitura da CPU mostrou governor `powersave` e preferência
+  `balance_power`, com perfil `balanced` confirmado em leituras sucessivas.
+- `./dev run disk health --json` confirmou `power_guard.enabled=true`,
+  `blocked=false`, perfil `balanced` e mensagem **Ativo. Perfil atual: equilibrado.**
+  A guarda continua configurada para equilibrado em atenção e economia em crítica.
+  A validação foi funcional no host, com consultas, journal e verificação das units.
+  `systemd-analyze verify` retornou 0, com avisos de acesso a diretórios e à unit
+  SteamZero protegida. O próximo boot natural ainda precisa confirmar a dependência.
+- Evidência e cópias em `.scratch/host-power-config-20261111/`, incluindo
+  `state.ini.before`, `starter.service.before`, intenção e resultado confirmado.
+  A reversão exige remover somente o link criado em
+  `/etc/systemd/system/phasezero-vibe-code.target.wants/`, parar os dois serviços
+  de energia ativados neste lote, restaurar as cópias e o modo `guided`, e
+  reconsultar o estado. As receitas e valores anteriores ficam nesta passagem.
+- O monitor está preservado em `2887457`, com passagem em `0b9da58`, ambos
+  confirmados no GitHub com os seis checks aprovados. Este lote ajusta o host e
+  a documentação. A captura de panic continua pendente de uma revisão própria
+  de boot pelo PhaseZero, com backend e recuperação verificados. O diagnóstico
+  atual mostra `pstore` sem backend e detectores de travamento desabilitados.
+
+## Monitor de alimentação e proteção indisponível — 10/11/2026
+
+- A coleta existente alimenta o estado permanente na Central e em **Disco ›
+  Saúde do host › Alimentação e proteção**, com energia externa, percentual,
+  tensão, corrente e proteção de perfil. A bandeja avisa uma desconexão observada,
+  descarga na presença de energia externa em duas leituras consecutivas e falha
+  ou pausa da proteção. Cada tipo tem intervalo mínimo de 5 min. Dados antigos,
+  lacunas de coleta e fontes desconhecidas interrompem a comprovação de transições.
+- O worker reconsulta o guarda a cada 60 s. Falha do daemon preserva o opt-out
+  persistido e aparece fora de Opções. A consulta periódica preserva escolhas
+  manuais na fila; restaurar o perfil exige alimentação externa confirmada.
+  `disk health [--json]` apresenta alimentação e proteção por consulta sem
+  reconciliar/escrever recibos; `disk guide power` oferece orientação manual.
+- Código `2887457f30f498a330ac7b67b4b5e78d2e2b8eb4` enviado e confirmado
+  na branch do [PR #9](https://github.com/Misael-art/Folego/pull/9). Os seis checks
+  do código passaram no GitHub. Gate local com Python 3.14.7 e HOME/XDG/TMPDIR
+  privados: foco de 47 testes em `run-gpfiu72c`; headless completo **1383 passed,
+  2 skipped** em `run-tn0up2fw`; Qt completo **1813 passed, 2 skipped** em
+  `.scratch/dev-tests/run-as8odgya`. `git diff --check` passou.
+- A primeira execução Qt, `run-0_4x0js8`, terminou com 1812 aprovados, 2 skips e
+  uma falha em `test_ui_history::test_slow_history_never_runs_on_gui_thread_or_builds_a_queue`
+  (1 disparo do timer em vez dos 3 exigidos em 150 ms). O reteste focado passou
+  6 casos em `run-wbha3m32`, e a nova suíte Qt passou integralmente com o mesmo
+  código e as mesmas asserções. Os dois primeiros runs citados e a tentativa Qt
+  falha foram preservados em `.scratch/dev-tests-reviewed/20261110-power-monitor/`.
+- `tools/verify_host_guard_wayland.py` abriu uma janela própria de 800 × 593,
+  sem rolagem horizontal, com dados sintéticos e backend de energia descartável.
+  O ensaio conferiu dois payloads de notificação, com captura de cliente e
+  recibo em `.scratch/power-monitor-wayland-20261110.mIWOrM/`.
+  Essa prova cobre layout e encaminhamento; leitura física dos pop-ups e corte
+  real de energia continuam pendentes.
+- CLI real confirmou energia externa conectada, carga a 63%, 8,43 V, 2,15 A e
+  proteção habilitada porém indisponível pelo daemon. Após validar que a unit
+  continha apenas seu processo principal, o serviço existente foi recarregado
+  às 23:16:43 -03. Ficou `active/running`, PID 154344, `ExecMainStatus=0`,
+  `NRestarts=0`, com novas amostras. A causa física dos resets continua aberta.
+  Próximo passo é observar a alimentação no uso normal e revisar o serviço de
+  perfis pelo seu responsável, preservando os registros dos próximos episódios.
+
+## Resets e limites por modelo nas contas — 10/11/2026
+
+- Relatório em [DIAGNOSTICO-RESETS-CONTAS-2026-11-10.md](DIAGNOSTICO-RESETS-CONTAS-2026-11-10.md).
+  O reset gratuito do Claude visto no Desktop não vem em `oauth/usage`
+  (leitura de 10/11) nem em endpoint do cliente instalado. Não ler a sessão
+  web do Desktop para obtê-lo.
+- O coletor Claude cria janelas para `limits[].weekly_scoped`
+  (`Semana Fable`). `reset_notes` guarda um lembrete pessoal por conta, pela
+  GUI (**Lembrete de reset…**) ou `ai reset-note`. `AlertTracker.reset_changes`
+  avisa reset novo e últimas 24 h de validade, com pop-up e som `reset`.
+- Headless focado 86 aprovados (`run-c7qf0ch2`), Qt focado 198
+  (`run-ox_y14ut`) e 8 (`run-72t15vp5`). `ai status` real mostrou a janela
+  Fable e o lembrete da conta Claude principal, válido até 17/11 04:59.
+  Quatro runs antigos concluídos foram movidos, sem apagar, para
+  `.scratch/dev-tests-reviewed/20261110-reset-signals/`.
+- Código `142d139c593bb7055acfb9392c203a9ef009b855` no PR #9, SHA conferido no
+  remoto. Suítes completas do CI ainda não consultadas para esse SHA. O
+  `git fetch` local falha por uma ref `refs/codex/turn-diffs/...` sem objeto,
+  anterior a este lote; `ls-remote` e `push` funcionam.
+- Segundo lote: estimativa local de ritmo (`pace_forecast`), som ao resgatar
+  no meio da janela, leitura de `spend` e lembrete de limite do Codex Web
+  (`ai limit-note`). Catálogo de prompts com 16 modelos: `evolve` e
+  `close-gaps` em Desenvolvimento, `optimize` em Desempenho; o contexto comum
+  trata texto de arquivos e ferramentas como dado, e `implant` condiciona
+  push/PR à autorização do projeto. Headless focado 127 (`run-f_jga585`), Qt
+  focado em `run-ejddu5sj`. Host reiniciou sozinho às 09:20 durante o lote,
+  sem perda de edições; mais quatro runs antigos foram para o mesmo arquivo.
+- Pendente: pop-up, som e diálogo no KDE/Wayland real, na próxima abertura
+  segura da GUI residente. Abertos no relatório: fonte do provedor para
+  reset do Claude, ritmo e limite Web; `limit`/`balance` de `spend`.
+
+## Evidência de queda de tensão e carga do Codex Web — 09/11/2026
+
+- A linha do tempo grava e sincroniza o primeiro valor crítico em descarga e
+  cada mudança confirmada de alimentação externa assim que a coleta os entrega.
+  Cada evento guarda a tensão, a referência de projeto e a qualidade da fonte.
+  Uma leitura desconhecida não encerra o episódio. A atenção mantém o episódio
+  aberto e uma recuperação confirmada permite registrar a próxima queda.
+- O caso normal mantém o intervalo de 15 s e os limites existentes de
+  armazenamento. O worker de recursos é o mesmo. O `disk timeline` identifica
+  os eventos e o resumo de incidentes inclui o último evento na janela lida.
+  A coleta por amostras ainda pode perder transições breves, principalmente
+  quando a leitura de recursos demora sob contenção.
+- Na observação local somente leitura, um renderizador Codex Web liderou seis
+  de oito janelas curtas e chegou a 151,5% de um núcleo. O cgroup do launcher
+  chegou a 159%. Houve concorrência com Codex Desktop e Plasma. As métricas
+  de processo não identificam a operação que desencadeou o consumo.
+- Código `1458507e76d2f08155bf49f05d6d6a2329c760d6` no PR #9. Com Python
+  3.14.7 e HOME/XDG privados, `./dev test-headless tests/test_host_timeline.py
+  tests/test_host_guard.py tests/test_battery.py tests/test_cli_disk.py` teve
+  **71 passed** em `run-q1db2hcp`. A contenção local foi acompanhada por
+  amostragem breve; os gates amplos rodam no GitHub. A GUI residente ainda
+  compartilha a unit com o Claude Desktop e precisa de uma próxima abertura
+  segura para carregar a alteração.
+
+## Prévia 0.2.0b10 · mini horizontal e modo de abertura — 09/11/2026
+
+- A mini recolhida fica em 46 px. A área **···** revela **Menu**, **D**,
+  **Copiar**, **Colar** e **Prompts** em uma fileira curta. O worker existente
+  confere a posição ao abrir a gaveta e corrige somente a janela do widget
+  quando a área útil exige. A Central mostra os botões **Widget flutuante**
+  e **Mini horizontal**. **Opções → Modo de abertura** usa QSettings e vale
+  para a próxima abertura, com a Central como padrão.
+- O ensaio próprio KWin/Wayland de 948 × 593 verificou os seis modos de
+  abertura e o retorno à mini, o recolhimento e o comando de desktop com duas
+  janelas descartáveis. Na borda, a mini passou de 416 × 46 para 416 × 74
+  e deslocou 28 px para manter os atalhos dentro da área útil. Capturas e
+  recibo em `.scratch/mini-startup-wayland-20261109.MoTmJa/`. Os acionamentos
+  foram sintéticos. O fluxo de entrada física segue pendente.
+- Python 3.14.7 e HOME/XDG privados. O foco final teve **13 passed** em
+  `run-zndpiluc`. A suíte Qt local anterior registrou 1791 aprovados, 2 skips
+  e duas falhas por observar a animação antes do último quadro. O teste de
+  geometria passou a dirigir as animações ao fim, preservando as asserções.
+  Log anterior em `.scratch/dev-tests-reviewed/mini-startup-20261109/run-6nozb0ti/`.
+  No SHA final, os seis checks do código passaram, com **1368 headless** e
+  **1793 Qt**, 2 skips por perfil. Os três jobs da tag também passaram.
+- Fonte `da6d3cce548e96a04ca94b622860bb6b16cb9d0f` no
+  [PR #9](https://github.com/Misael-art/Folego/pull/9). Tag anotada
+  `318ef2603c5fd48578f10849143e7c3cc2397f00`. CI do
+  [PR](https://github.com/Misael-art/Folego/actions/runs/42724458064)
+  e da [tag](https://github.com/Misael-art/Folego/actions/runs/42724785982).
+- `./dev setup` confirmou `0.2.0b10` no ambiente GUI editável. A GUI residente
+  compartilha seu cgroup com processos do Claude Desktop e a unit usa
+  `KillMode=control-group`. O carregamento pelo processo residente ficou
+  para a próxima abertura segura. O diagnóstico dos reinícios foi somente
+  leitura, com registros locais em `.scratch/restart-review-20261109.X2vFro/`.
+  A causa dos cortes segue aberta. O aceite do guarda de energia segue
+  separado, especialmente a restauração e o orçamento.
+
+- A [prévia v0.2.0b10](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b10)
+  foi publicada com fonte completa, sdist, wheel e `SHA256SUMS`. Os tamanhos
+  e os quatro digests SHA-256 públicos correspondem aos arquivos locais.
+  O wheel confirmou a versão em venv isolada. A fonte completa contém os
+  1011 caminhos rastreados e os 169 módulos do wheel e do sdist correspondem
+  à fonte. Recibos em `.scratch/release-b10-20261109.bw69nw/`.
+
+## Alerta de queda de voltagem da bateria e diagnóstico dos resets — 09/11/2026
+
+- Diagnóstico de 09/11 (journal + `host-timeline` + upower): 8 boots; 5 terminam
+  sem desligamento. Duas quedas na bateria com o medidor mostrando 74% (7,09 V) e 54%
+  (**6,57 V** a 2,7 A, 81 °C): pacote GETAC com 63% da capacidade de projeto
+  (3,28/5,2 Ah, ciclos=0) e medidor descalibrado; corte por queda de voltagem sem log.
+  Três quedas na tomada (carregando, 54–60 °C, ~7 GB livres) sem mensagem do
+  kernel: suspeita de energia/carregador, não comprovada. Três desligamentos
+  limpos, dois pelo botão de energia.
+- `BatteryInfo.voltage_min_design_uv` lê `voltage_min_design`;
+  `battery_alerts.voltage_sag` sinaliza descarga abaixo de 90% dessa referência
+  (sem referência = desconhecido, sem alerta). O cue crítico `battery-10` e o
+  estado `Bateria X,XX V` da mini passam a disparar mesmo com percentual alto.
+- Validação: `tests/test_battery.py` (11) e testes de UI/collector/timeline
+  relacionados passaram com HOME/XDG/TMPDIR privados, venv GUI, Qt offscreen.
+  `./dev check` bloqueado pelo limite de 20 workspaces retidos em
+  `.scratch/dev-tests` (inspecionar antes de remover). Falhas que já existiam
+  sem esta mudança (confirmadas com stash): `test_session_resilience::test_reconcile_known_journal_result_closes_started_review_once`,
+  `test_ui_capture_alerts::test_desktop_options_persist_and_preview_only_on_explicit_click`.
+- Incremento seguinte (mesmo dia): `voltage_level` classifica a descarga em
+  estável/aceitável/atenção/crítica (≥96%, ≥93%, ≥90% e abaixo de 90% de
+  `voltage_min_design`; 7,39/7,16/6,93 V neste pacote), com as mesmas faixas de
+  cor do percentual. Compacto e modo topo mostram `Bat 82% · ~1h46 · 7,42 V`; a
+  mini tem rótulo próprio de voltagem na célula BAT. Fora da descarga ou sem
+  referência a leitura fica neutra, sem patamar. `VoltageSagNotice` exige duas
+  amostras críticas seguidas e repete a cada 5 min; a bandeja publica
+  "Bateria · voltagem crítica" (categoria recursos) com a ação manual.
+- Nenhuma ação automática foi adicionada: perfil de energia, pausa de cargas e
+  suspensão preventiva dependem de autorização do usuário. Observado no host:
+  `powerprofilesctl` em `performance` durante descarga a 7,28 V com 82%.
+- Guarda de perfil (autorizado em 09/11, ver `AGENTS.md`):
+  `actions/power_profile_guard.py` pede `balanced` em atenção e `power-saver`
+  em crítica após duas observações, nunca eleva, e restaura o perfil original
+  quando a bateria deixa de descarregar e o perfil ainda é o que ele aplicou.
+  Recibo em `state/power-profile-guard.json`, auditoria `power-profile`, 4 trocas
+  por hora, pausa após troca não confirmada até o usuário religar a opção em
+  Opções › "Bateria · perfil de energia". Testes só com daemon falso; o conftest
+  esconde `powerprofilesctl` de toda a suíte. Sem CLI: o guarda roda na GUI.
+  Não exercitado no host com queda real de voltagem.
+- Pendente: aceite no KDE real em descarga (render conferido só em Qt
+  offscreen); o alerta não evita o corte, só avisa.
+
+## Sinalização por categoria e diagnóstico de OOM em cgroups — 09/11/2026
+
+Pop-ups nativos usam cinco selos com forma e cor próprias. O adaptador
+compartilha o payload entre a GUI e o Modo Desempenho, com `desktop-entry`,
+imagem local empacotada e urgência independente. Na GUI o envio é assíncrono,
+com fila e prazo limitados. A bandeja oferece o selo como fallback quando
+o envio nativo ainda não foi iniciado. Os avisos de entrada, calor, PSI e
+Codex Web mantêm as políticas de repetição existentes.
+
+Entregas confirmadas produzem um pop-up por provedor no ciclo, com contagem.
+A detecção e o som usam o mesmo rastreador. A preferência de som afeta só o
+áudio. Recibo anterior à abertura, repetido ou com erro estruturado fica
+fora do aviso de conclusão. O texto de respostas e os IDs de sessões ficam
+fora dos pop-ups.
+
+O journal e as units do systemd registraram seis encerramentos de `rustc`
+por `CONSTRAINT_MEMCG` em scopes transitórios de testes Cargo. Cada scope
+atingiu o teto de 3,42 GiB e tinha `MemorySwapMax=0`. As amostras globais
+retidas do Fôlego imediatamente anteriores aos eventos tinham de 2,54 a
+3,32 GiB de `MemAvailable`. Em dois episódios, o PSI global de
+memória em 60 s ficou abaixo de 1% na amostra anterior. A telemetria global
+e o OOM local são coerentes. O diagnóstico indica uma lacuna de cobertura
+por escopo, pois o observador de saúde atual não lê eventos OOM. Próximo
+incremento a considerar é observar o journal do kernel por boot e,
+para grupos ainda ativos, correlacionar `memory.events` e o limite efetivo.
+Em um build ativo, `memory.current` ficou a 80 KiB de `memory.max` e
+`memory.events` já registrava tentativas de ultrapassar o teto. Esse sinal
+local estava disponível antes do sexto encerramento pelo kernel.
+Nenhuma reprodução de pressão nem mudança nos limites do host foi usada.
+
+O foco passou 82 testes em `.scratch/dev-tests/run-2jgt8837/`. O envio real
+pelo worker foi aceito nas cinco categorias pelo Plasma 6.7.4 com KWin e
+D-Bus privados. O ensaio verificou a leitura dos selos e o retorno do envio.
+O Spectacle capturou os pop-ups do compositor isolado em Breeze claro a
+100% e Breeze escuro a 150%. Capturas e recibos em
+`.scratch/notices-20261109.4tNvDD/`. A apresentação no histórico não fez
+parte da inspeção visual. O worker recusa enviar na plataforma Qt offscreen.
+
+Os logs dos dois jobs Qt do head anterior confirmaram uma falha de largura
+na gaveta do compacto sob a fonte do Ubuntu. O texto **Apagar tudo** exigia
+72 px com a margem verificada e recebia 71 px. O botão **D** passou de 38
+para 32 px, devolvendo espaço aos três controles de texto. A asserção de
+legibilidade foi mantida.
+
+`./dev check` passou em Python 3.14.7 com HOME/XDG privados. O núcleo
+teve **1358 + 2 skips** em 29,72 s em `run-u04h_7_m`. Depois dos ajustes
+de layout e isolamento offscreen, a suíte Qt final passou **1772 + 2 skips**
+em 137,51 s em `run-pzcexxce`. Os dois passes Qt intermediários foram
+preservados em `.scratch/dev-tests-reviewed/notices-intermediate-20261109/`.
+Código `746e3a497c1e50bb406e67f4bea4b1c453cbc317` confirmado no GitHub e
+no [PR #9](https://github.com/Misael-art/Folego/pull/9). Na primeira
+consulta, cinco jobs de produto estavam em execução e um na fila.
+
+## Temas na mini e comandos do widget compacto — 09/11/2026
+
+A mini horizontal tem **Controles → Tema de cores**, com as oito amostras
+do seletor da Central e rótulo **em uso**. Ambos salvam a mesma preferência
+QSettings e preservam a transparência. Falha de gravação restaura a marca
+anterior e aparece no aviso da mini. O compacto usa **Monitoramento →
+Pausar monitoramento** ou **Retomar monitoramento**. O estado e a memória
+livre dividem o resumo. Laterais e topo mantêm a pausa na superfície.
+
+A gaveta do compacto mantém seis atalhos em duas linhas de 22 px. **D**,
+à direita, usa o comando nativo já usado por Custom. O worker consulta o
+KWin e confirma a exibição. Repetir o comando com a área de trabalho já
+visível conserva o estado. O teste em KWin Wayland com barramento e runtime
+privados partiu de `showingDesktop=false`, acionou o botão e verificou
+`true`, com duas janelas descartáveis abertas. O segundo clique confirmou
+o resultado idempotente após o worker ficar livre.
+
+Em janela própria Wayland de 948 × 593 px lógicos, a mesma amostra sintética
+com quatro medidores, bateria e marcadores foi comparada com a base
+`cac6764` nos temas SNES americano e PS2. O compacto recolhido passou de
+280 × 256 para **268 × 197 px**. Com a gaveta aberta passou de 280 × 303
+para **268 × 243 px**. Foram conferidos texto, dimensões dos marcadores,
+pausa/retomada, troca de tema e mini de 46 px. As capturas são do cliente;
+os acionamentos do ensaio foram Qt. Recibos e tentativas iniciais em
+`.scratch/widget-design-20261109.uiocmC/`.
+
+O foco inicial passou 146 testes e apontou uma expectativa antiga para o
+menu. A asserção passou a conferir os itens visíveis. O foco de regressão
+passou 10 testes, com 83 desmarcados. Evidência em `run-i0o_pqde` e
+`run-7j3_oqrt` sob `.scratch/dev-tests-reviewed/widget-design-20261109/`.
+
+`./dev check` passou com Python 3.14.7 e HOME/XDG privados. Foram
+**1357 + 2 skips** headless em 32,32 s e **1769 + 2 skips** Qt offscreen
+em 144,45 s, nos workspaces `run-dcbs8lq3` e `run-kz_1s0t9`, preservados
+em `.scratch/dev-tests-reviewed/widget-design-20261109/`.
+Código `90b0958402e6e3e09e8ab8b01d899a8afb38b4d6` confirmado no GitHub e
+no [PR #9](https://github.com/Misael-art/Folego/pull/9). Os seis jobs de
+produto estavam na fila na primeira consulta.
+
+## Visibilidade de contas e entregas na mini — 09/11/2026
+
+A consulta somente leitura encontrou duas entregas do Grok para revisitar.
+Elas mantinham a célula visível com `0%`. Na **Mini horizontal**, cotas
+positivas continuam ordenadas pelo percentual. Sem cota positiva, a célula
+indica **Entrega**, **Entregas**, **Resgate**, reposição confirmada de cinco
+horas ou instância Web aberta, conforme a evidência. O Web também mostra
+entregas pendentes com o cliente fechado. Quando desaparece o último sinal,
+a célula é recolhida e a conta fica acessível pelo menu. Zero confirmado e
+cota desconhecida continuam distintos nos detalhes da conta.
+
+Uma leitura que chegava durante o posicionamento do mini era descartada pelo
+ajuste de largura quando o KWin não confirmava a posição. A falha de
+posicionamento agora reagenda o mesmo ajuste, assim como a confirmação já
+fazia. A regressão reproduziu 384 px com 587 px de conteúdo e passou após
+a correção. O foco de mini, compacto e cotas passou 71 testes antes desse
+ajuste. As execuções anteriores foram preservadas em
+`.scratch/dev-tests-reviewed/mini-delivery-initial-20261109/`. A regressão
+de posicionamento ficou em `run-jilf4__1` e `run-0_9pweiu`, preservados
+em `.scratch/dev-tests-reviewed/mini-delivery-final-20261109/`.
+
+No KDE/Wayland, uma janela própria com dados sintéticos percorreu três
+estados em cada tema `snes-us` e `ps2`. A área útil real foi 948 × 593 px.
+A faixa mostrou os lembretes com 585 px, o percentual do Grok com 573 px e
+recolheu para 453 px, sempre com 46 px de altura e sem sobrepor os controles.
+Recibo, falhas iniciais da QA e capturas de cliente estão em
+`.scratch/mini-delivery-wayland-20261109.JdU3yp/`.
+
+`./dev check` final, Python 3.14.7 e HOME/XDG privados, passou **1357 + 2 skips**
+headless em 29,32 s e **1768 + 2 skips** Qt offscreen em 126,70 s, em
+`run-oyqmrc0s` e `run-v4off3md`, preservados em
+`.scratch/dev-tests-reviewed/mini-delivery-final-20261109/`.
+Código `7ff9c2dc2086860d5f71751890050b2a0faeacb0` confirmado no GitHub e no
+[PR #9](https://github.com/Misael-art/Folego/pull/9), com três jobs de produto
+em execução e três na fila na primeira consulta. A evidência de interface
+é da janela própria de QA com interação Qt.
+
+Na verificação posterior, o head `81793ca4579e5d5b1285a374da30ccde4661e3de`
+do PR passou os seis checks de produto. CodeRabbit e Sourcery ficaram
+skipped. A GUI residente PID 453574, iniciada às 08:55:19 -03, usa o
+checkout em instalação editável. O owner AT-SPI foi conferido pelo PID.
+Na árvore da mini, a célula do Grok publicou **Entregas** com contador **2**
+e cota não confirmada. A geometria observada do widget residente era do
+modo compacto. A confirmação da apresentação da mini veio da janela
+Wayland própria descrita acima.
+
+## Diagnóstico da verificação do conector Codex Web por conta — 09/11/2026
+
+O Fôlego passou a apresentar atividade do launcher, estado do conector, idade
+do diagnóstico e próxima tentativa informada pelo PhaseZero no painel **Contas
+e cotas de IA** e em `folego ai status --json`. A coleta continua no worker de
+60 s, lendo o recibo limitado da conta. Após 150 s, os estados atuais viram
+desconhecidos. A idade e a última previsão ainda futura ficam como histórico.
+Somente estados e horários saem do adaptador. A verificação e o alerta de
+tarefa longa pertencem ao PhaseZero.
+
+A lista de ações do PhaseZero pode incluir `reverify-connector` após adiamento
+ou launcher inacessível. O Fôlego reconhece resultado explícito de tentativa
+no contrato opcional `schemaVersion: 1` e `connectorVerification` documentado
+em [COMPACTO.md](COMPACTO.md#recuperação-do-codex-web). Recibos antigos ainda
+informam espera e configuração incompleta quando observado. A leitura real
+retornou infraestrutura `ready`, recibo recente e conector `unknown`. Próximo
+passo no PhaseZero: publicar o resultado explícito no recibo do monitor e
+comprovar a sequência espera → confirmação no launcher. O teste real de
+resposta Web continua sendo uma evidência separada.
+
+Validação com Python gerenciado 3.14.7 e HOME/XDG privados. A regressão falhou
+antes da implementação em `run-lca6rw5y/`. Depois, o foco Qt passou 47 testes
+em `run-cte9y96f/`. `./dev check`
+passou **1357 + 2 skips** headless em 33,35 s e **1765 + 2 skips** Qt offscreen
+em 137,34 s, nos workspaces `run-0dtpdjua` e `run-y3q66jyd`. As quatro execuções
+foram preservadas em `.scratch/dev-tests-reviewed/web-monitor-20261109/`.
+A janela própria
+KDE/Wayland 560×470 mostrou adiamento, confirmação em outra conta, recibo
+antigo e reabertura. Recibo, log da tentativa inicial e capturas de cliente em
+`.scratch/web-monitor-wayland-20261109.ExFNzx/`. O popup aberto por acionamento
+sintético não ficou visível na primeira tentativa. A interação física do menu
+e o fluxo integrado com a confirmação do PhaseZero instalado ficam pendentes.
+
+Código `56ace2dc37fc39ede1bfdfba210e1747d0146a0c` confirmado no GitHub e no
+[PR #9](https://github.com/Misael-art/Folego/pull/9). Na primeira consulta,
+três jobs de produto executavam e três aguardavam na fila. A GUI instalada
+permanece na prévia anterior.
+
+## Capacidade do Codex Web e recuperação pelo responsável — 08/11/2026
+
+O erro nativo `Selected model is at capacity. Please try a different model.`
+veio em `task_complete.error.message`, com `codex_error_info=server_overloaded`.
+No episódio das 18:23:48.454Z, o launcher 6.1.17 registrou, 532 ms antes,
+falha `new_chat_preparation`: `ChatGPT composer is unavailable`. O mesmo
+pareamento aparece nos turnos das 17:01/17:02/17:03Z. O responsável instalado
+informava `login-required`, serviço/rota/túnel prontos e nenhuma ação. Uma
+inspeção somente leitura das superfícies ChatGPT no launcher encontrou uma
+delas com controle de login e sem campo de mensagem. A evidência explica por
+que trocar o modelo não remove essa falha local; não comprova indisponibilidade
+global do modelo nem que login seja a única causa possível da mensagem genérica.
+
+O Fôlego passou a detectar o erro estruturado na mesma cauda de 64 KiB das
+entregas. A frase em resposta bem-sucedida não dispara recuperação. Novos erros
+durante o monitoramento solicitam, em worker, o ciclo de recuperação do
+responsável já habilitado **daquela conta**. O adaptador opcional reconhece
+o protocolo existente PhaseZero, verifica manifesto/hashes, propriedade,
+vinculação efetiva da unit e ausência de overrides; não há dependência dele
+para observar o Web. Responsável ausente, alterado ou desligado bloqueia o pedido.
+O coordenador grava intenção/ID antes da solicitação, deduplica após restart,
+limita três intenções por dez minutos/intervalo de 60 s e bloqueia pedidos após
+resultado incerto. O responsável mantém suas próprias verificações de
+ociosidade, recursos, orçamento e disjuntor. Sem novo daemon, replay de tarefa,
+troca de modelo/conta, renovação de credenciais ou restart direto pelo Fôlego.
+
+GUI: erro com badge vermelho `!`, aviso na Central/bandeja/widget e sem som de
+sucesso. O painel da conta e `ai status` mostram o diagnóstico do responsável
+com validade de 150 s, distinguindo login, espera e infraestrutura pronta de
+uma resposta Web comprovada. A CLI `ai recover-web --account ID --confirmar
+--json` solicita o mesmo ciclo para erro recente, de até 15 min, ainda não visto;
+`operation ID --json` consulta o registro. Versão e lock avançaram para 0.2.0b9.
+
+Validação final: `./dev check` sequencial passou **1346 passed/2 skipped em
+28,87 s** headless e **1753 passed/2 skipped em 116,33 s** Qt. Workspaces:
+`.scratch/dev-tests/run-662lzpgn/` e `run-lhse6dk2/`. Antes disso, passaram
+50 testes headless e 66 Qt focados. As primeiras tentativas expuseram o
+isolamento XDG da sessão do agente e arredondamento submicrossegundo de
+timestamps; foram corrigidos sem relaxar orçamento, propriedade ou expiração.
+As tentativas falhas permanecem em
+`.scratch/dev-tests-reviewed/web-capacity-20261108/`. Seis execuções antigas
+concluídas/revisadas foram preservadas em `web-capacity-preflight-20261108/`,
+no mesmo diretório de revisão, após excluir referências em processos vivos.
+Nenhum payload de QA foi apagado. Durante o gate: ~4,4–4,7 GiB de RAM
+disponível, PSI baixo e ACPI observado entre 73 e 85 °C, abaixo do passivo 100 °C.
+
+Na sessão KDE/Wayland real, a janela própria de QA 600×510 mostrou badge `1!`
+e orientação de login legíveis. Recibo e captura **de cliente** em
+`.scratch/web-capacity-wayland-20261108/controlled/`. A primeira tentativa
+de QA deixou o coletor real substituir os dados sintéticos; falhou e foi
+preservada, sem virar aceite. Nenhum erro foi injetado em sessão real.
+
+Teste de produção às 15:36:32 -03: a CLI instalada detectou o erro real da
+conta e solicitou a unit existente; o systemd concluiu o ciclo com `success`.
+Operação `7443bb0a5516c096240868e9c328ad9649ee9790502331c630f892226f9241a5`
+tem intenção e resultado parcial duráveis em XDG_STATE_HOME real. Parcial
+significa pedido aceito; o responsável manteve `login-required`, sem reparo.
+Uma primeira consulta havia sido recusada antes do efeito por perder a ligação
+com o launcher ao receber ambiente explícito; a descoberta foi corrigida e
+ganhou regressão no gate final. `./dev setup` confirmou a instalação GUI b9,
+e a unit própria `app-folego@autostart.service` foi recarregada às 15:39:35,
+após confirmar que só tinha a GUI em seu cgroup. PID observado **3396409**,
+`active/running`. AT-SPI/KWin confirmou Central 900×593, aviso real de
+capacidade e badge `18+!` no widget. Abertura da Central/widget foi percorrida
+pela acessibilidade. Não foi certificado recebimento de notificação pelo Plasma.
+
+**Aceite ainda aberto:** renovar login no ChatGPT dentro do launcher e observar
+uma nova resposta Web bem-sucedida; não repetir uma tarefa anterior sem conferir
+seus efeitos. O usuário foi informado dessa ação pelo fluxo oficial. Esta prévia
+entrega detecção, diagnóstico e solicitação limitada ao responsável, sem prometer
+reparar indisponibilidade do provedor. Não há autorização de merge.
+
+Publicação: código `71ab3df6725b1c18937480d7e13ee72d59853d5e` confirmado no
+GitHub, branch `codex/web-mcp-session-alert-20261108`. O
+[PR #9](https://github.com/Misael-art/Folego/pull/9) foi reutilizado e está
+pronto para revisão sobre `main`. Os seis jobs de produto dos runs
+`42511308867` (push) e `42511312946` (PR) passaram; CodeRabbit ficou skipped.
+A [prévia v0.2.0b9](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b9)
+foi publicada com tag anotada `e24d8a1480e5f49487710af85ddedb277079c368`
+apontando para o código acima, sem merge. O CI adicional da tag, run
+`42511573637`, ainda estava em andamento na última consulta.
+
+Os quatro assets públicos foram baixados: wheel, sdist, fonte completa e
+`SHA256SUMS`; manifesto e pacotes são idênticos aos locais, com hashes
+conferidos. Os 166 módulos Python do wheel/sdist e os 1000 caminhos rastreados
+da fonte completa foram comparados com o commit. Fonte completa: 22.175.384 B,
+revisada como artefato, fora do Git. O wheel também foi instalado em venv
+isolado, confirmou 0.2.0b9 e importou a recuperação sem Qt. Receitas, notas e
+recibos estão em `.scratch/release-b9-20261108/`. O build offline exigiu usar
+o cache oficial `.dev/cache/uv`; a primeira tentativa com o cache padrão
+recusou resolver o backend, sem download ou instalação global.
+
+O registro central foi atualizado para a branch de continuidade atual deste
+checkout único e para a tag/SHA explicitamente autorizados pelo pedido de
+prévia. A primeira tentativa de push com ref local `HEAD` foi recusada pelo
+guard; o push normal com a branch registrada passou. Nenhum guard foi
+desligado ou modificado. Próximo passo de produto permanece a renovação de
+login e comprovação de nova resposta Web, sem presumir êxito por serviço local
+pronto. Os aceites físicos e de estabilidade anteriores continuam pendentes.
+
+## Sessão MCP encerrada relatada pelo Codex Web — 08/11/2026
+
+Às 00:35:47 -03, a resposta final de um agente Codex Web registrou
+`McpServerError: Session terminated` ao tentar acessar o Codex Native2. O
+launcher havia encerrado o turno Web às 00:35:45 com estado `completed`.
+Às 00:35:11, a recuperação existente do PhaseZero observou launcher, rota,
+túnel e conector prontos, com sessão ocupada, sem falha local e sem ação; às
+00:36:21, observou estado `ready` e nenhuma ação. A frase não constava nos logs
+do launcher: apareceu na resposta do agente. A causa exata da terminação da
+sessão MCP não foi comprovada. Um restart local nesse momento arriscaria o
+turno ativo e não reconectaria necessariamente o cliente remoto.
+
+O Fôlego agora reconhece **somente o relato** no registro nativo de conclusão
+Web que o monitor de entregas já lia, dentro da cauda máxima de 64 KiB. Não há
+novo daemon, consulta MCP ativa, nova varredura nem persistência do texto da
+conversa. O recibo guarda só um booleano e os hashes de identidade usuais. Um
+recibo novo apresenta badge `!` vermelho e texto acessível na célula Web, aviso
+na Central, notificação pela bandeja se disponível, feedback no widget aberto
+e despertar pela política de tela já habilitada. Repetições da mesma conclusão
+na sessão atual são deduplicadas; o histórico em memória é limitado a 2048
+identidades. O relato não toca o som de entrega bem-sucedida. O aviso não
+equivale à indisponibilidade do serviço/túnel, que
+seguem seus estados independentes.
+
+Não foi implantado restart automático para `Session terminated`: a sessão e o
+token pertencem ao turno do cliente MCP e um retry cego pode duplicar efeitos.
+O owner existente do host já executa recuperação opt-in de falhas locais
+confirmadas; o Fôlego não disputa essa propriedade nem depende dele para ler
+o estado Web. A ação humana quando só esse relato existe é reconectar o
+Codex Native2 no ChatGPT e conferir o resultado anterior antes de repetir.
+Observação decisiva ainda faltante: erro bruto do cliente MCP com identidade
+da sessão e instante, correlacionado ao estado do túnel e do servidor no mesmo
+turno. Não registrar tokens ou conteúdo sensível. A detecção depende de a
+resposta final conter a frase exata enquanto o Fôlego estiver monitorando;
+outros modos de falha e mensagens que não cheguem à resposta permanecem
+desconhecidos.
+
+Validação: `./dev check` passou 1319 testes headless e 1724 Qt, com 2
+ignorados em cada perfil. Após a revisão visual, a adição do `!` foi
+revalidada por 9 testes Qt focados. Os testes focados do monitor passaram 17
+e os de interface/bandeja 27. A primeira fixture falhou porque a conta foi registrada
+depois do cache de inventário; foi corrigida e a tentativa permanece em
+`.scratch/dev-tests-reviewed/`. Uma execução intermediária de `./dev check`
+parou depois de 1318 headless aprovados porque o limite de 20 workspaces reteve
+a etapa Qt; a suíte Qt separada passou 1723 antes do ajuste final do som.
+As execuções completas finais ficaram em `.scratch/dev-tests/run-ngpknkiy/`
+e `.scratch/dev-tests/run-9ql5ciee/`. Durante o gate, ACPI marcou 79–82 °C,
+RAM disponível ficou em ~4,3 GiB e PSI de CPU/memória/I/O permaneceu baixo.
+Uma coleta real de entregas levou 139,15 ms de parede/98,69 ms de CPU; é
+amostra única do monitor inteiro, sem baseline antes/depois. O incremento
+reutiliza a mesma leitura limitada a cada 5 s e não acrescenta sondagem.
+Testes Qt offscreen não certificam entrega da notificação pelo Plasma,
+visibilidade física da célula ou reconexão real do cliente. Capturas offscreen
+de 200×63 em temas `snes-us` e `ps2` ficaram em
+`.scratch/web-mcp-visual-20261108/`; badge `1!` legível nos dois temas,
+sem evidência de compositor físico.
+
+Incremento de produto `fade7927dd17029cb9d86464fcb1a4b8d5403d4a`
+confirmado na branch remota `codex/web-mcp-session-alert-20261108`,
+[PR #9](https://github.com/Misael-art/Folego/pull/9) em draft. Às 12:43 -03, a unit
+existente `app-folego@autostart.service` foi reiniciada sem filhos de trabalho
+sob seu PID anterior; ficou `active/running` no PID 2790076, com janela Fôlego
+900×593 listada pelo KWin e 158,9 MB de memória de cgroup na primeira leitura.
+Não houve injeção de erro MCP na sessão real. Os checks do SHA remoto estavam
+em andamento na última consulta (núcleo e CLI aprovados; Qt pendente). Próximo
+passo: confirmar CI e registrar, em uma ocorrência futura, erro bruto do
+cliente e reação visual real sem provocar a falha.
 
 ## Prévia 0.2.0b8 publicada e instalada
 

@@ -1,0 +1,115 @@
+{
+  "schema": 1,
+  "version": "0.2.0b15",
+  "base_sha": "e1b4aed33cf1690f305fcf2a5b7e413fcf677d6a",
+  "cause": "Active intended HiFi profile, missing physical source and sink after ALSA busy opening failure in current audio owners and boot.",
+  "production_path": "DeckProfiles.microphone -> existing DeckProfileGuard/Supervisor -> Coordinator -> WirePlumberRecovery.restart -> physical capture chain verification",
+  "policy": "Existing audio_reprobe_enabled opt-in, healthy reference, two recent samples, budget/circuit and current ownership checks.",
+  "focused": {
+    "passed": 56,
+    "seconds": 10.79,
+    "run": "run-hebwgenr"
+  },
+  "headless": {
+    "passed": 1502,
+    "skipped": 2,
+    "seconds": 49.69,
+    "run": "run-dc_bkqkw"
+  },
+  "qt": {
+    "passed": 1940,
+    "skipped": 2,
+    "seconds": 167.65,
+    "run": "run-0wo0ba0c"
+  },
+  "local_check": "git diff --check",
+  "resource_limits": {
+    "cpu_quota_percent": 100,
+    "memory_max_gib": 2,
+    "heavy_operations": "sequential"
+  },
+  "resources_observed": {
+    "samples": 114,
+    "available_gib_min": 7.071,
+    "temperature_c_max": 60.0,
+    "swap_pages_in_out_max_per_second": {
+      "pswpin": 0,
+      "pswpout": 0
+    }
+  },
+  "wheel": {
+    "file": "folego-0.2.0b15-py3-none-any.whl",
+    "bytes": 599107,
+    "sha256": "a79ac99a690b58532aa5928ff4de36b2999ca7ed6df1013af546b4006b5f20f6",
+    "runtime_files_compared": 191,
+    "offline": true,
+    "dependencies": "Qt 6.12.0 cached wheels checked against uv.lock hashes"
+  },
+  "wayland": {
+    "platform": "wayland",
+    "window": [
+      800,
+      565
+    ],
+    "horizontal_scroll": 0,
+    "scoped_pending_preserved": true,
+    "independent_microphone_button_exercised": true,
+    "audio_reprobe_choice_visible": true,
+    "jobs": [
+      "accessibility-activation-plan",
+      "accessibility-activate",
+      "accessibility-profile-rearm",
+      "accessibility-audio-reprobe-enable"
+    ],
+    "host_effects": 0,
+    "input": "synthetic Qt events",
+    "capture": "client window",
+    "native_new_confirmation": true,
+    "discardable_opt_in_enabled": true
+  },
+  "gui_harness_failures": {
+    "attempts": 3,
+    "causes": [
+      "Initial center outside QCheckBox hit region.",
+      "QMessageBox.done did not choose the Yes button, so the confirmation was cancelled."
+    ],
+    "final": "Indicator and native Yes button were clicked and the flow passed."
+  },
+  "host_installation": {
+    "version": "0.2.0b15",
+    "runtime": ".dev/venv-host-b15",
+    "phase": "installed",
+    "automatic_audio_enabled": true,
+    "supervision_enabled": true,
+    "healthy_reference_present": true,
+    "microphone_healthy": true,
+    "microphone_circuit_empty": true,
+    "input_monitor_pid": 238080,
+    "gui_pid": 238092,
+    "performance_pid_preserved": 4069,
+    "wireplumber_pid_preserved": 170788,
+    "NRestarts": 0,
+    "graceful_reload": "Tracked SIGTERM of the two identified product principals, followed by start of their verified units.",
+    "private_receipt": "~/.local/state/folego/install-receipts/0.2.0b15.json"
+  },
+  "limits": [
+    "Natural recurrence and recovery of this exact condition remains pending.",
+    "Voice confirmation belongs to the user.",
+    "Raw device graphs and runtime receipts remain private."
+  ],
+  "source_sha": "77a0c0d878169ee25d1ce43cb738deff5276af62",
+  "tracked_runtime_and_tests_matched": 339,
+  "github": {
+    "pr": 9,
+    "source_sha_remote_confirmed": true,
+    "ci": {
+      "id": 43475137274,
+      "conclusion": "success"
+    },
+    "windows": {
+      "id": 43475137451,
+      "conclusion": "success"
+    },
+    "pr_update": "Local gh succeeded after the connector explicitly rejected update with HTTP 403."
+  }
+}

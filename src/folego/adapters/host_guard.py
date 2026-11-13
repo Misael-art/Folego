@@ -324,6 +324,16 @@ def _services(run, watched=_WATCHED_SERVICES) -> dict:
             "inventory": inventory}
 
 
+_BOOT_END_MESSAGES = {
+    "System is powering down": "poweroff",
+    "System is rebooting": "reboot",
+    "System is halting": "halt",
+    "System is rebooting with kexec": "kexec",
+    "System userspace is rebooting": "soft-reboot",
+}
+_BOOT_END_PATTERN = "^(?:" + "|".join(re.escape(message) for message in _BOOT_END_MESSAGES) + r")\.?$"
+
+
 def _boots(run) -> dict:
     code, out, err = run(["journalctl", "--list-boots", "-n", "4", "--no-pager"], 3.0)
     if code != 0:
@@ -339,23 +349,34 @@ def _boots(run) -> dict:
         return {"quality": "partial", "reason": "boot anterior ausente no journal", "items": items}
     incomplete = False
     for item in items[:-1]:
+        item.update(end_kind=None, end_source=None)
         code, events, err = run(["journalctl", "-b", item["boot_id"],
                                  "-u", "systemd-logind.service",
-                                 "-g", "System is powering down\\.", "-n", "1",
+                                 "-g", _BOOT_END_PATTERN, "-n", "1",
                                  "-o", "cat", "--no-pager"], 2.0)
         if code not in (0, 1) or (code == 1 and err.strip()):
             item["end"] = "unknown"
             item["reason"] = err or "fim do boot ilegível"
             incomplete = True
             continue
-        item["end"] = ("shutdown_recorded" if code == 0 and
-                       "System is powering down." in events else "inconclusive")
+        kind = _BOOT_END_MESSAGES.get(events.strip().removesuffix(".")) if code == 0 else None
+        if kind is not None:
+            item.update(end="shutdown_recorded", end_kind=kind,
+                        end_source="systemd-logind.service")
+        elif events.strip():
+            item.update(end="unknown", reason="registro de encerramento não reconhecido")
+            incomplete = True
+        else:
+            item["end"] = "inconclusive"
     previous = items[-2]
     without_record = sum(item.get("end") == "inconclusive" for item in items[:-1])
+    recorded = sum(item.get("end") == "shutdown_recorded" for item in items[:-1])
     reason = (f"{without_record} "
               f"{'boot anterior' if without_record == 1 else 'boots anteriores'} "
-              "sem registro de desligamento do logind no diário; causa desconhecida"
-              if without_record else "desligamento registrado nos boots anteriores consultáveis")
+              "sem registro de encerramento do logind no diário; causa desconhecida"
+              if without_record else
+              "solicitação de encerramento registrada; conclusão não comprovada" if recorded else
+              "encerramento anterior desconhecido; causa desconhecida")
     if incomplete:
         reason += "; parte do histórico indisponível"
     return {"quality": "partial" if incomplete else "ok", "items": items,

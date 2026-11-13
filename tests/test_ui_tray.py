@@ -168,6 +168,58 @@ def test_pressure_alert_explains_source_window_and_manual_action():
     assert "memória 6%; disco/I/O 12%; CPU 30%" in tray.tray.messages[-1][1]
 
 
+def test_web_mcp_report_names_client_action_without_claiming_local_outage():
+    tray, _ = build()
+    tray.install()
+    tray.show_web_mcp_report()
+    title, body = tray.tray.messages[-1]
+    assert 'Codex Web precisa de atenção' in title
+    assert 'McpServerError: Session terminated' in body
+    assert 'Reconecte o Codex Native2 no ChatGPT' in body
+    assert 'não confirma esse erro' in body
+
+
+def test_native_notices_group_by_provider_and_keep_urgency_separate():
+    from folego.adapters.desktop_notices import DesktopNotice
+
+    sent = []
+    tray = Tray(FakeWindow(), available_fn=lambda: True, tray_factory=FakeTray,
+                send_notice=lambda notice: sent.append(notice) or True)
+    tray.install()
+    tray.show_agent_deliveries({'grok': 2})
+    tray.show_accessibility({'alerts': ['Teclado <interno> & toque']})
+    tray.show_thermal({'state': 'critical', 'current_c': 105})
+    tray.show_web_mcp_report()
+    assert not tray.tray.messages
+    assert [notice.category for notice in sent] == ['agent', 'input', 'resources', 'service']
+    assert [notice.urgency for notice in sent] == ['normal', 'normal', 'critical', 'normal']
+    assert '2 novas entregas' in sent[0].body
+    tray.show_account_events([dict(kind='expiring', provider='claude', label='Principal', count=1,
+                                  expires_at=1_793_534_400.0)])
+    assert sent[-1].category == 'agent' and sent[-1].title == 'Contas · Claude'
+    assert 'Um reset disponível em Principal' in sent[-1].body and 'menos de 24 h' in sent[-1].body
+    tray.show_account_events([dict(kind='pace', provider='claude', label='Principal', window='Semana', at=1_793_534_400.0),
+                              dict(kind='limit-over', provider='web', label='Web local', at=1_793_534_400.0)])
+    assert 'Semana de Principal esgota' in sent[-2].body and 'Estimativa local' in sent[-2].body
+    assert sent[-1].title == 'Contas · Codex Web' and 'Confira no ChatGPT' in sent[-1].body
+    assert sent[1].arguments()[-1] == 'Teclado &lt;interno&gt; &amp; toque'
+    assert sent[2].icon.name == 'notice-resources-critical.svg'
+    assert all(notice.icon.is_file() for notice in sent)
+    assert DesktopNotice('operation', 'Desempenho', 'aviso').icon.is_file()
+
+
+def test_offscreen_notice_does_not_reach_session_bus(qapp, monkeypatch):
+    from folego.adapters.desktop_notices import DesktopNotice
+    from folego.ui import desktop_notices
+
+    monkeypatch.setattr(desktop_notices.QGuiApplication, 'platformName', lambda: 'offscreen')
+    monkeypatch.setattr(desktop_notices.shutil, 'which',
+                        lambda name: pytest.fail(f'Iniciaria {name} fora da sessão gráfica'))
+    sender = desktop_notices.DesktopNotices(qapp)
+    assert not sender.send(DesktopNotice('agent', 'Agente de QA', 'Entrega sintética'))
+    sender.close()
+
+
 def test_the_tray_menu_offers_only_viewing_actions():
     tray, window = build()
     tray.install()
@@ -226,3 +278,28 @@ def test_the_tooltip_shows_the_worst_watched_volume(qapp):
     tray.show_snapshot(snap(tmpfs=(TmpfsVolume(
         "/tmp", "tmpfs", 8 * 1024**3, 8_010_114_007, 579_820_585),)))
     assert "/tmp 93%" in tray.tray.tooltips[-1]
+
+
+def test_battery_voltage_notice_states_reading_and_manual_action():
+    from folego.core.snapshot import BatteryInfo
+    tray, _ = build()
+    tray.install()
+    tray.show_battery_voltage(BatteryInfo(54, 'Discharging', voltage_uv=6_569_000,
+                                          voltage_min_design_uv=7_700_000))
+    title, body = tray.tray.messages[-1]
+    assert "voltagem crítica" in title
+    assert "6,57 V com 54% indicados" in body
+    assert "Conecte o carregador" in body
+
+
+def test_power_profile_notice_names_the_change_and_its_reversal():
+    tray, _ = build()
+    tray.install()
+    tray.show_power_profile({'from': 'performance', 'to': 'power-saver',
+                             'restore': False, 'level': 'critical'})
+    title, body = tray.tray.messages[-1]
+    assert "perfil de energia reduzido" in title
+    assert "de desempenho para economia" in body and "Opções" in body
+    tray.show_power_profile({'from': 'power-saver', 'to': 'performance', 'restore': True})
+    title, body = tray.tray.messages[-1]
+    assert "restaurado" in title and "desempenho" in body

@@ -44,6 +44,15 @@ Capturas recentes e resultados de execução fundamentam o registro de aceite.
 A diretriz também está registrada no AI Memory do projeto em
 `_rules/qualidade-visual-nos-minimos-detalhes.md`.
 
+## Identidade das notificações do desktop
+
+O Plasma mantém o formato nativo do pop-up e do histórico. O Fôlego fornece
+selo, título e urgência. A categoria conserva cor e silhueta nos temas da
+aplicação. Agentes usam bandeja violeta, serviços usam conector azul,
+recursos usam medidor laranja, entrada usa teclado verde-água e operações
+usam engrenagem grafite. O selo de recursos ganha um `!` no limite térmico
+crítico. Título e silhueta identificam o assunto também sem cor.
+
 ## Calor e pedidos de alívio aos agentes
 
 O alerta térmico usa o limite **do mesmo sensor** que fornece a temperatura.
@@ -112,6 +121,13 @@ estado textual e cromático, alça de movimento e três caminhos visíveis
 (compacto, Central, seletor de formatos). O seletor lista destinos diretamente
 em todos os formatos. Alertas com fonte ausente não viram valores seguros; o
 compacto e a Central mantêm o detalhamento.
+
+Na mini, **Tema de cores** entra no menu existente, com amostras das paletas
+e marca na seleção. No compacto de 268 px, estado e memória livre dividem
+a linha de resumo e a pausa fica em **Monitoramento**. O rodapé retrátil
+organiza os atalhos em duas linhas de 22 px. O botão **D** ocupa uma coluna
+à direita, com ícone de desktop e fundo neutro para distingui-lo dos atalhos
+coloridos de edição, prompts e captura.
 
 1. **Conceito original.** O cabeçalho com “Central” e vários botões avulsos
    evoluiu para dois grupos. O teclado abre embaixo e seu chevron abre no topo.

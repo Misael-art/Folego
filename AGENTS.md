@@ -1,16 +1,20 @@
 # Instruções portáteis para agentes
 
-Comece por `README.md`, `docs/HANDOFF.md`, `docs/DIAGNOSTICO-2026-10-24.md`
-e `docs/NOVO-HOST.md`. Esses arquivos descrevem a situação atual; os registros
+Comece por `README.md`, `docs/HANDOFF.md`, `docs/DIAGNOSTICO-2026-10-24.md`,
+`docs/NOVO-HOST.md` e `docs/BASE-DO-HOST.md`. Esses arquivos descrevem a situação atual; os registros
 de 17/18 de outubro preservam o histórico e não devem ser lidos como aceite total.
 Este projeto não depende do HOME, disco, venv, serviços ou skills do host anterior.
 
 <!-- BEGIN HOST RESOURCE CHECK -->
-## Capacidade do host antes de operações pesadas
+## Cuidados obrigatórios com os recursos do host
 
-- Antes de builds, testes longos, instalações, extrações, cópias grandes ou VMs, meça carga de CPU, RAM disponível, atividade de swap, pressão de I/O e espaço livre no destino e nos temporários. Confira os processos concorrentes e estime o pico de RAM, o volume de entrada e saída e o paralelismo da sua ação.
-- Inspecione processos concorrentes por RSS e comando completo; uma lista truncada ou ordenada apenas por CPU pode ocultar um build com prioridade baixa. Se calor estiver perto do trip passivo informado pelo próprio sensor, não inicie outra carga pesada até reavaliar.
-- Prossiga quando houver margem para a carga prevista. Se houver pressão sustentada ou pouca margem, espere e meça de novo ou reduza o lote e os jobs. Em host com histórico de reinícios sob pressão de RAM ou disco, reserve margem maior e reavalie durante a execução. Se a pressão aumentar, pause trabalho próprio quando for seguro e preserve os processos das outras tarefas.
+- Priorize a estabilidade da sessão. Antes de builds, suítes longas, instalações, extrações, cópias grandes, indexações, modelos locais ou VMs, meça CPU/carga e PSI, MemAvailable, atividade de swap, pressão de I/O, espaço livre no destino e nos temporários e temperatura com os limites do próprio sensor. Inspecione processos concorrentes por RSS e comando completo: prioridade baixa ou CPU momentaneamente baixa não significam ausência de outro build. Estime pico de RAM, saída em disco e paralelismo antes de iniciar.
+- Execute uma carga pesada por vez no host, incluindo as de outros IDEs, CLIs e agentes. Comece com um job/worker; use no máximo dois somente com margem medida e se o wrapper do projeto permitir. Serialize suítes completas, builds, VMs e QA. Delegar tarefas não autoriza multiplicar cargas locais. nice/ionice não limitam consumo nem substituem a medição.
+- Neste Jupiter com cerca de 14,5 GiB de RAM compartilhada com a GPU, planeje manter ao menos 4 GiB e 25% da RAM disponíveis depois do pico estimado; adote a maior reserva. No disco persistente, preserve ao menos 10 GiB além da saída estimada, com margem extra para staging e verificação de cópias. Confira o filesystem real: /tmp e /run/user podem ser tmpfs e consumir RAM. Use temporários privados no disco e o wrapper/ambiente já gerenciado pelo projeto; limite e registre a retenção das saídas.
+- Não inicie outra carga pesada com swap-in/out contínuo, PSI sustentada, pouca margem ou temperatura a menos de 10 °C do trip passivo. No Jupiter, use 90 °C como ponto conservador para adiar a carga; isso é política preventiva, não diagnóstico da causa dos cortes. Se limites ou medições estiverem indisponíveis, obtenha a evidência antes da carga pesada. Swap apenas ocupado não prova pressão atual.
+- Reavalie durante operações longas, em intervalos de 15–30 s ou por telemetria equivalente. Com pressão crescente, reduza lote/jobs ou pause apenas o trabalho próprio quando for seguro, antes de esgotar a reserva ou se aproximar do limite térmico. Preserve processos de outras tarefas e continue trabalho leve independente enquanto aguarda margem.
+- Não crie folga encerrando agentes, daemons, apps ou a rede inteira, limpando caches compartilhados/dados pessoais ou reiniciando a sessão. Não use stress, enchimento de RAM/disco, descarga ou aquecimento como QA no host físico. Sem instalações globais por conveniência. Encerre somente filhos temporários próprios, identificados e acompanhados; preserve evidência e trabalho útil com recuperação verificável.
+- Faça os checks pertinentes em lotes proporcionais ao risco e registre ambiente, limites e resultado; não afrouxe gates para obter verde. Ao criar outro perfil de agente, leve estas diretrizes ao arquivo global realmente carregado e confira sua descoberta. Estas instruções não ampliam grants nem substituem os contratos do projeto.
 <!-- END HOST RESOURCE CHECK -->
 
 ## Ambiente e verificação
@@ -83,7 +87,65 @@ explícitas ativadas pelo usuário; fechamento pelo canal do app (bandeja, unit,
 janela) com intenção/ID, revalidação no ato, orçamento e disjuntor. Agentes,
 projetos e classes protegidas nunca são alvo. SIGKILL continua manual.
 
+### Recuperação de enumeração de áudio autorizada em 11/11
+
+O pedido de revisão da autorrecuperação autoriza reenumerar somente a unit de
+usuário `wireplumber.service` no defeito comprovado do Deck em que a placa
+interna está em `off` e o perfil interno persistido desapareceu da enumeração,
+com ALSA presente. Exige opt-in próprio, referência saudável para automação,
+unit de sistema sem drop-ins, executável/boot/PID/starttime/cgroup comprovados,
+ausência de outra placa/entrada física ativa, preferência externa compatível,
+intenção/ID, revalidação, orçamento e disjuntor. A solicitação manual pode usar
+a preferência persistida comprovada quando ainda faltar referência no Fôlego.
+Uma enumeração genérica desconhecida continua protegida. O usuário autorizou
+instalação no host, commit, PR e prévia deste incremento após os gates.
+
+Pedido de 13/11 amplia a mesma opção para a falha comprovada em que o perfil
+interno saudável está ativo e suas rotas físicas faltam após erro de dispositivo
+ocupado. Exige preferência salva, captura ALSA, PCMs internos livres e os erros
+de captura e reprodução da placa no journal do boot e dos responsáveis atuais.
+Mantém opt-in, referência saudável, duas amostras recentes, diário/coordenador,
+revalidação no ato, orçamento, disjuntor e confirmação da cadeia física.
+O incremento deve ser instalado neste host com a opção habilitada.
+
+### Guarda de perfil de energia autorizado em 09/11
+
+Pedido do usuário após os desligamentos por queda de voltagem: o Fôlego pode
+**reduzir automaticamente o perfil de energia** (`powerprofilesctl`) na descarga
+— equilibrado em atenção, economia em crítica — e devolver o perfil anterior com
+o carregador, se ninguém o trocou. Ligado por padrão, com opção persistente em
+Opções. Recibo com intenção/ID antes do efeito, confirmação por leitura,
+orçamento por hora e pausa após resultado não confirmado. Não autoriza fechar
+ou pausar processos, suspender, alterar brilho/TDP nem elevar o perfil.
+
 ## Organização do desenvolvimento
+
+Pedido de 12/11: autoriza a orientação de cuidado como recurso opcional do
+Fôlego, com descoberta periódica de IDEs/CLIs compatíveis e gravação somente de
+um bloco próprio identificado. Desligar retira esse bloco, preservando demais
+diretrizes, edições posteriores e permissões. Neste host deve ficar habilitado;
+em outras instalações começa desligado. Migração da aplicação manual exige
+manifesto e hashes comprovados. Intenção/ID, revalidação, reconciliação e orçamento
+precedem efeitos; resultado incerto não permite replay automático. Não ampliar
+grants, reiniciar agentes ou varrer projetos. Autoriza instalação neste host e
+publicação da prévia após os gates.
+
+Pedido posterior de 11/11, após os novos cortes: autoriza a opção **Sessão básica
+do Plasma**, ligada por padrão, com controle persistente GUI/CLI, aplicação no
+host, commit, PR e prévia após os gates. Reduzir autostart de aplicativos e
+serviços opcionais identificados e a restauração de aplicativos do Plasma,
+preservando originais e restauração verificável. Preservar a base funcional,
+Fôlego e seu monitor de entrada. Não parar aplicações/agentes em andamento,
+alterar serviços de sistema, reiniciar a sessão física para QA nem ampliar
+grants de efeitos. Itens desconhecidos permanecem protegidos e visíveis.
+
+Pedido de 08/11: autoriza, para o erro nativo Web `Selected model is at capacity.
+Please try a different model.`, solicitar automaticamente o ciclo do responsável
+de recuperação já habilitado e verificado da mesma conta. Usar diário/ID,
+revalidação, deduplicação e orçamento; sem replay de tarefa, troca de conta/modelo,
+renovação de credenciais ou restart direto de agentes pelo Fôlego. Autoriza
+instalação/teste local e publicação de prévia deste incremento após os gates;
+não autoriza merge nem certifica recuperação de indisponibilidade do provedor.
 
 1. Escolha uma pendência de `docs/HANDOFF.md`; reproduza o contrato que falha.
 2. Entregue um incremento integrado em CLI/GUI quando aplicável; evite módulos

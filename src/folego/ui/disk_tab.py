@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMessageBox,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..actions.disk.planner import fmt_bytes
-from ..core.host_guard import GUIDES
+from ..core.host_guard import GUIDES, boot_end_text
 
 PLAN_PENDING = "ainda não analisado — use Reconsultar o disco."
 PLAN_LOADING = "consultando o disco (dry-run, nada é escrito)…"
@@ -39,6 +39,7 @@ class HostHealthPanel(QWidget):
         super().__init__(parent)
         self._report = None
         self._thermal = None
+        self._power = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 10)
         title = QLabel("Saúde do host")
@@ -91,6 +92,7 @@ class HostHealthPanel(QWidget):
         grouped.setSpacing(7)
         self.rows = {}
         for index, (key, label) in enumerate((
+                ("power", "Alimentação e proteção"),
                 ("pressure", "Pressão de CPU e I/O"),
                 ("ntfs", "Volumes NTFS"), ("service", "Serviços do usuário"),
                 ("btrfs", "Disco Btrfs"), ("reboot", "Reinícios registrados"))):
@@ -159,8 +161,14 @@ class HostHealthPanel(QWidget):
     def copy_diagnostic(self):
         clipboard = QGuiApplication.clipboard()
         if clipboard is not None:
-            clipboard.setText(json.dumps({"host": self._report, "thermal": self._thermal},
+            clipboard.setText(json.dumps({"host": self._report, "thermal": self._thermal,
+                                          "power": self._power},
                                          ensure_ascii=False, indent=2))
+
+    def show_power_status(self, report: dict):
+        self._power = report
+        self.rows['power'].setText(report['message'])
+        self.copy_button.setEnabled(True)
 
     def show_error(self, message: str):
         self.updated.setText(f"Verificação indisponível: {message[:180]}")
@@ -252,6 +260,8 @@ class HostHealthPanel(QWidget):
         else:
             boot_text = f"{count} {'boot' if count == 1 else 'boots'} no journal · " + boots.get("reason", "encerramento anterior desconhecido")
         previous = boots.get("items", [])[-2] if count >= 2 else None
+        if previous and (end_text := boot_end_text(previous)):
+            boot_text += f"\nBoot anterior: {end_text}"
         previous_timeline = previous.get("timeline", {}) if previous else {}
         if previous_timeline.get("last"):
             boot_text += f"\nBoot anterior: última amostra {previous_timeline['last']['at']}"

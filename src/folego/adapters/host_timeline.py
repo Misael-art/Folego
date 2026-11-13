@@ -12,7 +12,9 @@ from datetime import datetime
 from pathlib import Path
 
 from .. import paths
+from ..core.battery_alerts import voltage_level
 from ..core.snapshot import ERROR, MISSING, OK, PARTIAL, Snapshot, SourceQuality
+from ..safely.atomicfile import fsync_dir
 
 _BOOT_ID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
 _PER_BOOT_LIMIT = 4 * 1024 * 1024
@@ -20,6 +22,11 @@ _TOTAL_LIMIT = 32 * 1024 * 1024
 _CAPACITY_WARNING_PERCENT = 85
 _SOURCES = ("meminfo", "swaps", "pressure_memory", "pressure_io", "pressure_cpu",
             "temperature", "battery", "external_power", "processes")
+POWER_EVENT_LABELS = {
+    "battery-voltage-critical": "queda crítica de tensão da bateria",
+    "external-power-connected": "alimentação externa conectada",
+    "external-power-disconnected": "alimentação externa desconectada",
+}
 
 
 def _sample(snapshot: Snapshot) -> dict:
@@ -67,6 +74,7 @@ def _sample(snapshot: Snapshot) -> dict:
             "battery_percent": battery.percent if battery else None,
             "battery_status": battery.status if battery else None,
             "battery_voltage_uv": battery.voltage_uv if battery else None,
+            "battery_voltage_min_design_uv": battery.voltage_min_design_uv if battery else None,
             "battery_current_ua": battery.current_ua if battery else None,
             "battery_power_uw": battery.power_uw if battery else None,
             "external_power_online": (snapshot.external_power_online
@@ -75,20 +83,45 @@ def _sample(snapshot: Snapshot) -> dict:
 
 
 class HostTimelineRecorder:
-    """One short line per 15 s, fsynced at startup, once a minute or on pressure."""
+    """Sync each recorded sample, with power events bypassing the 15 s cadence."""
 
     def __init__(self, directory: Path | None = None, *, interval_s: float = 15.0):
         self.directory = Path(directory) if directory else paths.host_timeline_dir()
         self.interval_s = interval_s
+        self._boot_id = None
         self._last_mono = -float("inf")
         self._written = 0
+        self._last_external_power = None
+        self._voltage_critical = False
         self.last_error = ""
 
     def record(self, snapshot: Snapshot) -> None:
         if not _BOOT_ID.fullmatch(snapshot.boot_id or ""):
             self.last_error = "boot ID ausente ou inválido"
             return
-        if snapshot.mono - self._last_mono < self.interval_s:
+        if snapshot.boot_id != self._boot_id:
+            self._boot_id = snapshot.boot_id
+            self._last_mono = -float("inf")
+            self._written = 0
+            self._last_external_power = None
+            self._voltage_critical = False
+        battery = snapshot.battery if snapshot.source("battery").status == OK else None
+        level = voltage_level(battery)
+        online = (snapshot.external_power_online
+                  if snapshot.source("external_power").status == OK else None)
+        events = []
+        critical = self._voltage_critical
+        if level == "critical":
+            if not critical:
+                events.append("battery-voltage-critical")
+            critical = True
+        elif (level in ("acceptable", "stable")
+              or (online is True and battery and battery.status in ("Charging", "Full"))):
+            critical = False
+        if online is not None and self._last_external_power is not None and online != self._last_external_power:
+            events.append("external-power-connected" if online else "external-power-disconnected")
+        if not events and snapshot.mono - self._last_mono < self.interval_s:
+            self._remember_power(online, critical)
             return
         try:
             if self.directory.is_symlink():
@@ -108,6 +141,8 @@ class HostTimelineRecorder:
                 size += entry.stat().st_size
             path = self.directory / f"{snapshot.boot_id}.jsonl"
             item = _sample(snapshot)
+            if events:
+                item["power_events"] = events
             raw = (json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\n").encode()
             if size + len(raw) > _TOTAL_LIMIT:
                 raise ValueError("limite de 32 MiB de histórico alcançado")
@@ -122,10 +157,11 @@ class HostTimelineRecorder:
                 with os.fdopen(fd, "ab", closefd=False) as stream:
                     stream.write(raw)
                     stream.flush()
-                pressure = ((item["psi_mem_avg10"] or 0) >= 5
-                            or (item["psi_io_avg10"] or 0) >= 5)
-                if self._written % 4 == 0 or pressure:
-                    os.fsync(fd)
+                # Low-pressure samples also precede abrupt resets. Do not report
+                # them as recorded while up to a minute still lives in page cache.
+                os.fsync(fd)
+                if self._written == 0:
+                    fsync_dir(self.directory)
             finally:
                 os.close(fd)
         except (OSError, ValueError) as exc:
@@ -133,7 +169,13 @@ class HostTimelineRecorder:
             return
         self._last_mono = snapshot.mono
         self._written += 1
+        self._remember_power(online, critical)
         self.last_error = ""
+
+    def _remember_power(self, online: bool | None, critical: bool) -> None:
+        if online is not None:
+            self._last_external_power = online
+        self._voltage_critical = critical
 
 
 def record_snapshot(recorder: HostTimelineRecorder, snapshot: Snapshot) -> Snapshot:
@@ -171,13 +213,27 @@ def _valid_sample(row: object) -> bool:
     mono_ns = row.get("mono_ns")
     if mono_ns is not None and (type(mono_ns) is not int or mono_ns <= 0):
         return False
-    for name in ("battery_voltage_uv", "battery_current_ua", "battery_power_uw"):
+    for name in ("battery_voltage_uv", "battery_voltage_min_design_uv",
+                 "battery_current_ua", "battery_power_uw"):
         value = row.get(name)
         if value is not None and (type(value) is not int or value < 0):
             return False
     if statuses.get("battery", OK) != OK and any(row.get(name) is not None for name in
             ("battery_percent", "battery_status", "battery_voltage_uv",
-             "battery_current_ua", "battery_power_uw")):
+             "battery_voltage_min_design_uv", "battery_current_ua", "battery_power_uw")):
+        return False
+    events = row.get("power_events", [])
+    if (not isinstance(events, list)
+            or any(not isinstance(event, str) or event not in POWER_EVENT_LABELS for event in events)
+            or len(set(events)) != len(events)):
+        return False
+    for event, online in (("external-power-connected", True), ("external-power-disconnected", False)):
+        if event in events and (statuses.get("external_power", OK) != OK
+                                or row.get("external_power_online") is not online):
+            return False
+    if "battery-voltage-critical" in events and (
+            statuses.get("battery", OK) != OK or row.get("battery_status") != "Discharging"
+            or not row.get("battery_voltage_uv") or not row.get("battery_voltage_min_design_uv")):
         return False
     return True
 
@@ -291,9 +347,14 @@ def summarize_boot_timeline(directory: Path, boot_id: str) -> dict:
               "psi_io_avg10", "psi_io_avg60", "psi_cpu_avg10", "psi_cpu_avg60",
               "temperature_c", "temperature_sensor",
               "battery_percent", "battery_status", "battery_voltage_uv",
-              "battery_current_ua", "battery_power_uw", "external_power_online", "top_cpu")
+              "battery_voltage_min_design_uv", "battery_current_ua", "battery_power_uw",
+              "external_power_online", "power_events", "top_cpu")
+    power_event = next((row for row in reversed(rows)
+                        if row.get("schema") == 2 and row.get("power_events")), None)
     return {"quality": quality, "reason": reason,
             "last": {key: last.get(key) for key in fields} if last else None,
+            "last_power_event": ({key: power_event.get(key) for key in fields}
+                                 if power_event else None),
             "recent_samples": len(rows), "recent_max_interval_s": max(gaps, default=None),
             "last_interval_s": gaps[-1] if gaps else None,
             "window_limited": report.get("window_limited", False),

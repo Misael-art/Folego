@@ -205,7 +205,7 @@ class SuggestionRow(QWidget):
 
 class DashboardTab(QWidget):
     def __init__(self, *, on_jump=None, thresholds: title_signal.Thresholds | None = None,
-                 on_widget=None, parent=None):
+                 on_widget=None, on_mini=None, parent=None):
         super().__init__(parent)
         self._jump = on_jump or (lambda target: None)
         self._on_widget = on_widget
@@ -275,6 +275,10 @@ class DashboardTab(QWidget):
         self.host_status.setTextFormat(Qt.TextFormat.PlainText)
         self.host_status.setWordWrap(True)
         self.host_status.setAccessibleName("Saúde do host e integridade dos volumes")
+        self.power_status = QLabel('Alimentação aguardando leitura.')
+        self.power_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.power_status.setWordWrap(True)
+        self.power_status.setAccessibleName('Alimentação e proteção de energia')
         self.host_button = QPushButton("Ver saúde")
         self.host_button.setAccessibleName("Abrir os detalhes de saúde do host na aba Disco")
         self.host_button.clicked.connect(lambda: self._jump("disco"))
@@ -309,19 +313,31 @@ class DashboardTab(QWidget):
         hero_text.addWidget(self.hero_alert)
         hero_text.addWidget(self.primary_button, 0, Qt.AlignmentFlag.AlignLeft)
         hero_text.addStretch(1)
-        self.widget_button = QPushButton("⧉  Modo widget")
+        self.widget_button = QPushButton("Widget flutuante")
         self.widget_button.setObjectName("pill")
         self.widget_button.setAccessibleName("Recolher para o widget flutuante e a bandeja")
         self.widget_button.setToolTip("Minimiza para a bandeja e mostra um widget compacto que não pega o foco")
         self.widget_button.setVisible(on_widget is not None)
         if on_widget is not None:
             self.widget_button.clicked.connect(on_widget)
+        self.mini_button = QPushButton("Mini horizontal")
+        self.mini_button.setObjectName("pill")
+        self.mini_button.setAccessibleName("Recolher para o mini-widget horizontal")
+        self.mini_button.setToolTip("Mostra a barra horizontal com os indicadores essenciais")
+        self.mini_button.setVisible(on_mini is not None)
+        if on_mini is not None:
+            self.mini_button.clicked.connect(on_mini)
+        widget_choices = QVBoxLayout()
+        widget_choices.setSpacing(5)
+        widget_choices.addWidget(self.widget_button)
+        widget_choices.addWidget(self.mini_button)
+        widget_choices.addStretch(1)
         hero = QFrame()
         hero.setObjectName("hero")
         hero_layout = QHBoxLayout(hero)
         hero_layout.addWidget(self.gauge, 0)
         hero_layout.addLayout(hero_text, 1)
-        hero_layout.addWidget(self.widget_button, 0, Qt.AlignmentFlag.AlignTop)
+        hero_layout.addLayout(widget_choices)
 
         # um cartão por recurso
         self.cards = {key: ResourceCard(title) for key, title in (
@@ -347,6 +363,7 @@ class DashboardTab(QWidget):
         host_row.addWidget(self.host_status, 1)
         host_row.addWidget(self.host_button)
         activity_layout.addLayout(host_row)
+        activity_layout.addWidget(self.power_status)
         input_row = QHBoxLayout()
         input_row.addWidget(self.input_status, 1)
         input_row.addWidget(self.input_button)
@@ -619,8 +636,11 @@ class DashboardTab(QWidget):
             *(f'{label.accessibleName()}: {label.text()}' for label in self.summary_values.values()),
             self.hero_alert.text(), self.details.text(), self.resources.text(),
             self.last_operation.text(), self.automation_status.text(),
-            self.host_status.text(), self.input_status.text(),
+            self.host_status.text(), self.power_status.text(), self.input_status.text(),
             self.status.text()) if text)
+
+    def show_power_status(self, report: dict):
+        self.power_status.setText(report['message'])
 
     def show_host_report(self, report: dict):
         alerts = 0

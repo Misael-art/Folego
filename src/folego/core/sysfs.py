@@ -59,6 +59,8 @@ def read_battery(root: Path) -> tuple[BatteryInfo | None, SourceQuality]:
     voltage = _battery_int(path / 'voltage_now', minimum=100_000, maximum=100_000_000)
     current = _battery_int(path / 'current_now', maximum=100_000_000)
     power = _battery_int(path / 'power_now', maximum=1_000_000_000)
+    minimum_design = _battery_int(path / 'voltage_min_design', minimum=1_000_000,
+                                  maximum=100_000_000)
     remaining = None
     if status == 'Discharging':
         for name in ('time_to_empty_avg', 'time_to_empty_now'):
@@ -73,7 +75,8 @@ def read_battery(root: Path) -> tuple[BatteryInfo | None, SourceQuality]:
                     if 0 < estimate <= 7 * 86400:
                         remaining = estimate
                         break
-    return BatteryInfo(percent, status, remaining, voltage, current, power), SourceQuality('battery', OK)
+    return BatteryInfo(percent, status, remaining, voltage, current, power,
+                       minimum_design), SourceQuality('battery', OK)
 
 
 def read_external_power(root: Path) -> tuple[bool | None, SourceQuality]:

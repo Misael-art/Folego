@@ -1,14 +1,18 @@
 """Session startup preference; all system/file operations run in a worker."""
 import sys
-from PySide6.QtCore import Qt, Signal, QSignalBlocker
-from PySide6.QtGui import QPixmap, QPainter, QColor, QIcon
+from PySide6.QtCore import Qt, Signal, QSignalBlocker, QTimer
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QLineEdit, QLabel, QPushButton,
                               QVBoxLayout, QHBoxLayout, QScrollArea, QGroupBox, QLayout, QWidget, QSlider)
 from .tune_jobs import TuneJobs
-from .theme import TOKENS, THEMES, choose_theme, on_theme_change, choose_transparency, apply_theme
+from .desktop_preferences import STARTUP_VIEWS, set_startup_view, startup_view
+from .theme import TOKENS, THEMES, choose_theme, on_theme_change, choose_transparency, apply_theme, theme_swatch
 
 
 def options_argv(action, target, confirm):
+    if action.startswith('agent-care-'):
+        argv = [sys.executable, '-m', 'folego', 'ai', action.removeprefix('agent-'), '--json']
+        if confirm: argv.append('--confirmar')
+        return argv
     if action.startswith("jobs-"):
         argv = [sys.executable, "-m", "folego", "jobs", action.removeprefix("jobs-"), "--json"]
         if action == "jobs-recover": argv.append(target)
@@ -24,11 +28,20 @@ class OptionsTab(QWidget):
     operation_verified = Signal(object)
     sound_preview = Signal(str)
     screen_energy_requested = Signal(str)
+    power_guard_requested = Signal(str)
     def __init__(self, *, jobs=None):
         super().__init__()
         self._stopped = False
+        self._care_sync_on_start = False
+        self._care_generation = 0
+        self._care_poller = None
+        self._care_timer = QTimer(self)
+        self._care_timer.setInterval(180000)
+        self._care_timer.timeout.connect(self.sync_agent_care)
         self._desktop_options = False
         self._screen_energy_state = {'enabled': False, 'message': 'Verificando o Plasma.'}
+        self._power_guard_state = {'enabled': False, 'unavailable': True,
+                                   'message': 'Verificando o perfil de energia.'}
         self._cooperative_message = 'Pedido cooperativo: aguardando leitura térmica.'
         self._sound_message = 'Sons distintos por agente; alerta em 20%, fim da franquia e reposição confirmada.'
         self.jobs = jobs or TuneJobs(parent=self, argv_factory=options_argv, timeout_ms=30000)
@@ -41,6 +54,34 @@ class OptionsTab(QWidget):
         self.status.setWordWrap(True)
         self.verify = QPushButton("Verificar configuração")
         self.verify.clicked.connect(lambda: self.start())
+        self.basic_choice = QCheckBox('Iniciar o Plasma com o básico funcional e o Fôlego')
+        self.basic_choice.setChecked(True)
+        self.basic_choice.setAccessibleName('Sessão básica do Plasma, ligada por padrão')
+        self.basic_choice.clicked.connect(self.change_basic_session)
+        self.basic_status = QLabel('Ligado por padrão; aguardando verificação.')
+        self.basic_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.basic_status.setWordWrap(True)
+        self.basic_verify = QPushButton('Verificar sessão básica')
+        self.basic_verify.clicked.connect(lambda: self.jobs.run(
+            'startup-basic-reconcile', '', done=self.show_basic_session))
+        basic_text = QLabel('Preserva Plasma, entrada nativa, rede, áudio, energia e o Fôlego. '
+                            'Adia aplicativos e serviços opcionais reconhecidos. '
+                            'Desligar restaura a configuração anterior. Aplicativos abertos continuam em execução.')
+        basic_text.setWordWrap(True)
+        self.care_choice = QCheckBox('Orientar agentes a usar o host com cuidado')
+        self.care_choice.setAccessibleName('Orientação de cuidado nos IDEs e CLIs dos agentes')
+        self.care_choice.clicked.connect(self.change_agent_care)
+        self.care_status = QLabel('Verificando a orientação dos agentes.')
+        self.care_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.care_status.setWordWrap(True)
+        self.care_verify = QPushButton('Verificar orientação dos agentes')
+        self.care_verify.clicked.connect(lambda: self.jobs.run(
+            'agent-care-reconcile', '', done=self.show_agent_care))
+        care_text = QLabel('Quando ligada, procura agentes compatíveis a cada três minutos enquanto '
+                          'o Fôlego está aberto e acrescenta a orientação de cuidado. Desligar retira '
+                          'somente o bloco do Fôlego e preserva as demais diretrizes. Novas sessões '
+                          'recebem a orientação; ela não limita recursos pelo sistema.')
+        care_text.setWordWrap(True)
         self.pending = QComboBox()
         self.pending.setAccessibleName("Operações com resultado pendente")
         self.operation_id = QLineEdit()
@@ -66,9 +107,9 @@ class OptionsTab(QWidget):
         self.recover_run_button.clicked.connect(self.recover_run)
         self.retained_runs.currentIndexChanged.connect(
             lambda: self.recover_run_button.setEnabled(bool(self.retained_runs.currentData())))
-        text = QLabel("A opção inicia a central e o monitor com seu login gráfico. "
+        text = QLabel("A opção inicia o Fôlego e o monitor com seu login gráfico. "
                       "Não amplia permissões de reparo ou limpeza. Desligar impede o próximo início "
-                      "e para a unit própria do monitor de entrada; a central aberta continua na tela.")
+                      "e para a unit própria do monitor de entrada; o Fôlego aberto continua na tela.")
         text.setWordWrap(True)
         outer = QVBoxLayout(self)
         area = QScrollArea()
@@ -78,8 +119,23 @@ class OptionsTab(QWidget):
         box.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         self.settings_box = box
         self.build_theme_options()
+        self.startup_view_choice = QComboBox()
+        self.startup_view_choice.setAccessibleName('Modo de abertura do Fôlego')
+        for mode, label in STARTUP_VIEWS:
+            self.startup_view_choice.addItem(label, mode)
+        self._startup_view = startup_view()
+        self.startup_view_choice.setCurrentIndex(self.startup_view_choice.findData(self._startup_view))
+        self.startup_view_choice.currentIndexChanged.connect(self._save_startup_view)
+        self.startup_view_status = QLabel('A escolha vale na próxima abertura do Fôlego.')
+        self.startup_view_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.startup_view_status.setWordWrap(True)
         for title, controls in (
+            ('Modo de abertura', (self.startup_view_choice, self.startup_view_status)),
             ("Início com a sessão", (self.choice, text, self.status, self.verify)),
+            ('Sessão básica do Plasma', (self.basic_choice, basic_text,
+                                         self.basic_status, self.basic_verify)),
+            ('Cuidado do host pelos agentes', (self.care_choice, care_text,
+                                                self.care_status, self.care_verify)),
             ("Operações pendentes", (self.pending, self.operation_id, self.reconcile, self.cancel,
                                      self.operation_status)),
             ("Temporários do Fôlego", (self.retention, self.retain, self.retained_runs,
@@ -94,6 +150,18 @@ class OptionsTab(QWidget):
         area.setWidget(content)
         outer.addWidget(area)
 
+    def _save_startup_view(self):
+        mode = self.startup_view_choice.currentData()
+        try:
+            set_startup_view(mode)
+        except (RuntimeError, ValueError) as error:
+            with QSignalBlocker(self.startup_view_choice):
+                self.startup_view_choice.setCurrentIndex(self.startup_view_choice.findData(self._startup_view))
+            self.startup_view_status.setText(str(error))
+            return
+        self._startup_view = mode
+        self.startup_view_status.setText('Preferência salva para a próxima abertura do Fôlego.')
+
     def build_theme_options(self):
         group = QGroupBox('Aparência · consoles clássicos')
         layout = QVBoxLayout(group)
@@ -101,12 +169,7 @@ class OptionsTab(QWidget):
         self.theme_choice.setAccessibleName('Tema de cores de todo o Fôlego')
         self.theme_choice.setToolTip('Aplica agora na central, widget, menus, painéis e teclado; mantém a escolha ao reabrir')
         for key, theme in THEMES.items():
-            pixmap = QPixmap(60, 14)
-            painter = QPainter(pixmap)
-            for i, color in enumerate(theme.tokens.actions):
-                painter.fillRect(i * 10, 0, 10, 14, QColor(color))
-            painter.end()
-            self.theme_choice.addItem(QIcon(pixmap), theme.name, key)
+            self.theme_choice.addItem(theme_swatch(theme), theme.name, key)
         self.theme_description = QLabel()
         self.theme_description.setWordWrap(True)
         self.theme_status = QLabel()
@@ -210,6 +273,7 @@ class OptionsTab(QWidget):
         for key, text in (('codex', 'Codex · entrega concluída'), ('web', 'Codex Web · entrega concluída'),
                           ('claude', 'Claude · entrega concluída'), ('grok', 'Grok · entrega concluída'),
                           ('low', 'Atenção · 20% restantes'), ('empty', 'Franquia esgotada'), ('restored', 'Franquia disponível novamente'),
+                          ('reset', 'Reset disponível ou perto de vencer'),
                           ('battery-75', 'Bateria · 75%'), ('battery-50', 'Bateria · 50%'),
                           ('battery-25', 'Bateria · 25%'), ('battery-10', 'Bateria · 10%')):
             self.sound_kind.addItem(text, key)
@@ -240,11 +304,38 @@ class OptionsTab(QWidget):
         screen_layout.addWidget(self.screen_energy_status)
         screen_layout.addWidget(screen_hint)
         self.settings_box.insertWidget(0, screen_group)
+        power_group = QGroupBox('Bateria · perfil de energia')
+        power_layout = QVBoxLayout(power_group)
+        self.power_guard_choice = QCheckBox('Reduzir o perfil de energia quando a voltagem cair')
+        self.power_guard_choice.setAccessibleName('Guarda de perfil de energia por voltagem')
+        self.power_guard_choice.setEnabled(False)
+        self.power_guard_choice.clicked.connect(
+            lambda checked: self.power_guard_requested.emit('enable' if checked else 'disable'))
+        self.power_guard_status = QLabel('Verificando o perfil de energia.')
+        self.power_guard_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.power_guard_status.setWordWrap(True)
+        power_hint = QLabel('Na descarga: voltagem em atenção pede o perfil equilibrado; crítica pede '
+                            'economia. O perfil anterior volta quando o carregador é conectado, se '
+                            'você não o tiver trocado. Nenhum aplicativo é fechado.')
+        power_hint.setWordWrap(True)
+        for widget in (self.power_guard_choice, self.power_guard_status, power_hint):
+            power_layout.addWidget(widget)
+        self.settings_box.insertWidget(1, power_group)
+        self.show_power_guard(self._power_guard_state)
         self.show_screen_energy(self._screen_energy_state)
         self.cooperative_status = QLabel(self._cooperative_message)
         self.cooperative_status.setTextFormat(Qt.TextFormat.PlainText)
         self.cooperative_status.setWordWrap(True)
         screen_layout.addWidget(self.cooperative_status)
+
+    def show_power_guard(self, state):
+        self._power_guard_state = state
+        if self._stopped or not self._desktop_options: return
+        from PySide6.QtCore import QSignalBlocker
+        with QSignalBlocker(self.power_guard_choice):
+            self.power_guard_choice.setChecked(bool(state.get('enabled')))
+        self.power_guard_choice.setEnabled(not state.get('unavailable', False))
+        self.power_guard_status.setText(state.get('message', 'Estado do perfil desconhecido'))
 
     def show_screen_energy(self, state):
         self._screen_energy_state = state
@@ -276,10 +367,38 @@ class OptionsTab(QWidget):
 
     def start(self, *, sync=False):
         if self._stopped: return
+        self._care_sync_on_start = sync
+        self.jobs.run('agent-care-status', '', done=self.show_agent_care)
         self.choice.setEnabled(False)
         self.jobs.run("startup-sync" if sync else "startup-status", "", done=self.done)
+        if sync:
+            self.basic_choice.setEnabled(False)
+        else:
+            self.jobs.run('startup-basic-status', '', done=self.show_basic_session)
         self.jobs.run("review-pending", "", done=self.show_pending)
         self.jobs.run("jobs-status", "", done=self.show_retention)
+
+    def change_basic_session(self, checked):
+        self.basic_choice.setEnabled(False)
+        self.jobs.run('startup-basic-enable' if checked else 'startup-basic-disable',
+                      '', confirm=True, done=self.show_basic_session)
+
+    def show_basic_session(self, payload):
+        if self._stopped: return
+        payload = payload or {}
+        known = type(payload.get('enabled')) is bool
+        if known:
+            with QSignalBlocker(self.basic_choice):
+                self.basic_choice.setChecked(payload['enabled'])
+        self.basic_choice.setEnabled(known and payload.get('state') not in ('unknown', 'conflict'))
+        text = payload.get('message') or payload.get('reason') or 'Configuração desconhecida; preservada.'
+        if payload.get('targets'):
+            text += '\nItens adiados: ' + ', '.join(payload['targets'])
+        if payload.get('preserved'):
+            text += '\nItens sem classificação, preservados: ' + ', '.join(payload['preserved'])
+        if payload.get('operation_id'):
+            text += '\nOperação: ' + payload['operation_id']
+        self.basic_status.setText(text)
 
     def show_pending(self, payload):
         if self._stopped: return
@@ -344,6 +463,58 @@ class OptionsTab(QWidget):
         if "archived" in (payload or {}):
             self.jobs.run("jobs-status", "", done=self.show_retention)
 
+    def sync_agent_care(self):
+        if self._stopped or getattr(self.jobs, 'in_flight', 0): return
+        if self._care_poller is None:
+            from .workers import Poller
+            from ..actions.agent_guidelines import AgentGuidelines
+            self._care_poller = Poller(lambda: AgentGuidelines().configure(),
+                                       parent=self, offload=True)
+            self._care_poller.snapshot_ready.connect(self._care_auto_done)
+            self._care_poller.error.connect(self._care_auto_failed)
+        if self._care_poller._inflight: return
+        self._care_poll_generation = self._care_generation
+        self._care_poller.request()
+
+    def _care_auto_done(self, payload):
+        self._care_poller.pause()
+        if not self._stopped and self._care_poll_generation == self._care_generation:
+            self.show_agent_care(payload)
+
+    def _care_auto_failed(self, message):
+        self._care_poller.pause()
+        if self._stopped or self._care_poll_generation != self._care_generation: return
+        self.care_status.setText(message + '\nOrientação preservada; verificar antes de repetir.')
+        if not message.startswith('CoordinatorBusy:'):
+            self._care_timer.stop()
+
+    def change_agent_care(self, checked):
+        if self._stopped: return
+        self._care_generation += 1
+        self.care_choice.setEnabled(False)
+        self.jobs.run('agent-care-enable' if checked else 'agent-care-disable',
+                      '', confirm=True, done=self.show_agent_care)
+
+    def show_agent_care(self, payload):
+        if self._stopped: return
+        payload = payload or {}
+        enabled = payload.get('enabled')
+        if type(enabled) is bool:
+            self.care_choice.setTristate(False)
+            self.care_choice.setChecked(enabled)
+        else:
+            self.care_choice.setTristate(True)
+            self.care_choice.setCheckState(Qt.CheckState.PartiallyChecked)
+        self.care_choice.setEnabled(type(enabled) is bool)
+        self.care_status.setText(payload.get('message') or payload.get('reason') or
+                                 'Resultado desconhecido; diretrizes preservadas.')
+        if payload.get('operation_id'):
+            self.care_status.setText(self.care_status.text() + '\nOperação: ' + str(payload['operation_id']))
+        if enabled is True and payload.get('state') not in ('pending', 'conflict'):
+            self._care_timer.start()
+        else:
+            self._care_timer.stop()
+
     def changed(self, checked):
         if self._stopped: return
         self.choice.setEnabled(False)
@@ -351,6 +522,9 @@ class OptionsTab(QWidget):
 
     def done(self, payload):
         if self._stopped: return
+        if isinstance((payload or {}).get('basic_session'), dict):
+            self.show_basic_session(payload['basic_session'])
+        self._start_agent_care()
         self.choice.setEnabled(True)
         if type((payload or {}).get("enabled")) is bool:
             self.choice.setTristate(False)
@@ -369,7 +543,16 @@ class OptionsTab(QWidget):
             self.status.setText(str((payload or {}).get("outcome", "desconhecido")) + " · " +
                                 str((payload or {}).get("reason", "resposta não comprovada; verificar novamente")))
 
+    def _start_agent_care(self):
+        if self._care_sync_on_start:
+            self._care_sync_on_start = False
+            self.sync_agent_care()
+
     def stop(self):
+        self._care_timer.stop()
+        self._care_generation += 1
+        if self._care_poller is not None:
+            self._care_poller.stop()
         self._stopped = True
         self.jobs.shutdown()
 

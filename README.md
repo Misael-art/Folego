@@ -20,6 +20,10 @@ CPU, swap e temporários em uma visão clara e ajuda a investigar o que está
 pressionando a máquina — inclusive quando há agentes de IA, builds e várias
 aplicações trabalhando ao mesmo tempo.
 
+O [port nativo para Windows](docs/WINDOWS.md) está em prévia: monitoramento,
+diagnóstico e energia reversível, com início na sessão e sem depender de WSL.
+O guia distingue as capacidades Windows das integrações exclusivas do Linux.
+
 As ações de recursos são manuais e passam por confirmação e verificações de
 proteção. **O executor automático de recursos permanece desligado.** A supervisão
 de entrada tem uma política própria, opcional, para reabilitar dispositivos
@@ -62,11 +66,13 @@ reduz a carga nem suspende agentes por conta própria.
 O **mini horizontal** reúne estado, CPU, temperatura com fonte, RAM, bateria e
 cotas de IA em células de uma linha. A largura acompanha os dados disponíveis;
 entregas, resets resgatáveis e reposição confirmada de cinco horas têm lembretes
-discretos. A alça pontilhada move a faixa; **Expandir** abre
-o compacto, a grade abre a Central e a seta lista diretamente todos os formatos.
-O **modo compacto** tem 280 px de largura e recursos em duas linhas. O ícone de
+discretos. Uma conta sem cota disponível aparece pelo motivo que a mantém na
+faixa, como **Entregas** ou **Resgate**. A alça pontilhada move a faixa; **Expandir** abre
+o compacto, a grade abre a Central e a seta lista todos os formatos e o submenu
+**Tema de cores**. O **modo compacto** tem 268 px lógicos de largura. O ícone de
 grade abre a **Central**; a seta ao lado reúne os cinco formatos,
-**Contas e cotas de IA**, **Ocultar widget** e **Sair do Fôlego**. **Modo widget**, na Central, retorna ao
+**Contas e cotas de IA**, **Monitoramento**, **Ocultar widget** e **Sair do Fôlego**.
+Em **Monitoramento**, a ação alterna entre pausar e retomar. **Modo widget**, na Central, retorna ao
 flutuante mantendo o monitoramento. A saída também fica na bandeja. As duas
 interfaces dispensam botões de minimizar, maximizar e fechar.
 O menu **Posição do widget**, na Central, e o seletor do widget permitem escolher
@@ -76,8 +82,8 @@ faixa de encaixe. A seta leva, respectivamente, à barra lateral direita,
 lateral esquerda ou horizontal superior. A seta na borda da barra retorna ao
 compacto. As barras ocupam a área útil informada pelo desktop, respeitando
 painéis conhecidos; o conteúdo lateral tem rolagem quando necessário.
-A faixa de IAs mostra somente provedores com cota positiva e confirmada,
-ordenados pelo percentual disponível. Contas sem cota ou sem confirmação
+No compacto e nas barras, a faixa ordena as cotas positivas e confirmadas
+pelo percentual disponível. Contas sem cota ou sem confirmação
 continuam acessíveis em **Contas e cotas de IA**; passe o mouse sobre um medidor
 visível para abrir o painel da conta exibida. Consumo, resets, tickets e
 referência da assinatura ficam separados. Os medidores seguem o padrão circular do PhaseZero:
@@ -86,13 +92,31 @@ Uma cota desconhecida não é tratada como zero. O anel faz uma transição suav
 ao receber um novo percentual; uma cota que volta aparece com uma transição curta
 e a reposição confirmada usa o aviso sonoro existente. Entregas para revisitar
 fazem a borda interna pulsar.
+Quando a resposta final de um agente Codex Web relata
+`McpServerError: Session terminated`, o Fôlego marca a entrega com `!` vermelho,
+mostra aviso na janela e na bandeja disponível e acende a tela se a economia
+de energia estiver ativa. É um relato da sessão MCP, não prova de defeito no
+serviço local. Reconecte o Codex Native2 no ChatGPT e confira o resultado da
+operação anterior antes de repetir. A recuperação automática do serviço local
+continua com o responsável configurado no host; o Fôlego não reinicia o
+cliente, o túnel ou agentes por esse texto.
+Quando um turno Web falha com `Selected model is at capacity. Please try a
+different model.`, o monitor solicita automaticamente um ciclo de recuperação
+ao responsável já habilitado e verificado daquela conta. O pedido usa o diário
+de operações e não reenvia a tarefa. O painel **Contas e cotas de IA** e
+`./dev run ai status` mostram o diagnóstico recente do responsável, inclusive
+quando é necessário renovar o login no ChatGPT dentro do launcher. A mensagem
+de capacidade também pode encobrir uma falha local do campo de mensagem;
+trocar o modelo não corrige essa situação. Sem responsável compatível, o
+Fôlego avisa e preserva o estado. [Escopo e limites](docs/COMPACTO.md#recuperação-do-codex-web).
 Ao lado das entregas, um **presente verde piscando** mostra as redefinições
 disponíveis confirmadas das contas do provedor. Clique para consultar a conta;
 o resgate continua no cliente de IA.
 
-Os atalhos coloridos aparecem em duas linhas iguais ao passar o mouse pelo
-widget e se recolhem ao sair. **Copiar, Colar e Print** ficam abaixo de
-**Selecionar tudo, Apagar tudo e Prompts**. O ícone de teclado no cabeçalho abre
+No compacto, a gaveta aparece ao passar o mouse pelo widget e se recolhe ao
+sair. **Copiar, Colar e Print** ficam abaixo de **Selecionar, Apagar tudo e Prompts**.
+À direita, o botão **D** mostra a área de trabalho pelo KWin e mantém as
+aplicações abertas. O ícone de teclado no cabeçalho abre
 na parte inferior; somente sua seta abre no topo. CPU e Tmp ficam alinhados,
 com a temperatura do host em °C e a rotação do cooler em RPM lado a lado na
 terceira linha (sensor indisponível: **— °C** ou **— RPM**). Quando só existe a
@@ -109,7 +133,18 @@ cada minuto. A estimativa restante aparece quando o sistema informa tempo ou
 energia e consumo compatíveis. Ela varia conforme o uso. Os avisos seguem a
 preferência de sons em **opções**.
 
-A biblioteca oferece 13 prompts de desenvolvimento: escolha um título para copiar e cole no
+A Central e **Disco › Saúde do host › Alimentação e proteção** mostram energia
+externa, percentual, tensão e corrente da bateria, junto do estado da proteção
+de perfil. A bandeja avisa a desconexão observada do carregador, descarga com
+energia externa presente em duas leituras consecutivas e proteção indisponível
+ou pausada por resultado sem confirmação. Cada tipo de aviso tem intervalo
+mínimo de cinco minutos. Leituras ausentes ou com mais de 15 segundos aparecem
+como desconhecidas. O serviço de perfis é reconsultado a cada minuto em worker,
+preservando a opção persistida quando ele falha. A CLI `./dev run disk health`
+oferece a mesma leitura sob demanda, também com `--json`; `disk guide power`
+mostra a orientação. Os eventos de alimentação continuam no histórico existente.
+
+A biblioteca oferece 16 prompts de desenvolvimento: escolha um título para copiar e cole no
 agente desejado. O teclado virtual preserva o foco do campo de destino no KWin.
 O seletor organiza os títulos em seis blocos com faixas laterais coloridas,
 cabeçalhos horizontais e ícones de copiar. O painel tem até 480 × 540 px,
@@ -147,16 +182,35 @@ contas usam um fundo contínuo, com os elementos internos transparentes.
 O alvo é **Linux**, com KDE Plasma para a integração completa com o desktop.
 O wrapper gerencia Python **3.14.7**, uv e dependências fixadas em `uv.lock`.
 Não é necessário ativar um ambiente virtual ou instalar pacotes Python globalmente.
-A [prévia 0.2.0b8](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b8)
+A [prévia 0.2.0b14](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b14)
 oferece fonte completa, wheel, sdist e SHA256SUMS. A fonte completa inclui o wrapper
 e o lockfile; os pacotes Python exigem Python 3.14 e a dependência GUI opcional.
 
 ```bash
-git clone --branch v0.2.0b8 https://github.com/Misael-art/Folego.git
+git clone --branch v0.2.0b14 https://github.com/Misael-art/Folego.git
 cd Folego
 ./dev setup
 ./dev gui
 ```
+
+Em **Opções → Sessão básica do Plasma**, a opção **Iniciar o Plasma com o básico
+funcional e o Fôlego** começa ligada. Ela configura uma sessão vazia do Plasma,
+adia autostarts e serviços opcionais reconhecidos e preserva entrada nativa,
+rede, áudio, energia, autenticação, portais e o Fôlego. Aplicativos em execução
+continuam abertos. Os originais ficam em recibo privado com hashes; desligar
+restaura os bytes e links anteriores, sem iniciar aplicativos imediatamente.
+Mudanças externas e resultados incertos bloqueiam repetição. Itens desconhecidos
+ficam preservados e aparecem no diagnóstico. Serviços opcionais suprimidos não
+podem ser iniciados por unit enquanto a opção estiver ligada; os aplicativos
+continuam disponíveis para abertura manual. O próximo login físico precisa de
+validação própria; a opção não certifica a causa nem a eliminação dos reinícios.
+
+Na CLI: `./dev run startup basic-status --json` consulta;
+`./dev run startup basic-enable --confirmar` aplica;
+`./dev run startup basic-disable --confirmar` restaura e
+`./dev run startup basic-reconcile --json` verifica o recibo sem repetir efeitos.
+O início normal da GUI sincroniza a preferência no KDE. A configuração é por
+usuário; não altera o boot nem serviços de sistema.
 
 Na primeira abertura, o Fôlego configura o **início automático com a sessão**,
 ligado por padrão. A aba **opções** permite desligar e mantém sua escolha nas
@@ -217,8 +271,12 @@ desconhecida, e uma falha nesse estado não é tratada como contador zerado.
 Avisos NTFS são buscados em janela limitada do journal, incluindo o número de
 índices identificados, sem percorrer o volume. Enquanto a GUI monitora, uma
 amostra privada e limitada de RAM, swap, PSI, temperatura e maior CPU é gravada
-a cada 15 segundos para investigar o período anterior a um reinício, incluindo
-estado da bateria do Deck e presença observada de alimentação externa; a CLI
+normalmente a cada 15 segundos para investigar o período anterior a um reinício.
+Cada amostra gravada solicita sincronização com o disco antes de informar sucesso,
+inclusive quando não há pressão; falhas dessa sincronização ficam visíveis.
+A primeira leitura crítica de tensão e as transições confirmadas de alimentação
+externa são sincronizadas com o disco assim que observadas, usando a mesma coleta.
+Eventos entre leituras podem escapar. A CLI
 `disk timeline` lê até 80 amostras recentes, ou de um boot preservado com
 `--boot-id`. O histórico possui limites de
 4 MiB por boot e 32 MiB no total; ao atingir o limite, a gravação para e o
@@ -231,6 +289,12 @@ de pressão a cada 5 minutos. O histórico registra também as médias PSI de
 recomenda reduzir tarefas pelo aplicativo responsável e não altera processos.
 O plano para
 continuidade e dossiês está no [roadmap de resiliência](docs/ROADMAP-RESILIENCIA-HOST.md).
+A base funcional para economia estável, os serviços por capacidade e o roteiro
+de novo diagnóstico estão no [guia do host Jupiter](docs/BASE-DO-HOST.md).
+O diagnóstico diferencia pedidos de reinício, desligamento e parada registrados
+pelo logind. A solicitação registrada não comprova o fim do boot. Journal ausente
+ou ilegível mantém o encerramento desconhecido; ausência de registro não prova
+falha elétrica, térmica ou da GPU.
 `disk recovery` só verifica identidade da
 origem, montagem, acesso bruto, ferramenta e destino independente com espaço
 para imagem integral e margem. A checagem não abre o dispositivo nem concede
@@ -304,6 +368,13 @@ desabilitar uma entrada intencionalmente, pause os reparos:
 ```bash
 ./dev run accessibility disable --confirmar
 ```
+
+No Steam Deck, **Reenumerar áudio automaticamente após falha conhecida**
+permite recuperar o desaparecimento comprovado do perfil interno no WirePlumber.
+A opção é persistente e começa desligada. A guarda verifica referência saudável,
+responsável, preferência, placas e captura, com orçamento e pausa após resultado
+incerto. O cartão do microfone também oferece recuperação manual. Pendências de
+entrada preservam os reparos independentes de áudio. O guia detalha os critérios.
 
 Para controlar o início com a sessão pelo terminal:
 
@@ -427,3 +498,17 @@ Problemas reproduzíveis e propostas bem delimitadas são bem-vindos em
 O código do Fôlego é disponibilizado sob a [licença MIT](LICENSE).
 Dependências mantêm suas próprias licenças; veja [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md),
 incluindo os avisos de Qt/PySide6.
+
+### Orientação de cuidado nos agentes
+
+Em **Opções → Cuidado do host pelos agentes**, habilite a orientação para que
+o Fôlego procure os clientes compatíveis a cada três minutos enquanto estiver
+aberto. Ele acrescenta um bloco identificado nas instruções globais; desligar
+retira somente esse bloco, preservando as diretrizes pessoais e edições posteriores.
+O recurso começa desligado em novas instalações; neste Jupiter foi habilitado.
+Não inicia/reinicia agentes nem impõe limites de CPU/RAM pelo sistema.
+
+CLI: `folego ai care-status --json`, `care-enable --confirmar`,
+`care-disable --confirmar`, `care-sync` e `care-reconcile`.
+Arquivos, limites, migração da aplicação manual e recuperação em
+[BASE-DO-HOST.md](docs/BASE-DO-HOST.md).

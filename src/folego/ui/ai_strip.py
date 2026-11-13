@@ -259,6 +259,8 @@ class AIStrip(QWidget):
         panel.setFixedSize(min(560, area.width() - 20), min(470, area.height() - 24))
         panel.open_requested.connect(lambda p, a: (menu.close(), self.open_agent(p, a)))
         panel.billing_requested.connect(lambda p, a: (menu.close(), self.billing(p, a)))
+        panel.reset_note_requested.connect(lambda p, a: (menu.close(), self.reset_note(p, a)))
+        panel.limit_note_requested.connect(lambda p, a: (menu.close(), self.reset_note(p, a, limit=True)))
         panel.refresh_requested.connect(self.refresh)
         action = QWidgetAction(menu)
         action.setDefaultWidget(panel)
@@ -291,6 +293,25 @@ class AIStrip(QWidget):
         day, accepted = QInputDialog.getInt(self, 'Renovação mensal · ' + ai_sessions.NAMES[provider],
              'Dia da cobrança mensal (1–31; 0 remove).\nReferência pessoal, sem confirmação de cobrança pelo provedor.', current, 0, 31)
         if accepted: self.opener.request('agent-billing', (provider, day, account) if account else (provider, day))
+
+    def reset_note(self, provider, account=None, limit=False):
+        item = next((i for i in self.items if account and i.get('account_id') == account), self.default_item(provider))
+        account = item.get('account_id')
+        if not account: return self._notice('Conta não identificada; lembrete não registrado')
+        credits = item.get('reset_credits') or {}
+        current = (item.get('declared_limit_until') if limit else
+                   credits.get('expires_at') if credits.get('declared') else None)
+        text, accepted = QInputDialog.getText(
+            self, ('Lembrete de limite · ' if limit else 'Lembrete de reset · ') + ai_sessions.NAMES[provider],
+            ('Quando o ChatGPT informou que o limite volta' if limit else 'Validade do reset mostrado pelo cliente')
+            + ' (DD/MM/AAAA HH:MM; vazio remove).\nLembrete pessoal: o Fôlego não consulta nem altera a conta.',
+            text=ai_sessions.stamp(current) if current else '')
+        if not accepted: return
+        try:
+            moment = ai_sessions.parse_local_time(text) if text.strip() else None
+        except ValueError as exc:
+            return self._notice(str(exc))
+        self.opener.request('agent-limit-note' if limit else 'agent-reset-note', (account, moment))
 
     def _notice(self, message):
         # The compact card owns visible transient feedback, separate from alerts.
@@ -327,17 +348,32 @@ class AIStrip(QWidget):
                        '0% disponível' if button.remaining == 0 else 'cota desconhecida ou vencida')
             delivery = next((r for r in self.delivery_items if r['provider'] == provider), {})
             count = delivery.get('count')
+            web_mcp_report = provider == 'web' and any(
+                receipt.get('reported_web_mcp_error') for receipt in delivery.get('pending', ()))
+            web_capacity_error = provider == 'web' and any(
+                receipt.get('web_capacity_error') for receipt in delivery.get('pending', ()))
+            if web_mcp_report:
+                summary += ' · agente relatou sessão MCP encerrada'
+            if web_capacity_error:
+                summary += ' · erro de capacidade; confira a recuperação no painel da conta'
             has_deliveries |= (bool(count) or instances is not None) and selected is not None
             if not count and instances is None: button.set_halo(0.0)
             badge = self.badges[provider]
             partial = not delivery.get('complete', True)
             number = str(count) + ('+' if partial else '')
-            badge.setText('?' if count is None else number if count else '')
-            background = TOKENS.accent if count else TOKENS.muted if count is None else TOKENS.surface
-            badge.setStyleSheet(f"background:{TOKENS.accent if count else TOKENS.muted if count is None else 'transparent'};"
+            badge_text = '?' if count is None else number if count else ''
+            web_error = web_mcp_report or web_capacity_error
+            if web_error and count: badge_text += '!'
+            badge.setText(badge_text)
+            background = TOKENS.danger if web_error else TOKENS.accent if count else TOKENS.muted if count is None else TOKENS.surface
+            badge.setStyleSheet(f"background:{TOKENS.danger if web_error else TOKENS.accent if count else TOKENS.muted if count is None else 'transparent'};"
                                f"color:{on_color(background)};font-size:8pt;font-weight:600;border-radius:6px;")
             completed = 'conclusões não verificadas' if count is None else f'{count} novas entregas para revisitar'
             if count and partial: completed = 'Pelo menos ' + completed + '; outras sessões não verificadas'
+            badge.setToolTip('Codex Web retornou erro de capacidade; confira a recuperação no painel da conta.'
+                             if web_capacity_error else
+                             'O agente relatou sessão MCP encerrada; abra o Codex Web para conferir.'
+                             if web_mcp_report else completed)
             confirmed = [(i, ai_sessions.available_resets(i)) for i in items]
             offers = [(i, n) for i, n in confirmed if n is not None and n > 0]
             total = sum(n for _, n in offers)

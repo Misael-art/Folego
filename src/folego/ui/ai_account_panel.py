@@ -24,6 +24,8 @@ def until(at, now):
 class AccountPanel(QWidget):
     open_requested = Signal(str, str)
     billing_requested = Signal(str, str)
+    reset_note_requested = Signal(str, str)
+    limit_note_requested = Signal(str, str)
     refresh_requested = Signal()
 
     def __init__(self, provider, items, parent=None):
@@ -96,6 +98,16 @@ class AccountPanel(QWidget):
         billing.clicked.connect(lambda: self.billing_requested.emit(provider, self.selected))
         actions.addWidget(open_button)
         actions.addWidget(billing)
+        if provider != 'web':
+            note = QPushButton('Lembrete de reset…')
+            note.setToolTip('Registrar um reset resgatável que o cliente mostra e a fonte não expõe')
+            note.clicked.connect(lambda: self.reset_note_requested.emit(provider, self.selected))
+            actions.addWidget(note)
+        else:
+            note = QPushButton('Lembrete de limite…')
+            note.setToolTip('Registrar quando o ChatGPT informou que o limite volta')
+            note.clicked.connect(lambda: self.limit_note_requested.emit(provider, self.selected))
+            actions.addWidget(note)
         outer.addLayout(actions)
         self.select(self.selected)
 
@@ -145,13 +157,15 @@ class AccountPanel(QWidget):
         if remaining is not None:
             self.line(f'{100 - remaining}% usado', big=True, color=color)
             self.line(f'{remaining}% restante · janela mais restrita', color='muted')
+        for pace in ai.pace_forecast(item, now):
+            self.line(f"Nesse ritmo, {pace['name']} esgota por volta de {date(pace['at'])} · estimativa local", color='warning')
         tickets = item.get('reset_credits') or {}
         expiry = tickets.get('expires_at')
         available = ai.available_resets(item, now)
         if available is not None:
             self.line(f"Tickets de reset · {available} disponíveis", color='ok' if available else 'muted')
             if available:
-                self.line(('Valem até ' + date(expiry) if expiry else 'Validade não informada') + ' · resgate no cliente', color='muted')
+                self.line(('Valem até ' + date(expiry) if expiry else 'Validade não informada') + (' · lembrete seu; confirme e resgate no cliente' if tickets.get('declared') else ' · resgate no cliente'), color='muted')
         else:
             self.line('Tickets de reset · ' + ('consulta vencida' if tickets else 'não informados'), color='muted')
         day = item.get('billing_day')
@@ -197,6 +211,11 @@ class AccountPanel(QWidget):
             self.line(text, color='muted')
             if 'used_credits' in extra and 'monthly_limit' in extra:
                 self.line(f"Consumo {extra['used_credits']:g} / {extra['monthly_limit']:g} · unidades do provedor", color='muted')
+        spend = item.get('usage_credits')
+        if spend:
+            self.line('Créditos de uso · ' + ('habilitados' if spend['enabled'] else 'desabilitados')
+                      + (' · consumo ' + spend['used'] if 'used' in spend else '')
+                      + (' · saldo ' + spend['balance'] if 'balance' in spend else ''), color='muted')
         if item.get('plan'): self.line('Plano · ' + str(item['plan']), color='muted')
         if item.get('reason'): self.line(item['reason'], color='muted')
         if item.get('observed_at'): self.line('Consulta · ' + date(item['observed_at']), color='muted')
@@ -224,6 +243,15 @@ class AccountPanel(QWidget):
         if service.get('catalog_status') == 200:
             self.line('Catálogo de modelos · última consulta local bem-sucedida', color='muted')
         self.line('Resposta do ChatGPT Web · ' + item.get('web_inference', 'não comprovada'), color='muted')
+        until = item.get('declared_limit_until')
+        if until:
+            waiting = until > time.time()
+            self.line(('Limite esgotado até ' if waiting else 'Prazo do limite passou em ') + date(until)
+                      + ' · lembrete seu', color='warning' if waiting else 'muted')
+        recovery = item.get('web_recovery')
+        if recovery:
+            for line in ai.web_recovery_lines(recovery):
+                self.line(line, color='muted')
         self.line('Limite da sessão/conta · não informado pelo WebGPT', big=True, color='muted')
         self.line('Saldo disponível e horário de reposição · desconhecidos', color='muted')
         usage = item.get('local_usage')

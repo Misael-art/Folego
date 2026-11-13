@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QStyle
 
 from folego.core import ai_sessions as ai
 from folego.ui.ai_strip import AIStrip
+from folego.ui.ai_monitor import AIMonitor
 from folego.ui.theme import apply_theme, TOKENS
 
 
@@ -173,6 +174,52 @@ def test_web_ring_tracks_real_instance_without_quota(qapp):
     strip.set_items([web])
     assert not strip.columns['web'].isVisible()
     assert not strip.buttons['web'].instance_active
+    strip.shutdown()
+
+
+def test_web_mcp_report_is_visible_and_emitted_once(qapp):
+    strip = make(qapp)
+    strip.show(); qapp.processEvents()
+    web = ai.unknown('web')
+    web.update(account_id='web-account', web_instances=1, web_instances_at=time.time())
+    strip.set_items([web])
+    receipt = dict(session='session', event='turn', at=time.time() + 1,
+                   reported_web_mcp_error=True)
+    row = dict(provider='web', count=1, pending=[receipt], complete=True)
+    strip.set_deliveries([row])
+    assert strip.badges['web'].text() == '1!'
+    assert 'sessão MCP encerrada' in strip.buttons['web'].accessibleName()
+    assert 'sessão MCP encerrada' in strip.badges['web'].toolTip()
+    strip.shutdown()
+
+    class QuietAlerts:
+        def observe(self, *_): pass
+        def shutdown(self): pass
+    monitor = AIMonitor(alerts=QuietAlerts())
+    emitted = []
+    monitor.web_mcp_reported.connect(emitted.append)
+    monitor.set_deliveries([row])
+    monitor.set_deliveries([row])
+    assert emitted == [receipt]
+    monitor.shutdown()
+
+
+def test_capacity_error_badge_and_notification_are_deduplicated(qapp):
+    strip = make(qapp)
+    web = ai.unknown('web')
+    web.update(account_id='web-account', web_instances=1, web_instances_at=time.time())
+    strip.set_items([web])
+    receipt = dict(session='capacity-session', event='turn', at=time.time() + 1, web_capacity_error=True)
+    row = dict(provider='web', count=1, pending=[receipt], complete=True)
+    strip.set_deliveries([row])
+    assert strip.badges['web'].text() == '1!'
+    assert 'erro de capacidade' in strip.buttons['web'].accessibleName()
+    assert 'recuperação' in strip.badges['web'].toolTip()
+    emitted = []
+    strip.monitor.web_capacity_reported.connect(emitted.append)
+    strip.monitor.set_deliveries([row])
+    strip.monitor.set_deliveries([row])
+    assert emitted == [receipt]
     strip.shutdown()
 
 

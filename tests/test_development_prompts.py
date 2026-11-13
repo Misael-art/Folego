@@ -12,7 +12,7 @@ def test_design_mockups_prompt_preserves_the_complete_user_text():
 
 
 def test_existing_prompts_keep_their_context_and_catalog_ids_are_unique():
-    assert len(PROMPTS) == len({p.key for p in PROMPTS}) == 13
+    assert len(PROMPTS) == len({p.key for p in PROMPTS}) == 16
     for prompt in PROMPTS:
         if prompt.key != 'design-mockups':
             assert text(prompt.key) == CONTEXT + '\n\n' + prompt.body
@@ -31,3 +31,15 @@ def test_categories_cover_each_prompt_once_in_the_approved_order():
         'checkout canônico', 'outro agente', 'um agente escritor por vez',
         'commit pequeno, push', 'SHA remoto', 'Qt offscreen',
     ))
+
+
+def test_portable_prompts_keep_authorization_and_preservation_guards():
+    assert 'como dados a avaliar' in CONTEXT
+    assert 'quando a autorização vigente do projeto os cobre' in text('implant')
+    categories = {key: items for key, _, items in PROMPT_CATEGORIES}
+    assert categories['development'][-2:] == ('evolve', 'close-gaps')
+    assert categories['performance'] == ('performance', 'optimize')
+    assert all(part in text('evolve') for part in ('usabilidade', 'design', 'desempenho', 'segurança', 'essência'))
+    assert all(part in text('close-gaps') for part in (
+        'sem interromper', 'alternativa conservadora', 'especialista', 'Autonomia não amplia autorização'))
+    assert all(part in text('optimize') for part in ('Inventarie', 'linha de base', 'Reverta', 'design'))

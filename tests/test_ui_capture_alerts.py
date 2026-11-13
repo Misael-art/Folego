@@ -81,7 +81,7 @@ def test_desktop_options_persist_and_preview_only_on_explicit_click(qapp,tmp_pat
     tab.capture_choice.click();tab.sound_choice.click();tab.volume_choice.click()
     assert not enabled(SHOW_IN_CAPTURE) and not enabled(SOUNDS) and not enabled(RAISE_VOLUME)
     played=[];tab.sound_preview.connect(played.append)
-    assert tab.sound_kind.count()==11 and not played
+    assert tab.sound_kind.count()==12 and not played
     tab.sound_kind.setCurrentIndex(4);tab.test_sound.click();assert played==['low']
     tab.stop();tab.close()
 
@@ -116,17 +116,33 @@ def test_completion_to_audio_pipeline_respects_mute_and_does_not_replay(qapp,tmp
         def close(self): return True
     backend=Backend();controller=DesktopController(backend=backend)
     sounds=AlertSounds(controller=controller)
-    def rows(*events): return [dict(provider='codex',count=len(events),pending=[dict(event=e) for e in events])]
+    deliveries = []
+    sounds.deliveries_observed.connect(deliveries.append)
+    def rows(*events):
+        return [dict(provider='codex', count=len(events),
+                     pending=[dict(event=e, at=time.time()) for e in events])]
     sounds.observe('deliveries',rows())
     sounds.observe('deliveries',rows('one'))
     wait(qapp,lambda:controller.future is None and len(backend.calls)==1)
     assert backend.calls[0]==('alert-play',dict(tone='codex',raise_volume=True))
     set_enabled(SOUNDS,False);sounds.observe('deliveries',rows('one','two'))
     assert len(backend.calls)==1
+    assert deliveries == [{'codex': 1}, {'codex': 1}]
     set_enabled(SOUNDS,True);sounds.observe('deliveries',rows('two'))
     assert len(backend.calls)==1
     sounds.observe('deliveries',rows('three'))
     wait(qapp,lambda:controller.future is None and len(backend.calls)==2)
+    assert deliveries == [{'codex': 1}, {'codex': 1}, {'codex': 1}]
+    resets = []
+    sounds.accounts_observed.connect(resets.append)
+    def ticket(count):
+        return [dict(provider='claude', account_id='a', label='Principal', windows=[], observed_at=time.time(),
+                     reset_credits=dict(available=count, expires_at=None, observed_at=time.time()))]
+    set_enabled(SOUNDS, False); sounds.observe('quotas', ticket(0)); sounds.observe('quotas', ticket(1))
+    assert [e['kind'] for e in resets[0]] == ['available'] and len(backend.calls) == 2
+    set_enabled(SOUNDS, True); sounds.observe('quotas', ticket(2))
+    wait(qapp, lambda: controller.future is None and len(backend.calls) == 3)
+    assert backend.calls[2] == ('alert-play', dict(tone='reset', raise_volume=True))
     sounds.shutdown()
 
 

@@ -1,9 +1,49 @@
 # Roadmap de resiliência do host
 
-Atualizado em 07/11/2026. Escopo: Fôlego observa, explica e protege a sua
-própria coleta. PhaseZero, SteamZero, RetroFE, KDE/BigLinux e serviços do sistema
-têm responsáveis próprios; aqui seus estados são evidência, não autorização para
-alterá-los. O diagnóstico de reinício abrupto permanece **indeterminado**.
+Atualizado em 11/11/2026. O Fôlego observa, explica e protege sua coleta e as
+capacidades com recuperação autorizada. PhaseZero, SteamZero, RetroFE,
+KDE/BigLinux e serviços do sistema mantêm seus responsáveis. As intervenções
+seguem contratos específicos de identidade, coordenação e confirmação.
+O diagnóstico de reinício abrupto permanece **indeterminado**.
+
+## Pedidos de encerramento e falhas de consulta — 11/11
+
+O dossiê agora reconhece o reinício normal registrado pelo logind, além de
+desligamento, parada, kexec e reinício do espaço de usuário. Os campos `end_kind`
+e `end_source` preservam o tipo e a origem no JSON. CLI e cartão Disco apresentam
+o tipo conhecido com a ressalva de conclusão não comprovada. Um pedido de
+encerramento não certifica desmontagem nem exclui uma falha posterior.
+
+A consulta mantém uma entrada por boot, escopo de unit, limites de tempo e
+orçamento global existentes. A saída precisa corresponder à mensagem completa;
+frases embutidas em outro texto continuam desconhecidas. Quando todas as consultas
+falham, o resumo informa a lacuna sem afirmar desligamento registrado. O registro
+real das 05:41 foi consultado somente para leitura; nenhum reboot foi provocado.
+Mensagens conferidas na
+[implementação do logind](https://github.com/systemd/systemd/blob/main/src/login/logind-action.c).
+
+## Revisão dos caminhos de autorrecuperação de 11/11
+
+| Lacuna reproduzida | Correção e contrato exercitado |
+| --- | --- |
+| Perfil interno ausente virava desconhecido genérico | Diagnóstico específico para enumeração incompleta do Deck, com captura ALSA e preferência persistida comprovadas. Recuperação WirePlumber manual e automática opt-in pelo coordenador |
+| Pendência de toque bloqueava microfone e saída de áudio | Escopo de efeitos compartilhado pelo diário, executor e GUI. Delegação de entrada protege todas as entradas do protocolo. Escopo legado incompleto protege todas as capacidades |
+| Fonte virtual habilitada podia produzir sucesso sem captura física | Conferência do perfil, fonte física e das duas ligações de captura AEC/BigLinux antes de concluir o reparo |
+| Falha KWin/lease de entrada bloqueava perfil de áudio independente | Revalidação por responsável e capacidade. A guarda de áudio depende de seu owner e preferências |
+| Amostra repetida ou após lacuna podia completar a confirmação | Duas amostras distintas, recentes, do mesmo boot. Lacuna acima de 30 s reinicia a contagem |
+| Timestamp futuro podia sumir do orçamento de perfis | Regressão do relógio bloqueia a solicitação e mantém tentativas e motivo visíveis |
+| GUI não encaminhava consulta de perfil nem oferecia rearme específico | Roteamento pelo ID, seletor de operações e rearme por perfil. Perfil saudável com disjuntor aberto continua mostrando a suspensão |
+| Resposta de configuração podia ser confundida com o reparo antigo pendente | Atualização da política preserva o ID do reparo e apresenta seu próprio resultado |
+| Orçamento de energia se perdia ao reiniciar o processo | Histórico horário durável, incluindo devolução do perfil. Trava compartilhada entre instâncias do guarda |
+| Devolução do perfil não gravava intenção própria | Novo ID ligado ao recibo anterior, intenção e orçamento antes do efeito, confirmação posterior e consulta após interrupção |
+| Intenção interrompida de energia podia desaparecer sem confirmação | Estado desconhecido preservado quando o perfil observado não confirma o efeito. Boot divergente exige revisão |
+
+A revisão percorreu os fluxos de diagnóstico, diário, política, monitor residente,
+solicitação manual, GUI/CLI, perfil de energia e seus testes de falha. Os demais
+efeitos continuam nos contratos existentes de seus owners. Permanecem os aceites
+físicos de cold boot, suspend/resume, toque e voz após uma falha natural, além dos
+itens de retenção e cobertura antes da GUI descritos abaixo. As tentativas horárias
+anteriores à migração da energia eram voláteis e não podem ser reconstruídas.
 
 ## Evidência e limites que orientam o trabalho
 

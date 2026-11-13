@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (QMainWindow, QStyle, QStyleOptionTab, QStylePaint
 
 from . import desktop_caps, title_signal
 from .compact import CompactWindow
+from .desktop_preferences import WIDGET_VIEWS, startup_view
 from .dashboard_tab import DashboardTab
 from .disk_tab import DiskTab, plan_argv
 from .orphans_panel import OrphansPanel
@@ -35,9 +36,11 @@ from .custom_prompts_tab import CustomPromptsTab
 from .ai_monitor import AIMonitor
 from .desktop_shortcuts import DesktopController
 from .screen_energy import ScreenEnergy
+from ..actions.power_profile_guard import PowerProfileGuard
 from .theme import TOKENS, _background_color, set_control_icon, prepare_surface
 from ..core import health
-from ..core.battery_alerts import BatteryAlertTracker
+from ..core.battery_alerts import (BatteryAlertTracker, ExternalPowerTracker,
+                                   VoltageSagNotice, power_supply_status, voltage_level)
 from ..core.host_guard import PressureAlertTracker, ThermalTracker
 from ..core.agent_pressure import PressureBackend
 from ..core.exclusions import ExclusionError, ExclusionList
@@ -111,7 +114,7 @@ class MainWindow(QMainWindow):
                  exclusions: ExclusionList | None = None, journal=None,
                  config_store=None, grant_store=None, compact_factory=None, process_jobs=None,
                  accessibility_factory=None, startup_defaults=False,
-                 host_guard_factory=None):
+                 host_guard_factory=None, power_guard=None):
         super().__init__()
         self.setObjectName('mainWindow')
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
@@ -161,6 +164,10 @@ class MainWindow(QMainWindow):
         self._collection_error = ""
         self.ai_monitor = AIMonitor(self)
         self._battery_alerts = BatteryAlertTracker()
+        self._voltage_notice = VoltageSagNotice()
+        self._external_power_tracker = ExternalPowerTracker()
+        self._power_state = {'pending': True, 'message': 'Verificando proteção de energia.'}
+        self._power_warning_at = None
         self._jobs = jobs if jobs is not None else TuneJobs(parent=self)
         self._disk_jobs = disk_jobs if disk_jobs is not None else TuneJobs(
             parent=self, argv_factory=plan_argv, timeout_ms=DISK_TIMEOUT_MS)
@@ -171,7 +178,8 @@ class MainWindow(QMainWindow):
         self._process_group = ""
 
         self.dashboard = DashboardTab(on_jump=self.jump_to, thresholds=self._thresholds,
-                                      on_widget=self.enter_widget_mode)
+                                      on_widget=self.enter_widget_mode,
+                                      on_mini=lambda: self._show_widget_position('mini'))
         self._widget_confirm = confirm_fn or self._ask_widget_rule
         self._show_automation_state()
         self.tunings = TuningsTab(jobs=self._jobs, confirm_fn=confirm_fn)
@@ -198,6 +206,18 @@ class MainWindow(QMainWindow):
         self._screen_controller.payload.connect(self._screen_result)
         self._screen_controller.failed.connect(self._screen_error)
         self._screen_controller.busy_changed.connect(self._screen_after_busy)
+        self._power_controller = DesktopController(
+            self, backend=power_guard if power_guard is not None else PowerProfileGuard())
+        self._power_controller.payload.connect(self._power_result)
+        self._power_controller.failed.connect(self._power_error)
+        self._power_key = self._power_pending = None
+        self._power_asked_at = 0.0
+        self._power_timer = QTimer(self)
+        self._power_timer.setInterval(60_000)
+        self._power_timer.timeout.connect(lambda: self._power_request('status'))
+        self._power_timer.start()
+        self.options.power_guard_requested.connect(self._power_request)
+        QTimer.singleShot(0, lambda: self._power_request('status'))
         self._pressure_controller = DesktopController(self, backend=PressureBackend())
         self._pressure_controller.payload.connect(self.options.show_cooperative_state)
         self._pressure_controller.failed.connect(self.options.cooperative_error)
@@ -208,7 +228,10 @@ class MainWindow(QMainWindow):
         self._pressure_seen = False
         self.options.screen_energy_requested.connect(self._screen_energy_request)
         self.ai_monitor.deliveries_ready.connect(self._screen_delivery_attention)
+        self.ai_monitor.web_mcp_reported.connect(self._web_mcp_reported)
+        self.ai_monitor.web_capacity_reported.connect(self._web_capacity_reported)
         self._screen_delivery_ids = set()
+        self._web_mcp_note = ''
         self._screen_thermal_level = 0
         self._screen_wake_pending = False
         self._screen_reconcile_pending = False
@@ -249,9 +272,7 @@ class MainWindow(QMainWindow):
         self.control_menu = QMenu(self.control_button)
         self.control_menu.addAction('Sair do Fôlego', self.quit)
         self.widget_position_menu = self.control_menu.addMenu('Posição do widget')
-        for label, mode in (('Mini horizontal', 'mini'), ('Widget flutuante', 'compact'),
-                            ('Lateral esquerda', 'left'),
-                            ('Lateral direita', 'right'), ('Barra superior', 'top')):
+        for mode, label in WIDGET_VIEWS:
             self.widget_position_menu.addAction(
                 label, lambda checked=False, target=mode: self._show_widget_position(target))
         self.control_button.setMenu(self.control_menu)
@@ -259,7 +280,11 @@ class MainWindow(QMainWindow):
         self.setMenuWidget(self.navigation_header)
         self.accessibility.options_requested.connect(self._open_options)
 
-        self.tray = Tray(self, thresholds=self._thresholds)
+        from .desktop_notices import DesktopNotices
+        self._desktop_notices = DesktopNotices(self)
+        self.tray = Tray(self, thresholds=self._thresholds, send_notice=self._desktop_notices.send)
+        self.ai_monitor.alerts.deliveries_observed.connect(self.tray.show_agent_deliveries)
+        self.ai_monitor.alerts.accounts_observed.connect(self.tray.show_account_events)
         # atalhos locais da aplicação (não dependem de portal global do Wayland)
         self._compact_shortcut = QShortcut(QKeySequence("Ctrl+Shift+F"), self)
         self._compact_shortcut.activated.connect(self.show_compact)
@@ -301,6 +326,84 @@ class MainWindow(QMainWindow):
         self._poller.snapshot_ready.connect(self.apply_snapshot)
         self._poller.error.connect(self.show_error)
         self._poller.start()
+
+    def _power_request(self, action, value=None):
+        if self._quitting: return
+        if self._power_controller.future is None:
+            self._power_controller.request(action, value)
+        elif action != 'observe' and (action != 'status' or self._power_pending is None):
+            self._power_pending = action  # a user choice is never dropped behind a sample
+
+    def _observe_power_profile(self, battery, external_power=None):
+        """Hand sustained sag, or the return of external power, to the profile guard."""
+        key = None
+        if battery is not None:
+            level = voltage_level(battery)
+            if level in ('attention', 'critical'):
+                key = level
+            elif external_power is True and battery.status in ('Charging', 'Full', 'Not charging'):
+                key = 'external'
+        now = time.monotonic()
+        # Sagging samples are re-sent at a slow pace; the charger only on its edge.
+        due = (key != self._power_key if key == 'external' or key is None
+               else key != self._power_key or now - self._power_asked_at >= 15)
+        if not due or self._power_controller.future is not None: return
+        self._power_key, self._power_asked_at = key, now
+        self._power_request('observe', key)
+
+    def _power_result(self, result):
+        if result.get('changed'):
+            self.tray.show_power_profile(result['changed'])
+        if 'enabled' in result:
+            self._power_state = result
+            self.options.show_power_guard(result)
+            self._show_power_status()
+            self._notify_power_guard()
+        pending, self._power_pending = self._power_pending, None
+        if pending:
+            QTimer.singleShot(0, lambda: self._power_request(pending))
+
+    def _power_error(self, message):
+        self._power_pending = None
+        self._power_state = {**self._power_state, 'pending': False,
+                             'unavailable': True, 'message': message}
+        self.options.show_power_guard(self._power_state)
+        self._show_power_status()
+        self._notify_power_guard()
+
+    def _notify_power_guard(self):
+        state = self._power_state
+        if state.get('enabled') is False and not state.get('blocked'):
+            return
+        if not (state.get('unavailable') or state.get('blocked')):
+            return
+        now = time.monotonic()
+        if self._power_warning_at is not None and now - self._power_warning_at < 300:
+            return
+        self._power_warning_at = now
+        self.tray.show_power_warning({
+            'title': 'Alimentação · proteção de energia indisponível',
+            'message': state['message'] + '. Confira Bateria · perfil de energia em Opções.'})
+
+    def _show_power_status(self, *, now_mono=None):
+        report = (power_supply_status(self._last_snapshot, now_mono=now_mono)
+                  if self._last_snapshot is not None else
+                  {'state': 'unknown', 'message': 'Alimentação aguardando leitura.'})
+        if self._paused or self._collection_error:
+            report = {'state': 'unknown',
+                      'message': 'Alimentação desconhecida · monitoramento pausado ou coleta indisponível.'}
+        state = self._power_state
+        if state.get('enabled') is False and not state.get('blocked'):
+            guard = 'Proteção de energia desligada · ' + state['message']
+        elif state.get('unavailable') or state.get('blocked'):
+            guard = 'Proteção de energia indisponível · ' + state['message']
+        elif state.get('pending'):
+            guard = state['message']
+        else:
+            guard = 'Proteção de energia · ' + state['message']
+        report = {**report, 'guard': state, 'message': report['message'] + '\n' + guard}
+        self.dashboard.show_power_status(report)
+        self.disk.host_health.show_power_status(report)
 
     def _screen_energy_request(self, action):
         self.options.screen_energy_choice.setEnabled(False)
@@ -350,6 +453,14 @@ class MainWindow(QMainWindow):
             self._wake_screen()
 
     def _screen_delivery_attention(self, rows):
+        self._web_mcp_note = ('Codex Web: agente relatou sessão MCP encerrada; verifique o cliente.'
+                              if any(row.get('provider') == 'web' and
+                                     any(item.get('reported_web_mcp_error')
+                                         for item in row.get('pending', ()))
+                                     for row in rows) else '')
+        if any(row.get('provider') == 'web' and any(p.get('web_capacity_error') for p in row.get('pending', ()))
+               for row in rows):
+            self._web_mcp_note = 'Codex Web: erro de capacidade; confira a recuperação no painel da conta.'
         ids = {(item.get('session'), item.get('event'))
                for row in rows if isinstance(row, dict)
                for item in row.get('pending', ()) if isinstance(item, dict)
@@ -357,6 +468,19 @@ class MainWindow(QMainWindow):
         if ids - self._screen_delivery_ids:
             self._wake_screen()
         self._screen_delivery_ids = ids
+
+    def _web_mcp_reported(self, _receipt):
+        self.tray.show_web_mcp_report()
+        if self._compact is not None:
+            self._compact._shortcut_result('Codex Web: agente relatou sessão MCP encerrada; verifique o cliente.')
+        self._wake_screen()
+
+    def _web_capacity_reported(self, receipt):
+        detail = receipt.get('web_recovery', {}).get('detail', 'Confira o diagnóstico no painel da conta Web')
+        self.tray.show_web_capacity_error(detail)
+        if self._compact is not None:
+            self._compact._shortcut_result('Codex Web: ' + detail)
+        self._wake_screen()
 
     def _pressure_request(self, action, value=None):
         if self._pressure_controller.future is None:
@@ -479,6 +603,7 @@ class MainWindow(QMainWindow):
         Only a new snapshot can restore the health indicator.
         """
         snapshot = self._last_snapshot
+        self._show_power_status(now_mono=now_mono)
         if snapshot is None and not (self._paused or self._collection_error):
             return
         now = time.monotonic() if now_mono is None else now_mono
@@ -511,14 +636,23 @@ class MainWindow(QMainWindow):
     def apply_snapshot(self, snapshot):
         self._request_history()
         self._collection_error = ""
-        cue = self._battery_alerts.observe(
-            snapshot.battery if not snapshot.is_stale(self._thresholds.stale_after_s)
-            and snapshot.source('battery').status == 'ok' else None)
+        battery = (snapshot.battery if not snapshot.is_stale(self._thresholds.stale_after_s)
+                   and snapshot.source('battery').status == 'ok' else None)
+        cue = self._battery_alerts.observe(battery)
         if cue:
             self.ai_monitor.alerts.battery_cue(cue)
+        if self._voltage_notice.observe(battery):
+            self.tray.show_battery_voltage(battery)
+        online = (snapshot.external_power_online
+                  if snapshot.source('external_power').status == 'ok' else None)
+        self._observe_power_profile(battery, online)
+        power_notice = self._external_power_tracker.observe(snapshot)
+        if power_notice and not self._paused:
+            self.tray.show_power_warning(power_notice)
         signal = title_signal.compute(snapshot, self._thresholds,
                                       engine=self._health)
         self._last_snapshot = snapshot
+        self._show_power_status()
         thermal = self._thermal_tracker.observe(snapshot)
         self.disk.show_thermal(thermal)
         self.tray.show_thermal(thermal)
@@ -544,7 +678,7 @@ class MainWindow(QMainWindow):
             snapshot, protected_fn=self._protection_reason))
         self.orphans.show_protections(self._sessions_view, self._exclusions_view,
                                       error=self._protect_default or "")
-        notes = (self._tray_note,) if self._tray_note else ()
+        notes = tuple(note for note in (self._tray_note, self._web_mcp_note) if note)
         self.dashboard.show_snapshot(
             snapshot, orphan_count=len(candidates),
             thumbnails_kb=self.disk.thumbnails_kb, extra_notes=notes,
@@ -677,7 +811,12 @@ class MainWindow(QMainWindow):
 
     def _show_widget_position(self, mode):
         self.show_compact(mode=mode)
-        self.hide_window()
+        return self._compact.isVisible() and self.hide_window()
+
+    def show_startup_view(self):
+        mode = startup_view()
+        if mode == 'central' or not self._show_widget_position(mode):
+            self.show()
 
     def enter_widget_mode(self) -> bool:
         """Modo widget: abre o widget flutuante e recolhe a janela central para a bandeja."""
@@ -862,9 +1001,12 @@ class MainWindow(QMainWindow):
             self.hide()
             return
         if self._quitting or self.tray.tray is None:
+            self._desktop_notices.close()
             self._freshness_timer.stop()
             self._screen_timer.stop()
+            self._power_timer.stop()
             self._screen_controller.close()
+            self._power_controller.close()
             self._pressure_controller.close()
             if self._poller is not None:
                 self._poller.stop()
