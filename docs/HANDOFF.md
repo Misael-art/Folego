@@ -37,6 +37,11 @@
   `.scratch/microphone-20261113/`, privado. Alteração versionada deste lote
   exclusivamente documental, com revisão de diff e referências. As mudanças
   locais anteriores de renderização Codex seguem fora do commit.
+- Reparo documentado em **1c41e91fe33d08dae68b949b412efaeaf78489c5**,
+  SHA remoto confirmado no PR #9. `git diff --check` passou e o comando
+  instalado confirmou microfone saudável, guarda ativa e disjuntor vazio
+  às 14:17:41 -03. A consulta inicial de CI desse SHA retornou zero execuções.
+  CI e Windows da base `5fcdd95` estavam aprovados.
 - Diagnóstico preservado em **6598d0092a2537da0730f8d5d724813143a289f4**,
   SHA remoto conferido no PR #9. A consulta inicial do novo SHA retornou zero
   execuções de CI. CI e Windows da base `f5ea713` estavam aprovados.
