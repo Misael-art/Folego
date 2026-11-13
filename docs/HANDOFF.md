@@ -1,4 +1,32 @@
-# Passagem para o próximo agente — atualizada em 12/11/2026
+# Passagem para o próximo agente — atualizada em 13/11/2026
+
+## Microfone sem fonte física após dispositivo ocupado no login — 13/11/2026
+
+- Investigação solicitada pelo usuário. No boot `70f177c8`, às 13:07:02 -03,
+  PipeWire registrou falha ao abrir captura acp5x/0 e reprodução acp5x/1 por
+  dispositivo ocupado. WirePlumber abortou a criação dos dois endpoints HiFi
+  e o AEC passou a informar ausência da fonte física.
+- ALSA reconhece a captura e os alto-falantes. Perfil ativo e persistido
+  `HiFi (Mic, Speaker)`, controles `Int Mic`/`DMIC Enable` ligados e entrada
+  padrão `mic-biglinux`, sem mute e a 94%. O grafo contém apenas as fontes
+  virtuais e a saída falsa. Às 13:22–13:25, os três PCMs internos estavam
+  `closed`. O responsável pela ocupação inicial permanece indeterminado.
+  O journal registra gerenciadores dos UIDs 1000 e 949 durante o login.
+- Diagnóstico do Fôlego instalado b14 mantém microfone em `unknown`, com
+  perfil interno ativo e captura física ausente. A reenumeração automática
+  está habilitada, mas o detector autorizado cobre perfil ausente e placa
+  desligada. O caso observado exige revisão manual específica.
+- Plano privado `513d8c0f-b1cb-4631-85f8-587b344f1a37` preparado com o adaptador
+  instalado `WirePlumberRecovery.probe`. Conferiu preferência salva, captura
+  ALSA, outras rotas, unit de sistema sem drop-ins, executável root-owned e
+  cgroup com um processo. Identidade histórica WirePlumber PID 2144,
+  starttime 1586. Qualquer efeito exige nova revalidação no ato.
+- A autorização para reiniciar somente WirePlumber foi solicitada ao usuário
+  e aguarda resposta. Recibo anterior, perfis salvos, grafo e plano em
+  `.scratch/microphone-20261113/`, privado. Recuperação e teste de voz pendentes.
+  Alteração deste lote exclusivamente documental, com revisão de diff e
+  referências. As mudanças locais anteriores de renderização Codex seguem
+  fora do commit.
 
 ## Codex Desktop e Web juntos — observação de 12/11/2026
 
