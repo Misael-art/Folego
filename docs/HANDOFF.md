@@ -21,12 +21,22 @@
   ALSA, outras rotas, unit de sistema sem drop-ins, executável root-owned e
   cgroup com um processo. Identidade histórica WirePlumber PID 2144,
   starttime 1586. Qualquer efeito exige nova revalidação no ato.
-- A autorização para reiniciar somente WirePlumber foi solicitada ao usuário
-  e aguarda resposta. Recibo anterior, perfis salvos, grafo e plano em
-  `.scratch/microphone-20261113/`, privado. Recuperação e teste de voz pendentes.
-  Alteração deste lote exclusivamente documental, com revisão de diff e
-  referências. As mudanças locais anteriores de renderização Codex seguem
-  fora do commit.
+- O usuário autorizou o reparo manual. Às **14:16:44 -03**, o adaptador
+  instalado reiniciou `wireplumber.service` após revalidar a identidade,
+  preferência salva, PCMs livres, ausência de outras rotas/leases/pendências
+  de áudio, orçamento e responsável externo. O coordenador e diário existentes
+  registraram intenção antes do efeito e resultado **sucesso** no mesmo ID.
+  Houve uma tentativa manual, contabilizada no orçamento do microfone.
+- WirePlumber passou de PID 2144 para **170788**, starttime 419929. A fonte
+  física HiFi e os alto-falantes reapareceram. Cadeia física → echo-cancel →
+  mic-biglinux confirmada saudável em amostras estáveis, padrão mic-biglinux,
+  sem mute e a 94%. PipeWire **2142**, Pulse **3854** e monitor Fôlego **4067**
+  mantiveram seus PIDs. A saída física reapareceu com mute/volume zero salvos.
+  A validação de voz pelo usuário permanece pendente.
+- Recibos anterior/posterior, perfis salvos, grafo e resultado em
+  `.scratch/microphone-20261113/`, privado. Alteração versionada deste lote
+  exclusivamente documental, com revisão de diff e referências. As mudanças
+  locais anteriores de renderização Codex seguem fora do commit.
 - Diagnóstico preservado em **6598d0092a2537da0730f8d5d724813143a289f4**,
   SHA remoto conferido no PR #9. A consulta inicial do novo SHA retornou zero
   execuções de CI. CI e Windows da base `f5ea713` estavam aprovados.
