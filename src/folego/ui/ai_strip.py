@@ -209,7 +209,8 @@ class AIStrip(QWidget):
         for provider, button in self.buttons.items():
             count = next((r.get('count') for r in self.delivery_items if r['provider'] == provider), None)
             active_web = provider == 'web' and button.instance_active
-            button.set_halo(value if (count or active_web) and self.columns[provider].isVisible() else 0.0)
+            halo = value if count else .5 if active_web else 0.0
+            button.set_halo(halo if self.columns[provider].isVisible() else 0.0)
 
     def open_agent(self, provider, account=None):
         account = account or self.default_item(provider).get('account_id')
@@ -356,7 +357,7 @@ class AIStrip(QWidget):
                 summary += ' · agente relatou sessão MCP encerrada'
             if web_capacity_error:
                 summary += ' · erro de capacidade; confira a recuperação no painel da conta'
-            has_deliveries |= (bool(count) or instances is not None) and selected is not None
+            has_deliveries |= bool(count) and selected is not None
             if not count and instances is None: button.set_halo(0.0)
             badge = self.badges[provider]
             partial = not delivery.get('complete', True)

@@ -169,7 +169,8 @@ def test_web_ring_tracks_real_instance_without_quota(qapp):
     assert strip.columns['web'].isVisible()
     assert strip.buttons['web'].instance_active
     assert strip.buttons['web'].remaining is None
-    assert strip.delivery_pulse.state() == QVariantAnimation.State.Running
+    assert strip.buttons['web'].halo == .5
+    assert strip.delivery_pulse.state() == QVariantAnimation.State.Stopped
     web['web_instances'] = 0
     strip.set_items([web])
     assert not strip.columns['web'].isVisible()

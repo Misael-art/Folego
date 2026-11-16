@@ -1,5 +1,44 @@
 # Passagem para o próximo agente — atualizada em 16/11/2026
 
+## CPU alta em segundo plano — 16/11/2026
+
+- Na janela de 30,34 s às 04:51 -03, a ocupação do host foi **82,4%**,
+  PSI de CPU **21,87%**, I/O wait 0,15%, sem troca de páginas. Medição
+  com a sessão Codex do diagnóstico aberta. Em equivalentes de uma CPU
+  lógica, a árvore do Codex Desktop ocupou 3,26; Plasma mais KWin,
+  1,56; os três cgroups do Fôlego b15, 0,81. O renderizador do Codex
+  marcou 85,4% de um núcleo, o processo com SwiftShader 42,2% e o
+  app-server 28,4%, fora os filhos. Nenhum build foi observado.
+- O Plasma carregava o applet `org.biglinux.micnoise` do pacote
+  `biglinux-noise-reduction-pipewire` **26.04.28-1709**. O arquivo
+  `~/.config/biglinux-microphone/settings.json` não existia e a espera
+  por ele retornou erro em 19,4 ms. O QML instalado agenda nova
+  tentativa em 100 ms mesmo nesse caso, com lançamentos repetidos
+  de shell/inotify observados no cgroup. Os filhos colhidos pelo
+  Plasma ocuparam cerca de 0,29 núcleo no intervalo, de forma agregada.
+  O pacote **26.10.14-0055** do repositório oficial BigLinux Stable foi
+  consultado sem instalação. O arquivo de 2 MB conferiu com o SHA-256
+  do catálogo local. Seu applet trata diretório ausente e aumenta o
+  intervalo entre falhas até 60 s. Ainda falta comparar CPU após
+  desativar o applet antigo ou atualizar pelo fluxo da distribuição.
+  [Código do BigLinux](https://github.com/biglinux/biglinux-noise-reduction-pipewire/blob/main/usr/share/plasma/plasmoids/br.com.biglinux.micnoise/contents/ui/main.qml).
+- A central do Fôlego e o serviço de entrada faziam a mesma inspeção
+  nativa a cada 10 s, inclusive com a aba Entrada oculta. O serviço
+  passa a publicar no estado privado uma visão de exibição limitada,
+  sem planos. A aba oculta reutiliza essa amostra quando o boot,
+  o PID/starttime e a idade são válidos. Aba visível, verificação
+  manual ou falta de amostra confiável continuam usando inspeção
+  direta. Cadência, política e checagens antes de reparo do serviço
+  permanecem em vigor. Presença do Codex Web mantém halo estático,
+  e entregas confirmadas continuam pulsando.
+- QA em janela própria KDE/Wayland com HOME/XDG privados e coletor
+  descartável. Um ciclo residente, zero inspeções duplicadas com a
+  aba oculta, nova inspeção ao abrir, halo estático com Web residente
+  e pulso ao receber entrega passaram. A suíte focada pelo `./dev test`
+  foi recusada pelo limite de 20 sessões retidas. Sem benchmark A/B
+  do custo total e sem alterações em áudio, Plasma, Codex ou na
+  instância b15 em execução.
+
 ## Gestão de disco e custo da observação — 15/11/2026
 
 - **Disco → Saúde do host → Espaço em disco** e `./dev run disk health --json`

@@ -420,6 +420,33 @@ class Supervisor:
         self._pending_reader = PendingReader(self.coordinator.journal)
         self._wait_since = None
 
+    def _recent_watcher(self):
+        status = read_object(self.store.root / "watch-status.json")
+        if (status is not None and type(status.get("checked_at")) in (int, float)
+                and 0 <= self.now() - status["checked_at"] <= 30
+                and isinstance(status.get("result"), dict)
+                and _alive(status.get("owner")) is True):
+            return status, "observed"
+        return None, "not-observed" if status is None else "unknown"
+
+    def resident_overview(self):
+        """Fresh resident evidence for display only, without duplicating native probes."""
+        try:
+            watched, _ = self._recent_watcher()
+            sample = watched.get("overview") if watched else None
+            if (not isinstance(sample, dict) or not fresh(sample)
+                    or sample["boot_id"] != watched["owner"]["boot_id"]
+                    or sample.get("state") not in ("observed", "degraded", "waiting", "unknown")):
+                return None
+            for key in ("blockers", "alerts"):
+                values = sample.get(key)
+                if (not isinstance(values, list) or len(values) > 8
+                        or any(not isinstance(value, str) or len(value) > 240 for value in values)):
+                    return None
+            return sample
+        except (OSError, ValueError, ProbeError, KeyError, OverflowError):
+            return None
+
     def inspect(self):
         report = self.native.collect()
         if self.profile_guard is not None:
@@ -489,11 +516,8 @@ class Supervisor:
             report.update(policy={"enabled": False, "circuit": "estado ilegível"}, pending_operations=[])
             report["blockers"].append(str(exc))
         try:
-            watched = read_object(self.store.root / "watch-status.json")
-            recent = (watched is not None and type(watched.get("checked_at")) in (int, float)
-                      and 0 <= self.now() - watched["checked_at"] <= 30 and _alive(watched.get("owner")) is True)
-            report["watcher"] = {"state": "observed" if recent else "not-observed" if watched is None else "unknown",
-                                 "result": watched.get("result", {}) if recent else {}}
+            watched, watcher_state = self._recent_watcher()
+            report["watcher"] = {"state": watcher_state, "result": watched.get("result", {}) if watched else {}}
         except (OSError, ValueError, ProbeError):
             report["watcher"] = {"state": "unknown", "result": {}}
         report["state"] = ("unknown" if report["errors"] else "waiting" if report["blockers"] else

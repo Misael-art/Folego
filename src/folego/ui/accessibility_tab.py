@@ -3,6 +3,7 @@ import json
 import math
 import sys
 import time
+from threading import Event
 
 from PySide6.QtCore import QTimer, Qt, Signal, QSize
 from PySide6.QtGui import QIcon
@@ -98,9 +99,12 @@ def access_argv(action, target, confirm):
 class AccessibilityTab(QWidget):
     report_ready = Signal(object)
     options_requested = Signal()
-    def __init__(self, *, inspect_fn=None, jobs=None, confirm_fn=None, parent=None):
+    def __init__(self, *, inspect_fn=None, overview_fn=None, jobs=None, confirm_fn=None, parent=None):
         super().__init__(parent)
         self.inspect_fn = inspect_fn
+        self._overview_fn = overview_fn
+        self._tab_visible = False
+        self._full_requested = Event()
         self._jobs = jobs if jobs is not None else TuneJobs(
             parent=self, argv_factory=access_argv, timeout_ms=180000)
         self._confirm = confirm_fn or self._ask
@@ -224,25 +228,56 @@ class AccessibilityTab(QWidget):
         self._freshness.timeout.connect(self.check_freshness)
         self._freshness.start()
 
-    def start(self):
+    def start(self, *, full=False):
         if self._stopped:
             return
+        if full:
+            self._full_requested.set()
         if self._poller is None:
             if self.inspect_fn is None:
                 from ..actions.accessibility import Supervisor
                 self.inspect_fn = Supervisor().inspect
-            self._poller = Poller(self.inspect_fn, interval_s=10, offload=True, parent=self)
-            self._poller.snapshot_ready.connect(self.show_report)
+            self._poller = Poller(self._collect, interval_s=10, offload=True, parent=self)
+            self._poller.snapshot_ready.connect(self._show_observation)
             self._poller.error.connect(self.show_error)
             self._poller.start()
         self._poller.request()
+
+    def _collect(self):
+        if self._overview_fn is not None and not self._tab_visible and not self._full_requested.is_set():
+            overview = self._overview_fn()
+            if overview is not None:
+                return False, overview
+        self._full_requested.clear()
+        return True, self.inspect_fn()
+
+    def _show_observation(self, result):
+        full, report = result
+        if full:
+            self.show_report(report)
+        elif not self._stopped:
+            self._report = None
+            self.report_ready.emit(report if 0 <= sample_age(report) <= STALE_SECONDS else
+                                   {"state": "unknown", "blockers": ["amostra residente antiga"]})
+        if self._full_requested.is_set() and not self._stopped:
+            self._poller.request()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._tab_visible = True
+        if self._poller is not None or self._overview_fn is not None:
+            self.start(full=True)
+
+    def hideEvent(self, event):
+        self._tab_visible = False
+        super().hideEvent(event)
 
     def refresh(self):
         if self._stopped:
             return
         self._verifying = True
         self.status.setText("Verificando dispositivos e responsáveis… o resumo aparecerá aqui.")
-        self.start()
+        self.start(full=True)
 
     def show_error(self, error):
         if self._stopped:
@@ -553,7 +588,7 @@ class AccessibilityTab(QWidget):
             self.reconcile_button.setEnabled(True)
         self.status.setText(str(payload.get("outcome", "recusa")) + " · " + str(payload.get("reason", "política atualizada")))
         self._update_actions()
-        self.start()  # Keep the operation result visible; a poll is not a manual verification.
+        self.start(full=True)  # Keep the operation result visible; a poll is not a manual verification.
 
     def stop(self):
         self._stopped = True

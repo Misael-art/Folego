@@ -478,7 +478,13 @@ def test_user_unit_preserves_personal_unit_and_install_never_touches_other_units
 
 
 def test_headless_watch_runs_without_ui_or_peers_and_writes_observable_status(supervisor):
+    supervisor.native.report["boot_id"] = action.read_boot_id()
     result = watch(supervisor=supervisor, cycles=1)
     assert result == {"ok": True, "cycles": 1}
     value = action.read_object(supervisor.store.root / "watch-status.json")
     assert value["result"]["state"] == "paused" and not supervisor.native.calls
+    assert supervisor.resident_overview() == value["overview"]
+    assert "plans" not in value["overview"] and "devices" not in value["overview"]
+    value["overview"]["mono"] -= 30
+    action.save_object(supervisor.store.root / "watch-status.json", value)
+    assert supervisor.resident_overview() is None

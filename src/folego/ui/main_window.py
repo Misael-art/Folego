@@ -196,8 +196,10 @@ class MainWindow(QMainWindow):
         self._runtime_jobs = TuneJobs(parent=self, argv_factory=argv_for, timeout_ms=RUNTIME_SIZE_TIMEOUT_MS)
         self.tmpfs = TmpfsTab(jobs=self._tmpfs_jobs, confirm_fn=confirm_fn, runtime_jobs=self._runtime_jobs)
         self._accessibility_factory = accessibility_factory
-        self.accessibility = AccessibilityTab(inspect_fn=accessibility_factory().inspect if accessibility_factory else None,
-                                               confirm_fn=confirm_fn)
+        input_observer = accessibility_factory() if accessibility_factory else None
+        self.accessibility = AccessibilityTab(
+            inspect_fn=input_observer.inspect if input_observer is not None else None,
+            overview_fn=getattr(input_observer, "resident_overview", None), confirm_fn=confirm_fn)
         self.accessibility.report_ready.connect(self._show_accessibility)
         self.options = OptionsTab()
         self.options.sound_preview.connect(self.ai_monitor.alerts.preview)

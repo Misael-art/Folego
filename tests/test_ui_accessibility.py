@@ -153,6 +153,21 @@ def test_verify_has_immediate_and_completed_summary_outside_scrolling(qapp):
     view.stop()
 
 
+def test_hidden_tab_reuses_passive_overview_and_manual_request_uses_full_probe(qapp):
+    overview = {"state": "waiting", "blockers": ["responsável ativo"], "alerts": []}
+    view = AccessibilityTab(jobs=Jobs(), inspect_fn=sample, overview_fn=lambda: overview)
+    try:
+        assert view._collect() == (False, overview)
+        view._full_requested.set()
+        full, report = view._collect()
+        assert full and report["cards"]
+        assert view._collect() == (False, overview)
+        view._overview_fn = lambda: None
+        assert view._collect()[0]
+    finally:
+        view.stop()
+
+
 def test_pending_hardware_does_not_disable_keyboard_escape_or_lose_original_id(qapp):
     view = AccessibilityTab(jobs=Jobs())
     value=sample(); value["pending_operations"]=["hardware-id"]
