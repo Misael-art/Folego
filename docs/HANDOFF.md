@@ -38,7 +38,30 @@
   `systemd-analyze --user verify` aceitou o drop-in junto da unit do
   Plasma instalada. O comando de preparo fora da unit foi recusado.
   Amostras privadas e verificações em `.scratch/plasma-basic-widgets-20261116/`.
-  O próximo login real permanece pendente.
+- **0.2.0b17 instalada no Jupiter** a partir de
+  `5bcaf31950443bedf9a4e02c7ef7fe1e8a253399`, confirmado no
+  [PR #9](https://github.com/Misael-art/Folego/pull/9) com os gates de núcleo/CLI,
+  Qt offscreen e Windows aprovados. Wheel offline de 615.984 bytes, SHA-256
+  `321a6c35883ed4f0c575545d530ee95343b69587d6a0a62b32666d23db88e784`.
+  Os 195 arquivos de runtime conferem entre fonte congelada, wheel e
+  ambiente instalado. Build e instalação de dependências usaram o cache
+  do projeto, um worker, até meio núcleo e 1 GiB por escopo. Havia cerca
+  de 7 GiB de RAM disponível, 81 GiB livres, 57–58 °C no sensor com trip
+  passivo de 100 °C, sem paginação ativa nem pressão de memória ou I/O.
+- GUI, Entrada e Desempenho ativos na b17, sem reinício inesperado e com a
+  política de entrada preservada. O recibo privado
+  `~/.local/state/folego/install-receipts/0.2.0b17.json` guarda originais,
+  hashes e identidades. O ambiente anterior permanece disponível.
+  `startup basic-status --json` confirmou a opção ligada, sem conflitos,
+  com o preparo programado. O Plasma manteve o PID 3486 e o novo `ExecStartPre`
+  ainda não executou. Os widgets seguem presentes na sessão em curso.
+  Em 27 s já na b17, a linha de base foi **19,39% de um núcleo** para o
+  monitor de entrada, **8,73%** para Desempenho, **32,81%** para a GUI e
+  **40,30%** para o Plasma. A observação recente do monitor estava em
+  `waiting`. Os números por cgroup incluem os descendentes e refletem a
+  sessão com os widgets ainda ativos.
+  No próximo início normal do Plasma, conferir no status o efeito e repetir
+  a medição de CPU do Plasma e do monitor sob condições comparáveis.
 
 ## Fôlego 0.2.0b16 instalado e varredura de recursos — 16/11/2026
 
