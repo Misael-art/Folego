@@ -1,5 +1,62 @@
 # Passagem para o próximo agente — atualizada em 16/11/2026
 
+## Fôlego 0.2.0b16 instalado e varredura de recursos — 16/11/2026
+
+- Instalação local autorizada no Jupiter. Fonte
+  `2358b691129144b19a210fb25a46e5c12647530b`, confirmada no
+  [PR #9](https://github.com/Misael-art/Folego/pull/9), com gates Linux
+  headless, CLI, Qt offscreen e Windows aprovados. Suíte local focada:
+  **98 aprovados** em 21,09 s, `run-v3ksu3gm`, Python 3.14.7 e Qt 6.12,
+  um núcleo, 2 GiB e HOME/XDG privados. A evidência própria de QA
+  `run-jd6479yn` foi movida integralmente para
+  `.scratch/dev-tests-reviewed/` após verificar encerramento, mesmo
+  filesystem, inode e ausência de uso observado. Nada foi descartado.
+- Wheel offline de 610.290 bytes, SHA-256
+  `804647ae7bcd6aee6ba7b8dd0d28b8e5ddbfb492e2b886bb78001e9a0d46ff3f`.
+  Os 194 arquivos de runtime conferiram entre fonte congelada, wheel
+  e ambiente `.dev/venv-host-b16`. Dependências GUI vieram do cache
+  com hashes do lockfile. Comparação de cinco hashes dos pontos de
+  entrada confirmada antes da troca. Instalação preservou política de
+  entrada, autostart, atalhos e ambiente anterior para retorno.
+  Originais, intenção/ID e hashes no recibo privado
+  `~/.local/state/folego/install-receipts/0.2.0b16.json`.
+- Interface **753706**, entrada **753591** e Desempenho **753607**,
+  ativos na b16 e sem reinício inesperado. O KDE/Wayland confirmou a
+  janela da GUI nova. O monitor residente emitiu amostra válida e o
+  opt-in de reenumeração de áudio continua ligado. A operação antiga
+  `58176bdf86c94e759e43f661630c5ce8` ainda precisa de comprovação em
+  Entrada. A instalação preservou esse bloqueio.
+- Dois boots antigos foram arquivados pelo fluxo coordenado. Ambos
+  consultáveis e com SHA-256 confirmado, 273.657 e 256 bytes. A
+  gravação neste boot voltou e entregou 11 amostras na verificação.
+  Há 64 arquivos ativos, contando o boot atual. Antes de um boot
+  novo, arquivar mais um registro histórico para abrir a próxima vaga.
+- Medidas de 36,59 s antes e 36,50 s depois, sem carga artificial.
+  CPU total **66,03% → 51,63%**, PSI de CPU **8,48% → 4,42%**.
+  Em percentual de um núcleo: central **45,95% → 30,95%**,
+  conjunto Fôlego **71,54% → 60,49%**, Codex Desktop
+  **320,94% → 228,46%**, Plasma e KWin **63,73% → 61,86%**.
+  A variação do Codex e a troca do launcher da GUI impedem atribuir
+  toda a diferença ao Fôlego. Sem quota de CPU observada nos cgroups
+  verificados, sem troca ativa, cerca de 7,2 GiB livres de RAM,
+  ACPI a 60–61 °C e NVMe ativo em menos de 1% das janelas. Perfil
+  de economia segue selecionado.
+- A maior oportunidade continua sendo medir o Codex Desktop com
+  renderização acelerada em abertura isolada, preservando a opção
+  SwiftShader de retorno e considerando o histórico de falha de
+  abertura. O BigLinux instalado ainda tem o ciclo de 100 ms do applet
+  Filtrar ruídos. A distribuição oferece **26.10.14-0055**, com a
+  correção já verificada no pacote oficial. Próximo ganho no Fôlego:
+  medir e reduzir o custo das consultas KWin e aos responsáveis no
+  monitor residente, com prova nova no momento dos reparos.
+- Disco Btrfs compartilhado em atenção, **91,4% e 80,2 GiB
+  disponíveis**. Espera por I/O abaixo de 0,5%, sem delta nos erros
+  Btrfs. A medição limitada de cache e projetos foi parcial.
+  Desempenho não encontrou alvo elegível a fechar. Sem alteração
+  em Codex, Plasma, perfil de energia ou pacotes do sistema.
+  Amostras e verificação do wheel em
+  `.scratch/performance-b16-20261116/`. Sem release pública.
+
 ## CPU alta em segundo plano — 16/11/2026
 
 - Na janela de 30,34 s às 04:51 -03, a ocupação do host foi **82,4%**,
