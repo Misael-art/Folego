@@ -367,6 +367,14 @@ quando desligada. `Linger=yes` permite que trabalhos atuais atravessem logout;
 esta configuração não os termina. O próximo login/boot físico e a comparação
 de pressão preservam aceite pendente. Recibo e gates estão no [HANDOFF](HANDOFF.md).
 
+A política também pode retirar widgets opcionais reconhecidos do painel e da
+bandeja. A seleção cobre o painel PhaseZero, as cotas Codex e a interface
+**Filtrar ruídos** do BigLinux. O backend de áudio e o widget do Fôlego
+continuam na sessão. A mudança e sua restauração usam um preparo no início
+de `plasma-plasmashell.service`, antes de o Plasma carregar o layout.
+O Fôlego guarda o original e a ordem dos itens, verifica a alteração e
+preserva edições posteriores fora dos widgets gerenciados.
+
 A revisão deve demonstrar login/saída e recuperação por console, teclado e
 ponteiro, método de entrada acessível, rede/DNS/HTTPS/horário, voz e reprodução,
 controle de energia/bateria e portais requeridos pelas aplicações. Deve medir

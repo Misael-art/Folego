@@ -66,7 +66,8 @@ class OptionsTab(QWidget):
             'startup-basic-reconcile', '', done=self.show_basic_session))
         basic_text = QLabel('Preserva Plasma, entrada nativa, rede, áudio, energia e o Fôlego. '
                             'Adia aplicativos e serviços opcionais reconhecidos. '
-                            'Desligar restaura a configuração anterior. Aplicativos abertos continuam em execução.')
+                            'Widgets opcionais conhecidos mudam no próximo início do Plasma. '
+                            'Desligar restaura a configuração anterior.')
         basic_text.setWordWrap(True)
         self.care_choice = QCheckBox('Orientar agentes a usar o host com cuidado')
         self.care_choice.setAccessibleName('Orientação de cuidado nos IDEs e CLIs dos agentes')
@@ -396,6 +397,11 @@ class OptionsTab(QWidget):
             text += '\nItens adiados: ' + ', '.join(payload['targets'])
         if payload.get('preserved'):
             text += '\nItens sem classificação, preservados: ' + ', '.join(payload['preserved'])
+        widgets = payload.get('widgets') or {}
+        if widgets.get('message'):
+            text += '\n' + widgets['message']
+        if widgets.get('targets'):
+            text += ' ' + ', '.join(widgets['targets'])
         if payload.get('operation_id'):
             text += '\nOperação: ' + payload['operation_id']
         self.basic_status.setText(text)

@@ -54,7 +54,8 @@ MAX_ENTRIES = 64
 MASK = {'kind': 'link', 'target': '/dev/null'}
 SCOPE = ('Vale para as próximas ativações e o próximo login. Aplicativos abertos continuam '
          'em execução. Entrada nativa, áudio, rede, energia, Plasma e Fôlego são preservados. '
-         'Serviços opcionais ficam indisponíveis por unit enquanto a opção estiver ligada.')
+         'Serviços opcionais ficam indisponíveis por unit enquanto a opção estiver ligada. '
+         'Widgets opcionais conhecidos são tratados ao iniciar o Plasma.')
 
 
 class BasicSessionError(ValueError):
@@ -69,7 +70,7 @@ def _parents(path):
             raise BasicSessionError('Diretório com link simbólico; preservado')
 
 
-def _snapshot(path, *, link=False, system=False):
+def _snapshot(path, *, link=False, system=False, limit=LIMIT):
     _parents(path)
     try:
         info = path.lstat()
@@ -79,16 +80,16 @@ def _snapshot(path, *, link=False, system=False):
         raise BasicSessionError('Propriedade da configuração não comprovada: ' + path.name)
     if stat.S_ISLNK(info.st_mode) and link:
         return {'kind': 'link', 'target': os.readlink(path)}
-    if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o022 or info.st_size > LIMIT:
+    if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o022 or info.st_size > limit:
         raise BasicSessionError('Arquivo desconhecido, gravável por terceiros ou excessivo: ' + path.name)
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, 'rb') as stream:
         opened = os.fstat(stream.fileno())
-        data = stream.read(LIMIT + 1)
+        data = stream.read(limit + 1)
         after = os.fstat(stream.fileno())
     if (opened.st_dev, opened.st_ino, opened.st_uid) != (info.st_dev, info.st_ino, info.st_uid) or (
             opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns) != (
-            after.st_size, after.st_mtime_ns, after.st_ctime_ns) or len(data) > LIMIT:
+            after.st_size, after.st_mtime_ns, after.st_ctime_ns) or len(data) > limit:
         raise BasicSessionError('Arquivo mudou durante a leitura: ' + path.name)
     return _file(data, stat.S_IMODE(info.st_mode))
 
@@ -250,6 +251,8 @@ class BasicSession:
         return entries, preserved
 
     def status(self):
+        from .plasma_widgets import widget_status
+
         enabled = self._policy()
         receipt = self._receipt()
         conflicts = []
@@ -267,6 +270,7 @@ class BasicSession:
                 'targets': [Path(e['path']).name for e in receipt['entries']] if receipt else [],
                 'preserved': receipt.get('preserved', []) if receipt else [],
                 'conflicts': conflicts, 'scope': SCOPE,
+                'widgets': widget_status(self.config, self.state.with_name('basic-widgets.json'), enabled),
                 'message': ('Configuração mudou; consulte o recibo antes de alterar.' if conflicts else
                             'Resultado pendente; consulte ou restaure pelo mesmo código.' if pending else
                             'Sessão básica configurada para as próximas ativações.' if configured else
@@ -274,6 +278,21 @@ class BasicSession:
                             'Ligado por padrão; configuração ainda não aplicada.')}
 
     def configure(self, enabled=None, *, reconcile=False):
+        from .plasma_widgets import ensure_hook, widget_status
+
+        result = self._configure(enabled, reconcile=reconcile)
+        if result.get('enabled') and result.get('outcome') == 'sucesso':
+            try:
+                hook = ensure_hook(self.config, self.unit_dirs)
+            except (OSError, ValueError) as exc:
+                return {**result, 'ok': False, 'outcome': 'parcial',
+                        'widgets': {'state': 'unknown', 'message': str(exc)}}
+            if hook != 'unsupported':
+                result['widgets'] = widget_status(
+                    self.config, self.state.with_name('basic-widgets.json'), True)
+        return result
+
+    def _configure(self, enabled=None, *, reconcile=False):
         with Coordinator().lock(wait=.2):
             receipt = self._receipt()
             if reconcile:

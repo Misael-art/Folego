@@ -283,7 +283,7 @@ def build_parser() -> argparse.ArgumentParser:
     startup = commands.add_parser("startup", help="início automático com a sessão, ligado por padrão")
     startup_sub = startup.add_subparsers(dest="sub", required=True)
     for name in ("status", "enable", "disable", "sync", "basic-status", "basic-enable",
-                 "basic-disable", "basic-sync", "basic-reconcile"):
+                 "basic-disable", "basic-sync", "basic-reconcile", "basic-widgets-prepare"):
         command = startup_sub.add_parser(name)
         command.add_argument("--json", action="store_true")
         command.add_argument("--confirmar", action="store_true")
@@ -2961,6 +2961,13 @@ def _dispatch(ns, argv) -> int:
         return EXIT_REFUSED if blocked else EXIT_OK
     if ns.command == "startup":
         from . import startup
+        if ns.sub == 'basic-widgets-prepare':
+            from .plasma_widgets import prepare
+            try:
+                print(json.dumps(prepare(), ensure_ascii=False))
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                return _emit_gate_refusal(ns, 'startup.basic-widgets-prepare', str(exc))
+            return EXIT_OK
         if ns.sub.startswith('basic-'):
             from .basic_session import BasicSession
             action = ns.sub.removeprefix('basic-')

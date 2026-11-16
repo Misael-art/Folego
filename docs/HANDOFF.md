@@ -1,5 +1,45 @@
 # Passagem para o próximo agente — atualizada em 16/11/2026
 
+## Widgets opcionais na Sessão básica e custo do monitor de entrada — 16/11/2026
+
+- **Opções → Sessão básica do Plasma** e `startup basic-sync --confirmar`
+  programam um drop-in de usuário para `plasma-plasmashell.service`.
+  O preparo ocorre no próximo início do Plasma, com verificação de cgroup,
+  ausência de outro Plasma do usuário, limites, intenção durável e leitura
+  após a escrita. A unit segue iniciando se o preparo for recusado.
+  Desligar a Sessão básica agenda a restauração. O drop-in de preparo
+  permanece para conseguir restaurar mesmo sem a interface do Fôlego aberta.
+  [API e formato do desktop](https://develop.kde.org/docs/plasma/scripting/) ·
+  [Unit systemd](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html).
+- Catálogo restrito a `org.phasezero.deckpanel`, `org.codex.quotapanel` e
+  aos dois IDs do widget Filtrar ruídos do BigLinux. O filtro de áudio
+  continua com o responsável atual. Controles do painel e widgets sem
+  classificação são preservados. O arquivo fica intacto enquanto Plasma
+  está rodando. A restauração conserva configuração e posição dos widgets,
+  mescla mudanças alheias de ordem e recusa IDs reutilizados ou layout
+  desconhecido.
+- Na b16 instalada, seis inspeções de entrada no Wayland a intervalos de 10 s,
+  sem executar reparos. Mediana por ciclo: **2,34 s** de relógio e **1,79 s**
+  de CPU local somando Python e filhos. KWin: **16 chamadas, 1,19 s de relógio
+  e 0,98 s de CPU** nos clientes. Áudio: **8 chamadas e 0,22 s de CPU**.
+  Consultas agrupadas a systemd/containers: **3 chamadas e 0,32 s de CPU**.
+  O cgroup do monitor residente usou **20,03% de um núcleo** em 52 s.
+- Uma segunda janela de quatro inspeções incluiu a Steam: **0,18 s** de CPU
+  por sondagem Steam e **0,35 s** nos outros responsáveis. KWin variou de
+  **0,87 a 0,98 s** entre as duas medianas. CPU mede clientes locais, sem
+  atribuir ao monitor o consumo interno de KWin, PipeWire ou Docker.
+  Prioridade de otimização: reutilizar transporte D-Bus nas consultas ao
+  KWin, mantendo a revalidação de identidade e origem no ato de reparar.
+- Testes focados: **67 aprovados** em 15,09 s (`run-msdq44w9`, Python 3.14.7,
+  Qt offscreen, HOME/XDG privados, cgroup de 1 núcleo e 2 GiB). O KConfig
+  nativo interpretou corretamente uma cópia privada do layout real
+  reduzido e a restauração sem edições devolveu os bytes exatos. Uma
+  janela própria KDE/Wayland exibiu o agendamento no painel Opções.
+  `systemd-analyze --user verify` aceitou o drop-in junto da unit do
+  Plasma instalada. O comando de preparo fora da unit foi recusado.
+  Amostras privadas e verificações em `.scratch/plasma-basic-widgets-20261116/`.
+  O próximo login real permanece pendente.
+
 ## Fôlego 0.2.0b16 instalado e varredura de recursos — 16/11/2026
 
 - Instalação local autorizada no Jupiter. Fonte
