@@ -30,12 +30,33 @@ def main() -> int:
     from PySide6.QtWidgets import QApplication, QMessageBox, QPushButton
     from folego.ui.main_window import MainWindow
     from folego.ui.theme import apply_theme
+    from folego.core.snapshot import BatteryInfo, Snapshot, SourceQuality
+
+    class UnavailablePowerGuard:
+        def perform(self, action, value=None):
+            return {'enabled': True, 'unavailable': True,
+                    'message': 'Serviço de perfis indisponível (cenário de teste)'}
+
+        def close(self):
+            pass
 
     app = QApplication([])
     app.setApplicationName("folego-qa-host-guard")
     apply_theme(app, args.theme)
     assert QGuiApplication.platformName() == "wayland", "KDE/Wayland indisponível"
-    win = MainWindow(startup_defaults=False)
+    win = MainWindow(startup_defaults=False, power_guard=UnavailablePowerGuard())
+    notices = []
+    win.tray._send_notice = lambda notice: notices.append(notice) or True
+    now = time.monotonic()
+    for mono, online in ((now - 5, True), (now, False)):
+        win.apply_snapshot(Snapshot(
+            ts=time.time(), mono=mono, boot_id='qa-power', mem=None,
+            swap_used_kb=0, swap_total_kb=0, pressure_memory=None,
+            pressure_io=None, pressure_cpu=None, load=None, apps=(), self_rss_kb=0,
+            battery=BatteryInfo(75, 'Discharging', voltage_uv=7_250_000,
+                                voltage_min_design_uv=7_700_000, current_ua=2_400_000),
+            external_power_online=online,
+            sources=(SourceQuality('battery', 'ok'), SourceQuality('external_power', 'ok'))))
     win.resize(800, 600)
     win._show_host_report({
         "observed_at": "2026-11-05T05:18:37-03:00",
@@ -62,6 +83,14 @@ def main() -> int:
             break
         time.sleep(0.02)
     assert win.windowHandle() and win.windowHandle().isExposed()
+    until = time.monotonic() + 3
+    while 'proteção de energia indisponível' not in win.dashboard.power_status.text().lower():
+        assert time.monotonic() < until
+        app.processEvents()
+        time.sleep(.02)
+    assert '7,25 V' in win.dashboard.power_status.text()
+    assert '2,40 A' in win.disk.host_health.rows['power'].text()
+    assert len(notices) == 2
     QTest.mouseClick(win.dashboard.host_button, Qt.MouseButton.LeftButton)
     app.processEvents()
     assert win.tabs.currentWidget() is win.disk
@@ -90,6 +119,8 @@ def main() -> int:
                "window": [win.width(), win.height()], "horizontal_scroll": 0,
                "vertical_scroll_max": area.verticalScrollBar().maximum(),
                "guide": seen[0][0], "theme": args.theme,
+               "power_status": win.dashboard.power_status.text(),
+               "power_notices": [notice.title for notice in notices],
                "state": "synthetic", "host_effects": 0}
     args.receipt.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n")
     win.quit()

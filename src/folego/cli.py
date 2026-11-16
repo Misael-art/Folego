@@ -235,8 +235,15 @@ def build_parser() -> argparse.ArgumentParser:
         description="Bem-estar do Steam Deck: diagnóstico e higiene com confirmação.")
     commands = parser.add_subparsers(dest="command")
 
-    ai = commands.add_parser("ai", help="cotas e validade das IAs; somente leitura")
-    ai.add_argument("sub", choices=["status"])
+    ai = commands.add_parser("ai", help="cotas, diagnóstico e recuperação pelo responsável Web")
+    ai.add_argument("sub", choices=["status", "recover-web", "reset-note", "limit-note", "care-status", "care-enable", "care-disable",
+                                    "care-sync", "care-reconcile"])
+    ai.add_argument("--adopt-legacy", help="com care-enable: manifesto privado da orientação manual anterior")
+    ai.add_argument("--account", help="com recover-web/reset-note: identidade da conta (account_id de status --json)")
+    ai.add_argument("--expires", help="com reset-note/limit-note: validade ou retorno do limite Web 'DD/MM/AAAA HH:MM' (hora local)")
+    ai.add_argument("--count", type=int, default=1, help="com reset-note: resets disponíveis")
+    ai.add_argument("--clear", action="store_true", help="com reset-note/limit-note: remove o lembrete")
+    ai.add_argument("--confirmar", action="store_true")
     ai.add_argument("--json", action="store_true")
 
     perf = commands.add_parser("performance", help="modo desempenho: observação por app; somente leitura")
@@ -275,7 +282,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     startup = commands.add_parser("startup", help="início automático com a sessão, ligado por padrão")
     startup_sub = startup.add_subparsers(dest="sub", required=True)
-    for name in ("status", "enable", "disable", "sync"):
+    for name in ("status", "enable", "disable", "sync", "basic-status", "basic-enable",
+                 "basic-disable", "basic-sync", "basic-reconcile", "basic-widgets-prepare"):
         command = startup_sub.add_parser(name)
         command.add_argument("--json", action="store_true")
         command.add_argument("--confirmar", action="store_true")
@@ -297,10 +305,10 @@ def build_parser() -> argparse.ArgumentParser:
     lease_run = access_sub.add_parser("lease-run", help="inicia aplicação cooperante sob propriedade durável de entrada")
     lease_run.add_argument("--provider", required=True)
     lease_run.add_argument("argv", nargs=argparse.REMAINDER)
-    for name in ("status", "plan", "transitions", "enable", "disable", "capture", "rearm", "install", "repair", "reconcile", "watch", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
+    for name in ("status", "plan", "transitions", "enable", "disable", "audio-reprobe-enable", "audio-reprobe-disable", "capture", "rearm", "install", "repair", "reconcile", "watch", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
         command = access_sub.add_parser(name)
         command.add_argument("--json", action="store_true")
-        if name in ("enable", "disable", "capture", "rearm", "install", "repair", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
+        if name in ("enable", "disable", "audio-reprobe-enable", "audio-reprobe-disable", "capture", "rearm", "install", "repair", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
             command.add_argument("--confirmar", action="store_true")
         if name == "repair":
             command.add_argument("--plan", required=True, help="plano imutável devolvido por plan --json")
@@ -325,7 +333,8 @@ def build_parser() -> argparse.ArgumentParser:
     health = disk_sub.add_parser("health", help="integridade e riscos do host (somente leitura)")
     health.add_argument("--json", action="store_true", help="saída para máquinas")
     guide = disk_sub.add_parser("guide", help="orientação manual para um risco; não repara")
-    guide.add_argument("issue", choices=("thermal", "pressure", "ntfs", "btrfs", "service", "reboot"))
+    guide.add_argument("issue", choices=("storage", "thermal", "pressure", "power", "ntfs",
+                                         "btrfs", "service", "reboot"))
     guide.add_argument("--json", action="store_true", help="saída para máquinas")
     recovery = disk_sub.add_parser("recovery", help="pré-checagem NTFS para cópia de resgate; não repara")
     recovery.add_argument("source", help="dispositivo NTFS, por exemplo /dev/mmcblk0p1")
@@ -334,6 +343,16 @@ def build_parser() -> argparse.ArgumentParser:
     timeline = disk_sub.add_parser("timeline", help="amostras locais antes de incidentes (somente leitura)")
     timeline.add_argument("--json", action="store_true", help="saída para máquinas")
     timeline.add_argument("--boot-id", help="consultar um boot específico preservado")
+
+    archive = disk_sub.add_parser("timeline-archive", help="preserva um boot anterior fora da coleta ativa")
+    archive.add_argument("boot_id", nargs="?", help="sem ID lista os boots anteriores candidatos")
+    archive.add_argument("--plan", help="JSON da revisão de arquivamento")
+    archive.add_argument("--confirmar", action="store_true", help="executa o plano revisado")
+    archive.add_argument("--json", action="store_true", help="saída para máquinas")
+
+    usage = disk_sub.add_parser("usage", help="medição limitada de uma pasta no disco local")
+    usage.add_argument("directory", nargs="?", help="pasta dentro da HOME (padrão: HOME)")
+    usage.add_argument("--json", action="store_true", help="saída para máquinas")
 
     plan = disk_sub.add_parser("plan", help="dry-run: o que poderia ser liberado (nada muda)")
     plan.add_argument("--json", action="store_true", help="saída para máquinas")
@@ -679,11 +698,34 @@ def _cmd_plan(args) -> int:
     print("Volume:")
     print(planner.format_volumes(volumes))
     print("")
-    print("Candidatos a liberação (dry-run, nada foi alterado):")
+    print("Candidatos à quarentena (somente leitura):")
     print(planner.format_report(plan))
     print("")
-    print("Para liberar de forma reversível: folego disk quarantine <caminho> --confirmar")
+    print("Quarentena mantém o espaço ocupado no volume até a remoção definitiva.")
+    print("Para mover de forma reversível: folego disk quarantine <caminho> --confirmar")
     return EXIT_OK
+
+
+def _cmd_disk_usage(args) -> int:
+    from .actions.disk.usage import inventory
+    result = inventory(args.directory)
+    known = result["quality"] != "unknown"
+    if args.json:
+        _emit_machine({"ok": known, "effect": "none", **result})
+    else:
+        print(f"Pasta: {result['directory']}")
+        if known:
+            print(f"Espaço observado: {planner.fmt_bytes(result['allocated_bytes'])} · "
+                  f"{result['scanned_entries']} entradas lidas")
+            for item in result["items"]:
+                print(f"  {item['name']!r} · {planner.fmt_bytes(item['allocated_bytes'])}"
+                      + (" · leitura parcial" if item["partial"] else ""))
+            if result["total_items"] > len(result["items"]):
+                print(f"Exibindo {len(result['items'])} de {result['total_items']} itens medidos.")
+            print("Blocos compartilhados podem aparecer mais de uma vez.")
+        if result["reason"]:
+            print(f"Leitura {'parcial' if known else 'indisponível'} · {result['reason']}")
+    return EXIT_OK if known else EXIT_REFUSED
 
 
 def _cmd_quarantine(args) -> int:
@@ -918,9 +960,11 @@ def _cmd_tmp(args) -> int:
 
 _HANDLERS = {
     "health": lambda args: _cmd_host_health(args),
+    "usage": _cmd_disk_usage,
     "guide": lambda args: _cmd_host_guide(args),
     "recovery": lambda args: _cmd_ntfs_recovery(args),
     "timeline": lambda args: _cmd_host_timeline(args),
+    "timeline-archive": lambda args: _cmd_timeline_archive(args),
     "plan": _cmd_plan,
     "quarantine": _cmd_quarantine,
     "restore": _cmd_restore,
@@ -933,9 +977,17 @@ _HANDLERS = {
 def _cmd_host_health(args) -> int:
     from .adapters.host_guard import HostObserver
     from .core.collector import MetricsCollector
-    from .core.host_guard import ThermalTracker
+    from .core.host_guard import ThermalTracker, storage_lines
+    from .core.battery_alerts import power_supply_status
+    from .actions.power_profile_guard import PowerProfileGuard, PowerProfileError
     report = HostObserver(record=False).observe()
-    report["thermal"] = ThermalTracker().observe(MetricsCollector().collect())
+    snapshot = MetricsCollector().collect()
+    report["thermal"] = ThermalTracker().observe(snapshot)
+    report["power"] = power_supply_status(snapshot)
+    try:
+        report["power_guard"] = PowerProfileGuard().status(reconcile=False)
+    except (PowerProfileError, OSError, ValueError) as exc:
+        report["power_guard"] = {"unavailable": True, "enabled": None, "message": str(exc)}
     if args.json:
         _emit_machine({"ok": True, "outcome": "observado", **report})
     else:
@@ -943,6 +995,10 @@ def _cmd_host_health(args) -> int:
         print("Saúde do host — somente leitura")
         print(f"Temperatura: {thermal['sensor'] or 'fonte desconhecida'} "
               f"{thermal['current_c'] if thermal['current_c'] is not None else '—'} °C")
+        print(f"Alimentação: {report['power']['message']}")
+        print(f"Proteção de energia: {report['power_guard']['message']}")
+        for line in storage_lines(report.get("storage", {})):
+            print("Disco · " + line)
         for row in report["btrfs"]:
             print(f"Btrfs {row['id']}: "
                   + (f"corrupção {row['counters']['corruption_errs']}; tendência {row['trend']}"
@@ -956,6 +1012,9 @@ def _cmd_host_health(args) -> int:
               f"({report['boots'].get('reason', '')})")
         items = report['boots'].get('items', [])
         if len(items) >= 2:
+            from .core.host_guard import boot_end_text
+            if end_text := boot_end_text(items[-2]):
+                print(f"Registro do boot anterior: {end_text}")
             evidence = items[-2].get('timeline', {})
             last = evidence.get('last')
             if last:
@@ -971,7 +1030,7 @@ def _cmd_host_health(args) -> int:
                 print(f"Amostras daquele boot: {evidence.get('quality', 'desconhecido')} "
                       f"({evidence.get('reason', 'sem evidência local')})")
         print(f"Custo desta observação: {report['observer_duration_ms']:.1f} ms")
-        print("Orientações: folego disk guide thermal|pressure|ntfs|btrfs|service|reboot")
+        print("Orientações: folego disk guide storage|thermal|pressure|power|ntfs|btrfs|service|reboot")
     return EXIT_OK
 
 
@@ -1004,7 +1063,7 @@ def _cmd_ntfs_recovery(args) -> int:
 
 
 def _cmd_host_timeline(args) -> int:
-    from .adapters.host_timeline import read_timeline
+    from .adapters.host_timeline import POWER_EVENT_LABELS, read_timeline
     try:
         active_boot_id = (Path(paths.proc_root()) /
                           "sys/kernel/random/boot_id").read_text().strip()
@@ -1019,8 +1078,8 @@ def _cmd_host_timeline(args) -> int:
         print(f"Histórico local: {report['quality']} · {report['reason'] or 'amostras recentes'}")
         capacity = report.get("capacity") or {}
         if capacity.get("near_limit"):
-            print("Aviso: histórico próximo do limite; novas amostras podem parar. "
-                  "Os registros existentes foram preservados.")
+            print(f"Histórico: {capacity['boot_files']}/{capacity['boot_files_limit']} boots ativos. "
+                  "Use folego disk timeline-archive para revisar o arquivamento.")
         for row in report["samples"][-10:]:
             battery = (f" · bateria {row['battery_percent']}% ({row['battery_status']})"
                        if row.get("battery_percent") is not None else "")
@@ -1033,10 +1092,51 @@ def _cmd_host_timeline(args) -> int:
                 electrical += f" · potência {row['battery_power_uw'] / 1_000_000:.2f} W"
             external = (f" · energia externa {'sim' if row['external_power_online'] else 'não'}"
                         if row.get("external_power_online") is not None else "")
+            events = (row.get("power_events") or ()) if row.get("schema") == 2 else ()
+            event_text = "".join(f" · {POWER_EVENT_LABELS[event]}" for event in events)
             print(f"  {row['at']} · RAM {row['mem_available_kb']} KiB · "
                   f"PSI memória {row['psi_mem_avg10']}% · "
                   f"PSI I/O {row['psi_io_avg10']}% · "
-                  f"temperatura {row['temperature_c']} °C{battery}{electrical}{external}")
+                  f"temperatura {row['temperature_c']} °C{battery}{electrical}{external}{event_text}")
+    return EXIT_OK
+
+
+def _cmd_timeline_archive(args) -> int:
+    from .actions.disk import timeline_archive
+    from .orchestration import ActionPlan
+
+    folder = paths.host_timeline_dir()
+    try:
+        if args.confirmar or args.plan:
+            if not args.confirmar or not args.plan or args.boot_id:
+                raise ValueError("use --plan com o JSON da revisão e --confirmar")
+            plan = ActionPlan.from_dict(json.loads(args.plan))
+            result = timeline_archive.archive(folder, plan, _disk_coordinator())
+            if args.json:
+                _emit_machine({**result.to_dict(), "ok": result.outcome == Outcome.OK})
+            else:
+                print(f"{result.reason} · operação {result.operation_id}")
+                if result.outcome == Outcome.OK:
+                    print(f"Consulta: folego disk timeline --boot-id {plan.params['boot_id']}")
+            return EXIT_BY_OUTCOME[result.outcome]
+        if args.boot_id:
+            plan = timeline_archive.review(folder, args.boot_id)
+            if args.json:
+                _emit_machine(plan.to_dict())
+            else:
+                print(f"Boot {args.boot_id} · {plan.target.detail['stat'][2]} bytes")
+                print(f"Destino: {plan.params['archive']}")
+                print("Peça a revisão com --json e use o JSON com --plan e --confirmar.")
+        else:
+            candidates = timeline_archive.candidates(folder)
+            if args.json:
+                _emit_machine({"ok": True, "items": candidates})
+            else:
+                for row in candidates:
+                    print(f"{row['boot_id']} · {planner.fmt_bytes(row['bytes'])}")
+                print("Selecione um boot anterior para revisar o arquivamento.")
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return _emit_gate_refusal(args, timeline_archive.ACTION, str(exc))
     return EXIT_OK
 
 
@@ -1157,6 +1257,7 @@ def _cmd_performance(args) -> int:
             "load": act.load, "agent_cpu": act.cpu_frac, "projects": sorted(act.projects),
             "mem_available_kb": view.mem_available_kb, "mem_total_kb": view.mem_total_kb,
             "psi_memory_some_avg60": view.pressure.some_avg60 if view.pressure else None,
+            "psi_cpu_some_avg60": view.pressure_cpu.some_avg60 if view.pressure_cpu else None,
             "reclaimable_kb": view.reclaimable_kb(),
             "groups": [dict(unit=g.unit, label=g.label, state=g.state, reason=g.reason,
                             procs=g.procs, rss_kb=g.rss_kb, cpu_frac=g.cpu_frac,
@@ -1164,9 +1265,13 @@ def _cmd_performance(args) -> int:
                        for g in view.groups]}, indent=2))
         return EXIT_OK
     psi = f"{view.pressure.some_avg60:.2f}%" if view.pressure else "indisponível"
+    psi_cpu = f"{view.pressure_cpu.some_avg60:.2f}%" if view.pressure_cpu else "indisponível"
     avail = _rss(view.mem_available_kb) if view.mem_available_kb is not None else "?"
-    print(f"agentes: {act.load} · projetos: {len(act.projects)} · RAM disponível {avail}"
-          f" · PSI memória (60 s) {psi}")
+    print(f"carga nas árvores de agentes: {act.load} · projetos: {len(act.projects)}"
+          f" · RAM disponível {avail} · PSI 60 s: memória {psi}, CPU {psi_cpu}")
+    top = " · ".join(f"{g.label} {g.cpu_frac:.0f}%" for g in view.top_cpu())
+    if top:
+        print(f"CPU por aplicativo (100% = 1 núcleo) · {top}")
     names = {perf_model.AGENT: "agente", perf_model.PROTECTED: "protegido",
              perf_model.OBSERVED: "observado"}
     for g in view.groups:
@@ -2741,7 +2846,9 @@ def _cmd_accessibility(args):
                 result = reconcile_lease(args.lease_id, confirmed=True, supervisor=supervisor)
             else:
                 result = supervisor.configure(enabled=(args.sub == "enable") if args.sub in ("enable", "disable") else None,
-                                              capture=args.sub == "capture", rearm=args.sub == "rearm")
+                                              capture=args.sub == "capture", rearm=args.sub == "rearm",
+                                              audio_reprobe=(args.sub == 'audio-reprobe-enable')
+                                              if args.sub in ('audio-reprobe-enable', 'audio-reprobe-disable') else None)
         if hasattr(result, "outcome"):
             code = EXIT_BY_OUTCOME[result.outcome]
             payload = {**result.to_dict(), "ok": result.ok, "exit": code}
@@ -2759,6 +2866,59 @@ def _dispatch(ns, argv) -> int:
     if ns.command == "performance":
         return _cmd_performance(ns)
     if ns.command == "ai":
+        if ns.sub.startswith('care-'):
+            from .actions.agent_guidelines import AgentGuidelines
+            from .orchestration import CoordinatorBusy
+            action = ns.sub.removeprefix('care-')
+            if action in ('enable', 'disable') and not ns.confirmar:
+                return _emit_gate_refusal(ns, 'agent-guidelines', 'operação exige --confirmar', EXIT_NEEDS_CONFIRM)
+            manager = AgentGuidelines()
+            try:
+                if ns.adopt_legacy and action != 'enable':
+                    raise ValueError('Migração manual exige care-enable --confirmar')
+                result = (manager.status() if action == 'status' else
+                          manager.configure(reconcile=True) if action == 'reconcile' else
+                          manager.configure(None if action == 'sync' else action == 'enable',
+                                            adopt=ns.adopt_legacy))
+            except (OSError, ValueError, KeyError, TypeError, RuntimeError, CoordinatorBusy) as exc:
+                result = {'ok': False, 'state': 'busy' if isinstance(exc, CoordinatorBusy) else 'conflict',
+                          'outcome': 'recusa', 'message': str(exc)}
+                try:
+                    result['enabled'] = manager.preference()
+                except (OSError, ValueError):
+                    pass
+            print(json.dumps(result, ensure_ascii=False))
+            return EXIT_BY_OUTCOME.get(result.get('outcome'), EXIT_OK if result.get('ok') else EXIT_REFUSED)
+        if ns.sub == 'recover-web':
+            if not ns.confirmar:
+                print('Use --confirmar para solicitar o ciclo ao responsável Web já habilitado')
+                return EXIT_NEEDS_CONFIRM
+            from .core.agent_deliveries import DeliveryMonitor
+            from .actions.web_recovery import WebRecovery
+            monitor = DeliveryMonitor()
+            rows = WebRecovery(monitor).handle(monitor.collect(), since=time.time() - 900, account_id=ns.account)
+            receipts = [p for row in rows if row['provider'] == 'web'
+                        for p in row['pending'] if 'web_recovery' in p]
+            if ns.json:
+                print(json.dumps(dict(schema=1, receipts=receipts), ensure_ascii=False))
+            else:
+                print('\n'.join(p['web_recovery']['detail'] for p in receipts)
+                      or 'Nenhum erro de capacidade recente e não visto nesta conta')
+            return (EXIT_UNKNOWN if any(p['web_recovery']['outcome'] == 'desconhecido' for p in receipts)
+                    else EXIT_PARTIAL if any(p['web_recovery']['outcome'] == 'parcial' for p in receipts)
+                    else EXIT_REFUSED)
+        if ns.sub in ('reset-note', 'limit-note'):
+            from .core.ai_sessions import parse_local_time, set_limit_note, set_reset_note
+            try:
+                if not ns.account or bool(ns.expires) == ns.clear:
+                    raise ValueError('Informe --account e --expires "DD/MM/AAAA HH:MM" ou --clear')
+                moment = None if ns.clear else parse_local_time(ns.expires)
+                print(set_reset_note(ns.account, moment, ns.count) if ns.sub == 'reset-note'
+                      else set_limit_note(ns.account, moment))
+            except (OSError, ValueError) as exc:
+                print(f'Lembrete não registrado: {exc}')
+                return EXIT_REFUSED
+            return EXIT_OK
         from .core.ai_sessions import collect, describe
         items = collect()
         if ns.json:
@@ -2801,7 +2961,26 @@ def _dispatch(ns, argv) -> int:
         return EXIT_REFUSED if blocked else EXIT_OK
     if ns.command == "startup":
         from . import startup
-        if ns.sub == "status":
+        if ns.sub == 'basic-widgets-prepare':
+            from .plasma_widgets import prepare
+            try:
+                print(json.dumps(prepare(), ensure_ascii=False))
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                return _emit_gate_refusal(ns, 'startup.basic-widgets-prepare', str(exc))
+            return EXIT_OK
+        if ns.sub.startswith('basic-'):
+            from .basic_session import BasicSession
+            action = ns.sub.removeprefix('basic-')
+            if action not in ('status', 'reconcile') and not ns.confirmar:
+                return _emit_gate_refusal(ns, 'startup', 'operação exige --confirmar', EXIT_NEEDS_CONFIRM)
+            try:
+                manager = BasicSession()
+                result = (manager.status() if action == 'status' else
+                          manager.configure(reconcile=True) if action == 'reconcile' else
+                          manager.configure(None if action == 'sync' else action == 'enable'))
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                result = {'ok': False, 'state': 'unknown', 'outcome': 'recusa', 'message': str(exc)}
+        elif ns.sub == "status":
             result = startup.status()
         else:
             if ns.sub != "sync" and not ns.confirmar:

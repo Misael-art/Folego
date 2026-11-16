@@ -3,7 +3,7 @@ import pytest
 import time
 
 from folego.core.snapshot import BatteryInfo, MemInfo, Pressure, Snapshot, SourceQuality
-from folego.ui.compact import CompactWindow, MINI_HEIGHT, MINI_WIDTH, clamp_position, dock_geometry
+from folego.ui.compact import COMPACT_WIDTH, CompactWindow, MINI_HEIGHT, MINI_WIDTH, clamp_position, dock_geometry
 from folego.ui.desktop_caps import detect
 
 pytest.importorskip("PySide6")
@@ -188,6 +188,7 @@ def test_wayland_floating_widget_clamps_after_kwin_initial_position(qapp, monkey
 
 def test_dock_choice_during_floating_geometry_check_is_kept(qapp, monkeypatch):
     from PySide6.QtCore import QRect
+    from PySide6.QtTest import QTest
     view, _ = make(qapp, caps=wayland())
     view._screen_area = lambda: QRect(0, 0, 948, 593)
     view._screens = lambda: ((0, 0, 948, 593),)
@@ -195,6 +196,7 @@ def test_dock_choice_during_floating_geometry_check_is_kept(qapp, monkeypatch):
     monkeypatch.setattr(view.shortcut_tabs.controller, 'request',
                         lambda action, value=None: requested.append((action, value)) or True)
     view.show_compact()
+    assert QTest.qWaitForWindowExposed(view, 2000)
     view._reconcile_compact_after_show()
     view.set_dock_mode('left')
     assert view._requested_mode == 'left'
@@ -311,7 +313,7 @@ def test_widget_position_menu_switches_docks_and_floating(qapp):
     assert view.geometry() == dock_geometry('left', view._screen_area())
     view.layout_actions['compact'].trigger()
     QTest.qWait(300)
-    assert view._dock_mode == 'compact' and view.width() == 280
+    assert view._dock_mode == 'compact' and view.width() == COMPACT_WIDTH
     view.force_close()
 
 
@@ -353,7 +355,6 @@ def test_mini_bar_is_one_line_and_every_form_has_a_direct_route(qapp):
     view._clear_feedback()
     assert 'Bateria 9%' in view.mini_status.text()
     assert all(not handle.isVisible() for handle in view._handles.values())
-    view._animate_actions(True)
     assert view.action_drawer.maximumHeight() == 0
     controls = [view.mini_drag, view.mini_status, view.mini_cpu,
                 view.mini_temperature, view.mini_memory, view.mini_expand,
@@ -372,7 +373,7 @@ def test_mini_bar_is_one_line_and_every_form_has_a_direct_route(qapp):
         assert view.layout_actions[mode].isChecked()
     view.mini_expand.click()
     QTest.qWait(320)
-    assert view._dock_mode == 'compact' and view.width() == 280
+    assert view._dock_mode == 'compact' and view.width() == COMPACT_WIDTH
     view.layout_actions['mini'].trigger()
     QTest.qWait(320)
     view.open_button.click()
@@ -410,6 +411,38 @@ def test_mini_bar_hides_stale_values_and_wayland_requests_confirmed_move(qapp, m
     assert requested[-1][0] == 'widget-geometry'
     view._capture_result({'operation': 'widget-geometry', 'geometry': (100, 100, MINI_WIDTH, MINI_HEIGHT)})
     assert requested[-1][0] == 'widget-place'
+    view.force_close()
+
+
+def test_mini_refits_deliveries_after_wayland_placement_failure(qapp, monkeypatch):
+    from PySide6.QtCore import QRect
+    from PySide6.QtTest import QTest
+
+    view, _ = make(qapp, caps=wayland())
+    view._screen_area = lambda: QRect(0, 0, 948, 593)
+    view._screens = lambda: ((0, 0, 948, 593),)
+    controller = view.shortcut_tabs.controller
+
+    def request(action, value=None):
+        controller.action = action
+        return True
+
+    monkeypatch.setattr(controller, 'request', request)
+    monitor = view.ai_strip.monitor
+    monkeypatch.setattr(monitor.poller, 'request', lambda: None)
+    monkeypatch.setattr(monitor.delivery_poller, 'request', lambda: None)
+    view.show_compact()
+    view.set_dock_mode('mini')
+    view._capture_result({'operation': 'widget-geometry', 'geometry': (100, 100, 280, 160)})
+    assert view._dock_pending == 'mini' and view.width() == MINI_WIDTH
+    monitor.set_deliveries([dict(provider=p, count=2) for p in view.mini_ai.buttons])
+    QTest.qWait(25)
+    assert not view.mini_fit_timer.isActive() and view.width() == MINI_WIDTH
+
+    view._capture_failed('O compositor não confirmou a posição da janela')
+    QTest.qWait(25)
+    assert view._dock_pending is None
+    assert view.width() == view._mini_width() > MINI_WIDTH
     view.force_close()
 
 
@@ -630,17 +663,19 @@ def test_side_dock_reaches_all_quotas_above_fixed_actions(qapp, width, height, m
 @pytest.mark.parametrize('width,height', ((948, 593), (1920, 1080), (2560, 1080)))
 def test_top_dock_keeps_four_quotas_and_actions_inside_view(qapp, width, height):
     from PySide6.QtCore import QPoint, QRect
-    from PySide6.QtTest import QTest
     view, _ = make(qapp)
     view._screen_area = lambda: QRect(0, 0, width, height)
     view.show_compact()
     view.show_snapshot(snap())
     _four_quotas(view)
     view.set_dock_mode('top')
-    QTest.qWait(450)
+    # This is a layout check. Drive both Qt timelines to their final frames.
+    view.dock_animation.setCurrentTime(view.dock_animation.duration())
+    qapp.processEvents()
     assert view.action_drawer.maximumHeight() == 0
     view._animate_actions(True)
-    QTest.qWait(180)
+    view.drawer_animation.setCurrentTime(view.drawer_animation.duration())
+    qapp.processEvents()
     assert view.geometry() == dock_geometry('top', QRect(0, 0, width, height))
     assert view.dock_scroll.geometry().bottom() < view.action_drawer.geometry().top()
     if width >= 900:
@@ -769,15 +804,54 @@ def test_an_illegible_automation_state_is_not_drawn_as_manual(qapp):
 
 def test_pause_is_a_distinct_state_and_says_so(qapp):
     view, host = make(qapp)
-    view.pause_button.click()
+    assert view.monitoring_menu.menuAction().isVisible()
+    assert view.pause_button.isHidden()
+    assert view.pause_action.text() == "Pausar monitoramento"
+    view.pause_action.trigger()
     assert host.paused is True
     assert "PAUSADO" in view.mode_label.text()
     assert view.pause_button.toolTip() == "Retomar monitoramento"
     assert view.pause_button.accessibleDescription() == "monitoramento pausado"
+    assert view.pause_action.text() == "Retomar monitoramento"
 
-    view.pause_button.click()
+    view.pause_action.trigger()
     assert host.paused is False
     assert "ativo" in view.mode_label.text()
+    view.force_close()
+
+
+def test_mini_theme_menu_saves_shared_selection_and_keeps_previous_on_failure(qapp, tmp_path, monkeypatch):
+    from PySide6.QtCore import QSettings
+    from folego.ui import compact, theme
+
+    view, _ = make(qapp)
+    store = QSettings(str(tmp_path / 'theme.ini'), QSettings.Format.IniFormat)
+    monkeypatch.setattr(compact, 'choose_theme', lambda key: theme.choose_theme(key, store=store))
+    previous = theme.TOKENS.key, theme.TOKENS.transparency
+    other = next(key for key in theme.THEMES if key != previous[0])
+    try:
+        assert not view.theme_menu.menuAction().isVisible()
+        view._arrange_sections('mini')
+        assert view.theme_menu.menuAction().isVisible() and not view.monitoring_menu.menuAction().isVisible()
+        actions = {action.data(): action for action in view.theme_actions.actions()}
+        assert len(actions) == len(theme.THEMES) and actions[previous[0]].isChecked()
+        assert all(not action.icon().isNull() for action in actions.values())
+        actions[other].trigger()
+        assert theme.TOKENS.key == store.value(theme.THEME_KEY) == other
+        assert theme.TOKENS.transparency == previous[1]
+        assert actions[other].isChecked() and not actions[previous[0]].isChecked()
+        assert [key for key, action in actions.items() if action.text().endswith(' · em uso')] == [other]
+
+        def fail(key):
+            raise RuntimeError('Tema não foi salvo')
+
+        monkeypatch.setattr(compact, 'choose_theme', fail)
+        actions[previous[0]].trigger()
+        assert actions[other].isChecked() and not actions[previous[0]].isChecked()
+        assert view.feedback_label.text() == 'Tema não foi salvo'
+    finally:
+        view.force_close()
+        theme.apply_theme(qapp, previous[0], transparency=previous[1])
 
 
 def test_repeated_navigation_clicks_do_not_create_any_operation(qapp):
@@ -849,10 +923,10 @@ def test_widget_header_uses_navigation_and_control_menu_instead_of_window_button
     assert view.open_button.text()=='' and not view.open_button.icon().isNull()
     assert view.open_button.accessibleName()=='Abrir a central do Fôlego'
     assert not hasattr(view,'hide_button') and not hasattr(view,'quit_button')
-    assert [a.text() for a in view.control_menu.actions()]==[
+    assert [a.text() for a in view.control_menu.actions() if a.isVisible()]==[
         'Mini horizontal', 'Widget compacto', 'Lateral esquerda',
         'Lateral direita', 'Barra superior', 'Abrir Central', '',
-        'Contas e cotas de IA', 'Ocultar widget', 'Sair do Fôlego']
+        'Contas e cotas de IA', 'Monitoramento', 'Ocultar widget', 'Sair do Fôlego']
     view._refresh_accounts_menu()
     assert len(view.accounts_menu.actions())==4
     assert all('sem confirmação' in action.text() for action in view.accounts_menu.actions()
@@ -906,3 +980,36 @@ def test_cooler_speed_stays_next_to_temperature_in_each_position(qapp):
     assert 'ACPI 56 °C' in view.detail_label.text()
     assert 'não confirma temperatura da CPU' in view.detail_label.toolTip()
     view.force_close()
+
+
+def test_battery_voltage_is_shown_in_its_own_level_colour(qapp):
+    from dataclasses import replace
+    from folego.ui.theme import TOKENS
+    view, _ = make(qapp)
+    view.show_compact()
+
+    def show(volts, status='Discharging', design=7_700_000):
+        view.show_snapshot(replace(
+            snap(), mono=time.monotonic(),
+            battery=BatteryInfo(80, status, 3600, voltage_uv=volts,
+                                voltage_min_design_uv=design),
+            sources=(SourceQuality('battery', 'ok'),)))
+    show(7_650_000)
+    assert '7,65 V' in view.battery_label.text() and '80%' in view.battery_label.text()
+    assert view._voltage_band == 'green' and 'estável' in view.battery_label.toolTip()
+    assert f'color:{TOKENS.ok}' in view._voltage_html()
+    show(7_100_000)
+    assert view._voltage_band == 'orange' and 'atenção' in view.battery_label.toolTip()
+    show(6_570_000)
+    assert view._voltage_band == 'red' and f'color:{TOKENS.danger}' in view._voltage_html()
+    assert 'risco de desligamento' in view.battery_label.toolTip()
+    assert view.mini_battery.text() == '80%' and view.mini_voltage.text() == '6,57V'
+    assert not view.mini_voltage.isHidden() and TOKENS.danger in view.mini_voltage.styleSheet()
+    assert 'voltagem 6,57 V' in view.mini_battery.accessibleDescription()
+    show(8_400_000, 'Charging')
+    assert view._voltage_band is None and f'color:{TOKENS.muted}' in view._voltage_html()
+    assert 'fora da descarga' in view.battery_label.toolTip()
+    show(6_570_000, design=None)
+    assert view._voltage_band is None and 'sem referência' in view.battery_label.toolTip()
+    show(None)
+    assert 'V<' not in view.battery_label.text() and view._voltage_text == ''

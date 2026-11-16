@@ -242,3 +242,53 @@ def test_private_home_never_adopts_real_native_account_paths(tmp_path):
           clock=lambda: NOW, discover=lambda: [dict(provider='codex', roots=dict(CODEX_HOME=str(external/'.codex')))])
     assert row(view)['count'] is None
     assert all(str(external) not in directory for _, directory in view._accounts(NOW))
+
+
+def test_web_mcp_report_reuses_completion_without_claiming_local_failure(tmp_path):
+    clock = [NOW]
+    root = tmp_path / 'web'
+    path = root / 'sessions/2026/11/01/rollout-web.jsonl'
+    append(path, dict(type='session_meta', payload=dict(id='web', source='vscode')))
+    config = tmp_path / '.config/folego/ai-sessions.json'
+    config.parent.mkdir(parents=True)
+    config.write_text(json.dumps(dict(schema=1, accounts=[dict(provider='web', path=str(root))])))
+    view = monitor(tmp_path, clock)
+    view.collect()
+    clock[0] += 1
+    append(path, dict(timestamp=iso(clock[0]), type='event_msg', payload=dict(
+        type='task_complete', turn_id='turn-1',
+        last_agent_message='A conexão retornou McpServerError: Session terminated.')))
+    report = row(view, 'web')['pending']
+    assert len(report) == 1 and report[0]['reported_web_mcp_error'] is True
+    assert 'last_agent_message' not in json.dumps(report)
+    view.acknowledge(report)
+    assert row(view, 'web')['pending'] == []
+
+
+def test_web_mcp_report_does_not_infer_error_from_tool_or_other_provider(tmp_path):
+    path = codex(tmp_path)
+    append(path, dict(timestamp=iso(NOW + 1), type='event_msg', payload=dict(
+        type='item_completed', item=dict(text='McpServerError: Session terminated'))))
+    append(path, dict(timestamp=iso(NOW + 1), type='event_msg', payload=dict(
+        type='task_complete', turn_id='turn-1', last_agent_message='Tudo bem.')))
+    assert 'reported_web_mcp_error' not in last_delivery('codex', path, NOW, NOW + 2)
+
+
+@pytest.mark.parametrize('provider,error,answer,trigger', [
+    ('web', {'message': 'Selected model is at capacity. Please try a different model.',
+             'codex_error_info': 'server_overloaded'}, None, True),
+    ('web', None, 'Selected model is at capacity. Please try a different model.', False),
+    ('web', {'message': 'Unknown model'}, None, False),
+    ('codex', {'message': 'Selected model is at capacity. Please try a different model.'}, None, False),
+])
+def test_capacity_requires_failed_native_web_completion(tmp_path, provider, error, answer, trigger):
+    path = codex(tmp_path)
+    complete = event('task_complete', NOW + 1)
+    complete['payload'].update(error=error, last_agent_message=answer)
+    append(path, complete)
+    result = last_delivery(provider, path, NOW, NOW + 2)
+    assert bool(result.get('web_capacity_error')) is trigger
+    assert bool(result.get('delivery_failed')) is (error is not None)
+    assert 'message' not in result and 'error' not in result
+    append(path, event('task_started', NOW + 2))
+    assert last_delivery(provider, path, NOW, NOW + 3) is None

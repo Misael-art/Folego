@@ -35,6 +35,11 @@ class Recovery:
                   "service_owner": report["service_owner"], "peer": peer,
                   "devices": self._devices(report, scope),
                   "audio_targets": self.backend.audio_targets(scope)}
+        if 'microphone' in scope and not save and self.supervisor.profile_guard is not None:
+            self.supervisor.profile_guard.annotate(report)
+            recovery = self.supervisor.profile_guard.manual_parameters(report)
+            if recovery is not None:
+                params['profile_recovery'] = recovery
         return ActionPlan(SAVE_ACTION if save else ACTION, ResourceIdentity.entry(capability), params,
             notes=("Ação manual: habilitar e verificar cada capacidade; nunca desabilitar entradas.",
                    "Provedor externo registrado, quando presente, será solicitado e revalidado por hash.",
@@ -62,13 +67,15 @@ class Recovery:
         int(key, 16)
         return self.supervisor.store.root / "manual-operations" / (key + ".json")
 
-    def _pending(self, key):
-        return [i for i in unresolved(self.supervisor.coordinator.journal) if i != key]
+    def _pending(self, key, capability):
+        return [i for i in unresolved(self.supervisor.coordinator.journal,
+                                     capabilities=(capability,)) if i != key]
 
     def execute(self, plan, *, confirmed=False):
         expected = ("capabilities", "boot_id", "service_owner", "peer", "devices", "audio_targets")
         if (not confirmed or plan.action not in (ACTION, SAVE_ACTION) or plan.target.kind != "entry"
-                or plan.target.key not in (*LABELS, "all") or set(plan.params) != set(expected)
+                or plan.target.key not in (*LABELS, "all")
+                or set(plan.params) not in (set(expected), set(expected) | {'profile_recovery'})
                 or list(plan.params["capabilities"]) != (list(ORDER) if plan.target.key == "all" else [plan.target.key])):
             return ActionResult(plan.action, Outcome.REFUSED, plan.operation_id, target_key=plan.target.key,
                                 reason="plano manual/confirmacão inválido")
@@ -83,8 +90,10 @@ class Recovery:
             if peer != plan.to_dict()["params"]["peer"]:
                 return self._result(plan, [], Outcome.REFUSED, "responsável registrado mudou; nenhuma rotina executada")
             keyboard_only = plan.action == ACTION and plan.target.key == "virtual-keyboard"
-            if self._pending(plan.operation_id) and not keyboard_only:
-                return self._result(plan, [], Outcome.REFUSED, "operação anterior incerta; consultar seu código sem repetir")
+            if plan.action == SAVE_ACTION and any(
+                    key != plan.operation_id for key in unresolved(self.supervisor.coordinator.journal)):
+                return self._result(plan, [], Outcome.REFUSED,
+                                    'operação anterior incerta; configuração anterior preservada')
             receipt = {"schema": 1, "plan": plan.to_dict(), "rows": [], "complete": False,
                        "owner": self._owner(), "started_at": time.time()}
             save_object(self._receipt(plan.operation_id), receipt)
@@ -105,6 +114,8 @@ class Recovery:
                 usable_peer = None
             if not keyboard_only:
                 input_block.extend(v for v in report["blockers"] if not (usable_peer and v == PEER_WAIT))
+                if any(self._pending(plan.operation_id, key) for key in plan.params['capabilities'] if key in INPUTS):
+                    input_block.append('operação anterior de entrada incerta; consultar o código')
             if not input_block and usable_peer and any(k in INPUTS for k in plan.params["capabilities"]):
                 try:
                     self.backend.peer_idle(usable_peer)
@@ -120,7 +131,14 @@ class Recovery:
                 receipt["current"] = key
                 save_object(self._receipt(plan.operation_id), receipt)
                 try:
-                    if key in INPUTS and not input_block:
+                    if key != 'virtual-keyboard' and self._pending(plan.operation_id, key):
+                        ready, reason = False, 'operação anterior desta capacidade incerta; consulte o código'
+                    elif key == 'microphone' and plan.params.get('profile_recovery'):
+                        result = self.supervisor.profile_guard.manual_repair(plan)
+                        if result.outcome == Outcome.UNKNOWN:
+                            raise UncertainEffect(result.reason)
+                        ready, reason = result.outcome == Outcome.OK, result.reason
+                    elif key in INPUTS and not input_block:
                         current = self.supervisor.native.collect()
                         if (not fresh(current) or current["boot_id"] != plan.params["boot_id"]
                                 or current["service_owner"] != plan.params["service_owner"]
@@ -132,19 +150,26 @@ class Recovery:
                         if not input_block and usable_peer:
                             self.backend.peer_idle(usable_peer)
                         report = current
-                    if key in INPUTS and input_block:
+                        if input_block:
+                            ready, reason = False, '; '.join(input_block)
+                        elif key == 'virtual-keyboard':
+                            ready, reason = self.backend.open_keyboard(report)
+                        elif key == 'gamepad':
+                            ready, reason = self.backend.gamepad(report)
+                        elif key == 'touch' and not any('touch' in d['kinds'] for d in report['devices']):
+                            self._reserve_touch_attempt(plan)
+                            ready, reason = self.backend.repair_touch(usable_peer)
+                        else:
+                            ready, reason = self.backend.enable_devices(key, report, delegated=delegated)
+                    elif key in INPUTS and input_block:
                         ready, reason = False, "; ".join(input_block)
                     elif key in ("audio", "microphone"):
                         ready, reason = self.backend.enable_audio(key, plan.params["audio_targets"].get(key))
-                    elif key == "virtual-keyboard":
-                        ready, reason = self.backend.open_keyboard(report)
-                    elif key == "gamepad":
-                        ready, reason = self.backend.gamepad(report)
-                    elif key == "touch" and not any("touch" in d["kinds"] for d in report["devices"]):
-                        self._reserve_touch_attempt(plan)
-                        ready, reason = self.backend.repair_touch(usable_peer)
-                    else:
-                        ready, reason = self.backend.enable_devices(key, report, delegated=delegated)
+                        if key == 'microphone' and ready and self.supervisor.profile_guard is not None:
+                            observed = self.supervisor.profile_guard.profiles.microphone()
+                            ready = observed.get('state') == 'healthy'
+                            if not ready:
+                                reason = observed.get('detail', 'caminho físico de captura não comprovado')
                     row = {"key": key, "ready": bool(ready), "outcome": "sucesso" if ready else "parcial",
                            "reason": str(reason)[:800], "physical_verified": False}
                 except ValueError as exc:
@@ -256,6 +281,27 @@ class Recovery:
                 result = ActionResult.from_dict(receipt["result"])
                 if (result.outcome != Outcome.UNKNOWN and result.operation_id == key
                         and result.action == state.intent.action and result.target_key == state.intent.target.key):
+                    c.journal.append_result(result)
+                    return result
+            if (receipt and receipt.get('complete') is False and receipt.get('current') == 'microphone'
+                    and receipt.get('plan') == state.intent.to_dict()
+                    and _alive(receipt.get('owner')) is False
+                    and state.intent.params.get('profile_recovery')
+                    and self.supervisor.profile_guard is not None):
+                rows = receipt.get('rows', [])
+                scope = list(state.intent.params['capabilities'])
+                valid_rows = (isinstance(rows, list) and len(rows) == len(scope)
+                    and all(isinstance(row, dict) and row.get('key') == key and type(row.get('ready')) is bool
+                            and row.get('outcome') in ('sucesso', 'parcial', 'desconhecido')
+                            and (key == 'microphone' or row['outcome'] != 'desconhecido')
+                            for row, key in zip(rows, scope)))
+                if valid_rows and self.supervisor.profile_guard.manual_recovered(state.intent):
+                    rows = [dict(row, ready=True, outcome='sucesso', reason='Perfil e cadeia saudáveis observados; solicitação encerrada')
+                            if row['key'] == 'microphone' else row for row in rows]
+                    outcome = Outcome.OK if all(row['ready'] for row in rows) else Outcome.PARTIAL
+                    result = self._result(state.intent, rows, outcome, 'Estado atual confirmado; operação consultada')
+                    receipt.update(complete=True, rows=rows, result=result.to_dict())
+                    save_object(self._receipt(key), receipt)
                     c.journal.append_result(result)
                     return result
             return self._result(state.intent, (receipt or {}).get("rows", []), Outcome.UNKNOWN,

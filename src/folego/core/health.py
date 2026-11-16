@@ -12,7 +12,7 @@ only, because both the UI and the CLI must be able to explain a refusal.
 from dataclasses import dataclass, field
 
 from .snapshot import ERROR, MISSING, PARTIAL, Snapshot
-THRESHOLDS_VERSION = 2
+from .policy import HealthThresholds, THRESHOLDS_VERSION
 GREEN = "green"
 YELLOW = "yellow"
 RED = "red"
@@ -20,23 +20,6 @@ UNKNOWN = "unknown"
 
 _RANK = {GREEN: 0, YELLOW: 1, RED: 2}
 _SEVERITY = {RED: "critico", YELLOW: "alto", GREEN: "medio", UNKNOWN: "critico"}
-
-
-@dataclass(frozen=True)
-class HealthThresholds:
-    version: int = THRESHOLDS_VERSION
-    yellow_available_frac: float = 0.20
-    red_available_frac: float = 0.10
-    psi_memory_yellow: float = 5.0
-    psi_memory_red: float = 10.0
-    psi_full_yellow: float = 5.0
-    psi_full_red: float = 10.0
-    self_rss_yellow_kb: int = 300_000
-    tmpfs_yellow_frac: float = 0.75
-    tmpfs_red_frac: float = 0.90
-    stale_after_s: float = 15.0
-    recovery_samples: int = 3
-    thermal_margin_c: float = 5.0
 
 
 @dataclass(frozen=True)

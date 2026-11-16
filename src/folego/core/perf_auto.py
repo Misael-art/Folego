@@ -2,7 +2,7 @@
 
 `decide` is pure. A ready suggestion of a rule in automatic mode is closed only
 when every gate holds, in this order: the breaker is closed; the host is under
-pressure (memory PSI, low available RAM, or agents in build/test); the item was
+pressure (memory PSI or low available RAM); the item was
 not snoozed; the same app was not already closed in this boot (a reopen means
 the user wants it, so the rule rests until the next boot); the hourly budget
 has room; and the item was announced at least GRACE_S ago. At most one close is
@@ -21,7 +21,6 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .agents import BUSY
 from .perf_model import PerfView
 from .perf_rules import AUTOMATIC
 
@@ -134,8 +133,6 @@ def pressure(view: PerfView) -> str:
     if (view.mem_available_kb is not None and view.mem_total_kb
             and view.mem_available_kb < AVAILABLE_FLOOR * view.mem_total_kb):
         return f"RAM disponível abaixo de {AVAILABLE_FLOOR:.0%}"
-    if view.activity.load == BUSY:
-        return "agentes em build/teste"
     return ""
 
 

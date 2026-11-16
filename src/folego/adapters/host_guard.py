@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .. import paths
+from .host_storage import observe_storage, read_mountinfo
 from .host_timeline import read_timeline, summarize_boot_timeline
 from ..safely.atomicfile import write_atomic
 
@@ -56,27 +57,9 @@ def _stats(raw: str) -> dict[str, int]:
 
 def _mounts(proc_root: Path) -> tuple[list[dict], str]:
     try:
-        raw = _read_small(proc_root / "self/mountinfo", 262144)
+        return read_mountinfo(proc_root), ""
     except (OSError, ValueError, UnicodeError) as exc:
         return [], f"mountinfo indisponível: {exc}"
-    lines = raw.splitlines()
-    if len(lines) > 2048:
-        return [], "inventário de volumes excede 2048 linhas; coleta recusada"
-    found = []
-    for line in lines:
-        fields = line.split()
-        if "-" not in fields:
-            continue
-        sep = fields.index("-")
-        if sep + 2 >= len(fields) or len(fields) < 5:
-            continue
-        kind, source = fields[sep + 1:sep + 3]
-        mount = fields[4].replace("\\040", " ")
-        if kind in ("btrfs", "ntfs", "ntfs3", "fuseblk"):
-            found.append({"mount": mount, "source": source, "type": kind})
-    if len(found) > 128:
-        return found[:128], "inventário de volumes parcial (limite 128)"
-    return found, ""
 
 
 def _btrfs(sys_root: Path) -> tuple[list[dict], str]:
@@ -324,6 +307,16 @@ def _services(run, watched=_WATCHED_SERVICES) -> dict:
             "inventory": inventory}
 
 
+_BOOT_END_MESSAGES = {
+    "System is powering down": "poweroff",
+    "System is rebooting": "reboot",
+    "System is halting": "halt",
+    "System is rebooting with kexec": "kexec",
+    "System userspace is rebooting": "soft-reboot",
+}
+_BOOT_END_PATTERN = "^(?:" + "|".join(re.escape(message) for message in _BOOT_END_MESSAGES) + r")\.?$"
+
+
 def _boots(run) -> dict:
     code, out, err = run(["journalctl", "--list-boots", "-n", "4", "--no-pager"], 3.0)
     if code != 0:
@@ -339,23 +332,34 @@ def _boots(run) -> dict:
         return {"quality": "partial", "reason": "boot anterior ausente no journal", "items": items}
     incomplete = False
     for item in items[:-1]:
+        item.update(end_kind=None, end_source=None)
         code, events, err = run(["journalctl", "-b", item["boot_id"],
                                  "-u", "systemd-logind.service",
-                                 "-g", "System is powering down\\.", "-n", "1",
+                                 "-g", _BOOT_END_PATTERN, "-n", "1",
                                  "-o", "cat", "--no-pager"], 2.0)
         if code not in (0, 1) or (code == 1 and err.strip()):
             item["end"] = "unknown"
             item["reason"] = err or "fim do boot ilegível"
             incomplete = True
             continue
-        item["end"] = ("shutdown_recorded" if code == 0 and
-                       "System is powering down." in events else "inconclusive")
+        kind = _BOOT_END_MESSAGES.get(events.strip().removesuffix(".")) if code == 0 else None
+        if kind is not None:
+            item.update(end="shutdown_recorded", end_kind=kind,
+                        end_source="systemd-logind.service")
+        elif events.strip():
+            item.update(end="unknown", reason="registro de encerramento não reconhecido")
+            incomplete = True
+        else:
+            item["end"] = "inconclusive"
     previous = items[-2]
     without_record = sum(item.get("end") == "inconclusive" for item in items[:-1])
+    recorded = sum(item.get("end") == "shutdown_recorded" for item in items[:-1])
     reason = (f"{without_record} "
               f"{'boot anterior' if without_record == 1 else 'boots anteriores'} "
-              "sem registro de desligamento do logind no diário; causa desconhecida"
-              if without_record else "desligamento registrado nos boots anteriores consultáveis")
+              "sem registro de encerramento do logind no diário; causa desconhecida"
+              if without_record else
+              "solicitação de encerramento registrada; conclusão não comprovada" if recorded else
+              "encerramento anterior desconhecido; causa desconhecida")
     if incomplete:
         reason += "; parte do histórico indisponível"
     return {"quality": "partial" if incomplete else "ok", "items": items,
@@ -387,7 +391,7 @@ def _last_journal_entry(run, boot_id: str) -> dict:
 
 
 class HostObserver:
-    """Slow probe. `record` only commits a tiny Btrfs baseline for the GUI."""
+    """Slow probe. `record` only persists small diagnostic samples for the GUI."""
 
     def __init__(self, *, proc_root: Path | None = None, sys_root: Path | None = None,
                  state_path: Path | None = None, run=None, record: bool = False,
@@ -418,6 +422,9 @@ class HostObserver:
         except (OSError, ValueError, UnicodeError):
             boot_id = ""
         mounts, mounts_problem = _mounts(self.proc_root)
+        storage = observe_storage(mounts, sys_root=self.sys_root,
+                                  state_path=self.state_path.with_name("host-storage.json"),
+                                  now=now, record=self.record)
         btrfs, btrfs_problem = _btrfs(self.sys_root)
         btrfs, baseline_problem = _compare_and_record(btrfs, self.state_path,
                                                         self.record, now, boot_id)
@@ -471,6 +478,7 @@ class HostObserver:
                 "baseline_quality": "unknown" if baseline_problem and baseline_problem != "novo" else "ok",
                 "baseline_reason": baseline_problem,
                 "ntfs": ntfs, "services": services, "boots": self._boot_cache[1],
+                "storage": storage,
                 "observer_duration_ms": round((time.monotonic() - started) * 1000, 2),
                 "timeline": {"quality": timeline["quality"], "reason": timeline["reason"],
                              "capacity": timeline["capacity"],

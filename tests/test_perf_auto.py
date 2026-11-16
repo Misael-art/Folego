@@ -34,9 +34,9 @@ def test_without_pressure_nothing_closes_and_grace_precedes_close():
     assert d.close is not None and d.trigger.startswith("pressão")
 
 
-@pytest.mark.parametrize("v", [view(load=agents.BUSY), view(avail=1_000_000)])
-def test_low_ram_or_agent_build_also_trigger(v):
-    assert perf_auto.pressure(v)
+def test_low_ram_triggers_but_cpu_in_a_protected_tree_alone_does_not():
+    assert perf_auto.pressure(view(avail=1_000_000))
+    assert not perf_auto.pressure(view(load=agents.BUSY))
 
 
 def test_only_automatic_ready_items_and_one_close_per_cycle():

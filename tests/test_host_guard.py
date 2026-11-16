@@ -1,6 +1,9 @@
 """Host guards use bounded evidence and never turn a gap into healthy."""
 import json
+import re
 import time
+
+import pytest
 
 from folego.adapters.host_guard import HostObserver, _boots, _ntfs_events, _services
 from folego.adapters.host_timeline import HostTimelineRecorder
@@ -259,6 +262,60 @@ def test_boot_history_finds_logind_poweroff_beyond_noisy_tail():
     assert "1 boot anterior" in result["reason"]
 
 
+@pytest.mark.parametrize(("message", "kind"), [
+    ("System is powering down.", "poweroff"),
+    ("System is rebooting.", "reboot"),
+    ("System is halting.", "halt"),
+    ("System is rebooting with kexec.", "kexec"),
+    ("System userspace is rebooting.", "soft-reboot"),
+])
+def test_boot_history_recognizes_logind_end_requests_without_certifying_completion(message, kind):
+    calls = []
+
+    def run(argv, timeout):
+        calls.append(argv)
+        if "--list-boots" in argv:
+            return 0, (" -1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa Wed previous\n"
+                       "  0 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb Wed current\n"), ""
+        assert "systemd-logind.service" in argv and timeout <= 2
+        assert argv[argv.index("-n") + 1] == "1"
+        pattern = argv[argv.index("-g") + 1]
+        return (0, message + "\n", "") if re.search(pattern, message) else (1, "", "")
+
+    report = _boots(run)
+    assert report["previous_end"] == "shutdown_recorded"
+    assert report["items"][0]["end_kind"] == kind
+    assert report["items"][0]["end_source"] == "systemd-logind.service"
+    assert "conclusão não comprovada" in report["reason"]
+    assert len(calls) == 2  # no extra polling to recognize a reboot
+
+
+def test_boot_history_never_claims_recorded_shutdown_when_all_queries_failed():
+    def run(argv, timeout):
+        if "--list-boots" in argv:
+            return 0, (" -1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa Wed previous\n"
+                       "  0 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb Wed current\n"), ""
+        return -1, "", "journal indisponível"
+
+    report = _boots(run)
+    assert report["quality"] == "partial"
+    assert report["previous_end"] == "unknown"
+    assert "desligamento registrado" not in report["reason"]
+    assert "causa desconhecida" in report["reason"]
+
+
+def test_boot_history_does_not_accept_a_shutdown_phrase_inside_unrelated_output():
+    def run(argv, timeout):
+        if "--list-boots" in argv:
+            return 0, (" -1 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa Wed previous\n"
+                       "  0 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb Wed current\n"), ""
+        return 0, "Unrelated: System is powering down.\n", ""
+
+    report = _boots(run)
+    assert report["quality"] == "partial"
+    assert report["previous_end"] == "unknown"
+
+
 def test_thermal_guard_uses_only_matching_acpi_limits_and_fresh_samples(tmp_path):
     zone = tmp_path / "class/thermal/thermal_zone0"
     zone.mkdir(parents=True)
@@ -288,3 +345,46 @@ def test_thermal_guard_uses_only_matching_acpi_limits_and_fresh_samples(tmp_path
     failed = tracker.observe(Snapshot(**base, mono=now + 35, temperature_c=105,
                                       sources=(SourceQuality("temperature", ERROR),)))
     assert failed["state"] == "unknown"
+
+
+def test_health_cli_reports_power_and_protection_without_writing_receipts(
+        fake_home, fake_proc, tmp_path, monkeypatch, capsys):
+    from folego.cli import main
+    from fixtures_proc import build_proc
+    from folego.actions.power_profile_guard import PowerProfileGuard
+    from folego.safely.persist import write_json_atomic
+    from folego import paths
+
+    build_proc(fake_proc, pids=[])
+    battery = tmp_path / 'sys/class/power_supply/BAT0'
+    battery.mkdir(parents=True)
+    for name, value in {'type': 'Battery', 'capacity': '75', 'status': 'Discharging',
+                        'voltage_now': '7000000', 'voltage_min_design': '7700000'}.items():
+        (battery / name).write_text(value)
+    adapter = battery.parent / 'ACAD'
+    adapter.mkdir()
+    (adapter / 'type').write_text('Mains')
+    (adapter / 'online').write_text('0')
+    monkeypatch.setenv('DECKWELLNESS_SYS_ROOT', str(tmp_path / 'sys'))
+    state = paths.state_dir() / 'power-profile-guard.json'
+    write_json_atomic(state, {'schema': 1, 'enabled': False, 'receipt': None})
+    before = state.read_bytes()
+    monkeypatch.setattr('folego.adapters.host_guard._command',
+                        lambda argv, timeout: (1, '', 'indisponível'))
+    assert main(['disk', 'health', '--json']) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result['power']['state'] == 'attention'
+    assert '7,00 V' in result['power']['message']
+    assert result['power_guard']['unavailable'] and result['power_guard']['enabled'] is False
+    assert state.read_bytes() == before
+    assert not PowerProfileGuard(path=state).status(reconcile=False)['enabled']
+    result['boots'] = {'quality': 'ok', 'reason': 'registro do logind',
+                       'previous_end': 'shutdown_recorded', 'items': [
+                           {'end': 'shutdown_recorded', 'end_kind': 'reboot',
+                            'end_source': 'systemd-logind.service'}, {}]}
+    monkeypatch.setattr(HostObserver, 'observe', lambda self: result)
+    assert main(['disk', 'health']) == 0
+    output = capsys.readouterr().out
+    assert 'reinício registrado pelo logind' in output
+    assert 'conclusão não comprovada' in output
+    assert state.read_bytes() == before

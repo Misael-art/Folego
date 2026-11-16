@@ -9,7 +9,7 @@ import time
 
 from .. import paths
 from ..core.sessions import read_boot_id
-from .accessibility import Supervisor, private_path, save_object
+from .accessibility import Supervisor, fresh, private_path, save_object
 
 UNIT = "folego-accessibility.service"
 MARKER = "# X-Folego-Managed=accessibility-v1"
@@ -62,15 +62,23 @@ def watch(*, supervisor=None, interval=10, cycles=None):
         count = 0
         while cycles is None or count < cycles:
             started = time.monotonic()
+            previous_report = getattr(supervisor, "last_report", None)
             try:
                 result = supervisor.tick()
             except Exception as exc:
                 # State/source faults stop effects but keep an observable monitor alive.
                 result = {"ok": False, "state": "unknown", "reason": str(exc)}
+            overview = None
             try:
                 from .accessibility import record_transition
                 report = getattr(supervisor, "last_report", None)
-                if report is not None:
+                if report is not None and report is not previous_report:
+                    if fresh(report):
+                        overview = {key: report[key]
+                                    for key in ("schema", "state", "mono", "boot_id")}
+                        overview["clock"] = report.get("clock", "monotonic")
+                        for key in ("blockers", "alerts"):
+                            overview[key] = [value[:240] for value in report[key][:8]]
                     result["last_transition"] = record_transition(supervisor.store, report)
             except (OSError, ValueError) as exc:
                 result["transition_error"] = str(exc)
@@ -81,6 +89,7 @@ def watch(*, supervisor=None, interval=10, cycles=None):
                 result["temporary_retention"] = {"archived": 0, "reason": str(exc)}
             save_object(supervisor.store.root / "watch-status.json",
                         {"schema": 1, "checked_at": time.time(), "result": result,
+                         "overview": overview,
                          "owner": {"pid": os.getpid(), "boot_id": read_boot_id(),
                                    "start_ticks": int(Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19])},
                          "effects_scope": "enable-baseline-input-and-deck-profiles"})

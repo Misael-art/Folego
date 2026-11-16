@@ -1,0 +1,583 @@
+{
+  "schema": 1,
+  "date": "2026-11-12",
+  "purpose": "Requested staged opening and passive stability observation of Codex Desktop and Codex Web on Jupiter/KDE Wayland.",
+  "product_version": "0.2.0b14",
+  "method": {
+    "interval_seconds": 15,
+    "sources": [
+      "procfs CPU/memory/swap/PSI",
+      "sysfs thermal_zone0",
+      "PID plus start ticks",
+      "KWin windows",
+      "Spectacle active-window captures",
+      "journalctl kernel and coredumps"
+    ],
+    "thermal_passive_critical_c": [
+      100,
+      105
+    ],
+    "reserve_gib": 4,
+    "tmp_destination": "private persistent Btrfs directory",
+    "artificial_stress": false,
+    "builds_tests_installs": false
+  },
+  "desktop_stage": {
+    "first_sample_utc": "2026-11-12T11:03:29Z",
+    "last_sample_utc": "2026-11-12T11:08:53Z",
+    "sample_count": 16,
+    "sample_span_seconds": 324.9,
+    "maximum_sample_gap_seconds": 114.06,
+    "minimum_mem_available_gib": 7.014,
+    "temperature_min_max_c": [
+      48.0,
+      66.0
+    ],
+    "cpu_host_min_mean_max_percent": [
+      20.56,
+      44.22,
+      87.73
+    ],
+    "swap_in_max_kib_s": 186.2,
+    "swap_out_max_kib_s": 10327.12,
+    "swap_out_nonzero_samples": 9,
+    "psi_some_avg60_max_percent": {
+      "cpu": 16.26,
+      "memory": 1.08,
+      "io": 0.71
+    },
+    "attention_samples": 0
+  },
+  "combined_clean": {
+    "first_sample_utc": "2026-11-12T11:12:39Z",
+    "last_sample_utc": "2026-11-12T11:23:11Z",
+    "sample_count": 43,
+    "sample_span_seconds": 631.56,
+    "maximum_sample_gap_seconds": 15.05,
+    "minimum_mem_available_gib": 6.332,
+    "temperature_min_max_c": [
+      48.0,
+      65.0
+    ],
+    "cpu_host_min_mean_max_percent": [
+      18.37,
+      23.25,
+      36.85
+    ],
+    "swap_in_max_kib_s": 1421.27,
+    "swap_out_max_kib_s": 0.0,
+    "swap_out_nonzero_samples": 0,
+    "psi_some_avg60_max_percent": {
+      "cpu": 2.99,
+      "memory": 0.18,
+      "io": 0.23
+    },
+    "attention_samples": 0
+  },
+  "main_processes": {
+    "desktop": {
+      "pid": 1931184,
+      "start_ticks": 3445656,
+      "state": "S",
+      "exe": "/opt/codex-desktop/electron",
+      "present_with_same_identity_in_every_clean_sample": true
+    },
+    "web-ui": {
+      "pid": 1963672,
+      "start_ticks": 3497590,
+      "state": "S",
+      "exe": "/opt/codex-desktop/electron",
+      "present_with_same_identity_in_every_clean_sample": true
+    },
+    "web-backend": {
+      "pid": 5671,
+      "start_ticks": 14451,
+      "state": "S",
+      "exe": "/home/misael/.local/share/phasezero/chatgpt-web/packages/6.1.17/app/codex-web-gpt-launcher",
+      "present_with_same_identity_in_every_clean_sample": true
+    }
+  },
+  "same_boot_throughout": true,
+  "kernel_check": {
+    "at": 1794482594.0666883,
+    "returncode": 0,
+    "journal_bytes": 42175,
+    "stderr": "",
+    "events": []
+  },
+  "coredump_check": {
+    "at": 1794482594.0768628,
+    "returncode": 0,
+    "journal_bytes": 8819,
+    "stderr": "",
+    "events": []
+  },
+  "limitations": [
+    "Web backend was already resident and hidden at baseline; Desktop phase was not isolated.",
+    "Initial native per-app classification missed joined argv[0]; corrected using executable identity. Host metrics remained valid. Collector restart caused the recorded Desktop-stage gap.",
+    "Initial Web wrapper launch in a Type=exec transient unit ended before a second window persisted. Relaunched only after confirming it absent, with ExitType=cgroup; no existing app was stopped.",
+    "A diagnostic helper inadvertently read a pre-existing 1.126 GB launcher log in full, causing transient RAM/swap pressure. It exited normally. The entire earlier opening interval is excluded from the clean combined window. Later log reads were bounded.",
+    "Desktop first capture had sidebar/composer rendered with selected conversation body blank; a later capture rendered conversation content. Historical bounded tail had ResizeObserver warnings; newly appended monitored log segments had no repeats. No prompts submitted by observer.",
+    "Measured real opening and idle use only, not provider recovery, sustained agent work, two-hour soak or proof that previous host crashes are fixed.",
+    "Screenshots, raw application logs and account/task content remain private and unversioned."
+  ],
+  "samples": [
+    {
+      "time_utc": "2026-11-12T11:12:39Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6672572,
+      "temperature_c": 54.0,
+      "cpu_host_percent": 31.65,
+      "swap_in_kib_s": 9.57,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:12:54Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 7142944,
+      "temperature_c": 53.0,
+      "cpu_host_percent": 29.44,
+      "swap_in_kib_s": 174.12,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:13:09Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 7157204,
+      "temperature_c": 52.0,
+      "cpu_host_percent": 23.35,
+      "swap_in_kib_s": 71.28,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:13:24Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 7118584,
+      "temperature_c": 61.0,
+      "cpu_host_percent": 26.59,
+      "swap_in_kib_s": 337.49,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:13:39Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 7264808,
+      "temperature_c": 52.0,
+      "cpu_host_percent": 25.79,
+      "swap_in_kib_s": 329.07,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:13:54Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6895100,
+      "temperature_c": 55.0,
+      "cpu_host_percent": 35.97,
+      "swap_in_kib_s": 761.88,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:14:09Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6975276,
+      "temperature_c": 52.0,
+      "cpu_host_percent": 23.03,
+      "swap_in_kib_s": 31.39,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:14:24Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6793264,
+      "temperature_c": 59.0,
+      "cpu_host_percent": 31.72,
+      "swap_in_kib_s": 44.15,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:14:39Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6754484,
+      "temperature_c": 52.0,
+      "cpu_host_percent": 23.02,
+      "swap_in_kib_s": 1421.27,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:14:54Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6658700,
+      "temperature_c": 65.0,
+      "cpu_host_percent": 36.85,
+      "swap_in_kib_s": 104.28,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:15:09Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6818532,
+      "temperature_c": 52.0,
+      "cpu_host_percent": 20.45,
+      "swap_in_kib_s": 49.2,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:15:24Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6781200,
+      "temperature_c": 51.0,
+      "cpu_host_percent": 24.7,
+      "swap_in_kib_s": 337.48,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:15:39Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6929092,
+      "temperature_c": 50.0,
+      "cpu_host_percent": 20.93,
+      "swap_in_kib_s": 14.1,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:15:54Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6978520,
+      "temperature_c": 50.0,
+      "cpu_host_percent": 21.31,
+      "swap_in_kib_s": 133.05,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:16:10Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6985992,
+      "temperature_c": 49.0,
+      "cpu_host_percent": 19.28,
+      "swap_in_kib_s": 7.98,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:16:25Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6999956,
+      "temperature_c": 49.0,
+      "cpu_host_percent": 18.75,
+      "swap_in_kib_s": 0.8,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:16:40Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 7009668,
+      "temperature_c": 49.0,
+      "cpu_host_percent": 19.72,
+      "swap_in_kib_s": 6.38,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:16:55Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 7005216,
+      "temperature_c": 53.0,
+      "cpu_host_percent": 24.26,
+      "swap_in_kib_s": 22.87,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:17:10Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 7018900,
+      "temperature_c": 50.0,
+      "cpu_host_percent": 21.67,
+      "swap_in_kib_s": 14.38,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:17:25Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 7031928,
+      "temperature_c": 49.0,
+      "cpu_host_percent": 18.56,
+      "swap_in_kib_s": 5.06,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:17:40Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6987164,
+      "temperature_c": 53.0,
+      "cpu_host_percent": 20.85,
+      "swap_in_kib_s": 11.44,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:17:55Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 7080828,
+      "temperature_c": 49.0,
+      "cpu_host_percent": 23.34,
+      "swap_in_kib_s": 1.86,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:18:10Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 7094036,
+      "temperature_c": 49.0,
+      "cpu_host_percent": 18.37,
+      "swap_in_kib_s": 9.84,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:18:25Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 7092556,
+      "temperature_c": 49.0,
+      "cpu_host_percent": 19.68,
+      "swap_in_kib_s": 14.37,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:18:40Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 7088432,
+      "temperature_c": 48.0,
+      "cpu_host_percent": 21.38,
+      "swap_in_kib_s": 14.36,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:18:55Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 7060692,
+      "temperature_c": 49.0,
+      "cpu_host_percent": 23.29,
+      "swap_in_kib_s": 13.82,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:19:10Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 7063180,
+      "temperature_c": 48.0,
+      "cpu_host_percent": 18.68,
+      "swap_in_kib_s": 2.39,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:19:25Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6640068,
+      "temperature_c": 57.0,
+      "cpu_host_percent": 27.77,
+      "swap_in_kib_s": 107.67,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:19:40Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6698884,
+      "temperature_c": 50.0,
+      "cpu_host_percent": 28.79,
+      "swap_in_kib_s": 49.73,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:19:55Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6843232,
+      "temperature_c": 49.0,
+      "cpu_host_percent": 24.2,
+      "swap_in_kib_s": 10.91,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:20:10Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6836072,
+      "temperature_c": 59.0,
+      "cpu_host_percent": 21.29,
+      "swap_in_kib_s": 38.32,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:20:25Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6835992,
+      "temperature_c": 49.0,
+      "cpu_host_percent": 22.38,
+      "swap_in_kib_s": 22.62,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:20:40Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6828216,
+      "temperature_c": 49.0,
+      "cpu_host_percent": 22.7,
+      "swap_in_kib_s": 21.27,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:20:55Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6865056,
+      "temperature_c": 49.0,
+      "cpu_host_percent": 20.08,
+      "swap_in_kib_s": 34.05,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:21:10Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6832092,
+      "temperature_c": 49.0,
+      "cpu_host_percent": 21.0,
+      "swap_in_kib_s": 28.97,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:21:25Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6819584,
+      "temperature_c": 49.0,
+      "cpu_host_percent": 19.43,
+      "swap_in_kib_s": 5.85,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:21:40Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6822364,
+      "temperature_c": 48.0,
+      "cpu_host_percent": 20.17,
+      "swap_in_kib_s": 5.32,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:21:55Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6790636,
+      "temperature_c": 61.0,
+      "cpu_host_percent": 20.42,
+      "swap_in_kib_s": 1.6,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:22:10Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6825340,
+      "temperature_c": 55.0,
+      "cpu_host_percent": 25.19,
+      "swap_in_kib_s": 48.41,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:22:25Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6735732,
+      "temperature_c": 51.0,
+      "cpu_host_percent": 20.22,
+      "swap_in_kib_s": 1.6,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:22:40Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6782028,
+      "temperature_c": 49.0,
+      "cpu_host_percent": 20.23,
+      "swap_in_kib_s": 2.13,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:22:56Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6797648,
+      "temperature_c": 52.0,
+      "cpu_host_percent": 21.33,
+      "swap_in_kib_s": 4.79,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    },
+    {
+      "time_utc": "2026-11-12T11:23:11Z",
+      "phase": "combined-clean",
+      "mem_available_kib": 6857512,
+      "temperature_c": 54.0,
+      "cpu_host_percent": 21.78,
+      "swap_in_kib_s": 16.23,
+      "swap_out_kib_s": 0.0,
+      "attention": false
+    }
+  ],
+  "excluded_opening_interval": {
+    "reason": "Failed transient launcher lifetime and diagnostic helper full-log read; not used to claim app-only stability.",
+    "minimum_mem_available_gib": 3.579,
+    "maximum_swap_out_kib_s": 32406.25,
+    "attention_samples": 1
+  },
+  "new_log_events_from_11_13_20_utc": {
+    "launcher.log": {
+      "delta_bytes": 3029,
+      "read_clipped": false,
+      "resize_observer_warnings": 0,
+      "crash_event_lines": []
+    },
+    "launcher-port-5176.log": {
+      "delta_bytes": 16873,
+      "read_clipped": false,
+      "resize_observer_warnings": 0,
+      "crash_event_lines": []
+    }
+  },
+  "window_checks": {
+    "both_visible_in_kwin": true,
+    "native_later_capture_conversation_rendered": true,
+    "web_capture_composer_and_web_model_rendered": true,
+    "screen_capture": "Computer Use screenshot failed under KDE; installed Spectacle active-window capture succeeded.",
+    "no_prompts_submitted_by_observer": true
+  }
+}

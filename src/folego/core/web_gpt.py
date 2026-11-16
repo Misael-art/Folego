@@ -196,6 +196,8 @@ def observe(core_home, launcher_data, *, now, live=False):
     result['web_service'] = service_status(core_home) if live else dict(state='unknown', detail='Serviço não consultado')
     result['web_tunnel'] = dict(state='unknown', detail='Túnel não consultado')
     result['web_inference'] = 'não comprovada; nenhum envio de teste foi realizado'
+    from ..adapters.web_recovery import status
+    result['web_recovery'] = status(core_home, now=now)
     if live:
         from .ai_sessions import read_json
         try:

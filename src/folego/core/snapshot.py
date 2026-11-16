@@ -148,6 +148,8 @@ class BatteryInfo:
     voltage_uv: int | None = None
     current_ua: int | None = None
     power_uw: int | None = None
+    # Pack minimum design voltage; reference for load-sag detection.
+    voltage_min_design_uv: int | None = None
 
 
 @dataclass(frozen=True)

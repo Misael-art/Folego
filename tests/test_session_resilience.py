@@ -133,6 +133,22 @@ def test_pending_index_is_bounded_reuses_validated_state_and_detects_rewrite(tmp
     assert reader.bytes_read - before <= READ_BUDGET
 
 
+def test_bounded_pending_index_preserves_scopes_and_clears_them_with_the_receipt(tmp_path):
+    from folego.actions.accessibility import unresolved
+    journal = Journal(tmp_path / 'scoped-journal')
+    plan = ActionPlan('accessibility.activate', ResourceIdentity.entry('touch'),
+                      {'capabilities': ['touch'], 'peer': {'registered': True}})
+    journal.append_intent(plan)
+    reader = PendingReader(journal, clock=lambda: 0)
+    assert reader.ids() == [plan.operation_id]
+    assert 'keyboard' in reader.pending_scopes[plan.operation_id]
+    assert 'microphone' not in reader.pending_scopes[plan.operation_id]
+    assert unresolved(journal, capabilities=['microphone']) == []
+    assert unresolved(journal, capabilities=['keyboard']) == [plan.operation_id]
+    journal.append_result(ActionResult(plan.action, Outcome.OK, plan.operation_id, target_key='touch'))
+    assert not reader.ids() and not reader.pending_scopes
+
+
 def test_closed_temporaries_archive_without_payload_deletion_and_unknown_is_preserved(tmp_path, monkeypatch, capsys):
     env = jobtemp.prepare_job_environment({}, root=tmp_path / "jobs", mounts=(("/", "ext4"),))
     run = Path(env["TMPDIR"]).parent

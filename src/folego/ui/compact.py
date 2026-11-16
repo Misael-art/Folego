@@ -17,10 +17,12 @@ from PySide6.QtWidgets import (QBoxLayout, QFrame, QGridLayout, QHBoxLayout, QLa
 
 from . import title_signal
 from .desktop_caps import detect
-from .theme import _background_color, background, themed_style, TOKENS, set_control_icon, on_theme_change
+from .theme import (_background_color, background, themed_style, TOKENS, THEMES, choose_theme,
+                    set_control_icon, on_theme_change, theme_swatch)
 from .palettes import readable
 from .mini_ai_strip import MiniAIStrip
-from ..core.battery_alerts import battery_band, remaining_text
+from ..core.battery_alerts import (VOLTAGE_BANDS, VOLTAGE_NAMES, battery_band, remaining_text,
+                                    voltage_level, voltage_sag, voltage_text)
 
 POSITION_KEY = "compact/position"
 WIDGET_TITLE = "Fôlego — widget"
@@ -28,6 +30,7 @@ FLOAT_MODES = ('compact', 'mini')
 DOCK_MODES = (*FLOAT_MODES, 'right', 'left', 'top')
 MINI_WIDTH = 384
 MINI_HEIGHT = 46
+COMPACT_WIDTH = 268
 SLIM_TOP_WIDTH = 900
 SLIM_TOP_HEIGHT = 120
 
@@ -228,7 +231,7 @@ class CompactWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setWindowTitle(WIDGET_TITLE)
         self.setAccessibleName("Widget do Fôlego")
-        self.setFixedWidth(280)
+        self.setFixedWidth(COMPACT_WIDTH)
         themed_style(self, lambda: "QWidget {font-size:9pt;}"
             "QFrame#widgetCard {background:transparent;border:none;}"
             f"QLabel {{background:transparent;color:{TOKENS.text};}}"
@@ -250,6 +253,8 @@ class CompactWindow(QWidget):
         self.battery_label = QLabel()
         self.battery_label.hide()
         self._battery_band = 'green'
+        self._voltage_band = None
+        self._voltage_text = ''
         self._battery_text = ''
         themed_style(self.battery_label, self._battery_style)
         self._automation_text = "automação manual · preset equilibrado · nenhum grant ativo"
@@ -320,7 +325,10 @@ class CompactWindow(QWidget):
         readings = QVBoxLayout()
         self.readings_layout = readings
         readings.setSpacing(3)
-        readings.addWidget(self.status_label)
+        self.summary_row = QHBoxLayout()
+        self.summary_row.setSpacing(4)
+        self.summary_row.addWidget(self.status_label, 1)
+        readings.addLayout(self.summary_row)
         readings.addWidget(self.detail_label)
         readings.addWidget(self.battery_label)
         readings_widget = QWidget()
@@ -389,12 +397,12 @@ class CompactWindow(QWidget):
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(0)
             for control in controls:
-                themed_style(control, lambda: f'QPushButton{{background:transparent;color:{TOKENS.text};'
-                             'border:none;border-radius:0;padding:0;min-height:0;}'
-                             f'QPushButton:hover{{background:{background(TOKENS.surface_alt)};}}')
                 row.addWidget(control)
             themed_style(group, lambda target=name: f'QFrame#{target}{{background:transparent;'
-                         f'border:1px solid {TOKENS.border};border-radius:7px;}}')
+                         f'border:1px solid {TOKENS.border};border-radius:7px;}}'
+                         f'QFrame#{target} QPushButton{{background:transparent;color:{TOKENS.text};'
+                         'border:none;border-radius:0;padding:0;min-height:0;}'
+                         f'QFrame#{target} QPushButton:hover{{background:{background(TOKENS.surface_alt)};}}')
             if name == 'keyboardGroup':
                 self.keyboard_group = group
                 header.addWidget(group, 0, 1)
@@ -420,6 +428,10 @@ class CompactWindow(QWidget):
                       self.mini_memory, self.mini_battery):
             label.setTextFormat(Qt.TextFormat.PlainText)
             label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        self.mini_voltage = QLabel('')
+        self.mini_voltage.setTextFormat(Qt.TextFormat.PlainText)
+        self.mini_voltage.setAccessibleName('Voltagem da bateria')
+        self.mini_voltage.hide()
         status_font = QFont(self.mini_status.font())
         status_font.setPointSize(9)
         self.mini_status.setFont(status_font)
@@ -442,7 +454,15 @@ class CompactWindow(QWidget):
             label.setAccessibleName(name)
             self._set_mini_metric(label, label.text(), 'muted')
             cell_layout.addWidget(title)
-            cell_layout.addWidget(label)
+            if label is self.mini_battery:
+                row = QHBoxLayout()
+                row.setContentsMargins(0, 0, 0, 0)
+                row.setSpacing(4)
+                row.addWidget(label)
+                row.addWidget(self.mini_voltage)
+                cell_layout.addLayout(row)
+            else:
+                cell_layout.addWidget(label)
             self.mini_layout.addWidget(cell)
             if label is self.mini_temperature:
                 self.mini_temperature_caption = title
@@ -463,7 +483,18 @@ class CompactWindow(QWidget):
         self.mini_expand.setAccessibleName('Expandir para o widget compacto')
         self.mini_expand.setToolTip('Expandir para o widget compacto')
         self.mini_expand.clicked.connect(lambda: self.set_dock_mode('compact'))
+        self.mini_actions_handle = QPushButton('···')
+        self.mini_actions_handle.setFixedSize(28, 26)
+        self.mini_actions_handle.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.mini_actions_handle.setAccessibleName('Revelar atalhos da mini horizontal')
+        self.mini_actions_handle.setToolTip('Atalhos da mini · passe o mouse ou toque')
+        themed_style(self.mini_actions_handle, lambda: f'QPushButton{{background:transparent;'
+                     f'color:{TOKENS.text};border:1px solid {TOKENS.border};border-radius:7px;'
+                     'min-height:0;padding:0;font-weight:700;}'
+                     f'QPushButton:hover{{background:{background(TOKENS.surface_alt)};}}')
+        self.mini_actions_handle.clicked.connect(lambda: self._animate_actions(True))
         self.mini_layout.addStretch(1)
+        self.mini_layout.addWidget(self.mini_actions_handle)
         self.mini_layout.addWidget(self.mini_expand)
         self.mini_bar.hide()
         self.layout_menu = QMenu('Visualizações', self.control_button)
@@ -484,6 +515,19 @@ class CompactWindow(QWidget):
         self.control_menu.addSeparator()
         self.accounts_menu = self.control_menu.addMenu('Contas e cotas de IA')
         self.accounts_menu.aboutToShow.connect(self._refresh_accounts_menu)
+        self.theme_menu = self.control_menu.addMenu('Tema de cores')
+        self.theme_actions = QActionGroup(self.theme_menu)
+        self.theme_actions.setExclusive(True)
+        for key, theme in THEMES.items():
+            action = self.theme_menu.addAction(theme_swatch(theme), theme.name)
+            action.setCheckable(True)
+            action.setData(key)
+            self.theme_actions.addAction(action)
+        self.theme_actions.triggered.connect(self._change_theme)
+        self._sync_theme_menu()
+        on_theme_change(self, self._theme_changed)
+        self.monitoring_menu = self.control_menu.addMenu('Monitoramento')
+        self.pause_action = self.monitoring_menu.addAction('Pausar monitoramento', self._toggle_pause)
         self.hide_action = self.control_menu.addAction('Ocultar widget', self._hide_safely)
         self.quit_action = self.control_menu.addAction('Sair do Fôlego', self._window.quit)
         self.control_menu.aboutToShow.connect(self._sync_layout_actions)
@@ -521,9 +565,9 @@ class CompactWindow(QWidget):
         self.side_content.hide()
         self.action_drawer = QWidget(self)
         self.action_drawer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        drawer = QVBoxLayout(self.action_drawer)
-        drawer.setContentsMargins(0, 0, 0, 0)
-        drawer.addWidget(self.shortcut_tabs)
+        self.drawer_layout = QHBoxLayout(self.action_drawer)
+        self.drawer_layout.setContentsMargins(0, 0, 0, 0)
+        self.drawer_layout.addWidget(self.shortcut_tabs)
         self.action_drawer.setMaximumHeight(0)
         layout.addWidget(self.action_drawer)
         self._arrange_sections('compact')
@@ -584,17 +628,27 @@ class CompactWindow(QWidget):
             self.body_layout.addWidget(self.readings_widget)
         for layout, saved in ((self.gauge_widget.layout(), self._gauge_margins),
                               (self.readings_layout, self._readings_margins)):
-            margins = (0, 0, 0, 0) if side or slim_top else (saved.left(), saved.top(),
-                                                            saved.right(), saved.bottom())
+            margins = ((0, 0, 0, 0) if side or slim_top or mode == 'compact'
+                       else (saved.left(), saved.top(), saved.right(), saved.bottom()))
             layout.setContentsMargins(*margins)
+        self.body_layout.setSpacing(7 if mode == 'compact' else 10)
         self.body_layout.setDirection(QBoxLayout.Direction.TopToBottom if side
                                       else QBoxLayout.Direction.LeftToRight)
         self.body_layout.setStretch(1, 0 if side else 1)
-        gauge_side = 64 if slim_top else 68
+        gauge_side = 60 if mode == 'compact' else 64 if slim_top else 68
         self.gauge.setFixedSize(gauge_side, gauge_side)
         self.ai_strip.layout().setDirection(QBoxLayout.Direction.TopToBottom if side
                                              else QBoxLayout.Direction.LeftToRight)
-        self.shortcut_tabs.set_orientation(mode)
+        self.shortcut_tabs.set_orientation(mode, self.control_button)
+        self.drawer_layout.setAlignment(self.shortcut_tabs, Qt.AlignmentFlag.AlignRight
+                                        if mode == 'mini' else Qt.AlignmentFlag(0))
+        self.drawer_layout.setContentsMargins(0, 0, 10 if mode == 'mini' else 0,
+                                             4 if mode == 'mini' else 0)
+        self.action_drawer.setVisible(mode != 'mini')
+        self.control_button.setText('Menu' if mode == 'mini' else '')
+        if mode != 'mini':
+            self.navigation_group.layout().addWidget(self.control_button)
+            self.control_button.show()
         for column in self.ai_strip.columns.values():
             self.ai_strip.layout().setAlignment(column, Qt.AlignmentFlag.AlignHCenter if side else Qt.AlignmentFlag(0))
             self.ai_strip.layout().setStretchFactor(column, 0 if side or slim_top else 1)
@@ -609,9 +663,12 @@ class CompactWindow(QWidget):
         keyboard_button = self.shortcut_tabs.buttons['keyboard']
         for button, width in ((keyboard_button, 24 if side else 30),
                               (self.shortcut_tabs.top_button, 16 if side else 20),
-                              (self.open_button, 32 if mode == 'mini' else 24 if side else 30),
-                              (self.control_button, 32 if mode == 'mini' else 16 if side else 20)):
+                              (self.open_button, 32 if mode == 'mini' else 24 if side else 30)):
             button.setFixedSize(width, 32 if mode == 'mini' else 25 if side else 28)
+        if mode == 'mini':
+            self.control_button.setFixedSize(58, 24)
+        else:
+            self.control_button.setFixedSize(16 if side else 20, 25 if side else 28)
         self.header_layout.setColumnStretch(0, 1)
         self.header_layout.setColumnStretch(1, 1 if side else 0)
         if side:
@@ -633,9 +690,12 @@ class CompactWindow(QWidget):
             self.header_layout.addWidget(self.navigation_group, 0, 2)
         self.readings_layout.removeWidget(self.free_label)
         self.footer_layout.removeWidget(self.free_label)
+        self.summary_row.removeWidget(self.free_label)
         self.notices_layout.removeWidget(self.pause_button)
         self.footer_layout.removeWidget(self.pause_button)
-        if side:
+        if mode == 'compact':
+            self.summary_row.addWidget(self.free_label)
+        elif side:
             self.readings_layout.addWidget(self.free_label)
             self.notices_layout.addWidget(self.pause_button)
         elif slim_top:
@@ -643,7 +703,10 @@ class CompactWindow(QWidget):
         else:
             self.footer_layout.insertWidget(0, self.pause_button)
             self.footer_layout.addWidget(self.free_label)
-        self.footer_widget.setVisible(not side and not slim_top and mode != 'mini')
+        self.footer_widget.setVisible(mode == 'top' and not slim_top)
+        self.pause_button.setVisible(side or mode == 'top')
+        self.monitoring_menu.menuAction().setVisible(mode == 'compact')
+        self.theme_menu.menuAction().setVisible(mode == 'mini')
         self.body_layout.setAlignment(self.gauge_widget, Qt.AlignmentFlag.AlignHCenter if side else Qt.AlignmentFlag(0))
         for label in (self.status_label, self.alert_label, self.feedback_label):
             label.setAlignment(Qt.AlignmentFlag.AlignHCenter if side else Qt.AlignmentFlag.AlignLeft)
@@ -655,7 +718,7 @@ class CompactWindow(QWidget):
             font = QFont(label.font())
             font.setPointSize(8 if short_side or slim_top else 9)
             label.setFont(font)
-        self.free_label.setWordWrap(not slim_top)
+        self.free_label.setWordWrap(not slim_top and mode != 'compact')
         self.battery_label.setWordWrap(side)
         self.battery_label.setAlignment(reading_alignment)
         self.pause_button.setMinimumWidth(0)
@@ -675,7 +738,7 @@ class CompactWindow(QWidget):
                                           else 'Sem cotas disponíveis confirmadas')
         self.inner.setContentsMargins(16 if mode == 'left' else 6, 6,
                                       16 if mode == 'right' else 6, 2 if mode != 'compact' else 6)
-        self.inner.setSpacing(2 if side else 4)
+        self.inner.setSpacing(2 if side else 3 if mode == 'compact' else 4)
         self.dock_scroll.setLayoutDirection(Qt.LayoutDirection.RightToLeft if mode == 'right'
                                              else Qt.LayoutDirection.LeftToRight)
         header, body, notices, ai, footer = self._sections
@@ -830,7 +893,7 @@ class CompactWindow(QWidget):
         self.setMaximumSize(16777215, 16777215)
         if mode in FLOAT_MODES:
             self.inner.activate()
-            width = 280 if mode == 'compact' else self._mini_width()
+            width = COMPACT_WIDTH if mode == 'compact' else self._mini_width()
             height = self.card.sizeHint().height() if mode == 'compact' else MINI_HEIGHT
             target = QRect(target.x(), target.y(), width, height)
             x, y = clamp_position(target.x(), target.y(), target.width(), target.height(), self._screens())
@@ -862,7 +925,7 @@ class CompactWindow(QWidget):
             self.dock_animation.setStartValue(origin)
             self.dock_animation.setEndValue(target)
             self.dock_animation.finished.connect(lambda: self.setFixedSize(target.size())
-                                                 if mode != 'compact' else self.setFixedWidth(280))
+                                                 if mode != 'compact' else self.setFixedWidth(COMPACT_WIDTH))
             self.dock_animation.finished.connect(self._schedule_mini_fit)
             self.dock_animation.start()
         self._dock_target = QRect(target) if mode not in FLOAT_MODES else None
@@ -919,9 +982,38 @@ class CompactWindow(QWidget):
             action.triggered.connect(lambda checked=False, p=provider: QTimer.singleShot(
                 0, lambda: self.ai_strip.details(p, anchor=self.control_button)))
 
+    def _sync_theme_menu(self):
+        for action in self.theme_actions.actions():
+            key = action.data()
+            current = key == TOKENS.key
+            action.setChecked(current)
+            action.setText(THEMES[key].name + (' · em uso' if current else ''))
+
+    def _theme_changed(self):
+        self._sync_theme_menu()
+        if self._dock_mode == 'compact' and self.isVisible():
+            QTimer.singleShot(0, self, lambda: self._drawer_frame(None))
+        else:
+            self._schedule_mini_fit()
+
+    def _change_theme(self, action):
+        try:
+            choose_theme(action.data())
+        except (RuntimeError, ValueError) as error:
+            self._sync_theme_menu()
+            self._shortcut_result(str(error))
+
     def _animate_actions(self, expanded):
         if self._dock_mode == 'mini':
-            self.action_drawer.setMaximumHeight(0)
+            if expanded and (self._dock_pending or self._requested_mode is not None):
+                return
+            height = self.drawer_layout.sizeHint().height() if expanded else 0
+            if height != self.action_drawer.maximumHeight():
+                self.action_drawer.setMaximumHeight(height)
+                self.action_drawer.setVisible(expanded)
+                self.setFixedHeight(MINI_HEIGHT + height)
+                if expanded:
+                    self._screen_changed()
             return
         self.drawer_animation.stop()
         self.drawer_animation.setStartValue(self.action_drawer.maximumHeight())
@@ -937,7 +1029,8 @@ class CompactWindow(QWidget):
 
     def enterEvent(self, event):
         self.drawer_delay.stop()
-        self._animate_actions(True)
+        if self._dock_mode != 'mini':
+            self._animate_actions(True)
         super().enterEvent(event)
 
     def leaveEvent(self, event):
@@ -945,9 +1038,18 @@ class CompactWindow(QWidget):
         super().leaveEvent(event)
 
     def eventFilter(self, watched, event):
+        kind = event.type()
+        if kind == QEvent.Type.Expose and self._needs_show_reconcile and watched is self.windowHandle():
+            QTimer.singleShot(0, self, self._reconcile_after_show)
+        if self._dock_mode == 'mini' and watched in (self.mini_actions_handle, self.shortcut_tabs):
+            if kind == QEvent.Type.Enter:
+                self.drawer_delay.stop()
+                self._animate_actions(True)
+            elif kind == QEvent.Type.Leave:
+                self.drawer_delay.start()
         # Qt/Wayland can synthesize an Enter on popup dismissal without pairing
         # its Leave when another surface of the same application is entered.
-        if (event.type() == QEvent.Type.Enter and isinstance(watched, QWindow)
+        if (kind == QEvent.Type.Enter and isinstance(watched, QWindow)
                 and self.isVisible() and watched is not self.windowHandle()):
             self.drawer_delay.start()
         return super().eventFilter(watched, event)
@@ -1101,6 +1203,7 @@ class CompactWindow(QWidget):
         if self.shortcut_tabs.controller.action == 'widget-place' and self._dock_pending:
             self._dock_pending = None
             self.card.setGraphicsEffect(None)
+            self._schedule_mini_fit()
             if self._dock_verify_attempts:
                 QTimer.singleShot(180, self._verify_dock_after_show)
             else:
@@ -1227,11 +1330,15 @@ class CompactWindow(QWidget):
             elif temperature >= limit - thresholds.thermal_margin_c:
                 thermal_notes.append('Temperatura próxima do limite passivo')
                 temperature_role = 'warning'
-        battery_low = (valid and snapshot.battery is not None
-                       and snapshot.source('battery').status == 'ok'
-                       and snapshot.battery.status == 'Discharging'
-                       and snapshot.battery.percent <= 10)
-        if battery_low:
+        battery_ok = (valid and snapshot.battery is not None
+                      and snapshot.source('battery').status == 'ok')
+        battery_sag = battery_ok and voltage_sag(snapshot.battery)
+        battery_low = battery_ok and (battery_sag or (
+            snapshot.battery.status == 'Discharging' and snapshot.battery.percent <= 10))
+        if battery_sag:
+            thermal_notes.append(f'Voltagem da bateria baixa ({voltage_text(snapshot.battery)}) '
+                                 f'apesar de {snapshot.battery.percent}%: risco de desligamento')
+        elif battery_low:
             thermal_notes.append(f'Bateria em {snapshot.battery.percent}%, descarregando')
         if self._paused:
             verdict, role = 'Pausado', 'muted'
@@ -1242,6 +1349,8 @@ class CompactWindow(QWidget):
                 verdict, role = 'Calor alto', 'danger'
             elif limit is not None and temperature >= limit - thresholds.thermal_margin_c:
                 verdict, role = 'Quente', 'warning'
+        elif battery_sag:
+            verdict, role = f'Bateria {voltage_text(snapshot.battery)}', 'danger'
         elif battery_low:
             verdict, role = f'Bateria {snapshot.battery.percent}%', 'danger'
         self.mini_status.setText(f'● {verdict}')
@@ -1277,7 +1386,16 @@ class CompactWindow(QWidget):
         self._set_mini_metric(self.mini_battery, f'{battery.percent}%' if battery else '—',
                               battery_role, color=self._battery_color if battery else None)
         if battery:
-            self.mini_battery.setToolTip(self._battery_text + '\n' + self.battery_label.toolTip())
+            tip = self._battery_text + '\n' + self.battery_label.toolTip()
+            if self._voltage_text:
+                self.mini_battery.setAccessibleDescription(
+                    f'{self.mini_battery.accessibleDescription()} · voltagem {self._voltage_text}')
+            self.mini_battery.setToolTip(tip)
+            self.mini_voltage.setToolTip(tip)
+        self.mini_voltage.setText(self._voltage_text.replace(' ', '') if battery else '')
+        self.mini_voltage.setVisible(bool(battery and self._voltage_text))
+        themed_style(self.mini_voltage, lambda: 'background:transparent;'
+                     f'color:{self._band_color(self._voltage_band)};font-size:9pt;font-weight:700;')
         self._schedule_mini_fit()
         source = ('ACPI' if snapshot.temperature_sensor == 'acpitz'
                   else snapshot.temperature_sensor)
@@ -1342,8 +1460,7 @@ class CompactWindow(QWidget):
             self.detail_label.setTextFormat(Qt.TextFormat.PlainText)
             self.detail_label.setText('\n'.join((memory, cpu, thermal, fan, swap, temp)))
         else:
-            battery = (f'<span style="color:{self._battery_color()};font-weight:700">{self._battery_text}</span>'
-                       if self._dock_mode == 'top' else '')
+            battery = self._battery_html() if self._dock_mode == 'top' else ''
             self.detail_label.setTextFormat(Qt.TextFormat.RichText)
             if self._dock_mode == 'compact':
                 self.detail_label.setText('<table width="100%" cellspacing="0"><tr>'
@@ -1355,11 +1472,22 @@ class CompactWindow(QWidget):
                     f'<td>{memory}</td><td>{cpu}</td><td>{thermal} · {fan}</td></tr>'
                     f'<tr><td>{swap}</td><td>{temp}</td><td>{battery}</td></tr></table>')
 
+    def _band_color(self, band):
+        return {'green': TOKENS.ok, 'yellow': readable('#e8bd18', (TOKENS.surface, TOKENS.surface_alt)),
+                'orange': readable('#ef8625', (TOKENS.surface, TOKENS.surface_alt)),
+                'red': TOKENS.danger, None: TOKENS.muted}[band]
+
     def _battery_color(self):
-        colors = {'green': TOKENS.ok, 'yellow': readable('#e8bd18', (TOKENS.surface, TOKENS.surface_alt)),
-                  'orange': readable('#ef8625', (TOKENS.surface, TOKENS.surface_alt)),
-                  'red': TOKENS.danger}
-        return colors[self._battery_band]
+        return self._band_color(self._battery_band)
+
+    def _voltage_html(self, text=None):
+        """Voltage in its own level colour; muted when the level is unknown."""
+        return (f'<span style="color:{self._band_color(self._voltage_band)};font-weight:700">'
+                f'{text or self._voltage_text}</span>')
+
+    def _battery_html(self):
+        html = f'<span style="color:{self._battery_color()};font-weight:700">{self._battery_text}</span>'
+        return html + (' · ' + self._voltage_html() if self._voltage_text else '')
 
     def _battery_style(self):
         return f'color:{self._battery_color()};font-weight:700;'
@@ -1368,7 +1496,8 @@ class CompactWindow(QWidget):
         battery = (snapshot.battery if snapshot.source('battery').status == 'ok'
                    and not snapshot.is_stale(15.0, now_mono) else None)
         if battery is None:
-            self._battery_text = ''
+            self._battery_text = self._voltage_text = ''
+            self._voltage_band = None
             self.battery_label.hide()
             if self._dock_mode == 'top':
                 self._render_details()
@@ -1379,9 +1508,21 @@ class CompactWindow(QWidget):
                   'Not charging': ' · conectada'}.get(battery.status, '')
         estimate = remaining_text(battery.remaining_s) if battery.status == 'Discharging' else ''
         self._battery_text = f'Bat {battery.percent}%{suffix}' + (f' · ~{estimate}' if estimate else '')
-        self.battery_label.setText(self._battery_text)
-        self.battery_label.setToolTip('Bateria · estimativa variável com o consumo' if estimate
-                                     else 'Bateria · tempo restante não disponível')
+        level = voltage_level(battery)
+        self._voltage_band = VOLTAGE_BANDS.get(level)
+        self._voltage_text = voltage_text(battery) if battery.voltage_uv is not None else ''
+        self.battery_label.setTextFormat(Qt.TextFormat.RichText)
+        self.battery_label.setText(self._battery_html())
+        tip = ('Bateria · estimativa variável com o consumo' if estimate
+               else 'Bateria · tempo restante não disponível')
+        if self._voltage_text:
+            tip += (f'\nVoltagem {self._voltage_text} · {VOLTAGE_NAMES[level]}' if level else
+                    f'\nVoltagem {self._voltage_text} · sem avaliação fora da descarga'
+                    if battery.status != 'Discharging' else
+                    f'\nVoltagem {self._voltage_text} · sem referência de projeto')
+            if level == 'critical':
+                tip += ' · risco de desligamento: conecte o carregador e reduza a carga'
+        self.battery_label.setToolTip(tip)
         self.battery_label.setVisible(self._dock_mode not in ('top', 'mini'))
         if self._dock_mode == 'top':
             self._render_details()
@@ -1426,6 +1567,7 @@ class CompactWindow(QWidget):
         self._paused = bool(paused)
         self.pause_button.setText("Retomar" if paused else "Pausar")
         self.pause_button.setToolTip("Retomar monitoramento" if paused else "Pausar monitoramento")
+        self.pause_action.setText(self.pause_button.toolTip())
         self.pause_button.setAccessibleDescription("monitoramento pausado" if paused else "monitoramento ativo")
         self._render_mode()
         if changed:
@@ -1508,6 +1650,9 @@ class CompactWindow(QWidget):
         """KWin may reapply the floating position rule when a dock is remapped."""
         if (not self._needs_show_reconcile or not self.isVisible() or self._force_close
                 or self._dock_pending or self.shortcut_tabs.controller.future is not None):
+            return
+        surface = self.windowHandle()
+        if self._caps.session_type == 'wayland' and (surface is None or not surface.isExposed()):
             return
         self._needs_show_reconcile = False
         requested, self._requested_mode = self._requested_mode, None
@@ -1666,7 +1811,10 @@ class CompactWindow(QWidget):
     def hideEvent(self, event):
         self.drawer_delay.stop()
         self.drawer_animation.stop()
-        self.action_drawer.setMaximumHeight(0)
+        if self._dock_mode == 'mini':
+            self._animate_actions(False)
+        else:
+            self.action_drawer.setMaximumHeight(0)
         self._save_position()
         super().hideEvent(event)
 

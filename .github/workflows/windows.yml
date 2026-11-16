@@ -1,0 +1,24 @@
+name: windows-native-preview
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Build from shared policy without dependencies
+        run: python tools/build_windows.py
+      - name: Windows PowerShell 5.1 contracts
+        shell: powershell
+        run: '& ./dist/folego-windows/Test-Folego.ps1'
+      - name: Native read-only API probe
+        shell: powershell
+        run: '& ./dist/folego-windows/Folego.ps1 -Probe -NoStartup'
+      - name: Own disposable Forms lifecycle
+        shell: powershell
+        run: '& ./dist/folego-windows/Folego.ps1 -NoStartup -DataRoot "$env:RUNNER_TEMP\folego-smoke" -SmokeSeconds 25'

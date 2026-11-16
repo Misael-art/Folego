@@ -83,7 +83,8 @@ def test_old_unknown_touch_does_not_block_microphone(tmp_path, monkeypatch):
     supervisor, profiles = guard(tmp_path, monkeypatch)
     supervisor.tick()
     supervisor.tick()
-    old = ActionPlan("accessibility.activate", ResourceIdentity.entry("touch"), {"old": True})
+    old = ActionPlan("accessibility.activate", ResourceIdentity.entry("touch"),
+                     {"capabilities": ["touch"], "peer": {"registered": True}})
     supervisor.coordinator.journal.append_intent(old)
     profiles.rows["microphone"]["state"] = "fault"
     profiles.rows["microphone"]["identity"]["active"] = "pro-audio"
@@ -164,7 +165,7 @@ def test_lost_result_opens_circuit_without_retry(tmp_path, monkeypatch):
     operation = result["operation_id"]
     profiles.rows["touchpad"]["state"] = "healthy"
     profiles.rows["touchpad"]["identity"]["url"] = DESKTOP_URL
-    assert supervisor.profile_guard.reconcile(operation, confirmed=True).outcome.value == "sucesso"
+    assert supervisor.reconcile(operation).outcome.value == "sucesso"
     assert supervisor.profile_guard.rearm("touchpad", confirmed=True)["ok"]
     assert not supervisor.store.read()["profile_circuit"]
 
@@ -277,3 +278,108 @@ def test_microphone_restore_changes_profile_only():
     assert calls == [("set-card-profile", "alsa_card.acp5x", MIC_PROFILE)]
     with pytest.raises(ProfileUnknown):
         probe.restore("microphone", {"identity": {"active": MIC_PROFILE, "card": "alsa_card.acp5x"}})
+
+
+def reprobe_fault(profiles):
+    row = profiles.rows['microphone']
+    row.update(state='fault', code='audio-enumeration-incomplete')
+    row['identity'].update(active='off', recovery='wireplumber-reprobe', owner={'pid': 123})
+
+
+@pytest.mark.parametrize('active', ['off', MIC_PROFILE])
+def test_reprobe_requires_opt_in_and_ignores_unrelated_kwin_failure(tmp_path, monkeypatch, active):
+    supervisor, profiles = guard(tmp_path, monkeypatch)
+    supervisor.tick(); supervisor.tick()
+    reprobe_fault(profiles)
+    profiles.rows['microphone']['identity']['active'] = active
+    if active == MIC_PROFILE:
+        profiles.rows['microphone']['code'] = 'audio-nodes-missing-after-busy'
+        profiles.rows['microphone']['identity']['busy_evidence'] = {'pipewire': {'pid': 124}}
+    supervisor.native.report['errors'] = ['KWin indisponível']
+    supervisor.native.report['backend'] = 'unknown'
+    supervisor.tick(); supervisor.tick()
+    assert not profiles.effects
+    supervisor.configure(audio_reprobe=True)
+    profiles.before = lambda: assert_intent(supervisor)
+    assert supervisor.tick()['state'] == 'repaired'
+    assert profiles.effects == ['microphone']
+
+
+def test_repeated_or_stale_observation_cannot_trigger_repair(tmp_path, monkeypatch):
+    supervisor, profiles = guard(tmp_path, monkeypatch)
+    supervisor.tick(); supervisor.tick()
+    reprobe_fault(profiles)
+    supervisor.configure(audio_reprobe=True)
+    report = supervisor.native.collect()
+    supervisor.profile_guard.annotate(report)
+    for _ in range(4):
+        assert supervisor.profile_guard.tick(report) is None
+    assert not profiles.effects
+    report['mono'] -= 60
+    assert supervisor.profile_guard.tick(report) is None
+    supervisor.tick()
+    assert not profiles.effects
+    assert supervisor.tick()['state'] == 'repaired'
+
+
+def test_unknown_legacy_scope_and_clock_regression_preserve_protection(tmp_path, monkeypatch):
+    supervisor, profiles = guard(tmp_path, monkeypatch)
+    supervisor.tick(); supervisor.tick()
+    old = ActionPlan('accessibility.activate', ResourceIdentity.entry('touch'), {'legacy': True})
+    supervisor.coordinator.journal.append_intent(old)
+    reprobe_fault(profiles)
+    supervisor.configure(audio_reprobe=True)
+    supervisor.tick(); supervisor.tick()
+    assert not profiles.effects
+    from folego.orchestration.models import ActionResult, Outcome
+    supervisor.coordinator.journal.append_result(ActionResult(old.action, Outcome.REFUSED, old.operation_id,
+                                                             target_key='touch'))
+    policy = supervisor.store.read()
+    policy['profile_attempts'] = [{'key': 'microphone', 'ts': supervisor.now() + 600, 'operation_id': 'future'}]
+    supervisor.store.save(policy)
+    before = len(supervisor.coordinator.journal.records())
+    supervisor.tick(); supervisor.tick()
+    assert not profiles.effects
+    assert len(supervisor.coordinator.journal.records()) == before
+
+
+def test_manual_reprobe_uses_parent_intent_and_saved_preference_without_learning_fault(tmp_path, monkeypatch):
+    from folego.actions.accessibility_recovery import Recovery
+    from test_accessibility_recovery import Backend
+    supervisor, profiles = guard(tmp_path, monkeypatch)
+    reprobe_fault(profiles)
+    recovery = Recovery(supervisor, backend=Backend(supervisor.native))
+    plan = recovery.prepare('microphone')
+    profiles.before = lambda: assert_parent_intent(supervisor, plan)
+    assert recovery.execute(plan, confirmed=True).outcome.value == 'sucesso'
+    assert profiles.effects == ['microphone']
+    assert not supervisor.store.read()['profile_baseline']
+
+
+def assert_parent_intent(supervisor, plan):
+    assert supervisor.coordinator.journal.state_of(plan.operation_id).intent == plan
+
+
+def test_unknown_manual_reprobe_can_be_queried_then_rearmed_without_retry(tmp_path, monkeypatch):
+    from folego.actions.accessibility_recovery import Recovery
+    from test_accessibility_recovery import Backend
+    supervisor, profiles = guard(tmp_path, monkeypatch)
+    supervisor.tick(); supervisor.tick()
+    reprobe_fault(profiles)
+    recovery = Recovery(supervisor, backend=Backend(supervisor.native))
+    plan = recovery.prepare('microphone')
+    profiles.fail = True
+    assert recovery.execute(plan, confirmed=True).outcome.value == 'desconhecido'
+    from folego.actions.accessibility import unresolved
+    assert unresolved(supervisor.coordinator.journal, capabilities=['audio']) == [plan.operation_id]
+    assert unresolved(supervisor.coordinator.journal, capabilities=['keyboard']) == []
+    assert supervisor.reconcile(plan.operation_id).outcome.value == 'desconhecido'
+    profiles.rows['microphone']['state'] = 'healthy'
+    profiles.rows['microphone']['identity']['active'] = MIC_PROFILE
+    monkeypatch.setattr('folego.actions.accessibility_recovery._alive', lambda owner: False)
+    assert supervisor.reconcile(plan.operation_id).outcome.value == 'sucesso'
+    report = supervisor.inspect()
+    card = next(row for row in report['cards'] if row['key'] == 'microphone')
+    assert 'reparo suspenso' in card['detail']
+    assert supervisor.profile_guard.rearm('microphone', confirmed=True)['ok']
+    assert profiles.effects == ['microphone']

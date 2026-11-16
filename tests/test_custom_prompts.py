@@ -117,7 +117,7 @@ def test_desktop_macro_requests_show_once_and_verifies_state(monkeypatch):
         effects.append(True)
         showing[0] = True
     backend = DesktopTools(run=run, desktop_show=show)
-    assert backend.show_desktop() == 'Área de trabalho exibida'
+    assert backend.perform('show-desktop') == 'Área de trabalho exibida'
     assert effects == [True]
     assert backend.show_desktop() == 'A área de trabalho já está visível'
     assert effects == [True]

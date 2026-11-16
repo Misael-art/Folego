@@ -11,13 +11,12 @@ import shlex
 import fcntl
 import time
 import hashlib
-import ctypes
-import errno
 import re
 from contextlib import contextmanager
 from pathlib import Path
 
 from ..core.tmpfs import read_mounts_checked
+from .atomicfile import rename_noreplace
 from .mounts import destination_verdict
 
 
@@ -300,7 +299,7 @@ def _archive_completed(root, *, mounts=None):
         except (OSError, ValueError):
             continue
         try:
-            _rename_noreplace(run, target)
+            rename_noreplace(run, target)
         except FileExistsError:
             continue
         for directory in (root, archive):
@@ -318,22 +317,6 @@ def _archive_completed(root, *, mounts=None):
 
 def _walk_error(error):
     raise error
-
-
-def _rename_noreplace(source, target):
-    """Linux renameat2 refuses an unexpected destination, including an empty dir."""
-    libc = ctypes.CDLL(None, use_errno=True)
-    try:
-        renameat2 = libc.renameat2
-    except AttributeError as exc:
-        raise OSError("renameat2 indisponível; temporários preservados") from exc
-    renameat2.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
-    renameat2.restype = ctypes.c_int
-    if renameat2(-100, os.fsencode(source), -100, os.fsencode(target), 1):
-        code = ctypes.get_errno()
-        if code == errno.EEXIST:
-            raise FileExistsError(code, os.strerror(code), str(target))
-        raise OSError(code, os.strerror(code), str(target))
 
 
 def retention_status(root):

@@ -2,7 +2,7 @@
 from . import ai_sessions
 import time
 
-TONES = ('codex', 'web', 'claude', 'grok', 'low', 'empty', 'restored',
+TONES = ('codex', 'web', 'claude', 'grok', 'low', 'empty', 'restored', 'reset',
          'battery-75', 'battery-50', 'battery-25', 'battery-10')
 
 
@@ -11,6 +11,10 @@ class AlertTracker:
         self.started_at = time.time() if now is None else now
         self.quotas = {}
         self.deliveries = {}
+        self.resets = {}
+        self.reset_warned = {}
+        self.pace_warned = {}
+        self.limits = {}
 
     def quota_changes(self, items, now=None):
         sounds = []
@@ -33,29 +37,86 @@ class AlertTracker:
                         for name, (remaining, at) in current['windows'].items())
             if left == 0 and old > 0: sounds.append('empty')
             elif 0 < left <= 20 < old: sounds.append('low')
-            elif left > old and (old == 0 or old <= 20 < left or reset): sounds.append('restored')
+            # A jump of 20 points inside the same window is a redeemed reset.
+            elif left > old and (old == 0 or old <= 20 < left or reset or left - old >= 20): sounds.append('restored')
         return list(dict.fromkeys(sounds))
+
+    def reset_changes(self, items, now=None):
+        """New redeemable resets and a single last-day reminder per expiry.
+
+        An unknown count keeps the previous reference; it is never read as zero.
+        """
+        now = time.time() if now is None else now
+        events = []
+        for item in items:
+            provider, account = item.get('provider'), item.get('account_id')
+            if provider not in ai_sessions.NAMES or not account: continue
+            count = ai_sessions.available_resets(item, now)
+            if count is None: continue
+            key = (provider, account)
+            previous = self.resets.get(key)
+            self.resets[key] = count
+            expiry = ai_sessions.timestamp((item.get('reset_credits') or {}).get('expires_at'))
+            event = dict(provider=provider, label=item.get('label') or ai_sessions.NAMES[provider],
+                         count=count, expires_at=expiry)
+            if previous is not None and count > previous:  # startup is a silent baseline
+                events.append(dict(event, kind='available'))
+                if expiry and expiry - now <= 86400: self.reset_warned[key] = expiry
+            elif count and expiry and expiry - now <= 86400 and self.reset_warned.get(key) != expiry:
+                self.reset_warned[key] = expiry
+                events.append(dict(event, kind='expiring'))
+        return events
+
+    def pace_changes(self, items, now=None):
+        """One notice per long window whose local estimate ends before its reset."""
+        now = time.time() if now is None else now
+        events = []
+        for item in items:
+            provider, account = item.get('provider'), item.get('account_id')
+            if provider not in ai_sessions.NAMES or not account: continue
+            for pace in ai_sessions.pace_forecast(item, now):
+                key = (provider, account, pace['name'])
+                if pace['duration_minutes'] < 1440 or self.pace_warned.get(key) == pace['resets_at']: continue
+                self.pace_warned[key] = pace['resets_at']
+                events.append(dict(kind='pace', provider=provider, window=pace['name'], at=pace['at'],
+                                   label=item.get('label') or ai_sessions.NAMES[provider]))
+        return events
+
+    def limit_changes(self, items, now=None):
+        """A declared Web limit date that passes while observed; never at startup."""
+        now = time.time() if now is None else now
+        events = []
+        for item in items:
+            provider, account, until = item.get('provider'), item.get('account_id'), item.get('declared_limit_until')
+            if provider not in ai_sessions.NAMES or not account: continue
+            key = (provider, account)
+            if not until:
+                self.limits.pop(key, None)
+            elif until > now:
+                self.limits[key] = until
+            elif self.limits.pop(key, None) == until:
+                events.append(dict(kind='limit-over', provider=provider, at=until,
+                                   label=item.get('label') or ai_sessions.NAMES[provider]))
+        return events
 
     def delivery_changes(self, rows, now=None):
         now = time.time() if now is None else now
-        sounds = []
+        deliveries = {}
         for row in rows:
             provider = row.get('provider')
             if provider not in ai_sessions.NAMES or row.get('count') is None: continue
-            pending = {p['event'] for p in row.get('pending', []) if isinstance(p.get('event'), str)}
-            seen = self.deliveries.get(provider)
-            if seen is None:
-                self.deliveries[provider] = pending
-                # A provider may have no readable session at startup. A native
-                # receipt explicitly completed after we started is still new.
-                if any((at := ai_sessions.timestamp(p.get('at'))) is not None and self.started_at <= at <= now
-                       for p in row.get('pending', [])):
-                    sounds.append(provider)
-                continue
-            if pending - seen: sounds.append(provider)
+            pending = {p['event']: p for p in row.get('pending', []) if isinstance(p.get('event'), str)}
+            seen = self.deliveries.setdefault(provider, set())
             # Acknowledgment, partial reads and new requests must not replay old
             # completion sounds. Overflow protects instead of silently evicting.
-            if len(seen | pending) > 16384:
+            if len(seen) + len(pending.keys() - seen) > 16384:
                 raise ValueError('Histórico sonoro excede o limite; reinicie para estabelecer uma nova referência')
+            count = sum(1 for event, receipt in pending.items()
+                        if event not in seen and not any(receipt.get(flag) for flag in (
+                            'delivery_failed', 'reported_web_mcp_error', 'web_capacity_error'))
+                        and (at := ai_sessions.timestamp(receipt.get('at'))) is not None
+                        and self.started_at <= at <= now)
+            if count:
+                deliveries[provider] = deliveries.get(provider, 0) + count
             seen.update(pending)
-        return sounds
+        return deliveries

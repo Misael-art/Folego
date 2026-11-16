@@ -5,14 +5,16 @@
 A faixa mínima flutuante parte de **384 × 46 px lógicos** em uma linha: alça de
 arraste, estado com palavra e cor, CPU agregada, temperatura com origem e uso de
 RAM, bateria quando presente e franquias de IA confirmadas. A largura acompanha
-o conteúdo dentro da área útil da tela, sem preencher todo o monitor. A altura
-continua em 46 px. Uma leitura ausente ou antiga mostra `—`; `ACPI` não é chamada de
-temperatura direta da CPU. O botão **Expandir** abre o compacto de 280 px, a
-grade abre a Central e a seta abre diretamente os cinco formatos, com marca no
-atual. Todas as barras e o compacto oferecem o mesmo seletor, e a Central
-oferece **Mini horizontal** em **Posição do widget**. A área de arraste não
-executa ações. O hover não abre atalhos nessa faixa; avisos completos
-continuam no compacto e na Central. Calor no limite do sensor e bateria crítica
+o conteúdo dentro da área útil da tela, sem preencher todo o monitor. Recolhida,
+a faixa tem 46 px de altura. Uma leitura ausente ou antiga mostra `—`; `ACPI`
+identifica a origem térmica. O botão **Expandir** abre o compacto de 268 px e
+a grade abre a Central. Passe o mouse sobre **···**, à direita dos indicadores,
+para revelar uma fileira curta com **Menu**, **D** (mostrar área de trabalho),
+**Copiar**, **Colar** e **Prompts**. A fileira fica abaixo dos indicadores,
+mantém a largura da faixa e se recolhe ao sair. **Menu** abre os cinco
+formatos e **Tema de cores**, com marca na escolha atual. A alça à esquerda
+serve para arrastar. Avisos completos aparecem no compacto e na Central.
+Calor no limite do sensor e bateria crítica
 em descarga aparecem também no estado breve, com detalhes ao passar o ponteiro.
 O [mockup e critérios](handoff/validation/mini-widget-2026-11-07/README.md)
 registram a hierarquia e as transições.
@@ -31,10 +33,11 @@ a estimativa de autonomia, quando medida, aparece na dica. Os alertas sonoros
 existentes são compartilhados, sem duplicar monitoramento ou sons.
 
 As IAs com cota positiva aparecem da maior para a menor, usando a mesma conta
-selecionada pelo compacto. Pequenos marcadores mostram entregas para revisitar
-e resets resgatáveis confirmados. Esses números não representam processos ou
-agentes em execução. Uma cota desconhecida pode conservar os lembretes
-confirmados, com `—` no valor. Clique na célula para consultar a conta.
+selecionada pelo compacto. Com cota zerada ou desconhecida, a célula mostra
+**Entrega**, **Entregas** ou **Resgate** conforme o lembrete disponível. O
+marcador informa a quantidade de entregas para revisitar ou de resets
+resgatáveis confirmados. Quando o último lembrete sai, a célula se recolhe.
+Clique na célula para consultar a conta, inclusive seu estado de cota.
 Quando a cota chega a zero e somente janelas confirmadas de **cinco horas**
 impedem seu uso, a célula mostra o tempo até a reposição. Não há contagem
 semanal. Ao vencer o prazo, a franquia permanece desconhecida até nova leitura;
@@ -44,13 +47,18 @@ quando o compacto está oculto.
 [Capturas e limites de validação](handoff/validation/mini-battery-quotas-2026-11-07/README.md)
 registram os estados, o encolhimento e a adaptação às larguras previstas.
 
-O widget tem 280 px de largura em pixels lógicos do desktop. Recursos ficam em
-duas linhas; alertas completos e mensagens podem aumentar a altura. O ícone de
-grade abre a **Central** e recolhe o widget. A seta ao lado abre os controles;
-o ícone de teclado e sua seta são um grupo separado para abrir o teclado embaixo
-ou no topo. **Modo widget**, na Central, retorna ao controle flutuante sem
-parar o monitoramento. Em outras abas, use **Posição do widget → Widget
-flutuante** ou **Mini horizontal** no menu do cabeçalho; a aba e os campos em edição são preservados.
+O compacto tem 268 px de largura em pixels lógicos do desktop. O estado e a
+memória livre dividem a linha de resumo. Alertas completos e mensagens podem
+aumentar a altura. O ícone de grade abre a **Central** e recolhe o widget.
+A seta abre os controles, incluindo **Monitoramento → Pausar monitoramento**
+ou **Retomar monitoramento**.
+O ícone de teclado e sua seta são um grupo separado para abrir o teclado embaixo
+ou no topo. A Central oferece dois botões empilhados, **Widget flutuante**
+e **Mini horizontal**. Em outras abas, use
+**Posição do widget** no menu do cabeçalho. A aba e os campos em edição são
+preservados. Em **Opções → Modo de abertura**, selecione Central, mini horizontal,
+widget flutuante, lateral esquerda, lateral direita ou barra superior para a
+próxima abertura. A Central é o padrão quando ainda não há escolha salva.
 As duas interfaces dispensam minimizar, maximizar e fechar.
 Para encerrar, use a seta da Central → **Sair do Fôlego** ou a bandeja. **Ocultar widget**,
 no mesmo menu, mantém um caminho de retorno: sem bandeja e com a central
@@ -65,7 +73,7 @@ auxiliar de entrada; um som em andamento conclui a restauração do volume.
 Ao passar o mouse pela borda esquerda do widget, uma faixa em dois tons mais
 escuros revela a seta para a barra direita. A borda direita abre a barra
 esquerda; a borda superior abre a barra horizontal no topo. A seta da borda
-externa de cada lateral, ou do centro da borda superior, retorna aos 280 px do
+externa de cada lateral, ou do centro da borda superior, retorna aos 268 px do
 compacto. O seletor de visualizações em cada formato também leva diretamente
 às outras quatro superfícies. Os controles, leitura de
 recursos e cotas são os mesmos componentes nas quatro formas completas. As laterais têm
@@ -90,7 +98,7 @@ Fôlego pede ao KWin para posicionar **somente sua própria janela** e verifica
 a posição antes de concluir; o conteúdo reaparece suavemente após a confirmação.
 Ao reabrir uma barra depois de visitar a Central, o Fôlego confirma novamente
 o encaixe: a regra inicial do KWin para o widget flutuante pode ter reposicionado
-a mesma janela. **Modo widget** na Central abre o widget flutuante. O menu **Posição
+a mesma janela. **Widget flutuante** na Central abre o compacto. O menu **Posição
 do widget** na Central e o seletor direto no widget oferecem mini, compacto,
 as duas laterais e o topo, sem depender da alça de borda estar visível.
 O flutuante preserva a posição quando ela cabe na área útil; se a altura mudou,
@@ -103,8 +111,8 @@ abertura inicia no compacto.
 
 ## Sessões de IA
 
-O widget mostra somente provedores com cota positiva confirmada, do maior para o
-menor **percentual disponível**. Um empate mantém a ordem Codex, Codex Web,
+No compacto e nas barras, as cotas positivas confirmadas aparecem do maior
+para o menor **percentual disponível**. Um empate mantém a ordem Codex, Codex Web,
 Claude e Grok. A conta padrão representa o provedor quando tem cota; se estiver
 zerada ou sem confirmação, a conta elegível com maior percentual aparece em seu
 lugar. Nome acessível, clique e painel se referem à mesma conta. Passe o mouse
@@ -184,13 +192,15 @@ quando a fonte daquele provedor informa tickets (atualmente confirmado no Codex)
   realmente aberto com perfil `chatgpt-web/*` mostra círculo verde pulsante
   com “OK”; na mini horizontal aparece “OK”. A contagem de entregas concluídas
   permanece distinta da contagem de instâncias abertas, disponível na descrição
-  acessível e no painel. O launcher sozinho não acende o indicador. Com zero
-  instâncias, o Web sai das faixas; sem inventário confiável, não se presume
-  zero. A observação usa a varredura existente de contas a cada 60 segundos e
+  acessível e no painel. O launcher sozinho não acende o indicador. Sem
+  instância confirmada, a mini ainda pode mostrar uma entrega Web pendente.
+  Sem inventário confiável, a contagem de instâncias fica desconhecida.
+  A observação usa a varredura existente de contas a cada 60 segundos e
   vence em 120 segundos. Instância aberta não comprova turno em execução,
   resposta remota ou cota disponível. A conta permanece no menu de contas.
-- Grok: se sua fonte não oferecer uma franquia percentual confirmada, fica no
-  menu de contas. Metadados de assinatura aparecem separados da reposição de
+- Grok: se sua fonte não oferecer uma franquia percentual confirmada, o menu
+  de contas mantém o diagnóstico e a mini pode mostrar entregas pendentes.
+  Metadados de assinatura aparecem separados da reposição de
   cota. A data de Grok pode ser informada pelo
   usuário; isso não confirma pagamento ou cota. Esses campos continuam
   indisponíveis nas fontes consultadas; não se usam tokens gastos na conversa
@@ -199,7 +209,54 @@ quando a fonte daquele provedor informa tickets (atualmente confirmado no Codex)
   observação aceita pelo provedor de metadados locais e validade não verificada.
   Cupons/créditos não fornecidos pela fonte continuam não informados.
 
-Fôlego usa configuração própria e não importa, inicia ou administra PhaseZero.
+Fôlego usa configuração própria. A observação de contas não depende do PhaseZero;
+a recuperação Web opcional descrita abaixo apenas solicita um ciclo ao responsável
+já instalado e habilitado, sem administrar sua instalação ou suas políticas.
+
+### Recuperação do Codex Web
+
+O monitor reconhece a mensagem exata `Selected model is at capacity. Please try
+a different model.` no campo `error.message` de uma conclusão nativa do Codex
+Web. A mesma frase em conversa, resposta bem-sucedida ou outro provedor não
+aciona reparo. A leitura aproveita a cauda de 64 KiB já coletada a cada 5 s;
+o recibo guarda identidade e booleano, sem texto da conversa. Há badge vermelho
+`!`, aviso na Central/bandeja e nenhum som de conclusão bem-sucedida.
+
+Durante o monitoramento, erros novos e recentes solicitam o ciclo do responsável
+da mesma conta. O adaptador atual reconhece o protocolo de recuperação PhaseZero
+já habilitado: confere manifesto/hashes, propriedade e a unit efetiva do systemd,
+incluindo a ausência de overrides. Outros launchers continuam observáveis, com
+recuperação indisponível. Desabilitar a recuperação no responsável bloqueia novos
+pedidos do Fôlego. Não há novo daemon, grant de recursos ou instalação automática.
+
+Cada pedido passa pelo coordenador, com intenção durável e ID por conta/turno.
+O erro é revalidado antes do pedido. No máximo três intenções por dez minutos,
+com intervalo de um minuto; solicitações incertas bloqueiam novos pedidos até
+revisão. O responsável conserva sua própria trava, verificação de ociosidade,
+orçamento e disjuntor. O Fôlego não troca conta/modelo, renova credenciais,
+reenvia tarefa nem reinicia diretamente agentes ou navegador.
+
+O painel da conta e `./dev run ai status --json` mostram a atividade observada
+no launcher, o estado do conector e a idade do último diagnóstico do
+responsável. Uma previsão de nova tentativa vem do próprio recibo. Após 150 s,
+o estado atual fica desconhecido e a previsão, se ainda futura, aparece como
+histórica. `login-required` pede login no ChatGPT **dentro do launcher desta
+conta**. Serviço, túnel, conector e resposta Web são sinais independentes.
+
+Recibos PhaseZero sem versão ainda informam espera, tarefa longa e configuração
+incompleta quando esses dados estão presentes. Para exibir o resultado de uma
+tentativa, o adaptador reconhece `schemaVersion: 1` e `connectorVerification`
+com `state` (`verified`, `deferred`, `failed` ou `unknown`) e `at` do mesmo ciclo.
+A confirmação exige recibo recente e nenhuma ação pendente ou indicação de
+configuração incompleta. A lista de ações do recibo pode incluir uma tentativa
+adiada. A leitura exporta estados e horários, sem IDs de abas nem conteúdo da
+sessão. A verificação e o alerta de tarefa longa pertencem ao PhaseZero.
+
+Para solicitar manualmente o mesmo ciclo para um erro ainda não visto, de até
+15 minutos, use `./dev run ai recover-web --account ID --confirmar --json`.
+O ID da conta vem de `ai status`; `operation ID --json` consulta a intenção.
+Resultado parcial significa que o pedido foi aceito para processamento, sem
+certificar recuperação. Timeout permanece desconhecido e não autoriza repetição.
 Os diretórios nativos principais são `~/.codex`,
 `~/.codex-chatgpt-web` (WebGPT standalone),
 `~/.local/share/codex-web-gpt/codex-home` (compatibilidade), `~/.claude` e `~/.grok`.
@@ -211,8 +268,8 @@ Raízes de `$CODEX_HOME`, `$CLAUDE_CONFIG_DIR` e `$GROK_HOME` acrescentam contas
 não substituem a principal. Processos locais podem fornecer suas raízes nativas.
 Quando existe, o registro opcional `phasezero/ai-accounts/codex-profiles/profiles.json`
 em XDG_DATA_HOME fornece nomes e caminhos dos perfis Codex/Web, inclusive inativos.
-Perfis arquivados não são adotados automaticamente. Não se executa código, inicia
-serviço ou copia login do PhaseZero. Sem esse registro, os diretórios nativos e
+Perfis arquivados não são adotados automaticamente. A descoberta não executa
+código, inicia serviço ou copia login do PhaseZero. Sem esse registro, os diretórios nativos e
 a configuração própria continuam funcionando. Registro complementar inválido
 é ignorado com aviso visível, sem adotar seus perfis.
 Para outras contas, crie `$XDG_CONFIG_HOME/folego/ai-sessions.json` (por padrão,
@@ -242,6 +299,15 @@ são configuração inválida. Sem override, prefere a principal existente e dep
 a primeira raiz existente. A descoberta de processos fica no HOME selecionado;
 HOME privado não adota contas nativas do HOME físico.
 Para consultar sem Qt: `./dev run ai status --json`.
+
+Quando o cliente mostra um reset gratuito que a fonte não expõe (caso do
+Claude), registre um lembrete em **Lembrete de reset…** no painel da conta ou
+com `./dev run ai reset-note --account ID --expires "DD/MM/AAAA HH:MM"`
+(`--clear` remove). O Fôlego só lembra; o resgate é feito no cliente.
+Para o Codex Web, **Lembrete de limite…** ou `ai limit-note` guardam quando o
+ChatGPT disse que o limite volta; o Fôlego avisa quando o prazo passa.
+O aviso de ritmo é uma estimativa local linear, exibida quando a janela
+esgotaria com folga antes da reposição.
 
 O painel aparece mesmo com outro aplicativo em foco. O botão direito no
 indicador abre **Atualizar dados**, **Contas, uso e renovação**,
@@ -306,6 +372,13 @@ fora da cauda legível deixam a observação parcial, sem amostragem silenciosa.
 
 ## Sons dos agentes e da franquia
 
+O Plasma recebe pop-ups identificados por categoria, com selo próprio e
+título curto. Uma entrega nova confirmada produz um aviso por provedor no
+ciclo, mesmo com os sons desativados. Entregas anteriores à abertura,
+recibos repetidos e erros estruturados não geram aviso de conclusão. Os
+avisos de Codex Web, pressão, temperatura, entrada e Desempenho têm seus
+próprios selos. O Plasma aplica as preferências de exibição da sessão.
+
 Na janela principal, abra **opções → Captura e avisos sonoros**. **Sons de
 conclusão dos agentes e de franquia** vem ligado. Codex, Codex Web, Claude e
 Grok têm quatro melodias curtas distintas. Escolha o aviso na lista e use
@@ -364,6 +437,14 @@ não se restaura às cegas nem se repete o som incerto.
 
 ## Abas de ações rápidas
 
+No compacto, a gaveta que abre com o ponteiro tem dois grupos. **Selecionar**,
+**Apagar tudo**, **Prompts**, **Copiar**, **Colar** e **Print** ocupam duas linhas
+de 22 px, com os nomes completos nas dicas e na acessibilidade. O botão
+**D** tem ícone de desktop e ocupa a altura das duas linhas. Ele solicita
+**Mostrar área de trabalho** ao KDE/KWin pelo mesmo fluxo do menu Custom.
+O compositor recolhe as janelas e mantém as aplicações abertas. Se o desktop
+já estiver visível, o comando mantém esse estado.
+
 **Selecionar tudo**, **Apagar tudo** e **Prompts** ficam em uma linha fina acima das abas.
 Atuam somente no campo editável em foco, identificado pelo AT-SPI e pelo
 proprietário da janela ativa. Apagar remove o texto do campo inteiro, não só a
@@ -386,6 +467,8 @@ SNES americano (cinza/lavanda), Super Famicom (quatro cores), Mega Drive / Genes
 (branco/laranja), NES (cinza/preto/vermelho), TurboGrafx-16 (grafite/laranja) e
 PlayStation 2 (preto/azul). São inspirações aproximadas nas cores fornecidas
 pelo usuário; os tons de texto são ajustados para contraste nas superfícies.
+Na mini horizontal, **Controles → Tema de cores** usa as mesmas paletas e
+mostra qual delas está em uso.
 
 A seleção aplica imediatamente em todas as superfícies Qt, abertas ou ocultas:
 central, widget, prompts/submenus/Custom, contas, avisos, controles e teclado.
@@ -444,9 +527,11 @@ assim, copiar nunca envia Ctrl+C para interromper um trabalho no terminal. O
 aplicativo de destino precisa aceitar esses atalhos. O Fôlego não lê nem grava
 o conteúdo da área de transferência ou as teclas em logs.
 
-**Prompts** abre uma lista de 13 títulos: diagnóstico real, implantação do
+**Prompts** abre uma lista de 16 títulos: diagnóstico real, implantação do
 diagnóstico item a item, continuidade, implementação de melhoria,
-investigação de erro, revisão, testes, desempenho, segurança,
+investigação de erro, exploração de melhorias e novas funções, resolução de
+todas as lacunas sem interrupções, revisão, testes, desempenho, otimização da
+execução sem perder funções, segurança,
 usabilidade, design com mockups, passagem de contexto e prontidão para PR/distribuição. Escolher um
 copia seu texto para a área de transferência; depois cole no agente desejado.
 Não cola, executa ou envia pedidos automaticamente. Os textos são genéricos,

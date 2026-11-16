@@ -176,6 +176,7 @@ class PendingReader(HistoryReader):
     def _reset(self):
         super()._reset()
         self.pending = {}
+        self.pending_scopes = {}
 
     def _accept(self, record):
         super()._accept(record)
@@ -192,8 +193,12 @@ class PendingReader(HistoryReader):
                 self._problem("operações pendentes excedem orçamento; revisão necessária")
             else:
                 self.pending[record.operation_id] = target
+                if record.kind == 'intent' and obj.action.startswith('accessibility.'):
+                    from ..core.accessibility import recovery_scope
+                    self.pending_scopes[record.operation_id] = sorted(recovery_scope(record.plan))
         else:
             self.pending.pop(record.operation_id, None)
+            self.pending_scopes.pop(record.operation_id, None)
 
     def ids(self):
         text = self.refresh()

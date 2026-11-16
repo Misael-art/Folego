@@ -79,6 +79,18 @@ def test_central_opens_host_details_in_existing_disk_tab(qapp):
     win.quit()
 
 
+def test_host_guard_distinguishes_recorded_reboot_from_proven_boot_completion(qapp):
+    win = MainWindow()
+    report = _report()
+    report['boots']['items'][-2].update(
+        end='shutdown_recorded', end_kind='reboot', end_source='systemd-logind.service')
+    win.disk.show_host_report(report)
+    text = win.disk.host_health.rows['reboot'].text()
+    assert 'reinício registrado pelo logind' in text
+    assert 'conclusão não comprovada' in text
+    win.quit()
+
+
 def test_host_guard_unknown_replaces_old_warning(qapp):
     win = MainWindow()
     win.disk.show_host_report(_report())

@@ -584,3 +584,39 @@ def test_web_unsupported_check_does_not_claim_unlimited_or_broken_client(tmp_pat
     assert not item['limits_action'] and item['remaining'] is None
     assert 'não suportado ou não confirmado' in text
     assert 'atualização' not in text and 'ilimitado' not in text
+
+
+def test_claude_model_scoped_weekly_limit_is_a_window_of_its_own(tmp_path):
+    config, _ = credentials(tmp_path)
+    scoped = dict(kind='weekly_scoped', percent=54, resets_at=NOW + 2000,
+                  scope=dict(model=dict(id=None, display_name='Fable'), surface=None))
+    payload = dict(five_hour=dict(utilization=10, resets_at=NOW + 1000),
+                   seven_day=dict(utilization=45, resets_at=NOW + 2000),
+                   limits=[dict(kind='session', percent=10, resets_at=NOW + 1000),
+                           dict(kind='weekly_all', percent=45, resets_at=NOW + 2000), scoped])
+    item = ai.claude(config, NOW, lambda url, headers: payload)
+    assert [w['name'] for w in item['windows']] == ['Sessão (5 h)', 'Semana', 'Semana Fable']
+    assert item['remaining'] == 46
+    assert 'Semana Fable: 54% usado / 46% livre' in ai.describe(item, NOW)
+    assert 'não expostos por esta fonte' in ai.describe(item, NOW)
+    payload['limits'][2] = dict(scoped, percent=None)
+    partial = ai.claude(config, NOW, lambda url, headers: payload)
+    assert partial['remaining'] is None and 'parcial' in partial['reason']
+
+
+def test_claude_usage_credits_and_local_pace_are_reported_without_inventing_values(tmp_path):
+    config, _ = credentials(tmp_path)
+    week = 10080 * 60
+    payload = dict(five_hour=dict(utilization=10, resets_at=NOW + 1000),
+                   seven_day=dict(utilization=45, resets_at=NOW + week * .83),
+                   spend=dict(enabled=False, percent=0, limit=None, balance=dict(amount_minor='x'),
+                              used=dict(amount_minor=1250, currency='USD', exponent=2)))
+    item = ai.claude(config, NOW, lambda url, headers: payload)
+    assert item['usage_credits'] == dict(enabled=False, used='USD 12.50', percent=0)
+    text = ai.describe(item, NOW)
+    assert 'Créditos de uso: desabilitados · consumo USD 12.50 · 0% do teto' in text
+    assert 'Ritmo: Semana esgota por volta de' in text and 'estimativa local' in text
+    assert [p['name'] for p in ai.pace_forecast(item, NOW)] == ['Semana']
+    assert ai.pace_forecast(item, NOW + 1000) == []  # stale reading gives no forecast
+    payload['spend'] = dict(enabled='yes')
+    assert 'usage_credits' not in ai.claude(config, NOW, lambda url, headers: payload)

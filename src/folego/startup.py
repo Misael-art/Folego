@@ -16,9 +16,12 @@ from .adapters.accessibility import bounded_command
 def preference():
     value = read_object(paths.config_dir() / "startup.json")
     if value is None:
-        return {"schema": 1, "enabled": True}
-    if type(value.get("enabled")) is not bool:
+        return {"schema": 1, "enabled": True, "basic_session": True}
+    if value.get('schema') != 1 or type(value.get("enabled")) is not bool:
         raise ValueError("preferência de inicialização desconhecida; preservada")
+    value.setdefault('basic_session', True)
+    if type(value['basic_session']) is not bool:
+        raise ValueError('preferência de sessão básica desconhecida; preservada')
     return value
 
 
@@ -85,7 +88,14 @@ def configure(enabled=None, *, confirmed=False, manage_service=True):
     if enabled is not None and (not confirmed or type(enabled) is not bool):
         raise ValueError("alteração de início automático exige confirmação e booleano")
     with _startup_lock():
-        return _configure_serialized(enabled, manage_service)
+        result = _configure_serialized(enabled, manage_service)
+        if enabled is None and manage_service and 'KDE' in os.environ.get('XDG_CURRENT_DESKTOP', '').split(':'):
+            from .basic_session import BasicSession
+            try:
+                result['basic_session'] = BasicSession().configure()
+            except (OSError, ValueError) as exc:
+                result['basic_session'] = {'ok': False, 'state': 'unknown', 'message': str(exc)}
+        return result
 
 
 def _configure_serialized(enabled, manage_service):
