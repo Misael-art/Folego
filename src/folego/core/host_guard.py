@@ -25,6 +25,27 @@ def boot_end_text(boot: dict) -> str | None:
     return f"{label} registrado pelo logind; conclusão não comprovada"
 
 
+def storage_lines(report: dict) -> list[str]:
+    lines = []
+    levels = {"critical": "espaço crítico", "high": "espaço em atenção"}
+    for volume in report.get("volumes", ()):
+        filesystem = volume["type"] + (" em NVMe" if volume["nvme"] else "")
+        roles = " e ".join(volume["roles"])
+        available = volume["available_bytes"] / 1024 ** 3
+        trend = volume.get("trend")
+        history = "formando histórico" if not trend else (
+            f"{trend['available_delta_bytes'] / 1024 ** 3:+.1f} GiB livres "
+            f"em {trend['elapsed_s'] / 3600:.1f} h")
+        if report.get("history_reason") or not volume.get("trend_available", True):
+            history = "histórico indisponível"
+        level = levels.get(volume["level"])
+        lines.append(f"{roles} · {filesystem} · {available:.1f} GiB disponíveis · "
+                     f"{volume['used_pct']:g}% usado · {history}" + (f" · {level}" if level else ""))
+    if report.get("quality") != "ok":
+        lines.append(report.get("reason") or "Espaço disponível desconhecido")
+    return lines
+
+
 @dataclass
 class PressureAlertTracker:
     """Warn on sustained kernel PSI already present in resource snapshots."""
@@ -147,6 +168,15 @@ class ThermalTracker:
 
 
 GUIDES = {
+    "storage": (
+        "Espaço em disco", "A capacidade é a informada pelo sistema de arquivos para o usuário. "
+        "Subvolumes Btrfs que compartilham a capacidade são exibidos juntos. "
+        "Atenção começa em 90% usado ou abaixo de 20 GiB disponíveis. "
+        "Crítico começa em 95% ou abaixo de 10 GiB. "
+        "Use Medir pasta para identificar onde está o espaço observado e revise arquivos pelo "
+        "aplicativo responsável. No Btrfs, snapshots e cópias com blocos compartilhados "
+        "podem manter espaço reservado. Mover para a quarentena no mesmo volume mantém "
+        "os dados e o espaço ocupado."),
     "power": (
         "Alimentação e proteção", "Confira energia externa, tensão e corrente junto do percentual. "
         "Uma descarga com carregador conectado pede revisão do carregador, cabo e dock. "

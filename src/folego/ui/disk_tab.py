@@ -10,15 +10,16 @@ reported as ``stored`` and purge asks for an explicit irreversible confirmation.
 import sys
 import json
 from datetime import datetime
+from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QGuiApplication
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMessageBox,
+from PySide6.QtWidgets import (QFileDialog, QFrame, QHBoxLayout, QLabel, QMessageBox,
                                QPushButton, QScrollArea, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..actions.disk.planner import fmt_bytes
-from ..core.host_guard import GUIDES, boot_end_text
+from ..core.host_guard import GUIDES, boot_end_text, storage_lines
 
 PLAN_PENDING = "ainda não analisado — use Reconsultar o disco."
 PLAN_LOADING = "consultando o disco (dry-run, nada é escrito)…"
@@ -94,6 +95,7 @@ class HostHealthPanel(QWidget):
         for index, (key, label) in enumerate((
                 ("power", "Alimentação e proteção"),
                 ("pressure", "Pressão de CPU e I/O"),
+                ("storage", "Espaço em disco"),
                 ("ntfs", "Volumes NTFS"), ("service", "Serviços do usuário"),
                 ("btrfs", "Disco Btrfs"), ("reboot", "Reinícios registrados"))):
             if index:
@@ -186,6 +188,7 @@ class HostHealthPanel(QWidget):
         except (KeyError, TypeError, ValueError):
             updated = "horário desconhecido"
         self.updated.setText("Última verificação: " + updated)
+        self.rows["storage"].setText("\n".join(storage_lines(report.get("storage", {}))))
         ntfs = report.get("ntfs", {})
         if ntfs.get("quality") not in ("ok", "partial"):
             ntfs_text = "Avisos NTFS desconhecidos · " + ntfs.get("reason", "fonte indisponível")
@@ -360,6 +363,9 @@ def plan_argv(acao: str, target: str, confirm: bool) -> list[str]:
     if acao == "list":
         argv.append("--json")
         return argv
+    if acao == "usage":
+        argv.extend(("--json", "--", target))
+        return argv
     return list(PLAN_ARGV)
 
 
@@ -391,6 +397,20 @@ class DiskTab(QWidget):
         self._reviewed_operation = ""
         self._quarantine_loaded = False
 
+        self.usage_button = QPushButton("Medir pasta…")
+        self.usage_button.clicked.connect(self.choose_usage_directory)
+        self.usage_summary = QLabel("Veja o espaço ocupado em uma pasta pessoal.")
+        self.usage_summary.setWordWrap(True)
+        self.usage_summary.setTextFormat(Qt.TextFormat.PlainText)
+        self.usage_table = QTableWidget(0, 3)
+        self.usage_table.setHorizontalHeaderLabels(["item", "espaço observado", "leitura"])
+        self.usage_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.usage_table.verticalHeader().setVisible(False)
+        self.usage_table.horizontalHeader().setStretchLastSection(True)
+        self.usage_table.setAccessibleName("Pastas e arquivos por espaço observado")
+        self.usage_table.setMinimumHeight(180)
+        self.usage_table.hide()
+
         self.summary = QLabel(PLAN_PENDING)
         self.summary.setWordWrap(True)
         self.table = QTableWidget(0, len(COLUMNS) + 1)
@@ -410,6 +430,7 @@ class DiskTab(QWidget):
         self.quarantine_button.setEnabled(False)
         self.quarantine_button.setAccessibleName(
             "Mover o item selecionado para a quarentena reversível")
+        self.quarantine_button.setToolTip("O espaço permanece ocupado enquanto o item estiver na quarentena.")
         bar = QHBoxLayout()
         bar.addWidget(self.refresh_button)
         bar.addWidget(self.quarantine_button)
@@ -457,6 +478,9 @@ class DiskTab(QWidget):
         content = QWidget()
         layout = QVBoxLayout(content)
         layout.addWidget(self.host_health)
+        layout.addWidget(self.usage_button, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self.usage_summary)
+        layout.addWidget(self.usage_table)
         layout.addWidget(plan_title)
         layout.addWidget(self.summary)
         layout.addLayout(bar)
@@ -487,6 +511,42 @@ class DiskTab(QWidget):
         self.host_health.show_thermal(thermal)
 
     # -------------------------------------------------------------------- reading
+
+    def choose_usage_directory(self):
+        directory = QFileDialog.getExistingDirectory(self, "Medir pasta", str(Path.home()))
+        if directory:
+            self.measure_usage(directory)
+
+    def measure_usage(self, directory):
+        self.usage_button.setEnabled(False)
+        self.usage_table.hide()
+        self.usage_summary.setText(f"Medindo {directory}…")
+        self._jobs.run("usage", directory, done=self.show_usage)
+
+    def show_usage(self, payload):
+        self.usage_button.setEnabled(True)
+        self.usage_table.setRowCount(0)
+        payload = payload or {}
+        if payload.get("quality") not in ("ok", "partial"):
+            self.usage_table.hide()
+            self.usage_summary.setText("Medição indisponível · " +
+                                       (payload.get("reason") or "sem resposta"))
+            return
+        rows = payload["items"]
+        summary = (f"{payload['directory']} · {fmt_bytes(payload['allocated_bytes'])} observados"
+                   f" · {payload['scanned_entries']} entradas lidas")
+        if payload["quality"] == "partial":
+            summary += f" · leitura parcial: {payload['reason']}"
+        if payload["total_items"] > len(rows):
+            summary += f" · {len(rows)} maiores itens de {payload['total_items']} medidos"
+        self.usage_summary.setText(summary + "\nBlocos compartilhados podem aparecer mais de uma vez.")
+        self.usage_table.setRowCount(len(rows))
+        for index, row in enumerate(rows):
+            values = (row["name"], fmt_bytes(row["allocated_bytes"]),
+                      "parcial" if row["partial"] else "medido")
+            for column, value in enumerate(values):
+                self.usage_table.setItem(index, column, QTableWidgetItem(value))
+        self.usage_table.setVisible(bool(rows))
 
     def refresh(self):
         self.summary.setText(PLAN_LOADING)

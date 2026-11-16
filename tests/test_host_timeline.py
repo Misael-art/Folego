@@ -231,6 +231,51 @@ def test_capacity_warns_before_history_stops_without_rotating_any_bytes(tmp_path
     assert path.read_bytes() == original
 
 
+def test_old_overflow_stays_readable_and_archive_resumes_collection(tmp_path, monkeypatch):
+    from folego.actions.disk import timeline_archive
+    from folego.orchestration import Coordinator, Outcome
+    from folego.orchestration.journal import Journal
+
+    boot_two = "c325bc6f-a6f8-4093-8b2d-5c10008de2e5"
+    boot_three = "1bb584fe-e43b-4598-8323-6f1133dd9b75"
+    folder = tmp_path / "timeline"
+    recorder = HostTimelineRecorder(folder)
+    recorder.record(_snapshot(100, BOOT))
+    recorder.record(_snapshot(110, boot_two))
+    source = folder / f"{BOOT}.jsonl"
+    before = source.read_bytes()
+    monkeypatch.setattr(host_timeline, "_MAX_FILES", 1)
+    monkeypatch.setattr(timeline_archive, "_MAX_FILES", 1)
+    assert read_timeline(folder, boot_id=BOOT)["quality"] == "partial"
+    recorder.record(_snapshot(130, boot_three))
+    assert recorder.last_error
+
+    monkeypatch.setattr(timeline_archive, "read_boot_id", lambda: boot_two)
+    monkeypatch.setattr(timeline_archive, "read_mountinfo", lambda _root: [
+        {"mount": str(tmp_path), "source": "/dev/test", "type": "ext4", "mount_id": "1"},
+    ])
+    coordinator = Coordinator(journal=Journal(tmp_path / "operations.jsonl"),
+                              lock_path=tmp_path / "coordinator.lock")
+    plan = timeline_archive.review(folder, BOOT)
+    result = timeline_archive.archive(folder, plan, coordinator)
+    assert result.outcome == Outcome.OK
+    assert not source.exists()
+    target = host_timeline.archive_directory(folder) / source.name
+    assert target.read_bytes() == before
+    assert read_timeline(folder, boot_id=BOOT)["samples"][0]["boot_id"] == BOOT
+    assert timeline_archive.archive(folder, plan, coordinator) == result
+    recorder.record(_snapshot(145, boot_three))
+    assert recorder.last_error
+    assert not (folder / f"{boot_three}.jsonl").exists()
+
+    monkeypatch.setattr(timeline_archive, "read_boot_id", lambda: boot_three)
+    plan = timeline_archive.review(folder, boot_two)
+    assert timeline_archive.archive(folder, plan, coordinator).outcome == Outcome.OK
+    recorder.record(_snapshot(150, boot_three))
+    assert not recorder.last_error
+    assert read_timeline(folder, boot_id=boot_three)["quality"] == "ok"
+
+
 def test_boot_summary_bounds_read_and_marks_absent_boot_unknown(tmp_path):
     folder = tmp_path / 'timeline'
     recorder = HostTimelineRecorder(folder)

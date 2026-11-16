@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Iterable
 
 from .agents import AgentActivity
-from .snapshot import Pressure, ProcInfo, Snapshot
+from .snapshot import OK, Pressure, ProcInfo, Snapshot
 
 AGENT = "agent"
 PROTECTED = "protected"
@@ -64,9 +64,14 @@ class PerfView:
     # unit -> why someone is using it now (focus, audio, download, project file);
     # only probed for groups that could become candidates.
     in_use: dict = field(default_factory=dict)
+    pressure_cpu: Pressure | None = None
 
     def reclaimable_kb(self) -> int:
         return sum(g.rss_kb for g in self.groups if g.state == OBSERVED)
+
+    def top_cpu(self) -> list[AppGroup]:
+        measured = (group for group in self.groups if (group.cpu_frac or 0) > 0)
+        return sorted(measured, key=lambda group: -group.cpu_frac)[:4]
 
 
 def leaf_unit(cgroup: str | None) -> str | None:
@@ -111,7 +116,7 @@ def build(snapshot: Snapshot, activity: AgentActivity, *,
         reason = _protection(unit, label)
         class_only = False
         if agent:
-            state, reason = AGENT, "hospeda trabalho de agente"
+            state, reason = AGENT, "app ou árvore protegida de agente"
         elif user:
             state, reason = PROTECTED, user
         elif reason:
@@ -128,7 +133,9 @@ def build(snapshot: Snapshot, activity: AgentActivity, *,
     groups.sort(key=lambda g: g.rss_kb, reverse=True)
     mem = snapshot.mem
     return PerfView(tuple(groups), activity, snapshot.pressure_memory,
-                    mem.mem_available_kb if mem else None, mem.mem_total_kb if mem else None)
+                    mem.mem_available_kb if mem else None, mem.mem_total_kb if mem else None,
+                    pressure_cpu=(snapshot.pressure_cpu
+                                  if snapshot.source("pressure_cpu").status == OK else None))
 
 
 

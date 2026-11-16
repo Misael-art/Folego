@@ -94,10 +94,12 @@ exclusions / sessions ────────────►  service.py  unit 
   aberta; um lock garante um único executor.
 
 ### Gatilho por pressão, não por relógio
-O laço observa a cada 10 s e só **age** quando há motivo: PSI de memória acima do
-limiar, RAM disponível abaixo do piso, um agente em fase build/teste
-(`AgentActivity.load`) ou a regra marcada como "sempre que ocioso". Sem pressão,
-o modo apenas sugere.
+O laço observa a cada 10 s. O executor usa PSI de memória acima do limiar ou
+RAM disponível abaixo do piso. A aba e a CLI também mostram PSI de CPU e os
+grupos com maior consumo de CPU, medido em percentual de um núcleo.
+A carga das árvores protegidas é mostrada separadamente. Renderização e
+serviços residentes podem consumir CPU mesmo sem um build, por isso esse
+sinal deixou de autorizar fechamento automático.
 
 ## 4. Proteção do trabalho de agentes
 

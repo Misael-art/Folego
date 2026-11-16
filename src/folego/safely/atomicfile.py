@@ -22,6 +22,22 @@ def fsync_dir(path: Path) -> None:
         os.close(fd)
 
 
+def rename_noreplace(source: Path, target: Path) -> None:
+    """Atomic Linux rename that refuses an existing destination."""
+    import ctypes
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    try:
+        renameat2 = libc.renameat2
+    except AttributeError as exc:
+        raise OSError("renameat2 indisponível; origem preservada") from exc
+    renameat2.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
+    renameat2.restype = ctypes.c_int
+    if renameat2(-100, os.fsencode(source), -100, os.fsencode(target), 1):
+        code = ctypes.get_errno()
+        raise OSError(code, os.strerror(code), str(target))
+
+
 def write_atomic(path: Path, data: bytes, *, mode: int | None = None) -> WriteResult:
     """Write bytes so readers only ever see the old or new complete file.
 

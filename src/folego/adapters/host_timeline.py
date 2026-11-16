@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import itertools
 import math
 import os
 import re
@@ -19,6 +20,7 @@ from ..safely.atomicfile import fsync_dir
 _BOOT_ID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
 _PER_BOOT_LIMIT = 4 * 1024 * 1024
 _TOTAL_LIMIT = 32 * 1024 * 1024
+_MAX_FILES = 64
 _CAPACITY_WARNING_PERCENT = 85
 _SOURCES = ("meminfo", "swaps", "pressure_memory", "pressure_io", "pressure_cpu",
             "temperature", "battery", "external_power", "processes")
@@ -27,6 +29,26 @@ POWER_EVENT_LABELS = {
     "external-power-connected": "alimentação externa conectada",
     "external-power-disconnected": "alimentação externa desconectada",
 }
+
+
+def archive_directory(directory: Path) -> Path:
+    return directory.with_name(directory.name + "-archive")
+
+
+def _private_directory(directory: Path):
+    info = directory.lstat()
+    if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
+            or stat.S_IMODE(info.st_mode) != 0o700):
+        raise ValueError("diretório de histórico não é privado")
+    return info
+
+
+def _entries(directory: Path, limit: int):
+    with os.scandir(directory) as entries:
+        result = [Path(entry.path) for entry in itertools.islice(entries, limit + 1)]
+    if len(result) > limit:
+        raise ValueError("inventário excede o limite de arquivos de histórico")
+    return result
 
 
 def _sample(snapshot: Snapshot) -> dict:
@@ -127,26 +149,23 @@ class HostTimelineRecorder:
             if self.directory.is_symlink():
                 raise ValueError("diretório de histórico é link simbólico")
             self.directory.mkdir(parents=True, mode=0o700, exist_ok=True)
-            dir_info = self.directory.stat()
-            if (not stat.S_ISDIR(dir_info.st_mode) or dir_info.st_uid != os.getuid()
-                    or stat.S_IMODE(dir_info.st_mode) != 0o700):
-                raise ValueError("diretório de histórico não é privado")
-            entries = list(self.directory.iterdir())
-            if len(entries) > 64:
-                raise ValueError("mais de 64 arquivos de histórico; revisão necessária")
+            _private_directory(self.directory)
+            entries = _entries(self.directory, _MAX_FILES)
+            path = self.directory / f"{snapshot.boot_id}.jsonl"
+            if len(entries) == _MAX_FILES and path not in entries:
+                raise ValueError("limite de 64 boots atingido; use disk timeline-archive")
             size = 0
             for entry in entries:
                 if entry.is_symlink() or not entry.is_file():
                     raise ValueError("entrada de histórico inesperada")
                 size += entry.stat().st_size
-            path = self.directory / f"{snapshot.boot_id}.jsonl"
             item = _sample(snapshot)
             if events:
                 item["power_events"] = events
             raw = (json.dumps(item, ensure_ascii=False, separators=(",", ":")) + "\n").encode()
             if size + len(raw) > _TOTAL_LIMIT:
                 raise ValueError("limite de 32 MiB de histórico alcançado")
-            flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+            flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK
             fd = os.open(path, flags, 0o600)
             try:
                 info = os.fstat(fd)
@@ -254,11 +273,11 @@ def read_timeline(directory: Path | None = None, *, limit: int = 80,
         if folder.is_symlink() or not folder.is_dir():
             return {"quality": "missing", "reason": "histórico ausente", "samples": [],
                     "capacity": None}
-        info = folder.stat()
-        if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
-            raise ValueError("diretório de histórico não é privado")
-        entries = list(folder.iterdir())
-        if len(entries) > 64 or any(p.is_symlink() or not p.is_file() for p in entries):
+        _private_directory(folder)
+        # The old recorder could leave exactly one extra file. Reading a
+        # validated boot remains available for review; writing keeps its cap.
+        entries = _entries(folder, _MAX_FILES + 1)
+        if any(p.is_symlink() or not p.is_file() for p in entries):
             raise ValueError("inventário de histórico inválido")
         sizes = {p.name: p.stat().st_size for p in entries}
         total_bytes = sum(sizes.values())
@@ -267,21 +286,32 @@ def read_timeline(directory: Path | None = None, *, limit: int = 80,
         capacity = {"total_bytes": total_bytes, "total_limit_bytes": _TOTAL_LIMIT,
                     "active_boot_bytes": active_bytes,
                     "per_boot_limit_bytes": _PER_BOOT_LIMIT,
+                    "boot_files": len(entries), "boot_files_limit": _MAX_FILES,
                     "at_limit": (total_bytes >= _TOTAL_LIMIT or
+                                 (len(entries) >= _MAX_FILES and active_bytes is None) or
+                                 len(entries) > _MAX_FILES or
                                  active_bytes is not None and active_bytes >= _PER_BOOT_LIMIT),
                     "near_limit": (total_bytes * 100 >= _TOTAL_LIMIT * _CAPACITY_WARNING_PERCENT or
+                                   len(entries) * 100 >= _MAX_FILES * _CAPACITY_WARNING_PERCENT or
                                    active_bytes is not None and active_bytes * 100 >=
                                    _PER_BOOT_LIMIT * _CAPACITY_WARNING_PERCENT)}
         files = [p for p in entries if p.name.endswith(".jsonl")]
         if boot_id is not None:
             files = [p for p in files if p.name == f"{boot_id}.jsonl"]
+            if not files:
+                archive = archive_directory(folder)
+                archived = archive / f"{boot_id}.jsonl"
+                if archive.exists() or archive.is_symlink():
+                    _private_directory(archive)
+                    if archived.exists() or archived.is_symlink():
+                        files = [archived]
         files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
         recent = deque(maxlen=max(1, min(limit, 200)))
         malformed = 0
         limited = False
         no_complete_line = False
         for path in reversed(files[:2] if boot_id is None else files):
-            fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
             with os.fdopen(fd, "rb") as stream:
                 info = os.fstat(stream.fileno())
                 if (not stat.S_ISREG(info.st_mode) or info.st_size > _PER_BOOT_LIMIT
@@ -311,12 +341,14 @@ def read_timeline(directory: Path | None = None, *, limit: int = 80,
                     continue
                 recent.append(row)
         samples = list(recent)
-        quality = ("partial" if malformed else "ok" if samples else "unknown"
+        quality = ("partial" if malformed or len(entries) > _MAX_FILES and samples else "ok" if samples else "unknown"
                    if no_complete_line else "missing")
         reason = (f"{malformed} amostra(s) ilegível(is) preservada(s) na janela" if malformed
                   else "" if samples else "janela sem linha completa"
                   if no_complete_line else "sem amostras locais para o boot"
                   if boot_id is not None else "histórico vazio")
+        if len(entries) > _MAX_FILES:
+            reason = (reason + " · " if reason else "") + "limite de boots excedido; gravação bloqueada"
         return {"quality": quality, "reason": reason, "samples": samples,
                 "capacity": capacity, "window_limited": limited}
     except (OSError, ValueError, UnicodeError, TypeError) as exc:

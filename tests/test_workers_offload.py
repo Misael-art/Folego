@@ -54,11 +54,13 @@ def test_offload_schedules_and_does_not_block_the_caller(qapp):
     try:
         began = time.monotonic()
         poller.request()
+        assert poller._drain_timer.isActive()
         assert time.monotonic() - began < 0.1
         assert started.wait(0.5)
         assert spy.snapshots == [], "a UI não recebe antes do resultado"
         gate.set()
         assert wait_for(qapp, lambda: spy.snapshots)
+        assert not poller._drain_timer.isActive()
         assert not spy.errors
     finally:
         poller.stop()

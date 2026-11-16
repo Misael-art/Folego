@@ -333,7 +333,8 @@ def build_parser() -> argparse.ArgumentParser:
     health = disk_sub.add_parser("health", help="integridade e riscos do host (somente leitura)")
     health.add_argument("--json", action="store_true", help="saída para máquinas")
     guide = disk_sub.add_parser("guide", help="orientação manual para um risco; não repara")
-    guide.add_argument("issue", choices=("thermal", "pressure", "power", "ntfs", "btrfs", "service", "reboot"))
+    guide.add_argument("issue", choices=("storage", "thermal", "pressure", "power", "ntfs",
+                                         "btrfs", "service", "reboot"))
     guide.add_argument("--json", action="store_true", help="saída para máquinas")
     recovery = disk_sub.add_parser("recovery", help="pré-checagem NTFS para cópia de resgate; não repara")
     recovery.add_argument("source", help="dispositivo NTFS, por exemplo /dev/mmcblk0p1")
@@ -342,6 +343,16 @@ def build_parser() -> argparse.ArgumentParser:
     timeline = disk_sub.add_parser("timeline", help="amostras locais antes de incidentes (somente leitura)")
     timeline.add_argument("--json", action="store_true", help="saída para máquinas")
     timeline.add_argument("--boot-id", help="consultar um boot específico preservado")
+
+    archive = disk_sub.add_parser("timeline-archive", help="preserva um boot anterior fora da coleta ativa")
+    archive.add_argument("boot_id", nargs="?", help="sem ID lista os boots anteriores candidatos")
+    archive.add_argument("--plan", help="JSON da revisão de arquivamento")
+    archive.add_argument("--confirmar", action="store_true", help="executa o plano revisado")
+    archive.add_argument("--json", action="store_true", help="saída para máquinas")
+
+    usage = disk_sub.add_parser("usage", help="medição limitada de uma pasta no disco local")
+    usage.add_argument("directory", nargs="?", help="pasta dentro da HOME (padrão: HOME)")
+    usage.add_argument("--json", action="store_true", help="saída para máquinas")
 
     plan = disk_sub.add_parser("plan", help="dry-run: o que poderia ser liberado (nada muda)")
     plan.add_argument("--json", action="store_true", help="saída para máquinas")
@@ -687,11 +698,34 @@ def _cmd_plan(args) -> int:
     print("Volume:")
     print(planner.format_volumes(volumes))
     print("")
-    print("Candidatos a liberação (dry-run, nada foi alterado):")
+    print("Candidatos à quarentena (somente leitura):")
     print(planner.format_report(plan))
     print("")
-    print("Para liberar de forma reversível: folego disk quarantine <caminho> --confirmar")
+    print("Quarentena mantém o espaço ocupado no volume até a remoção definitiva.")
+    print("Para mover de forma reversível: folego disk quarantine <caminho> --confirmar")
     return EXIT_OK
+
+
+def _cmd_disk_usage(args) -> int:
+    from .actions.disk.usage import inventory
+    result = inventory(args.directory)
+    known = result["quality"] != "unknown"
+    if args.json:
+        _emit_machine({"ok": known, "effect": "none", **result})
+    else:
+        print(f"Pasta: {result['directory']}")
+        if known:
+            print(f"Espaço observado: {planner.fmt_bytes(result['allocated_bytes'])} · "
+                  f"{result['scanned_entries']} entradas lidas")
+            for item in result["items"]:
+                print(f"  {item['name']!r} · {planner.fmt_bytes(item['allocated_bytes'])}"
+                      + (" · leitura parcial" if item["partial"] else ""))
+            if result["total_items"] > len(result["items"]):
+                print(f"Exibindo {len(result['items'])} de {result['total_items']} itens medidos.")
+            print("Blocos compartilhados podem aparecer mais de uma vez.")
+        if result["reason"]:
+            print(f"Leitura {'parcial' if known else 'indisponível'} · {result['reason']}")
+    return EXIT_OK if known else EXIT_REFUSED
 
 
 def _cmd_quarantine(args) -> int:
@@ -926,9 +960,11 @@ def _cmd_tmp(args) -> int:
 
 _HANDLERS = {
     "health": lambda args: _cmd_host_health(args),
+    "usage": _cmd_disk_usage,
     "guide": lambda args: _cmd_host_guide(args),
     "recovery": lambda args: _cmd_ntfs_recovery(args),
     "timeline": lambda args: _cmd_host_timeline(args),
+    "timeline-archive": lambda args: _cmd_timeline_archive(args),
     "plan": _cmd_plan,
     "quarantine": _cmd_quarantine,
     "restore": _cmd_restore,
@@ -941,7 +977,7 @@ _HANDLERS = {
 def _cmd_host_health(args) -> int:
     from .adapters.host_guard import HostObserver
     from .core.collector import MetricsCollector
-    from .core.host_guard import ThermalTracker
+    from .core.host_guard import ThermalTracker, storage_lines
     from .core.battery_alerts import power_supply_status
     from .actions.power_profile_guard import PowerProfileGuard, PowerProfileError
     report = HostObserver(record=False).observe()
@@ -961,6 +997,8 @@ def _cmd_host_health(args) -> int:
               f"{thermal['current_c'] if thermal['current_c'] is not None else '—'} °C")
         print(f"Alimentação: {report['power']['message']}")
         print(f"Proteção de energia: {report['power_guard']['message']}")
+        for line in storage_lines(report.get("storage", {})):
+            print("Disco · " + line)
         for row in report["btrfs"]:
             print(f"Btrfs {row['id']}: "
                   + (f"corrupção {row['counters']['corruption_errs']}; tendência {row['trend']}"
@@ -992,7 +1030,7 @@ def _cmd_host_health(args) -> int:
                 print(f"Amostras daquele boot: {evidence.get('quality', 'desconhecido')} "
                       f"({evidence.get('reason', 'sem evidência local')})")
         print(f"Custo desta observação: {report['observer_duration_ms']:.1f} ms")
-        print("Orientações: folego disk guide thermal|pressure|power|ntfs|btrfs|service|reboot")
+        print("Orientações: folego disk guide storage|thermal|pressure|power|ntfs|btrfs|service|reboot")
     return EXIT_OK
 
 
@@ -1040,8 +1078,8 @@ def _cmd_host_timeline(args) -> int:
         print(f"Histórico local: {report['quality']} · {report['reason'] or 'amostras recentes'}")
         capacity = report.get("capacity") or {}
         if capacity.get("near_limit"):
-            print("Aviso: histórico próximo do limite; novas amostras podem parar. "
-                  "Os registros existentes foram preservados.")
+            print(f"Histórico: {capacity['boot_files']}/{capacity['boot_files_limit']} boots ativos. "
+                  "Use folego disk timeline-archive para revisar o arquivamento.")
         for row in report["samples"][-10:]:
             battery = (f" · bateria {row['battery_percent']}% ({row['battery_status']})"
                        if row.get("battery_percent") is not None else "")
@@ -1060,6 +1098,45 @@ def _cmd_host_timeline(args) -> int:
                   f"PSI memória {row['psi_mem_avg10']}% · "
                   f"PSI I/O {row['psi_io_avg10']}% · "
                   f"temperatura {row['temperature_c']} °C{battery}{electrical}{external}{event_text}")
+    return EXIT_OK
+
+
+def _cmd_timeline_archive(args) -> int:
+    from .actions.disk import timeline_archive
+    from .orchestration import ActionPlan
+
+    folder = paths.host_timeline_dir()
+    try:
+        if args.confirmar or args.plan:
+            if not args.confirmar or not args.plan or args.boot_id:
+                raise ValueError("use --plan com o JSON da revisão e --confirmar")
+            plan = ActionPlan.from_dict(json.loads(args.plan))
+            result = timeline_archive.archive(folder, plan, _disk_coordinator())
+            if args.json:
+                _emit_machine({**result.to_dict(), "ok": result.outcome == Outcome.OK})
+            else:
+                print(f"{result.reason} · operação {result.operation_id}")
+                if result.outcome == Outcome.OK:
+                    print(f"Consulta: folego disk timeline --boot-id {plan.params['boot_id']}")
+            return EXIT_BY_OUTCOME[result.outcome]
+        if args.boot_id:
+            plan = timeline_archive.review(folder, args.boot_id)
+            if args.json:
+                _emit_machine(plan.to_dict())
+            else:
+                print(f"Boot {args.boot_id} · {plan.target.detail['stat'][2]} bytes")
+                print(f"Destino: {plan.params['archive']}")
+                print("Peça a revisão com --json e use o JSON com --plan e --confirmar.")
+        else:
+            candidates = timeline_archive.candidates(folder)
+            if args.json:
+                _emit_machine({"ok": True, "items": candidates})
+            else:
+                for row in candidates:
+                    print(f"{row['boot_id']} · {planner.fmt_bytes(row['bytes'])}")
+                print("Selecione um boot anterior para revisar o arquivamento.")
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return _emit_gate_refusal(args, timeline_archive.ACTION, str(exc))
     return EXIT_OK
 
 
@@ -1180,6 +1257,7 @@ def _cmd_performance(args) -> int:
             "load": act.load, "agent_cpu": act.cpu_frac, "projects": sorted(act.projects),
             "mem_available_kb": view.mem_available_kb, "mem_total_kb": view.mem_total_kb,
             "psi_memory_some_avg60": view.pressure.some_avg60 if view.pressure else None,
+            "psi_cpu_some_avg60": view.pressure_cpu.some_avg60 if view.pressure_cpu else None,
             "reclaimable_kb": view.reclaimable_kb(),
             "groups": [dict(unit=g.unit, label=g.label, state=g.state, reason=g.reason,
                             procs=g.procs, rss_kb=g.rss_kb, cpu_frac=g.cpu_frac,
@@ -1187,9 +1265,13 @@ def _cmd_performance(args) -> int:
                        for g in view.groups]}, indent=2))
         return EXIT_OK
     psi = f"{view.pressure.some_avg60:.2f}%" if view.pressure else "indisponível"
+    psi_cpu = f"{view.pressure_cpu.some_avg60:.2f}%" if view.pressure_cpu else "indisponível"
     avail = _rss(view.mem_available_kb) if view.mem_available_kb is not None else "?"
-    print(f"agentes: {act.load} · projetos: {len(act.projects)} · RAM disponível {avail}"
-          f" · PSI memória (60 s) {psi}")
+    print(f"carga nas árvores de agentes: {act.load} · projetos: {len(act.projects)}"
+          f" · RAM disponível {avail} · PSI 60 s: memória {psi}, CPU {psi_cpu}")
+    top = " · ".join(f"{g.label} {g.cpu_frac:.0f}%" for g in view.top_cpu())
+    if top:
+        print(f"CPU por aplicativo (100% = 1 núcleo) · {top}")
     names = {perf_model.AGENT: "agente", perf_model.PROTECTED: "protegido",
              perf_model.OBSERVED: "observado"}
     for g in view.groups:

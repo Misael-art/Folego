@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .. import paths
+from .host_storage import observe_storage, read_mountinfo
 from .host_timeline import read_timeline, summarize_boot_timeline
 from ..safely.atomicfile import write_atomic
 
@@ -56,27 +57,9 @@ def _stats(raw: str) -> dict[str, int]:
 
 def _mounts(proc_root: Path) -> tuple[list[dict], str]:
     try:
-        raw = _read_small(proc_root / "self/mountinfo", 262144)
+        return read_mountinfo(proc_root), ""
     except (OSError, ValueError, UnicodeError) as exc:
         return [], f"mountinfo indisponível: {exc}"
-    lines = raw.splitlines()
-    if len(lines) > 2048:
-        return [], "inventário de volumes excede 2048 linhas; coleta recusada"
-    found = []
-    for line in lines:
-        fields = line.split()
-        if "-" not in fields:
-            continue
-        sep = fields.index("-")
-        if sep + 2 >= len(fields) or len(fields) < 5:
-            continue
-        kind, source = fields[sep + 1:sep + 3]
-        mount = fields[4].replace("\\040", " ")
-        if kind in ("btrfs", "ntfs", "ntfs3", "fuseblk"):
-            found.append({"mount": mount, "source": source, "type": kind})
-    if len(found) > 128:
-        return found[:128], "inventário de volumes parcial (limite 128)"
-    return found, ""
 
 
 def _btrfs(sys_root: Path) -> tuple[list[dict], str]:
@@ -408,7 +391,7 @@ def _last_journal_entry(run, boot_id: str) -> dict:
 
 
 class HostObserver:
-    """Slow probe. `record` only commits a tiny Btrfs baseline for the GUI."""
+    """Slow probe. `record` only persists small diagnostic samples for the GUI."""
 
     def __init__(self, *, proc_root: Path | None = None, sys_root: Path | None = None,
                  state_path: Path | None = None, run=None, record: bool = False,
@@ -439,6 +422,9 @@ class HostObserver:
         except (OSError, ValueError, UnicodeError):
             boot_id = ""
         mounts, mounts_problem = _mounts(self.proc_root)
+        storage = observe_storage(mounts, sys_root=self.sys_root,
+                                  state_path=self.state_path.with_name("host-storage.json"),
+                                  now=now, record=self.record)
         btrfs, btrfs_problem = _btrfs(self.sys_root)
         btrfs, baseline_problem = _compare_and_record(btrfs, self.state_path,
                                                         self.record, now, boot_id)
@@ -492,6 +478,7 @@ class HostObserver:
                 "baseline_quality": "unknown" if baseline_problem and baseline_problem != "novo" else "ok",
                 "baseline_reason": baseline_problem,
                 "ntfs": ntfs, "services": services, "boots": self._boot_cache[1],
+                "storage": storage,
                 "observer_duration_ms": round((time.monotonic() - started) * 1000, 2),
                 "timeline": {"quality": timeline["quality"], "reason": timeline["reason"],
                              "capacity": timeline["capacity"],

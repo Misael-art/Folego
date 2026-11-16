@@ -67,6 +67,7 @@ class Poller(QObject):
             except queue.Empty:
                 return
             self._inflight = False
+            self._drain_timer.stop()
             if kind == "ok":
                 self.snapshot_ready.emit(payload)
             else:
@@ -76,7 +77,7 @@ class Poller(QObject):
 
     def start(self):
         self._timer.start()
-        if self._offload:
+        if self._inflight:
             self._drain_timer.start()
 
     def pause(self):
@@ -88,9 +89,7 @@ class Poller(QObject):
     def resume(self):
         if self._stop.is_set():
             return
-        self._timer.start()
-        if self._offload:
-            self._drain_timer.start()
+        self.start()
         self.request()
 
     def stop(self):
@@ -113,19 +112,20 @@ class Poller(QObject):
 
     @Slot()
     def request(self):
+        if self._stop.is_set():
+            return
         if not self._offload:
             self.poll_once()
             return
         # fila de um: enquanto uma coleta não volta, o próximo tick é ignorado.
         if self._inflight:
             return
-        if not self._drain_timer.isActive():
-            self._drain_timer.start()  # request manual também entrega o resultado
         try:
             self._requests.put_nowait(True)
         except queue.Full:
             return
         self._inflight = True
+        self._drain_timer.start()
 
     def _collect_once(self):
         try:

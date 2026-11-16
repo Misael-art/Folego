@@ -22,7 +22,7 @@ from .theme import TOKENS
 COLUMNS = ("Estado", "App", "Memória", "CPU", "Processos", "Motivo")
 STATES = {perf_model.AGENT: ("Agente", "accent"), perf_model.PROTECTED: ("Protegido", "muted"),
           perf_model.OBSERVED: ("Observado", "warning")}
-LOADS = {"idle": "ociosos", "interactive": "em uso", "busy": "em build/teste"}
+LOADS = {"idle": "baixa", "interactive": "presente", "busy": "elevada"}
 MIN_RSS_KB = 20 * 1024
 
 
@@ -470,10 +470,14 @@ class PerformanceTab(QWidget):
         act = view.activity
         avail = fmt_bytes(view.mem_available_kb * 1024) if view.mem_available_kb is not None else "?"
         psi = f"{view.pressure.some_avg60:.2f}%" if view.pressure else "indisponível"
+        psi_cpu = f"{view.pressure_cpu.some_avg60:.2f}%" if view.pressure_cpu else "indisponível"
+        top = " · ".join(f"{g.label} {g.cpu_frac:.0f}%" for g in view.top_cpu())
         self.summary.setText(
-            f"Agentes {LOADS.get(act.load, act.load)} · {len(act.projects)} projeto(s) protegido(s) · "
-            f"RAM disponível {avail} · pressão de memória (60 s) {psi} · "
-            f"observado sem agente {fmt_bytes(view.reclaimable_kb() * 1024)}")
+            f"Carga nas árvores de agentes {LOADS.get(act.load, act.load)} · "
+            f"{len(act.projects)} projeto(s) protegido(s) · "
+            f"RAM disponível {avail} · PSI 60 s: memória {psi}, CPU {psi_cpu} · "
+            f"observado sem agente {fmt_bytes(view.reclaimable_kb() * 1024)}"
+            + (f"\nCPU por aplicativo (100% = 1 núcleo) · {top}" if top else ""))
         rows = [g for g in view.groups if g.rss_kb >= MIN_RSS_KB]
         self.table.setRowCount(len(rows))
         for row, group in enumerate(rows):

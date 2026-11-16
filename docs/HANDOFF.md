@@ -1,4 +1,52 @@
-# Passagem para o próximo agente — atualizada em 15/11/2026
+# Passagem para o próximo agente — atualizada em 16/11/2026
+
+## Gestão de disco e custo da observação — 15/11/2026
+
+- **Disco → Saúde do host → Espaço em disco** e `./dev run disk health --json`
+  mostram a capacidade disponível informada pelo kernel para o sistema e a
+  pasta pessoal, com NVMe identificado por sysfs. O Btrfs compartilhado
+  aparece como uma unidade. Atenção a partir de 90% de uso ou abaixo de
+  20 GiB livres, crítico a partir de 95% ou abaixo de 10 GiB. A GUI guarda
+  uma amostra de espaço por hora no estado privado, com janela de até 24 h.
+  A CLI consulta essa tendência sem gravar. Um volume ilegível fica explicitamente
+  desconhecido. Capacidade e contadores de integridade Btrfs são distintos.
+- **Disco → Medir pasta…** e `./dev run disk usage [pasta] --json` agrupam
+  blocos ocupados pelos itens da pasta escolhida na HOME. O limite é de
+  12.000 entradas, 2 s cooperativos e 20 itens exibidos. A GUI usa filho
+  com prazo. A leitura não abre conteúdo, atravessa links ou cruza montagens.
+  Arquivos esparsos são medidos pelos blocos e hardlinks contam uma vez na
+  leitura; clones e snapshots Btrfs podem compartilhar blocos. Uma amostra
+  parcial não estima quanto seria liberado. A quarentena no mesmo volume
+  conserva os blocos até a purga manual.
+- O gravador da linha do tempo bloqueia o 65º arquivo antes da criação.
+  A leitura valida e mostra o excesso legado de um arquivo como parcial.
+  Para abrir espaço para novos boots preservando registros, liste
+  `./dev run disk timeline-archive`, escolha um boot anterior e revise
+  com `./dev run disk timeline-archive <boot-id> --json`. Execute o JSON
+  revisado com `./dev run disk timeline-archive --plan '<JSON>' --confirmar`.
+  O arquivamento usa o diário, revalida boot, montagem, identidade e hash
+  e confirma os bytes após o rename atômico. Consulte o recibo pelo ID e
+  o conteúdo com `./dev run disk timeline --boot-id <boot-id>`. O arquivo
+  irmão `host-timeline-archive` tem orçamento de 256 arquivos e 128 MiB,
+  sem purga automática. Para o excesso de 65 arquivos com um boot novo,
+  são necessários dois arquivamentos revisados para voltar a 63 e abrir
+  a vaga de gravação. Boot ativo ou registro ilegível é preservado.
+- O timer que entrega coletas Qt só fica ligado enquanto existe uma coleta
+  em voo. As cadências dos coletores e da proteção de entrada foram
+  preservadas. Desempenho mostra PSI de CPU e os grupos de maior custo.
+  CPU alta na árvore protegida deixou de disparar fechamento automático.
+  Memória baixa ou PSI de memória ainda exigem as regras e revalidações
+  existentes antes de um fechamento.
+- Validação local: `./dev test` focado em espaço, histórico, saúde do host,
+  CLI/aba Disco, workers e Desempenho, **121 aprovados** em 69,16 s
+  (`run-jd6479yn`, Python 3.14.7, Qt offscreen, HOME/XDG privados,
+  1 núcleo e 2 GiB). Janela própria no KDE/Wayland abriu a aba Disco,
+  acionou Medir pasta e confirmou o resultado do filho CLI com uma
+  seleção descartável injetada. A CLI direta confirmou o NVMe Btrfs
+  compartilhado a 91,4%, com 80,2 GiB disponíveis. Sem benchmark A/B de
+  CPU. Suítes completas locais não repetidas com pressão de CPU e o
+  orçamento de 20 runs retidos atingido. A instância instalada b15 segue
+  ativa; nenhum histórico da sessão física foi movido.
 
 ## Lentidão no Jupiter com o desktop em uso — 15/11/2026
 

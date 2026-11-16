@@ -644,6 +644,10 @@ class DashboardTab(QWidget):
 
     def show_host_report(self, report: dict):
         alerts = 0
+        storage = report.get("storage", {})
+        disk_alert = any(row["level"] in ("high", "critical") for row in storage.get("volumes", ()))
+        if disk_alert:
+            alerts += 1
         ntfs = report.get("ntfs", {})
         if ntfs.get("quality") in ("ok", "partial") and ntfs.get("count_10m", 0) > 0:
             alerts += 1
@@ -657,10 +661,12 @@ class DashboardTab(QWidget):
         unknown = (report.get("btrfs_quality") != "ok" or
                    report.get("baseline_quality") != "ok" or
                    ntfs.get("quality") not in ("ok", "partial") or
-                   report.get("services", {}).get("quality") != "ok")
+                   report.get("services", {}).get("quality") != "ok" or
+                   (storage and storage.get("quality") != "ok"))
         if alerts:
             self.host_status.setText(f"Saúde do host: {alerts} "
-                                     f"{'item para revisar' if alerts == 1 else 'itens para revisar'}.")
+                                     f"{'item para revisar' if alerts == 1 else 'itens para revisar'}."
+                                     + (" Espaço em disco em atenção." if disk_alert else ""))
         elif unknown:
             self.host_status.setText("Saúde do host: leitura parcial ou desconhecida.")
         else:
