@@ -1,4 +1,63 @@
-# Passagem para o próximo agente — atualizada em 13/11/2026
+# Passagem para o próximo agente — atualizada em 15/11/2026
+
+## Lentidão no Jupiter com o desktop em uso — 15/11/2026
+
+- Às 22:17 -03, carga de 1 min de 11,55 para 8 CPUs lógicas, PSI de CPU
+  `some avg10=29,93%` e `avg60=23,64%`. A RAM disponível era 6,3 GiB,
+  sem troca ativa em cinco leituras de `vmstat`. PSI de memória 0% e
+  PSI de I/O `some avg10=0,37%`. A energia externa estava conectada e
+  o perfil de energia já estava em economia.
+- Entre 22:21:23 e 22:22:08 -03, quatro leituras de contadores em
+  `/proc` e cgroups, espaçadas por 15 s, sem outras consultas emitidas pelo
+  observador nesse intervalo. CPU total ocupada em média 54,7%, espera por
+  disco 0,38%, PSI de CPU `some` 6,16% no intervalo, 6,90–6,91 GiB
+  disponíveis, zero páginas entrando ou saindo da swap e ACPI a 61 °C
+  (passivo 100 °C, crítico 105 °C). A janela ainda inclui a sessão do
+  diagnóstico e não certifica repouso. Nenhum build foi observado nas amostras.
+- Na mesma janela, com 100% equivalendo a uma CPU lógica: os dois cgroups
+  da **mesma árvore** do Codex Desktop somaram 170,2%. O processo Electron
+  com ANGLE/SwiftShader usou 80,3%, o renderizador principal 63,2% e o
+  app-server 4,6%. O Plasma usou 47,7% por cgroup e o KWin 41,8%.
+  O Fôlego b15 somou 94,6% pelos três cgroups (central 62,1%, entrada
+  21,8%, Desempenho 10,7%, incluindo subprocessos). O processo gráfico
+  do Fôlego, isolado, estava em 36,2%. A configuração do Desktop mantém
+  SwiftShader, uma mitigação prévia de falha de abertura que renderiza
+  em CPU. A coleta não comparou renderização acelerada e software.
+  [Documentação do Chromium](https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/swiftshader.md).
+- Uma amostragem adicional de cgroups durante 12 s observou consultas
+  repetidas a `qdbus6`, `kdotool` e `pactl` na central e a `qdbus6`
+  no serviço de entrada. O Plasma criou filhos de shell e de monitoramento.
+  Essas observações orientam a medição por coletor, sem atribuir todo o
+  custo de cada grupo a um único helper. Começar pela thread gráfica e
+  pelas consultas repetidas da central, com QA de custo em sessão própria.
+  Reduzir repinturas e inventários de apresentação sob pressão, preservando
+  a cadência e a revalidação da proteção de entrada.
+- `performance plan` no ambiente gráfico retornou nenhuma sugestão.
+  O executor opcional estava ativo, disjuntor fechado e último ciclo
+  consultado sem gatilho. Codex, Plasma e Fôlego são protegidos. O código
+  atual deriva `busy` da CPU da árvore protegida e chama isso de
+  «agentes em build/teste». Renderização basta para elevar a carga da
+  árvore. Próximo incremento: manter a proteção ampla, mostrar consumo
+  residente separado de trabalho confirmado e condicionar o gatilho a
+  evidência do trabalho ou da pressão do recurso. Reusar os grupos de
+  Desempenho e o PSI já coletado para atribuir pressão de CPU por janela.
+- A CLI `disk timeline` retornou inventário inválido. O diretório privado
+  tinha 65 arquivos regulares de boots, 12,57 MiB no total e nenhum
+  arquivo deste boot. O gravador permite a criação do 65º arquivo quando
+  há exatamente 64; a partir daí, leitura e gravação recusam o inventário.
+  Corrigir o limite antes da criação e recuperar o histórico por retenção
+  verificada de boots anteriores, com consulta e restauração. Nenhum
+  histórico foi movido ou descartado nesta investigação.
+- Btrfs do HOME a 97%, com cerca de 35 GiB livres, ante 118 GiB em 11/11
+  e 63 GiB à noite daquele dia. A baixa espera por I/O nesta janela mantém
+  a ocupação como risco de capacidade independente. `disk health` mostrou
+  os 6.741 erros de corrupção históricos estáveis. Mostrar espaço e
+  tendência do disco persistente na área de saúde, com inventário sob
+  demanda e revisão dos candidatos pelo responsável.
+- Diagnóstico observacional no host KDE/Wayland, com CLI instalada b15,
+  `vmstat`, `top`, `sensors`, `df`, `btrfs filesystem usage` e
+  deltas dos contadores do kernel. Sem build, benchmark artificial,
+  mudança de flags, encerramento de aplicativos ou limpeza do host.
 
 ## Recuperação automática das rotas de áudio após dispositivo ocupado — 0.2.0b15
 
