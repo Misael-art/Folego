@@ -47,6 +47,12 @@
   CPU. Suítes completas locais não repetidas com pressão de CPU e o
   orçamento de 20 runs retidos atingido. A instância instalada b15 segue
   ativa; nenhum histórico da sessão física foi movido.
+- Código `4d332fb0ed961a6551b51b7d897ab8fc0e35d552` confirmado no
+  [PR #9](https://github.com/Misael-art/Folego/pull/9). CI Linux e Windows
+  em andamento na primeira consulta. A CLI nova leu 80 amostras apesar
+  dos 65 arquivos ativos e validou dois planos de arquivamento em
+  somente leitura. A ativação nesta sessão e os dois arquivamentos
+  confirmados permanecem pendentes.
 
 ## Lentidão no Jupiter com o desktop em uso — 15/11/2026
 
