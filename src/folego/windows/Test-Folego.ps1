@@ -10,12 +10,12 @@ function Reject([scriptblock]$Operation, [string]$Message) { $failed = $false; t
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('folego-windows-tests-' + [Guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($fixture) | Out-Null
 try {
-    foreach ($file in @('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Collect.ps1', 'Test-Folego.ps1', 'DeckBootstrap.ps1')) {
+    foreach ($file in @('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1', 'Collect.ps1', 'Test-Folego.ps1', 'DeckBootstrap.ps1')) {
         $tokens = $null; $errors = $null
         $null = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $file), [ref]$tokens, [ref]$errors)
         Check ($errors.Count -eq 0) ('Syntax ' + $file + ': ' + ($errors | Out-String))
     }
-    Add-Type -Path (Join-Path $PSScriptRoot 'Native.cs')
+    Add-Type -Path @((Join-Path $PSScriptRoot 'Native.cs'), (Join-Path $PSScriptRoot 'Widget.cs')) -ReferencedAssemblies System.Windows.Forms, System.Drawing
     Check ($null -ne ('Folego.Windows.Native' -as [type])) 'Native C# backend compiles; no Win32 call made by compilation'
     $policy = if ($PolicyPath) { Read-FolegoJson $PolicyPath } else { Get-FolegoPolicy }
     $sample = [pscustomobject]@{ MonotonicMs = 1000L; TotalPhysical = 16GB; AvailablePhysical = 8GB; CommitLimit = 20GB; CommitUsed = 8GB; CpuPercent = 15; DiskAvailable = 30GB; DiskTotal = 120GB; Errors = @() }
@@ -380,6 +380,68 @@ try {
     Check (($diff -join ' ') -match 'NOVA: HKCU\|NewTool') 'Changes since the last review are highlighted'
     $report = @(Get-FolegoCopilotReport @() @{ 42 = 'copilotapp.exe --no-startup-window --win-session-start' })
     Check (($report -join ' ') -match 'recriá-la' -and ($report -join ' ') -match 'Aplicativos instalados') 'Copilot report explains session start and official uninstall'
+
+    # ------------------------------------------------ views and colour themes (pure rules)
+    Check ((Get-FolegoViewKeys $policy) -join ',' -eq 'central,taskbar,mini,compact,left,right,top') 'Linux views plus the Windows taskbar indicators'
+    $themeKeys = @(Get-FolegoThemeKeys $policy)
+    Check ($themeKeys.Count -eq 8 -and $policy.windows.appearance.default_theme -in $themeKeys) 'Eight Linux console themes with a valid default'
+    foreach ($key in $themeKeys) {
+        $tokens = (Get-FolegoTheme $policy $key).tokens
+        foreach ($role in @('background', 'surface', 'surface_alt', 'text', 'muted', 'accent', 'accent_text', 'ok', 'warning', 'danger', 'border')) {
+            Check ([string](Get-FolegoValue $tokens $role '') -match '^#[0-9A-Fa-f]{6}$') ('Theme ' + $key + ' defines ' + $role)
+        }
+    }
+    Reject { Get-FolegoTheme $policy 'neon' } 'Unknown theme rejected'
+    $look = Get-FolegoAppearance $fixture $policy
+    Check ($look.theme -eq $policy.windows.appearance.default_theme -and $look.startup_view -eq 'taskbar' -and $look.transparency -eq 0) 'Appearance defaults: taskbar indicators, default theme, opaque'
+    $look = Set-FolegoAppearanceField $look theme 'ps2' $policy
+    $look = Set-FolegoAppearanceField $look startup_view 'mini' $policy
+    $look = Set-FolegoWidgetPosition $look 'compact' 40 50 $policy
+    Save-FolegoAppearance $fixture $policy $look
+    $read = Get-FolegoAppearance $fixture $policy
+    Check ($read.theme -eq 'ps2' -and $read.startup_view -eq 'mini' -and $read.positions.compact.x -eq 40) 'Theme, opening view and position round trip'
+    Reject { Set-FolegoAppearanceField $read theme 'neon' $policy } 'Unknown theme never saved'
+    Reject { Set-FolegoAppearanceField $read transparency 61 $policy } 'Transparency capped so text stays legible'
+    Check ((Set-FolegoAppearanceField $read transparency 60 $policy).transparency -eq 60) 'Maximum transparency accepted'
+    Reject { Set-FolegoAppearanceField $read startup_view 'sidebar' $policy } 'Unknown opening view rejected'
+    Reject { Set-FolegoWidgetPosition $read 'top' 1 1 $policy } 'Docked views keep no free position'
+    [IO.File]::WriteAllText((Join-Path $fixture 'appearance.json'), '{"schema":1,"theme":"neon","transparency":0,"startup_view":"central","last_widget":"mini","positions":{}}')
+    Reject { Get-FolegoAppearance $fixture $policy } 'Unknown saved appearance is reported, not coerced'
+    Check (([IO.File]::ReadAllText((Join-Path $fixture 'appearance.json'))) -match 'neon') 'Unknown saved appearance preserved for review'
+    [IO.File]::Delete((Join-Path $fixture 'appearance.json'))
+    $area = [pscustomobject]@{ X = 0; Y = 0; Width = 1280; Height = 752 }
+    $b = Get-FolegoDockBounds 'left' $area
+    Check ($b.X -eq 0 -and $b.Width -eq 112 -and $b.Height -eq 752) 'Left bar uses the work area edge (Linux width rule)'
+    $b = Get-FolegoDockBounds 'right' $area
+    Check ($b.X -eq 1168 -and $b.Width -eq 112) 'Right bar anchored to the right edge'
+    Check ((Get-FolegoDockBounds 'top' $area).Height -eq 120 -and (Get-FolegoDockBounds 'top' ([pscustomobject]@{ X = 0; Y = 0; Width = 800; Height = 600 })).Height -eq 190) 'Top bar is slim on wide screens'
+    Reject { Get-FolegoDockBounds 'mini' $area } 'Floating views have no dock geometry'
+    $p = Get-FolegoFloatPosition $null 384 46 $area
+    Check ($p.X -eq 872 -and $p.Y -eq 682) 'Default float position bottom-right with margin'
+    $p = Get-FolegoFloatPosition ([pscustomobject]@{ x = 5000; y = -40 }) 384 46 $area
+    Check ($p.X -eq 896 -and $p.Y -eq 0) 'Saved position clamped into the live work area'
+    $healthy = [pscustomobject]@{ TotalPhysical = 16GB; AvailablePhysical = 8GB; CommitLimit = 20GB; CommitUsed = 15GB; CpuPercent = 20; BatteryPercent = 80; ExternalPower = $true }
+    $m = Get-FolegoMiniMetrics $healthy ([pscustomobject]@{ Celsius = 59.1 }) 'green' $policy $false
+    Check ($m.Status.Text -eq 'Saudável' -and $m.Cpu.Role -eq 'ok' -and $m.Temp.Text -match '^59' -and $m.Bat.Caption -eq 'TOMADA' -and $m.Headroom -eq 25) 'Mini metrics, power caption and headroom (RAM vs commit)'
+    $m = Get-FolegoMiniMetrics $healthy ([pscustomobject]@{ Celsius = 92 }) 'green' $policy $false
+    Check ($m.Status.Text -eq 'Calor alto' -and $m.Status.Role -eq 'danger' -and $m.Temp.Role -eq 'danger') 'Spike temperature turns the widget status red'
+    Check ((Get-FolegoMiniMetrics $healthy ([pscustomobject]@{ Celsius = 82 }) 'green' $policy $false).Status.Text -eq 'Quente') 'Guard threshold shows Quente'
+    $hot = [pscustomobject]@{ TotalPhysical = 16GB; AvailablePhysical = 1GB; CommitLimit = 20GB; CommitUsed = 8GB; CpuPercent = 97; BatteryPercent = 5; ExternalPower = $false }
+    $m = Get-FolegoMiniMetrics $hot $null 'red' $policy $false
+    Check ($m.Cpu.Role -eq 'danger' -and $m.Ram.Role -eq 'danger' -and $m.Bat.Role -eq 'danger' -and $m.Temp.Role -eq 'muted' -and $m.Status.Text -eq 'Bateria 5%') 'Critical CPU, RAM and battery; unknown temperature stays neutral'
+    Check ((Get-FolegoMiniMetrics $hot $null 'red' $policy $true).Status.Text -eq 'Pausado') 'Paused monitoring is shown as paused'
+    $m = Get-FolegoMiniMetrics $null $null 'unknown' $policy $false
+    Check ($m.Status.Role -eq 'muted' -and $m.Cpu.Text -eq '—' -and -not $m.Bat.Visible -and $null -eq $m.Headroom) 'Missing sample never looks healthy'
+    Check ($null -ne ('Folego.Windows.WidgetForm' -as [type]) -and $null -ne ('Folego.Windows.HealthRing' -as [type]) -and $null -ne ('Folego.Windows.TrayGlyph' -as [type])) 'Widget window, health ring and tray glyphs compile with Windows Forms'
+    $tray = @(Get-FolegoTrayIndicators (Get-FolegoMiniMetrics $healthy ([pscustomobject]@{ Celsius = 59.1 }) 'green' $policy $false))
+    Check (($tray | ForEach-Object { $_.Key }) -join ',' -eq 'Cpu,Temp,Ram,Bat') 'Taskbar shows CPU, temperature, RAM and battery'
+    Check ((@($tray | Where-Object { $_.Key -eq 'Temp' })[0].Text -eq '59') -and (@($tray | Where-Object { $_.Key -eq 'Ram' })[0].Text -eq '50')) 'Indicator numbers fit a small icon'
+    Check (@($tray | Where-Object { $_.Key -eq 'Bat' })[0].Tip -match 'tomada') 'Battery tooltip says when on external power'
+    Check (@($tray | Where-Object { $_.Text.Length -gt 3 -or $_.Tip.Length -gt 63 }).Count -eq 0) 'Icon text and tooltip fit Windows limits'
+    $tray = @(Get-FolegoTrayIndicators (Get-FolegoMiniMetrics $null $null 'unknown' $policy $false))
+    Check (($tray | ForEach-Object { $_.Key }) -join ',' -eq 'Cpu,Temp,Ram' -and @($tray | Where-Object { $_.Role -ne 'muted' -or $_.Text -ne '–' }).Count -eq 0) 'Unknown readings stay neutral and battery icon hides without a battery'
+    $tray = @(Get-FolegoTrayIndicators (Get-FolegoMiniMetrics $hot $null 'red' $policy $false))
+    Check (@($tray | Where-Object { $_.Key -eq 'Cpu' })[0].Role -eq 'danger' -and @($tray | Where-Object { $_.Key -eq 'Bat' })[0].Text -eq '5') 'Critical readings colour the indicators'
     $script:Replay
     'PASS: ' + $script:Checks + ' Windows contracts; effect APIs mocked. Native hardware validation remains separate.'
 } finally {

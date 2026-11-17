@@ -148,7 +148,7 @@ def _functions():
 def test_every_production_call_is_defined():
     import re
     defined, sources = _functions()
-    for name in ('Folego.ps1', 'Collect.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1'):
+    for name in ('Folego.ps1', 'Collect.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1'):
         called = set(re.findall(r'\b([A-Z][a-z]+-Folego[A-Za-z]*)\b', sources[name]))
         assert called <= defined, (name, sorted(called - defined))
 
@@ -180,9 +180,29 @@ def test_replay_fixtures_preserve_the_reset_evidence():
     assert max(temps) >= 90 and min(temps) <= 55
 
 
+def test_windows_themes_and_views_come_from_the_linux_design():
+    from folego.ui.palettes import THEMES, DEFAULT_THEME, contrast
+    look = builder.policy()['windows']['appearance']
+    assert look['default_theme'] == DEFAULT_THEME
+    assert set(look['themes']) == set(THEMES)
+    for key, theme in THEMES.items():
+        exported = look['themes'][key]
+        assert exported['name'] == theme.name
+        assert exported['actions'] == list(theme.tokens.actions)
+        for role, value in exported['tokens'].items():
+            assert value == getattr(theme.tokens, role)
+        for surface in ('background', 'surface', 'surface_alt'):
+            assert contrast(exported['tokens']['text'], exported['tokens'][surface]) >= 4.5
+    keys = [view['key'] for view in look['views']]
+    # Linux views keep their order; the Windows taskbar indicators are the default opening.
+    assert [key for key in keys if key != 'taskbar'] == ['central', 'mini', 'compact', 'left', 'right', 'top']
+    assert look['default_view'] == 'taskbar' and 'taskbar' in keys
+    assert look['transparency_max'] <= 60 and look['transparency_steps'][-1] == look['transparency_max']
+
+
 def test_health_level_is_not_reused_by_other_ui_blocks():
-    # Regression: the thermal tab once overwrote $level, so the high-pressure notice
-    # could never fire after the thermal block ran.
+    # Regression: the thermal tab once overwrote $level, so the widget showed "Desconhecido"
+    # and the high-pressure notice could never fire.
     import re
     ui = (WINDOWS / 'Folego.ps1').read_text(encoding='utf-8-sig')
     assert len(re.findall(r'\$level\s*=', ui)) == 1

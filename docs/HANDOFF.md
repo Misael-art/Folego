@@ -1,4 +1,32 @@
-# Passagem para o próximo agente — atualizada em 16/11/2026
+# Passagem para o próximo agente — atualizada em 17/11/2026
+
+## Fôlego Windows: visualizações do widget e temas de cores — 17/11/2026
+
+- Pedido: levar ao Windows as visualizações do Linux (central, mini horizontal,
+  widget compacto, laterais, barra superior) e a seleção de cores. Branch
+  `codex/windows-visualizacoes-20261117`, sobre `codex/windows-gestao-ativa-20261116` (PR #10).
+- `Folego.View.ps1` (regras puras: preferências, geometria igual a `dock_geometry`,
+  métricas e papéis de cor), `Folego.Widget.ps1` (Windows Forms) e `Widget.cs`
+  (janela sem foco/barra de tarefas, arraste, cantos arredondados, anel de folga).
+  Os oito temas e tokens vêm de `ui/palettes.py` pelo build, sem cópia manual.
+  Transparência limitada a 60% porque o Windows aplica opacidade à janela inteira.
+- Correção: a trava de instância única agora inclui o `-DataRoot` quando ele não é o
+  padrão. Antes, com o Fôlego instalado em execução, o smoke descartável só pedia à
+  instância real que se mostrasse e saía com código 0.
+- Verificação no Deck: `Test-Folego.ps1` **298 PASS**; Python 12/13 (o restante só no
+  Linux); probe ok; smoke com DataRoot descartável e captura só da própria janela
+  (`DrawToBitmap`) aprovou compacto, lateral direita, barra superior, central e mini
+  (o primeiro processo frio pode passar de 30 s por `Get-Volume`). Tema escuro PS2 legível.
+- Pendente: aceite físico do arraste, DPI acima de 100% e laterais com a barra de
+  tarefas oculta; CI Windows/Linux após push.
+- Incremento seguinte: visualização **Barra de tarefas**, padrão de abertura. Indicadores
+  vivos na área de notificação (estado, CPU, temperatura, RAM, bateria) desenhados por
+  `TrayGlyph` em `Widget.cs`; clique abre o menu de funções. Sem deskband (removida no
+  Windows 11) e sem injetar janela no `explorer.exe`. `Test-Folego.ps1` **304 PASS**;
+  smoke sem `appearance.json` abriu na barra de tarefas com 5 ícones e salvou o padrão.
+- Correção de regressão da #10: o bloco da aba Temperatura reutilizava `$level`, então o
+  widget mostrava “Desconhecido” e o aviso de pressão alta nunca disparava. Teste novo
+  garante uma única atribuição. A branch da #10 ainda tem o defeito.
 
 ## Fôlego Windows: gestão ativa (térmica, consumidores, inicialização) — 16/11/2026
 
