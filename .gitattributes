@@ -12,3 +12,6 @@ docs/reviews/**/support.txt -text -whitespace conflict-marker-size=32 linguist-g
 docs/reviews/**/screens.txt -text -whitespace linguist-generated=true
 docs/reviews/**/samples.jsonl -text linguist-generated=true
 docs/handoff/validation/*.log -text -whitespace linguist-generated=true
+
+# Monitor CSV replays keep CRLF and the NUL padding left by an abrupt reset.
+tests/fixtures/windows/*.csv -text -whitespace

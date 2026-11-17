@@ -15,7 +15,7 @@ jobs:
         run: python tools/build_windows.py
       - name: Windows PowerShell 5.1 contracts
         shell: powershell
-        run: '& ./dist/folego-windows/Test-Folego.ps1'
+        run: '& ./dist/folego-windows/Test-Folego.ps1 -ReplayCsv (Get-ChildItem tests/fixtures/windows/*.csv).FullName'
       - name: Native read-only API probe
         shell: powershell
         run: '& ./dist/folego-windows/Folego.ps1 -Probe -NoStartup'

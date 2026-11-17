@@ -18,7 +18,37 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
 from folego.core.policy import battery_band, HealthThresholds
 
-FILES = ('Folego.ps1', 'Folego.Core.ps1', 'Collect.ps1', 'Native.cs', 'Test-Folego.ps1', 'DeckBootstrap.ps1')
+FILES = ('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Collect.ps1', 'Native.cs', 'Test-Folego.ps1', 'DeckBootstrap.ps1')
+CAPABILITIES = ('monitor', 'power-plan-receipts', 'thermal-profiles', 'process-triage', 'startup-approval')
+
+# Thermal guard: Windows triage rules for the ACPI zone, not a sensor-certified limit.
+# Profiles only touch PROCTHROTTLEMAX/PERFBOOSTMODE of the active, existing scheme.
+THERMAL = {
+    'poll_seconds': 5, 'raise_average_c': 80, 'raise_samples': 3, 'spike_c': 90,
+    'recover_c': 70, 'recover_samples': 60, 'max_switches_per_hour': 4,
+    'automatic_default': False,
+    'profiles': {
+        'Fresco': {'throttle_max': 99, 'boost_mode': 0},
+        'Contencao': {'throttle_max': 80, 'boost_mode': 0},
+    },
+}
+PROCESSES = {
+    'sample_ms': 2000, 'top': 25, 'busy_cores': 0.5, 'orphan_idle_minutes': 10, 'wait_seconds': 6,
+    'automatic_executor': False,
+    'agent_names': ['claude', 'codex', 'node', 'bun', 'deno', 'python', 'pythonw', 'uv',
+                    'powershell', 'pwsh', 'cmd', 'conhost', 'bash', 'git', 'rg', 'npm', 'npx'],
+    'protected_names': ['system', 'registry', 'smss', 'csrss', 'wininit', 'winlogon', 'services',
+                        'lsass', 'lsaiso', 'svchost', 'fontdrvhost', 'dwm', 'explorer', 'sihost',
+                        'taskhostw', 'ctfmon', 'runtimebroker', 'searchhost', 'searchindexer',
+                        'startmenuexperiencehost', 'shellexperiencehost', 'shellhost',
+                        'textinputhost', 'applicationframehost', 'securityhealthsystray',
+                        'securityhealthservice', 'msmpeng', 'nissrv', 'mpdefendercoreservice',
+                        'audiodg', 'spoolsv', 'wudfhost', 'dllhost', 'wmiprvse', 'consent',
+                        'useroobebroker', 'lockapp', 'logonui', 'userinit', 'msiexec', 'tiworker',
+                        'trustedinstaller', 'steam', 'steamwebhelper', 'steamservice',
+                        'gameoverlayui', 'handheldcompanion', 'taskmgr'],
+}
+STARTUP = {'protected_names': ['Steam Deck', 'Steam Deck.lnk', 'Folego', 'SecurityHealth']}
 
 
 def policy() -> dict:
@@ -33,6 +63,9 @@ def policy() -> dict:
             'poll_seconds': 10, 'extended_seconds': 60,
             'persist_seconds': 60, 'notice_cooldown_seconds': 300,
             'automatic_resource_executor': False,
+            'thermal': THERMAL,
+            'processes': PROCESSES,
+            'startup': STARTUP,
         },
     }
 
@@ -56,7 +89,8 @@ def build(output: Path) -> dict:
         'product': 'Fôlego Windows',
         'version': tomllib.loads((ROOT / 'pyproject.toml').read_text())['project']['version'],
         'runtime': 'Windows PowerShell 5.1 / .NET Framework / Windows Forms',
-        'files': {file.name: {'bytes': file.stat().st_size, 'sha256': hashlib.sha256(file.read_bytes()).hexdigest()}
+        'capabilities': list(CAPABILITIES),
+        'files':{file.name: {'bytes': file.stat().st_size, 'sha256': hashlib.sha256(file.read_bytes()).hexdigest()}
                   for file in sorted(output.iterdir()) if file.is_file()},
     }
     (output / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')

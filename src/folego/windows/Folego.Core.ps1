@@ -33,20 +33,54 @@ function Get-FolegoSettings([string]$DataRoot) {
     if (($value.schema -isnot [int] -and $value.schema -isnot [long]) -or $value.schema -ne 1 -or $value.startup -isnot [bool] -or $value.commissioned -isnot [bool]) { throw 'Configuração desconhecida ou incompleta. Início e efeitos preservados para revisão.' }
     return $value
 }
+function Get-FolegoIdentitySeed([string]$Uuid, [string]$BiosSerial, [string]$BoardSerial) {
+    # Physical identity: SMBIOS UUID; only when firmware reports a placeholder UUID (the
+    # Steam Deck LCD reports FFFFFFFF-...) fall back to the BIOS, then the board serial.
+    # Hosts with a valid UUID keep their previous identifier unchanged.
+    if ($Uuid -and $Uuid -notmatch '^0{8}-|^F{8}-') { return $Uuid }
+    $placeholder = '^(0+|F+|Default string|To be filled by O\.E\.M\.|None|System Serial Number|Not Applicable|N/A|Unknown)$'
+    foreach ($row in @(@('bios', $BiosSerial), @('board', $BoardSerial))) {
+        $value = ([string]$row[1]).Trim()
+        if ($value.Length -ge 4 -and $value -notmatch $placeholder) { return ($row[0] + ':' + $value) }
+    }
+    throw 'Identidade física/boot não comprovada.'
+}
 function Get-FolegoHost {
     $product = Get-CimInstance Win32_ComputerSystemProduct -OperationTimeoutSec 3 -ErrorAction Stop
     $computer = Get-CimInstance Win32_ComputerSystem -OperationTimeoutSec 3 -ErrorAction Stop
     $os = Get-CimInstance Win32_OperatingSystem -OperationTimeoutSec 3 -ErrorAction Stop
-    if (-not $product.UUID -or $product.UUID -match '^0{8}-|^F{8}-' -or -not $os.LastBootUpTime) { throw 'Identidade física/boot não comprovada.' }
+    if (-not $os.LastBootUpTime) { throw 'Identidade física/boot não comprovada.' }
+    $bios = ''; $board = ''
+    if (-not $product.UUID -or $product.UUID -match '^0{8}-|^F{8}-') {
+        $bios = [string](Get-CimInstance Win32_BIOS -OperationTimeoutSec 3 -ErrorAction Stop).SerialNumber
+        $board = [string](Get-CimInstance Win32_BaseBoard -OperationTimeoutSec 3 -ErrorAction Stop).SerialNumber
+    }
+    $seed = Get-FolegoIdentitySeed ([string]$product.UUID) $bios $board
     $sha = [Security.Cryptography.SHA256]::Create()
-    try { $id = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes(([string]$product.UUID + '|' + $computer.Manufacturer + '|' + $computer.Model))))).Replace('-', '').Substring(0, 20) }
+    try { $id = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes(($seed + '|' + $computer.Manufacturer + '|' + $computer.Model))))).Replace('-', '').Substring(0, 20) }
     finally { $sha.Dispose() }
     return [pscustomobject]@{ Id = $id; Boot = $os.LastBootUpTime.ToUniversalTime().ToString('o'); Model = [string]$computer.Model; Manufacturer = [string]$computer.Manufacturer }
 }
 function Get-FolegoPolicy {
     $value = Read-FolegoJson (Join-Path $script:FolegoRoot 'policy.json')
     if ($null -eq $value -or $value.schema -ne 1 -or @($value.battery_bands).Count -ne 101 -or $value.health.recovery_samples -ne 3 -or $value.windows.automatic_resource_executor -isnot [bool] -or $value.windows.automatic_resource_executor -ne $false) { throw 'Pacote incompleto ou política desconhecida. Reconstrua pelo projeto oficial.' }
+    Assert-FolegoManagePolicy $value
     return $value
+}
+function Assert-FolegoManagePolicy($Value) {
+    $t = Get-FolegoValue $Value.windows thermal; $p = Get-FolegoValue $Value.windows processes; $s = Get-FolegoValue $Value.windows startup
+    $bad = $null -eq $t -or $null -eq $p -or $null -eq $s
+    if (-not $bad) {
+        $bad = $t.automatic_default -isnot [bool] -or $t.automatic_default -or $p.automatic_executor -isnot [bool] -or $p.automatic_executor -or
+            $t.poll_seconds -lt 1 -or $t.poll_seconds -gt 5 -or $t.recover_c -ge $t.raise_average_c -or $t.raise_average_c -gt $t.spike_c -or
+            $t.raise_samples -lt 1 -or $t.recover_samples -lt $t.raise_samples -or $t.max_switches_per_hour -lt 1 -or $t.max_switches_per_hour -gt 4 -or
+            @($p.agent_names).Count -lt 1 -or @($p.protected_names).Count -lt 1 -or @($s.protected_names).Count -lt 1
+        foreach ($name in @('Fresco', 'Contencao')) {
+            $preset = Get-FolegoValue $t.profiles $name
+            if ($null -eq $preset -or $preset.throttle_max -lt 50 -or $preset.throttle_max -gt 100 -or $preset.boost_mode -lt 0 -or $preset.boost_mode -gt 6) { $bad = $true }
+        }
+    }
+    if ($bad) { throw 'Política de gestão ativa ausente ou insegura. Reconstrua pelo projeto oficial.' }
 }
 function Get-FolegoRawHealth($Sample, $Policy, [long]$NowMs) {
     $reasons = New-Object 'Collections.Generic.List[string]'
@@ -227,3 +261,4 @@ function Save-FolegoSample([string]$DataRoot, $Value) {
     # One bounded latest sample per user, at most once per minute from the UI.
     Write-FolegoJson (Join-Path $DataRoot 'latest-sample.json') $Value
 }
+. (Join-Path $script:FolegoRoot 'Folego.Manage.ps1')
