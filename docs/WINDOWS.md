@@ -31,24 +31,40 @@ a entrada anterior; não são criadas variantes concorrentes.
 
 ## Visualizações e cores
 
-As mesmas visualizações do Fôlego Linux, no menu **Visualizações** (barra do topo
-da central, bandeja e menu ☰ do widget) e em **Ctrl+Shift+F**, que alterna entre a
+As visualizações do Fôlego Linux e uma própria do Windows, a **Barra de tarefas**, que
+é a de abertura padrão. Ficam no menu **Visualizações** (barra do topo da central,
+menu dos ícones da bandeja e menu ☰ do widget); **Ctrl+Shift+F** alterna entre a
 central e o último widget usado:
 
 | Visualização | Forma no Windows |
 | --- | --- |
 | Central do Fôlego | Janela com abas; um widget aberto recolhe a central para a bandeja. |
+| Barra de tarefas (padrão) | Indicadores vivos na área de notificação: um ponto de estado e ícones com o número de CPU, temperatura, RAM e bateria, na cor de saúde e com uma faixa na cor do tema. A dica de cada ícone traz a leitura completa. |
 | Mini horizontal | Faixa de 384 × 46 px (escala com o DPI): estado, CPU, temperatura, RAM e bateria, expandir e menu. |
 | Widget compacto | Cartão de 268 px com anel de folga, estado, RAM livre, CPU, zona térmica, bateria e perfil térmico. |
 | Lateral esquerda / direita | Barra na borda da área de trabalho, 112–128 px de largura e altura total, como no Linux. |
 | Barra superior | Faixa no topo da área de trabalho: 120 px em telas a partir de 900 px de largura, 190 px nas menores. |
+
+Na **Barra de tarefas**, um clique (esquerdo ou direito) em qualquer indicador abre o
+menu de funções: resumo atual, abrir a central, aplicar Fresco/Contenção ou
+restaurar os originais (com a mesma confirmação da central), analisar consumidores,
+inicialização, pausar, visualizações, tema, transparência, Gerenciador de Tarefas
+e sair. O resultado de uma ação iniciada ali aparece como notificação, sem abrir a
+central. Os indicadores aparecem neutros ("–") até a primeira leitura. O Windows 11
+não oferece mais deskbands, e encaixar uma janela dentro do `explorer.exe` seria
+frágil; por isso são ícones nativos da área de notificação, que o próprio Windows
+recoloca se o explorer reiniciar. Ícones novos podem ir para o menu ^: **Deixar os
+indicadores sempre visíveis…** abre Configurações → Barra de tarefas, onde o
+usuário liga os ícones do Fôlego (Windows PowerShell) em Outros ícones da bandeja.
+O Fôlego não altera essa configuração sozinho.
 
 O widget não rouba o foco, não aparece na barra de tarefas nem no Alt+Tab, fica
 acima das outras janelas e se move arrastando qualquer área fora dos botões; o
 mini e o compacto lembram a posição, recolocada dentro da tela atual. As
 laterais e a barra superior usam só a área de trabalho, sem cobrir a barra de
 tarefas, e não reservam espaço como uma appbar: janelas maximizadas passam por
-baixo. **Modo de abertura**, em Opções, escolhe a visualização da próxima abertura.
+baixo. **Modo de abertura**, em Opções, escolhe a visualização da próxima abertura; sem
+escolha salva, o Fôlego abre na Barra de tarefas, inclusive no início da sessão.
 
 **Tema de cores** oferece os oito temas de console do Linux (SNES americano,
 Super Famicom, Mega Drive, Master System III, PC Engine, NES, TurboGrafx-16 e

@@ -42,6 +42,51 @@ namespace Folego.Windows {
         }
     }
 
+    // Live notification-area indicators: a number on the health colour, with a strip in the
+    // metric's theme colour. Each icon owns its handle; the caller disposes the previous one.
+    public static class TrayGlyph {
+        [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr icon);
+        static Icon Own(Bitmap bitmap) {
+            IntPtr handle = bitmap.GetHicon();
+            try { using (Icon borrowed = Icon.FromHandle(handle)) return (Icon)borrowed.Clone(); }
+            finally { DestroyIcon(handle); }
+        }
+        public static Icon Text(string text, Color background, Color ink, Color strip, int size) {
+            using (Bitmap bitmap = new Bitmap(size, size))
+            using (Graphics g = Graphics.FromImage(bitmap)) {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                g.Clear(Color.Transparent);
+                using (SolidBrush fill = new SolidBrush(background)) g.FillRectangle(fill, 0, 0, size, size);
+                int band = Math.Max(2, size / 7);
+                using (SolidBrush top = new SolidBrush(strip)) g.FillRectangle(top, 0, 0, size, band);
+                float em = text.Length >= 3 ? size * 0.46f : size * 0.62f;
+                using (Font font = new Font("Segoe UI", em, FontStyle.Bold, GraphicsUnit.Pixel))
+                using (SolidBrush brush = new SolidBrush(ink))
+                using (StringFormat center = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center }) {
+                    g.DrawString(text, font, brush, new RectangleF(-2, band - 1, size + 4, size - band + 2), center);
+                }
+                return Own(bitmap);
+            }
+        }
+        public static Icon Dot(Color color, Color ring, int size) {
+            using (Bitmap bitmap = new Bitmap(size, size))
+            using (Graphics g = Graphics.FromImage(bitmap)) {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.Clear(Color.Transparent);
+                int pad = Math.Max(1, size / 8);
+                using (SolidBrush fill = new SolidBrush(color)) g.FillEllipse(fill, pad, pad, size - 2 * pad - 1, size - 2 * pad - 1);
+                using (Pen edge = new Pen(ring, Math.Max(1, size / 12))) g.DrawEllipse(edge, pad, pad, size - 2 * pad - 1, size - 2 * pad - 1);
+                return Own(bitmap);
+            }
+        }
+        // Left click opens the same menu Windows shows on right click, positioned by the shell.
+        public static void ShowMenu(NotifyIcon icon) {
+            System.Reflection.MethodInfo show = typeof(NotifyIcon).GetMethod("ShowContextMenu", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            if (show != null) show.Invoke(icon, null);
+        }
+    }
+
     // Ring with the headroom number and the verdict word, like the Linux HealthGauge.
     public class HealthRing : Control {
         public Color TrackColor = Color.Gray, RingColor = Color.Green, TextColor = Color.Black, MutedColor = Color.DimGray;

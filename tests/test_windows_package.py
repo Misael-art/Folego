@@ -193,5 +193,16 @@ def test_windows_themes_and_views_come_from_the_linux_design():
             assert value == getattr(theme.tokens, role)
         for surface in ('background', 'surface', 'surface_alt'):
             assert contrast(exported['tokens']['text'], exported['tokens'][surface]) >= 4.5
-    assert [view['key'] for view in look['views']] == ['central', 'mini', 'compact', 'left', 'right', 'top']
+    keys = [view['key'] for view in look['views']]
+    # Linux views keep their order; the Windows taskbar indicators are the default opening.
+    assert [key for key in keys if key != 'taskbar'] == ['central', 'mini', 'compact', 'left', 'right', 'top']
+    assert look['default_view'] == 'taskbar' and 'taskbar' in keys
     assert look['transparency_max'] <= 60 and look['transparency_steps'][-1] == look['transparency_max']
+
+
+def test_health_level_is_not_reused_by_other_ui_blocks():
+    # Regression: the thermal tab once overwrote $level, so the widget showed "Desconhecido"
+    # and the high-pressure notice could never fire.
+    import re
+    ui = (WINDOWS / 'Folego.ps1').read_text(encoding='utf-8-sig')
+    assert len(re.findall(r'\$level\s*=', ui)) == 1

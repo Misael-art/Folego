@@ -382,7 +382,7 @@ try {
     Check (($report -join ' ') -match 'recriá-la' -and ($report -join ' ') -match 'Aplicativos instalados') 'Copilot report explains session start and official uninstall'
 
     # ------------------------------------------------ views and colour themes (pure rules)
-    Check ((Get-FolegoViewKeys $policy) -join ',' -eq 'central,mini,compact,left,right,top') 'Same six views as the Linux widget menu'
+    Check ((Get-FolegoViewKeys $policy) -join ',' -eq 'central,taskbar,mini,compact,left,right,top') 'Linux views plus the Windows taskbar indicators'
     $themeKeys = @(Get-FolegoThemeKeys $policy)
     Check ($themeKeys.Count -eq 8 -and $policy.windows.appearance.default_theme -in $themeKeys) 'Eight Linux console themes with a valid default'
     foreach ($key in $themeKeys) {
@@ -393,7 +393,7 @@ try {
     }
     Reject { Get-FolegoTheme $policy 'neon' } 'Unknown theme rejected'
     $look = Get-FolegoAppearance $fixture $policy
-    Check ($look.theme -eq $policy.windows.appearance.default_theme -and $look.startup_view -eq 'central' -and $look.transparency -eq 0) 'Appearance defaults: central, default theme, opaque'
+    Check ($look.theme -eq $policy.windows.appearance.default_theme -and $look.startup_view -eq 'taskbar' -and $look.transparency -eq 0) 'Appearance defaults: taskbar indicators, default theme, opaque'
     $look = Set-FolegoAppearanceField $look theme 'ps2' $policy
     $look = Set-FolegoAppearanceField $look startup_view 'mini' $policy
     $look = Set-FolegoWidgetPosition $look 'compact' 40 50 $policy
@@ -432,7 +432,16 @@ try {
     Check ((Get-FolegoMiniMetrics $hot $null 'red' $policy $true).Status.Text -eq 'Pausado') 'Paused monitoring is shown as paused'
     $m = Get-FolegoMiniMetrics $null $null 'unknown' $policy $false
     Check ($m.Status.Role -eq 'muted' -and $m.Cpu.Text -eq '—' -and -not $m.Bat.Visible -and $null -eq $m.Headroom) 'Missing sample never looks healthy'
-    Check ($null -ne ('Folego.Windows.WidgetForm' -as [type]) -and $null -ne ('Folego.Windows.HealthRing' -as [type])) 'Widget window and health ring compile with Windows Forms'
+    Check ($null -ne ('Folego.Windows.WidgetForm' -as [type]) -and $null -ne ('Folego.Windows.HealthRing' -as [type]) -and $null -ne ('Folego.Windows.TrayGlyph' -as [type])) 'Widget window, health ring and tray glyphs compile with Windows Forms'
+    $tray = @(Get-FolegoTrayIndicators (Get-FolegoMiniMetrics $healthy ([pscustomobject]@{ Celsius = 59.1 }) 'green' $policy $false))
+    Check (($tray | ForEach-Object { $_.Key }) -join ',' -eq 'Cpu,Temp,Ram,Bat') 'Taskbar shows CPU, temperature, RAM and battery'
+    Check ((@($tray | Where-Object { $_.Key -eq 'Temp' })[0].Text -eq '59') -and (@($tray | Where-Object { $_.Key -eq 'Ram' })[0].Text -eq '50')) 'Indicator numbers fit a small icon'
+    Check (@($tray | Where-Object { $_.Key -eq 'Bat' })[0].Tip -match 'tomada') 'Battery tooltip says when on external power'
+    Check (@($tray | Where-Object { $_.Text.Length -gt 3 -or $_.Tip.Length -gt 63 }).Count -eq 0) 'Icon text and tooltip fit Windows limits'
+    $tray = @(Get-FolegoTrayIndicators (Get-FolegoMiniMetrics $null $null 'unknown' $policy $false))
+    Check (($tray | ForEach-Object { $_.Key }) -join ',' -eq 'Cpu,Temp,Ram' -and @($tray | Where-Object { $_.Role -ne 'muted' -or $_.Text -ne '–' }).Count -eq 0) 'Unknown readings stay neutral and battery icon hides without a battery'
+    $tray = @(Get-FolegoTrayIndicators (Get-FolegoMiniMetrics $hot $null 'red' $policy $false))
+    Check (@($tray | Where-Object { $_.Key -eq 'Cpu' })[0].Role -eq 'danger' -and @($tray | Where-Object { $_.Key -eq 'Bat' })[0].Text -eq '5') 'Critical readings colour the indicators'
     $script:Replay
     'PASS: ' + $script:Checks + ' Windows contracts; effect APIs mocked. Native hardware validation remains separate.'
 } finally {

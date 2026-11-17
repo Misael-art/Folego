@@ -68,7 +68,9 @@ function Set-FolegoThemeEverywhere {
     Set-FolegoMenuTheme $menu.Items; $menu.BackColor = ConvertTo-FolegoColor $script:Tokens.surface
     Update-FolegoTabTheme
     if ($null -ne $script:WidgetMenu) { Set-FolegoMenuTheme $script:WidgetMenu.Items }
-    if ($null -ne $script:Widget) { Set-FolegoControlTheme $script:Widget; Update-FolegoWidget }
+    $script:TrayDrawn = ''; $script:TaskbarDrawn = @{}
+    if ($null -ne $script:Widget) { Set-FolegoControlTheme $script:Widget }
+    Update-FolegoWidget
     Sync-FolegoAppearanceChecks
 }
 function Set-FolegoThemeChoice([string]$Key) {
@@ -128,7 +130,7 @@ function Add-FolegoAppearanceItems($Items) {
     foreach ($entry in @($views, $themes, $alpha)) { $null = $Items.Add($entry) }
 }
 function Sync-FolegoAppearanceChecks {
-    $current = if ($script:WidgetView) { $script:WidgetView } else { 'central' }
+    $current = if ($script:WidgetView) { $script:WidgetView } elseif ($script:TaskbarActive) { 'taskbar' } else { 'central' }
     foreach ($row in $script:AppearanceItems) {
         $row.Item.Checked = switch ($row.Kind) {
             'view' { $row.Item.Tag -eq $current }
@@ -319,14 +321,15 @@ function Hide-FolegoWidget {
 function Show-FolegoView([string]$View) {
     # Central shows the main window; any widget view collapses the central window to the tray.
     if ($View -notin (Get-FolegoViewKeys $policy)) { $status.Text = 'Visualização desconhecida.'; return }
-    if ($View -eq 'central') { Hide-FolegoWidget; Show-Folego; return }
+    if ($View -eq 'central') { Hide-FolegoWidget; Hide-FolegoTaskbarIndicators; Show-Folego; Sync-FolegoAppearanceChecks; return }
+    if ($View -eq 'taskbar') { Hide-FolegoWidget; $form.Hide(); Show-FolegoTaskbarIndicators; Sync-FolegoAppearanceChecks; return }
     try {
         $old = $script:Widget
         $script:Widget = Build-FolegoWidget $View; $script:WidgetView = $View
         Set-FolegoWidgetBounds $View
         $script:Widget.Show()
         if ($null -ne $old) { $old.ContextMenuStrip = $null; $old.Hide(); $old.Dispose() }
-        $form.Hide()
+        $form.Hide(); Hide-FolegoTaskbarIndicators
         if ($script:Appearance.last_widget -ne $View) { Save-FolegoAppearanceChange (Set-FolegoAppearanceField $script:Appearance last_widget $View $policy) }
         Update-FolegoWidget
     } catch { $status.Text = 'Widget indisponível: ' + [string]$_; Hide-FolegoWidget; Show-Folego }
@@ -344,6 +347,7 @@ function Set-FolegoWidgetText([string]$Key, [string]$Text, [string]$Role) {
     if ($Role) { $control.Tag = 'role:' + $Role; $control.ForeColor = Get-FolegoRoleColor $Role }
 }
 function Update-FolegoWidget {
+    Update-FolegoTrayStatus; Update-FolegoTaskbarIndicators
     if ($null -eq $script:Widget -or $null -eq $script:WidgetData) { return }
     $d = $script:WidgetData; $m = $d.Metrics
     $statusText = $m.Status.Text; $statusRole = $m.Status.Role
@@ -366,4 +370,127 @@ function Update-FolegoWidget {
     }
     $tip = $statusText + ' | CPU ' + $m.Cpu.Text + ' | ' + $m.Temp.Text + ' | RAM ' + $m.Ram.Text
     $script:WidgetTips.SetToolTip($script:Widget, $tip)
+}
+
+# ------------------------------------------------------------------ taskbar indicators
+# Windows 11 has no deskbands; injecting a window into explorer.exe would be fragile on a
+# host where the shell already restarts. Native notification-area icons are re-added by
+# Windows after an explorer restart and need no privilege.
+$script:TaskbarActive = $false; $script:TaskbarIcons = [ordered]@{}; $script:TaskbarDrawn = @{}; $script:TrayDrawn = ''
+function Get-FolegoInk([string]$Hex) {
+    $c = ConvertTo-FolegoColor $Hex
+    $channel = { param($v) $x = $v / 255.0; if ($x -le 0.04045) { $x / 12.92 } else { [Math]::Pow(($x + 0.055) / 1.055, 2.4) } }
+    $l = 0.2126 * (& $channel $c.R) + 0.7152 * (& $channel $c.G) + 0.0722 * (& $channel $c.B)
+    # Same rule as palettes.on_color: the ink with the higher contrast wins.
+    if ((($l + 0.05) / 0.0555) -ge (1.05 / ($l + 0.05))) { return [Drawing.Color]::FromArgb(16, 16, 16) }
+    return [Drawing.Color]::White
+}
+function Set-FolegoNotifyIcon($Notify, $Icon) {
+    $old = $Notify.Icon; $Notify.Icon = $Icon
+    if ($null -ne $old -and $old -ne [Drawing.SystemIcons]::Information) { $old.Dispose() }
+}
+function Get-FolegoShortTip([string]$Text) { if ($Text.Length -le 63) { return $Text }; return $Text.Substring(0, 62) + '…' }
+function Update-FolegoTrayStatus {
+    # The main tray icon is always a status dot in the current health colour.
+    if ($null -eq $script:WidgetData) { return }
+    $role = $script:WidgetData.Metrics.Status.Role
+    if ($script:Paused -or $script:WidgetStale) { $role = 'muted' }
+    $key = $role + '|' + $script:Appearance.theme
+    if ($key -eq $script:TrayDrawn) { return }
+    $size = [Windows.Forms.SystemInformation]::SmallIconSize.Width
+    Set-FolegoNotifyIcon $tray ([Folego.Windows.TrayGlyph]::Dot((Get-FolegoRoleColor $role), (ConvertTo-FolegoColor $script:Tokens.border), $size))
+    $script:TrayDrawn = $key
+}
+function Show-FolegoQuickMenu($Notify) { [Folego.Windows.TrayGlyph]::ShowMenu($Notify) }
+function New-FolegoTaskbarIcon([string]$Key) {
+    $notify = New-Object Windows.Forms.NotifyIcon
+    $notify.ContextMenuStrip = $menu
+    $notify.Text = 'Fôlego'
+    $notify.Add_MouseUp({ param($sender, $e) if ($e.Button -eq [Windows.Forms.MouseButtons]::Left) { Show-FolegoQuickMenu $sender } })
+    return $notify
+}
+function Update-FolegoTaskbarIndicators {
+    if (-not $script:TaskbarActive -or $null -eq $script:WidgetData) { return }
+    $metrics = $script:WidgetData.Metrics
+    $rows = @(Get-FolegoTrayIndicators $metrics)
+    $actions = @((Get-FolegoTheme $policy $script:Appearance.theme).actions)
+    $size = [Windows.Forms.SystemInformation]::SmallIconSize.Width
+    $wanted = @($rows | ForEach-Object { $_.Key })
+    foreach ($key in @($script:TaskbarIcons.Keys)) {
+        if ($key -notin $wanted) { $gone = $script:TaskbarIcons[$key]; $gone.Visible = $false; $gone.Dispose(); $script:TaskbarIcons.Remove($key); $script:TaskbarDrawn.Remove($key) }
+    }
+    foreach ($row in $rows) {
+        if (-not $script:TaskbarIcons.Contains($row.Key)) { $script:TaskbarIcons[$row.Key] = New-FolegoTaskbarIcon $row.Key }
+        $notify = $script:TaskbarIcons[$row.Key]
+        $role = if ($script:Paused -or $script:WidgetStale) { 'muted' } else { $row.Role }
+        $drawn = $row.Text + '|' + $role + '|' + $script:Appearance.theme + '|' + $size
+        if ($script:TaskbarDrawn[$row.Key] -ne $drawn) {
+            $background = Get-FolegoValue $script:Tokens $role $script:Tokens.muted
+            $icon = [Folego.Windows.TrayGlyph]::Text($row.Text, (ConvertTo-FolegoColor $background), (Get-FolegoInk $background), (ConvertTo-FolegoColor $actions[$row.Strip % $actions.Count]), $size)
+            Set-FolegoNotifyIcon $notify $icon
+            $script:TaskbarDrawn[$row.Key] = $drawn
+        }
+        $suffix = if ($script:Paused) { ' (pausado)' } elseif ($script:WidgetStale) { ' (amostra antiga)' } else { '' }
+        $notify.Text = Get-FolegoShortTip ($row.Tip + $suffix)
+        if (-not $notify.Visible) { $notify.Visible = $true }
+    }
+}
+function Show-FolegoTaskbarIndicators {
+    $script:TaskbarActive = $true; $script:TaskbarDrawn = @{}
+    # Show neutral placeholders at once; the first collection can take tens of seconds cold.
+    if ($null -eq $script:WidgetData) { $script:WidgetData = [pscustomobject]@{ Metrics = (Get-FolegoMiniMetrics $null $null 'unknown' $policy $false); RamLine = 'RAM —'; Profile = 'Perfil desconhecido'; Reasons = '' } }
+    Update-FolegoTrayStatus; Update-FolegoTaskbarIndicators
+    if (-not (Get-FolegoValue $script:Appearance taskbar_hint $false)) {
+        $tray.BalloonTipTitle = 'Fôlego na barra de tarefas'
+        $tray.BalloonTipText = 'Clique em um indicador para as funções. O Windows 11 pode guardar ícones novos em ^: para deixá-los sempre visíveis, use Configurações → Barra de tarefas → Outros ícones da bandeja.'
+        $tray.BalloonTipIcon = 'Info'; $tray.ShowBalloonTip(10000)
+        try { Save-FolegoAppearanceChange (Set-FolegoAppearanceField $script:Appearance taskbar_hint $true $policy) } catch { }
+    }
+}
+function Hide-FolegoTaskbarIndicators {
+    $script:TaskbarActive = $false
+    foreach ($notify in @($script:TaskbarIcons.Values)) { $notify.Visible = $false; $notify.Dispose() }
+    $script:TaskbarIcons = [ordered]@{}; $script:TaskbarDrawn = @{}
+}
+function Open-FolegoCentralTab([string]$Name, [string]$Action = '') {
+    # Opening the central window from the taskbar menu keeps the indicators in place.
+    Show-Folego
+    foreach ($page in $tabs.TabPages) { if ($page.Text -eq $Name) { $tabs.SelectedTab = $page } }
+    if ($Action) { Request-Folego $Action }
+}
+function New-FolegoQuickMenu {
+    $strip = New-Object Windows.Forms.ContextMenuStrip
+    $summary = $strip.Items.Add('Fôlego — aguardando leitura'); $summary.Enabled = $false
+    $null = $strip.Items.Add('-')
+    $null = $strip.Items.Add('Abrir a central', $null, { Show-Folego })
+    $thermal = New-Object Windows.Forms.ToolStripMenuItem 'Temperatura e CPU'
+    $null = $thermal.DropDownItems.Add('Aplicar perfil Fresco (turbo desligado)…', $null, {
+        if (Confirm-Folego 'Perfil térmico' ('Aplicar Fresco ao plano ativo? CPU máxima ' + $policy.windows.thermal.profiles.Fresco.throttle_max + '% e turbo desligado. Os valores atuais serão registrados antes da troca.')) { Request-Folego Fresco }
+    })
+    $null = $thermal.DropDownItems.Add('Aplicar perfil Contenção…', $null, {
+        if (Confirm-Folego 'Perfil térmico' ('Aplicar Contenção ao plano ativo? CPU máxima ' + $policy.windows.thermal.profiles.Contencao.throttle_max + '% e turbo desligado. Os valores atuais serão registrados antes.')) { Request-Folego Contencao }
+    })
+    $null = $thermal.DropDownItems.Add('Restaurar os valores originais…', $null, {
+        if (Confirm-Folego 'Perfil térmico' 'Devolver os limites originais do recibo? Só ocorre no mesmo host/boot e se ninguém os alterou.') { Request-Folego ThermalRestore }
+    })
+    $null = $thermal.DropDownItems.Add('Ver temperatura, perfil e recibo', $null, { Open-FolegoCentralTab 'Temperatura e CPU' })
+    $null = $strip.Items.Add($thermal)
+    $null = $strip.Items.Add('Analisar consumidores e órfãos', $null, { $script:TriageFilter = ''; Open-FolegoCentralTab 'Consumidores' 'Consumers' })
+    $null = $strip.Items.Add('Inicialização do Windows', $null, { Open-FolegoCentralTab 'Inicialização' 'StartupList' })
+    $null = $strip.Items.Add('Pausar / retomar monitoramento', $null, { Switch-FolegoPause })
+    $null = $strip.Items.Add('-')
+    Add-FolegoAppearanceItems $strip.Items
+    $null = $strip.Items.Add('Deixar os indicadores sempre visíveis…', $null, { Start-Process 'ms-settings:taskbar'; $status.Text = 'Em Outros ícones da bandeja, ligue os ícones do Fôlego (Windows PowerShell).' })
+    $null = $strip.Items.Add('Gerenciador de Tarefas', $null, { Start-Process taskmgr.exe })
+    $null = $strip.Items.Add('-')
+    $null = $strip.Items.Add('Sair do Fôlego', $null, { $script:Leaving = $true; $form.Close() })
+    $strip.Add_Opening({
+        param($sender, $e)
+        Sync-FolegoAppearanceChecks
+        if ($null -ne $script:WidgetData) {
+            $m = $script:WidgetData.Metrics
+            $sender.Items[0].Text = Get-FolegoShortTip ('Fôlego — ' + $m.Status.Text + ' · CPU ' + $m.Cpu.Text + ' · ' + $m.Temp.Text + ' · RAM ' + $m.Ram.Text)
+        }
+    })
+    return $strip
 }

@@ -16,7 +16,7 @@ function Get-FolegoTheme($Policy, [string]$Key) {
     return $theme
 }
 function New-FolegoAppearance($Policy) {
-    return [pscustomobject]@{ schema = 1; theme = [string]$Policy.windows.appearance.default_theme; transparency = 0; startup_view = 'central'; last_widget = 'compact'; positions = [pscustomobject]@{} }
+    return [pscustomobject]@{ schema = 1; theme = [string]$Policy.windows.appearance.default_theme; transparency = 0; startup_view = [string]$Policy.windows.appearance.default_view; last_widget = 'compact'; positions = [pscustomobject]@{} }
 }
 function Test-FolegoAppearance($Value, $Policy) {
     # Returns '' when valid, otherwise the reason. Unknown values are never coerced.
@@ -123,4 +123,18 @@ function Get-FolegoMiniMetrics($Sample, $ThermalNow, [string]$Level, $Policy, [b
     elseif ($temp.Role -eq 'warning' -and $status.Role -ne 'danger') { $status.Text = 'Quente'; $status.Role = 'warning' }
     elseif ($null -ne $Sample -and $Sample.ExternalPower -eq $false -and $null -ne $Sample.BatteryPercent -and $Sample.BatteryPercent -le 10) { $status.Text = ('Bateria ' + $Sample.BatteryPercent + '%'); $status.Role = 'danger' }
     return [pscustomobject]@{ Status = $status; Cpu = $cpu; Temp = $temp; Ram = $ram; Bat = $bat; Headroom = (Get-FolegoHeadroom $Sample) }
+}
+function Get-FolegoTrayIndicators($Metrics) {
+    # Taskbar view: one notification-area icon per metric. Text is at most 3 characters
+    # (a 16 px icon); the tooltip carries the full reading. Unknown stays neutral, never green.
+    $rows = @()
+    foreach ($spec in @(@('Cpu', 'CPU', '%', 0), @('Temp', 'Temperatura', '', 1), @('Ram', 'RAM em uso', '%', 2), @('Bat', 'Bateria', '%', 3))) {
+        $metric = $Metrics.($spec[0])
+        if ($spec[0] -eq 'Bat' -and -not $metric.Visible) { continue }
+        $digits = ([string]$metric.Text) -replace '[^0-9]', ''
+        $text = if (-not $digits) { '–' } elseif ($digits.Length -gt 3) { '999' } else { $digits }
+        $caption = if ($spec[0] -eq 'Bat' -and $metric.Caption -eq 'TOMADA') { 'Bateria (na tomada)' } else { $spec[1] }
+        $rows += [pscustomobject]@{ Key = $spec[0]; Text = $text; Role = [string]$metric.Role; Strip = [int]$spec[3]; Tip = ('Fôlego · ' + $caption + ': ' + $metric.Text) }
+    }
+    return $rows
 }

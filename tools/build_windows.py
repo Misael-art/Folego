@@ -22,9 +22,10 @@ from folego.ui.palettes import THEMES, DEFAULT_THEME  # pure module: no Qt impor
 FILES = ('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1',
          'Collect.ps1', 'Native.cs', 'Widget.cs', 'Test-Folego.ps1', 'DeckBootstrap.ps1')
 CAPABILITIES = ('monitor', 'power-plan-receipts', 'thermal-profiles', 'process-triage', 'startup-approval',
-                'widget-views', 'color-themes')
-# Same views and order as the Linux widget menu (ui/desktop_preferences.py).
-VIEWS = (('central', 'Central do Fôlego'), ('mini', 'Mini horizontal'), ('compact', 'Widget compacto'),
+                'widget-views', 'color-themes', 'taskbar-indicators')
+# Linux widget views (ui/desktop_preferences.py) plus the Windows-only taskbar indicators,
+# which are the default opening view on Windows.
+VIEWS = (('central', 'Central do Fôlego'), ('taskbar', 'Barra de tarefas'), ('mini', 'Mini horizontal'), ('compact', 'Widget compacto'),
          ('left', 'Lateral esquerda'), ('right', 'Lateral direita'), ('top', 'Barra superior'))
 
 
@@ -41,7 +42,7 @@ def appearance() -> dict:
             'actions': list(tokens.actions),
         }
     # Windows applies opacity to the whole widget window, text included, so it is capped.
-    return {'default_theme': DEFAULT_THEME, 'views': [{'key': k, 'name': n} for k, n in VIEWS],
+    return {'default_theme': DEFAULT_THEME, 'default_view': 'taskbar', 'views': [{'key': k, 'name': n} for k, n in VIEWS],
             'transparency_max': 60, 'transparency_steps': [0, 15, 30, 45, 60], 'themes': themes}
 
 # Thermal guard: Windows triage rules for the ACPI zone, not a sensor-certified limit.

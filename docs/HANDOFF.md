@@ -19,6 +19,14 @@
   (o primeiro processo frio pode passar de 30 s por `Get-Volume`). Tema escuro PS2 legível.
 - Pendente: aceite físico do arraste, DPI acima de 100% e laterais com a barra de
   tarefas oculta; CI Windows/Linux após push.
+- Incremento seguinte: visualização **Barra de tarefas**, padrão de abertura. Indicadores
+  vivos na área de notificação (estado, CPU, temperatura, RAM, bateria) desenhados por
+  `TrayGlyph` em `Widget.cs`; clique abre o menu de funções. Sem deskband (removida no
+  Windows 11) e sem injetar janela no `explorer.exe`. `Test-Folego.ps1` **304 PASS**;
+  smoke sem `appearance.json` abriu na barra de tarefas com 5 ícones e salvou o padrão.
+- Correção de regressão da #10: o bloco da aba Temperatura reutilizava `$level`, então o
+  widget mostrava “Desconhecido” e o aviso de pressão alta nunca disparava. Teste novo
+  garante uma única atribuição. A branch da #10 ainda tem o defeito.
 
 ## Fôlego Windows: gestão ativa (térmica, consumidores, inicialização) — 16/11/2026
 

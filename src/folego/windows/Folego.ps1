@@ -296,13 +296,10 @@ try {
 
     $tray = New-Object Windows.Forms.NotifyIcon
     $tray.Icon = [Drawing.SystemIcons]::Information; $tray.Text = 'Fôlego — aguardando coleta'; $tray.Visible = $true
-    $menu = New-Object Windows.Forms.ContextMenuStrip
-    $open = $menu.Items.Add('Abrir Fôlego'); $open.Add_Click({ Show-Folego })
-    $pause = $menu.Items.Add('Pausar / retomar'); $pause.Add_Click({ Switch-FolegoPause })
-    Add-FolegoAppearanceItems $menu.Items
-    $menu.Add_Opening({ Sync-FolegoAppearanceChecks })
-    $exit = $menu.Items.Add('Sair'); $exit.Add_Click({ $script:Leaving = $true; $form.Close() })
-    $tray.ContextMenuStrip = $menu; $tray.Add_DoubleClick({ Show-Folego })
+    # One quick-function menu for the tray icon and every taskbar indicator; left or right click.
+    $menu = New-FolegoQuickMenu
+    $tray.ContextMenuStrip = $menu
+    $tray.Add_MouseUp({ param($sender, $e) if ($e.Button -eq [Windows.Forms.MouseButtons]::Left) { Show-FolegoQuickMenu $sender } })
     $form.Add_FormClosing({ param($sender, $event) if (-not $script:Leaving) { $event.Cancel = $true; $form.Hide() } })
     $form.Add_Resize({
         foreach ($tab in $tabs.TabPages) {
@@ -358,8 +355,8 @@ try {
                         $thermalLines += ('Turbo: ' + $(if ($result.Processor.ac_boost -eq 0 -and $result.Processor.dc_boost -eq 0) { 'desligado' } elseif ($result.Processor.ac_boost -eq 0 -or $result.Processor.dc_boost -eq 0) { 'desligado só em uma fonte' } else { 'permitido' }))
                     } else { $thermalLines += 'Limites do processador: ilegíveis neste momento.' }
                     if ($null -ne $result.Thermal) {
-                        $level = Get-FolegoThermalProfile $result.Thermal $script:HostInfo
-                        $thermalLines += ('Perfil do Fôlego: ' + $level + ' | guarda automática: ' + $(if ($result.Thermal.enabled) { 'habilitada' } else { 'desligada' }) + $(if ($result.Thermal.paused) { ' | PAUSADA: confira o recibo' } else { '' }))
+                        $thermalLevel = Get-FolegoThermalProfile $result.Thermal $script:HostInfo
+                        $thermalLines += ('Perfil do Fôlego: ' + $thermalLevel + ' | guarda automática: ' + $(if ($result.Thermal.enabled) { 'habilitada' } else { 'desligada' }) + $(if ($result.Thermal.paused) { ' | PAUSADA: confira o recibo' } else { '' }))
                         $r = $result.Thermal.receipt
                         if ($null -ne $r) {
                             $origin = if ($r.automatic) { 'automático' } else { 'manual' }
@@ -410,6 +407,11 @@ try {
                         }
                     }
                     $status.Text = if ($result.Error) { 'Operação não concluída: ' + $result.Error } elseif ($result.Notes.Count) { $result.Notes -join ' | ' } else { 'Coleta concluída. Atualização a cada 10 s (5 s com a guarda térmica); sensores/disco detalhado a cada 60 s.' }
+                    if (-not $form.Visible -and $result.Action -notin @('Sample', 'AutoPower', 'Consumers', 'StartupList', 'Processes', 'Temps', 'Events')) {
+                        # Actions started from the taskbar menu report back without opening the central window.
+                        $tray.BalloonTipTitle = 'Fôlego'; $tray.BalloonTipIcon = $(if ($result.Error) { 'Warning' } else { 'Info' })
+                        $tray.BalloonTipText = $status.Text.Substring(0, [Math]::Min(250, $status.Text.Length)); $tray.ShowBalloonTip(8000)
+                    }
                     $tray.Text = ('Fôlego | CPU ' + $cpu + ' | bateria ' + $battery).Substring(0, [Math]::Min(63, ('Fôlego | CPU ' + $cpu + ' | bateria ' + $battery).Length))
                     if ($level -eq 'red') { Show-FolegoNotice 'pressure' 'Fôlego — pressão alta' 'Salve o trabalho e adie novas cargas. Abra o painel para conferir RAM, CPU e espaço.' }
                     if ($null -ne $sample.BatteryPercent -and $sample.ExternalPower -eq $false -and $sample.BatteryPercent -le 25) { Show-FolegoNotice 'battery' 'Fôlego — bateria baixa' ('Bateria em ' + $sample.BatteryPercent + '%. Confira a alimentação e salve o trabalho.') }
@@ -461,6 +463,7 @@ try {
     if ($null -ne $script:Worker) { try { $script:Worker.Stop() } finally { $script:Worker.Dispose() } }
     if ($null -ne (Get-Variable tray -ErrorAction SilentlyContinue)) { $tray.Visible = $false; $tray.Dispose() }
     if ($null -ne (Get-Command Hide-FolegoWidget -ErrorAction SilentlyContinue)) { Hide-FolegoWidget }
+    if ($null -ne (Get-Command Hide-FolegoTaskbarIndicators -ErrorAction SilentlyContinue)) { Hide-FolegoTaskbarIndicators }
     if ($null -ne $script:WidgetMenu) { $script:WidgetMenu.Dispose() }
     if ($null -ne (Get-Variable form -ErrorAction SilentlyContinue)) { $form.Dispose() }
     $activate.Dispose(); if ($ownsMutex) { $mutex.ReleaseMutex() }; $mutex.Dispose()
