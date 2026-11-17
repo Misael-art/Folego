@@ -31,7 +31,7 @@ if ($DelaySeconds) {
     $settings = Get-FolegoSettings $DataRoot
     if ($StartMinimized -and -not $settings.startup -and -not $NoStartup) { return }
 }
-Add-Type -Path (Join-Path $PSScriptRoot 'Native.cs')
+Add-Type -Path @((Join-Path $PSScriptRoot 'Native.cs'), (Join-Path $PSScriptRoot 'Widget.cs')) -ReferencedAssemblies System.Windows.Forms, System.Drawing
 $collector = New-Object Folego.Windows.Native
 if ($Probe) {
     $null = $collector.Read([IO.Path]::GetPathRoot($PSScriptRoot))
@@ -45,10 +45,18 @@ if ($Probe) {
 }
 [IO.Directory]::CreateDirectory($DataRoot) | Out-Null
 $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-$mutex = New-Object Threading.Mutex($false, ('Local\Folego.Windows.' + $sid))
+# One instance per user and state folder. The default folder keeps the original lock name;
+# a disposable -DataRoot (smoke/QA) gets its own, so it never wakes the user's real instance.
+$instance = $sid
+$defaultRoot = [IO.Path]::GetFullPath((Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Folego'))
+if ($DataRoot.TrimEnd('\') -ne $defaultRoot.TrimEnd('\')) {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { $instance += '.' + ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($DataRoot.ToLowerInvariant())))).Replace('-', '').Substring(0, 12) } finally { $sha.Dispose() }
+}
+$mutex = New-Object Threading.Mutex($false, ('Local\Folego.Windows.' + $instance))
 $ownsMutex = $false
 try { $ownsMutex = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $ownsMutex = $true }
-$activate = New-Object Threading.EventWaitHandle($false, [Threading.EventResetMode]::AutoReset, ('Local\Folego.Activate.' + $sid))
+$activate = New-Object Threading.EventWaitHandle($false, [Threading.EventResetMode]::AutoReset, ('Local\Folego.Activate.' + $instance))
 if (-not $ownsMutex) { if (-not $StartMinimized) { $null = $activate.Set() }; $activate.Dispose(); $mutex.Dispose(); return }
 try {
     if (-not $NoStartup -and -not $settings.commissioned) {
@@ -56,6 +64,8 @@ try {
     }
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
+    . (Join-Path $PSScriptRoot 'Folego.Widget.ps1')
+    Initialize-FolegoAppearance
     [Windows.Forms.Application]::EnableVisualStyles()
     $script:Worker = $null; $script:Handle = $null; $script:HostInfo = $null; $script:Extended = $null
     $script:LastSample = $null; $script:LastPower = $null; $script:NextPoll = 0L; $script:PersistAt = 0L
@@ -76,6 +86,26 @@ try {
     $status.Dock = 'Bottom'; $status.Height = 48; $status.Text = 'Aguardando coleta. ' + $startupNote; $form.Controls.Add($status)
     $tabs = New-Object Windows.Forms.TabControl
     $tabs.Dock = 'Fill'; $form.Controls.Add($tabs); $tabs.BringToFront()
+    # Tab headers follow the colour theme (WinForms only paints them in owner-draw mode).
+    $tabs.DrawMode = 'OwnerDrawFixed'; $tabs.ItemSize = New-Object Drawing.Size(120, 30)
+    $tabs.Add_DrawItem({
+        param($sender, $e)
+        $selected = $e.Index -eq $sender.SelectedIndex
+        $fill = New-Object Drawing.SolidBrush (ConvertTo-FolegoColor $(if ($selected) { $script:Tokens.accent } else { $script:Tokens.surface }))
+        try { $e.Graphics.FillRectangle($fill, $e.Bounds) } finally { $fill.Dispose() }
+        $ink = ConvertTo-FolegoColor $(if ($selected) { $script:Tokens.accent_text } else { $script:Tokens.text })
+        [Windows.Forms.TextRenderer]::DrawText($e.Graphics, $sender.TabPages[$e.Index].Text, $sender.Font, $e.Bounds, $ink, [Windows.Forms.TextFormatFlags]'HorizontalCenter, VerticalCenter, EndEllipsis')
+    })
+    $viewStrip = New-Object Windows.Forms.MenuStrip
+    $viewStrip.Dock = 'Top'
+    Add-FolegoAppearanceItems $viewStrip.Items
+    $form.MainMenuStrip = $viewStrip; $form.Controls.Add($viewStrip)
+    $form.KeyPreview = $true
+    $form.Add_KeyDown({
+        param($sender, $e)
+        if ($e.Control -and $e.Shift -and $e.KeyCode -eq 'F') { Switch-FolegoWidget; $e.Handled = $true }
+        elseif ($e.Control -and $e.Shift -and $e.KeyCode -eq 'P') { Switch-FolegoPause; $e.Handled = $true }
+    })
     function New-FolegoPage([string]$Name) {
         $tab = New-Object Windows.Forms.TabPage; $tab.Text = $Name; $tabs.Controls.Add($tab)
         $flow = New-Object Windows.Forms.FlowLayoutPanel
@@ -129,7 +159,8 @@ try {
     $reasons = New-FolegoOutput $page 110
     $null = Add-FolegoLabel $page 'Folga observada em RAM, CPU, commit e espaço. Commit é memória comprometida, não tamanho do pagefile. Dados antigos/ausentes permanecem desconhecidos. Sensores não fornecidos pelo hardware não são estimados.' 85
     Add-FolegoButton $page 'Atualizar agora' { Request-Folego Sample }
-    Add-FolegoButton $page 'Pausar / retomar monitoramento' { $script:Paused = -not $script:Paused; $status.Text = 'Monitoramento pausado: ' + $script:Paused; $script:NextPoll = 0L }
+    Add-FolegoButton $page 'Pausar / retomar monitoramento (Ctrl+Shift+P)' { Switch-FolegoPause }
+    Add-FolegoButton $page 'Abrir o widget (Ctrl+Shift+F)' { Show-FolegoView $script:Appearance.last_widget }
 
     $thermalPolicy = $policy.windows.thermal
     $page = New-FolegoPage 'Temperatura e CPU'
@@ -249,6 +280,14 @@ try {
     Add-FolegoButton $page 'Habilitar início com a sessão' { try { $status.Text = Set-FolegoStartup $DataRoot $true } catch { $status.Text = [string]$_ } }
     Add-FolegoButton $page 'Desabilitar início com a sessão' { try { $status.Text = Set-FolegoStartup $DataRoot $false } catch { $status.Text = [string]$_ } }
     Add-FolegoButton $page 'Revisar aplicativos de inicialização do Windows' { Start-Process 'ms-settings:startupapps' }
+    $null = Add-FolegoLabel $page 'Modo de abertura: central, mini horizontal, widget compacto, laterais ou barra superior. Vale na próxima abertura; o tema de cores e a transparência do widget ficam no menu Tema de cores e Transparência, no topo.' 62
+    $startupView = New-Object Windows.Forms.ComboBox
+    $startupView.DropDownStyle = 'DropDownList'; $startupView.Width = [Math]::Min(845, $form.ClientSize.Width - 60)
+    $startupView.AccessibleName = 'Modo de abertura do Fôlego'
+    foreach ($row in @($policy.windows.appearance.views)) { $null = $startupView.Items.Add([string]$row.name) }
+    $startupView.SelectedIndex = [Array]::IndexOf((Get-FolegoViewKeys $policy), [string]$script:Appearance.startup_view)
+    $startupView.Add_SelectionChangeCommitted({ Set-FolegoStartupViewChoice ((Get-FolegoViewKeys $policy)[$startupView.SelectedIndex]) })
+    $page.Controls.Add($startupView)
     Add-FolegoButton $page 'Criar ou conferir atalhos deste usuário' { try { Install-FolegoShortcuts; $status.Text = 'Atalhos conferidos.' } catch { $status.Text = [string]$_ } }
     Add-FolegoButton $page 'Abrir estado e recibos do Fôlego' { Start-Process explorer.exe -ArgumentList ('"' + $DataRoot + '"') }
     Add-FolegoButton $page 'Guia Windows e capacidades' { Start-Process notepad.exe -ArgumentList ('"' + (Join-Path $PSScriptRoot 'LEIA-ME.md') + '"') }
@@ -259,7 +298,9 @@ try {
     $tray.Icon = [Drawing.SystemIcons]::Information; $tray.Text = 'Fôlego — aguardando coleta'; $tray.Visible = $true
     $menu = New-Object Windows.Forms.ContextMenuStrip
     $open = $menu.Items.Add('Abrir Fôlego'); $open.Add_Click({ Show-Folego })
-    $pause = $menu.Items.Add('Pausar / retomar'); $pause.Add_Click({ $script:Paused = -not $script:Paused; $script:NextPoll = 0L })
+    $pause = $menu.Items.Add('Pausar / retomar'); $pause.Add_Click({ Switch-FolegoPause })
+    Add-FolegoAppearanceItems $menu.Items
+    $menu.Add_Opening({ Sync-FolegoAppearanceChecks })
     $exit = $menu.Items.Add('Sair'); $exit.Add_Click({ $script:Leaving = $true; $form.Close() })
     $tray.ContextMenuStrip = $menu; $tray.Add_DoubleClick({ Show-Folego })
     $form.Add_FormClosing({ param($sender, $event) if (-not $script:Leaving) { $event.Cancel = $true; $form.Hide() } })
@@ -294,7 +335,7 @@ try {
                     $level = Update-FolegoHealth $script:Health $raw.Level $policy.health.recovery_samples
                     $names = @{ green = 'Há folga nos recursos observados'; yellow = 'Atenção à carga'; red = 'Pressão alta — preserve seu trabalho'; unknown = 'Dados incompletos ou antigos' }
                     $headline.Text = $names[$level]; $reasons.Text = $raw.Text
-                    $headline.ForeColor = switch ($level) { 'red' { [Drawing.Color]::Firebrick } 'yellow' { [Drawing.Color]::DarkGoldenrod } 'green' { [Drawing.Color]::DarkGreen } default { [Drawing.Color]::DimGray } }
+                    $headline.ForeColor = Get-FolegoRoleColor $(switch ($level) { 'red' { 'danger' } 'yellow' { 'warning' } 'green' { 'ok' } default { 'muted' } })
                     $cpu = if ($null -ne $sample.CpuPercent) { '{0:N0}%' -f $sample.CpuPercent } else { 'desconhecida' }
                     $battery = if ($null -ne $sample.BatteryPercent) { [string]$sample.BatteryPercent + '% (' + $policy.battery_bands[[int]$sample.BatteryPercent] + ')' } else { 'indisponível' }
                     $ac = if ($null -eq $sample.ExternalPower) { 'desconhecida' } elseif ($sample.ExternalPower) { 'conectada' } else { 'desconectada' }
@@ -335,7 +376,7 @@ try {
                             $item = New-Object Windows.Forms.ListViewItem([string]$row.pid)
                             foreach ($cell in @($row.name, $row.class, $row.cores, $row.io_kbps, $row.age_min, $row.parent_pid, (@($row.reasons) -join ', '))) { $null = $item.SubItems.Add([string]$cell) }
                             $item.Tag = $i
-                            if ($row.class -eq 'agente-orfao') { $item.ForeColor = [Drawing.Color]::DarkGoldenrod } elseif (-not $row.killable) { $item.ForeColor = [Drawing.Color]::DimGray }
+                            if ($row.class -eq 'agente-orfao') { $item.ForeColor = Get-FolegoRoleColor warning } elseif (-not $row.killable) { $item.ForeColor = Get-FolegoRoleColor muted }
                             $null = $procList.Items.Add($item)
                         }
                         $procList.EndUpdate(); $procDetail.Text = ''
@@ -349,7 +390,7 @@ try {
                             $item = New-Object Windows.Forms.ListViewItem([string]$row.name)
                             foreach ($cell in @($row.scope, $row.app, $row.state, $row.protected, $row.command)) { $null = $item.SubItems.Add([string]$cell) }
                             $item.Tag = $i
-                            if ($row.protected) { $item.ForeColor = [Drawing.Color]::DimGray } elseif ($row.state -eq 'disabled') { $item.ForeColor = [Drawing.Color]::DarkGreen }
+                            if ($row.protected) { $item.ForeColor = Get-FolegoRoleColor muted } elseif ($row.state -eq 'disabled') { $item.ForeColor = Get-FolegoRoleColor ok }
                             $null = $startList.Items.Add($item)
                         }
                         $startList.EndUpdate()
@@ -380,6 +421,12 @@ try {
                         $script:PersistAt = $now
                     }
                     $script:SamplesReceived++
+                    $profileName = if ($null -ne $result.Thermal) { 'Perfil ' + (Get-FolegoThermalProfile $result.Thermal $script:HostInfo) } else { 'Perfil desconhecido' }
+                    $freeText = if ($sample.TotalPhysical -gt 0) { ('{0:N1} GiB livres' -f ($sample.AvailablePhysical / 1GB)) } else { 'sem leitura' }
+                    $metricsNow = Get-FolegoMiniMetrics $sample $result.ThermalNow $level $policy $script:Paused
+                    $script:WidgetData = [pscustomobject]@{ Metrics = $metricsNow; RamLine = ('RAM ' + $metricsNow.Ram.Text + ' · ' + $freeText); Profile = $profileName; Reasons = (@($raw.Text -split "`r`n")[0..1] -join "`r`n") }
+                    $script:WidgetStale = $false
+                    Update-FolegoWidget
                 } catch { $status.Text = [string]$_; $headline.Text = 'Coleta/operação incompleta — confira o estado'; $script:Health.Level = 'unknown'; $script:LowStreak = 0 }
                 finally {
                     $script:Worker.Dispose(); $script:Worker = $null; $script:Handle = $null
@@ -387,7 +434,10 @@ try {
                     $script:NextPoll = $now + $interval
                 }
             }
-            if ($null -ne $script:LastSample -and ($now - $script:LastSample.MonotonicMs) -gt 15000) { $headline.Text = if ($script:Paused) { 'Monitoramento pausado — amostra antiga' } else { 'Amostra antiga — aguardando coleta' }; $script:LowStreak = 0 }
+            if ($null -ne $script:LastSample -and ($now - $script:LastSample.MonotonicMs) -gt 15000) {
+                $headline.Text = if ($script:Paused) { 'Monitoramento pausado — amostra antiga' } else { 'Amostra antiga — aguardando coleta' }; $script:LowStreak = 0
+                if (-not $script:WidgetStale) { $script:WidgetStale = $true; Update-FolegoWidget }
+            }
             if (-not $script:Paused -and $null -eq $script:Worker -and $now -ge $script:NextPoll) {
                 $action = 'Sample'
                 if ($null -ne $script:LastPower -and $script:LastPower.enabled -and -not $script:LastPower.paused) {
@@ -397,13 +447,21 @@ try {
             }
         } catch { $status.Text = [string]$_ }
     })
-    $form.Add_Shown({ if ($StartMinimized) { $form.Hide() }; $timer.Start(); Request-Folego Sample })
+    $form.Add_Shown({
+        Set-FolegoThemeEverywhere
+        if ($script:AppearanceNote) { $status.Text = 'Aparência: ' + $script:AppearanceNote }
+        if ($script:Appearance.startup_view -ne 'central') { Show-FolegoView $script:Appearance.startup_view }
+        elseif ($StartMinimized) { $form.Hide() }
+        $timer.Start(); Request-Folego Sample
+    })
     [Windows.Forms.Application]::Run($form)
     if ($SmokeSeconds -gt 0 -and $script:SamplesReceived -lt 1) { throw 'A janela abriu, mas nenhuma coleta completa chegou à interface no smoke.' }
 } finally {
     if ($null -ne (Get-Variable timer -ErrorAction SilentlyContinue)) { $timer.Stop(); $timer.Dispose() }
     if ($null -ne $script:Worker) { try { $script:Worker.Stop() } finally { $script:Worker.Dispose() } }
     if ($null -ne (Get-Variable tray -ErrorAction SilentlyContinue)) { $tray.Visible = $false; $tray.Dispose() }
+    if ($null -ne (Get-Command Hide-FolegoWidget -ErrorAction SilentlyContinue)) { Hide-FolegoWidget }
+    if ($null -ne $script:WidgetMenu) { $script:WidgetMenu.Dispose() }
     if ($null -ne (Get-Variable form -ErrorAction SilentlyContinue)) { $form.Dispose() }
     $activate.Dispose(); if ($ownsMutex) { $mutex.ReleaseMutex() }; $mutex.Dispose()
 }

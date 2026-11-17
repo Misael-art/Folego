@@ -262,3 +262,4 @@ function Save-FolegoSample([string]$DataRoot, $Value) {
     Write-FolegoJson (Join-Path $DataRoot 'latest-sample.json') $Value
 }
 . (Join-Path $script:FolegoRoot 'Folego.Manage.ps1')
+. (Join-Path $script:FolegoRoot 'Folego.View.ps1')

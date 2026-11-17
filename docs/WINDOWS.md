@@ -29,6 +29,41 @@ O comando usa a instalação real e as pastas conhecidas, sem caminhos Linux,
 letras de disco ou nomes de usuário gravados. Mudar a instalação exige revisar
 a entrada anterior; não são criadas variantes concorrentes.
 
+## Visualizações e cores
+
+As mesmas visualizações do Fôlego Linux, no menu **Visualizações** (barra do topo
+da central, bandeja e menu ☰ do widget) e em **Ctrl+Shift+F**, que alterna entre a
+central e o último widget usado:
+
+| Visualização | Forma no Windows |
+| --- | --- |
+| Central do Fôlego | Janela com abas; um widget aberto recolhe a central para a bandeja. |
+| Mini horizontal | Faixa de 384 × 46 px (escala com o DPI): estado, CPU, temperatura, RAM e bateria, expandir e menu. |
+| Widget compacto | Cartão de 268 px com anel de folga, estado, RAM livre, CPU, zona térmica, bateria e perfil térmico. |
+| Lateral esquerda / direita | Barra na borda da área de trabalho, 112–128 px de largura e altura total, como no Linux. |
+| Barra superior | Faixa no topo da área de trabalho: 120 px em telas a partir de 900 px de largura, 190 px nas menores. |
+
+O widget não rouba o foco, não aparece na barra de tarefas nem no Alt+Tab, fica
+acima das outras janelas e se move arrastando qualquer área fora dos botões; o
+mini e o compacto lembram a posição, recolocada dentro da tela atual. As
+laterais e a barra superior usam só a área de trabalho, sem cobrir a barra de
+tarefas, e não reservam espaço como uma appbar: janelas maximizadas passam por
+baixo. **Modo de abertura**, em Opções, escolhe a visualização da próxima abertura.
+
+**Tema de cores** oferece os oito temas de console do Linux (SNES americano,
+Super Famicom, Mega Drive, Master System III, PC Engine, NES, TurboGrafx-16 e
+PlayStation 2). `tools/build_windows.py` copia de `palettes.py` os tokens já
+ajustados para contraste mínimo de 4,5:1; as cores de saúde (ok, atenção,
+crítico) mantêm o sentido em todos os temas. O tema vale na hora para a central,
+as abas, os menus e o widget. **Transparência do widget** vai de 0 a 60%: no
+Windows a opacidade atinge a janela inteira, texto incluído, por isso o limite é
+menor que o do Linux, que torna transparente só o fundo.
+
+As escolhas ficam em `appearance.json`, gravado só quando o usuário muda visualização,
+tema, transparência, modo de abertura ou posição. Um arquivo inválido é preservado e
+os padrões valem só na sessão, sem sobrescrevê-lo. Os atalhos de área de trabalho,
+cotas de IA e regras do KWin do widget Linux não têm equivalente validado no Windows.
+
 ## Recursos e limites do port
 
 | Função | Backend e comportamento Windows |
@@ -199,7 +234,8 @@ e recibo de energia por identidade física, com até 12 recibos anteriores;
 quando um perfil muda ou a guarda é ligada/desligada); `processes-<host>.json`
 guarda até 20 recibos de encerramento e o rastreio de ociosidade (gravado só
 em análise ou ação manual); `startup-<host>.json` guarda até 30 recibos e a
-última revisão de inicialização; `latest-sample.json` conserva somente
+última revisão de inicialização; `appearance.json` guarda visualização, tema,
+transparência e posições do widget; `latest-sample.json` conserva somente
 a última amostra, substituída atomicamente no máximo uma vez por minuto.
 Configurações acima de 1 MiB, schema desconhecido e campos essenciais inválidos
 bloqueiam operações. Não há logs de sensores sem limite nem histórico de

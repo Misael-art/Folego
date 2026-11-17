@@ -17,9 +17,32 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
 from folego.core.policy import battery_band, HealthThresholds
+from folego.ui.palettes import THEMES, DEFAULT_THEME  # pure module: no Qt import
 
-FILES = ('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Collect.ps1', 'Native.cs', 'Test-Folego.ps1', 'DeckBootstrap.ps1')
-CAPABILITIES = ('monitor', 'power-plan-receipts', 'thermal-profiles', 'process-triage', 'startup-approval')
+FILES = ('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1',
+         'Collect.ps1', 'Native.cs', 'Widget.cs', 'Test-Folego.ps1', 'DeckBootstrap.ps1')
+CAPABILITIES = ('monitor', 'power-plan-receipts', 'thermal-profiles', 'process-triage', 'startup-approval',
+                'widget-views', 'color-themes')
+# Same views and order as the Linux widget menu (ui/desktop_preferences.py).
+VIEWS = (('central', 'Central do Fôlego'), ('mini', 'Mini horizontal'), ('compact', 'Widget compacto'),
+         ('left', 'Lateral esquerda'), ('right', 'Lateral direita'), ('top', 'Barra superior'))
+
+
+def appearance() -> dict:
+    """Linux console themes with their already contrast-checked tokens; no second palette copy."""
+    themes = {}
+    for key, theme in THEMES.items():
+        tokens = theme.tokens
+        themes[key] = {
+            'name': theme.name, 'description': theme.description,
+            'tokens': {role: getattr(tokens, role) for role in (
+                'background', 'surface', 'surface_alt', 'text', 'muted', 'accent', 'accent_text',
+                'ok', 'warning', 'danger', 'focus', 'border')},
+            'actions': list(tokens.actions),
+        }
+    # Windows applies opacity to the whole widget window, text included, so it is capped.
+    return {'default_theme': DEFAULT_THEME, 'views': [{'key': k, 'name': n} for k, n in VIEWS],
+            'transparency_max': 60, 'transparency_steps': [0, 15, 30, 45, 60], 'themes': themes}
 
 # Thermal guard: Windows triage rules for the ACPI zone, not a sensor-certified limit.
 # Profiles only touch PROCTHROTTLEMAX/PERFBOOSTMODE of the active, existing scheme.
@@ -66,6 +89,7 @@ def policy() -> dict:
             'thermal': THERMAL,
             'processes': PROCESSES,
             'startup': STARTUP,
+            'appearance': appearance(),
         },
     }
 

@@ -148,7 +148,7 @@ def _functions():
 def test_every_production_call_is_defined():
     import re
     defined, sources = _functions()
-    for name in ('Folego.ps1', 'Collect.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1'):
+    for name in ('Folego.ps1', 'Collect.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1'):
         called = set(re.findall(r'\b([A-Z][a-z]+-Folego[A-Za-z]*)\b', sources[name]))
         assert called <= defined, (name, sorted(called - defined))
 
@@ -178,3 +178,20 @@ def test_replay_fixtures_preserve_the_reset_evidence():
     swing = (FIXTURES / 'monitor-swing-2252.csv').read_text(encoding='ascii').splitlines()[1:]
     temps = [float(line.split(',')[7]) for line in swing if line]
     assert max(temps) >= 90 and min(temps) <= 55
+
+
+def test_windows_themes_and_views_come_from_the_linux_design():
+    from folego.ui.palettes import THEMES, DEFAULT_THEME, contrast
+    look = builder.policy()['windows']['appearance']
+    assert look['default_theme'] == DEFAULT_THEME
+    assert set(look['themes']) == set(THEMES)
+    for key, theme in THEMES.items():
+        exported = look['themes'][key]
+        assert exported['name'] == theme.name
+        assert exported['actions'] == list(theme.tokens.actions)
+        for role, value in exported['tokens'].items():
+            assert value == getattr(theme.tokens, role)
+        for surface in ('background', 'surface', 'surface_alt'):
+            assert contrast(exported['tokens']['text'], exported['tokens'][surface]) >= 4.5
+    assert [view['key'] for view in look['views']] == ['central', 'mini', 'compact', 'left', 'right', 'top']
+    assert look['transparency_max'] <= 60 and look['transparency_steps'][-1] == look['transparency_max']
