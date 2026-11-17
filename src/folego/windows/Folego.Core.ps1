@@ -81,7 +81,7 @@ function Assert-FolegoManagePolicy($Value) {
         }
     }
     $q = Get-FolegoValue $Value.windows sequence
-    if ($null -eq $q -or $q.automatic_adoption -isnot [bool] -or $q.automatic_adoption -or $q.calm_samples -lt 1 -or $q.gap_seconds -lt 5 -or $q.cpu_max -gt 90 -or $q.disk_busy_max -gt 90 -or $q.temp_max_c -gt $t.spike_c -or $q.item_timeout_seconds -lt 60 -or $q.poll_seconds -lt 1 -or $q.poll_seconds -gt 10) { $bad = $true }
+    if ($null -eq $q -or $q.orchestration_default -isnot [bool] -or $q.calm_samples -lt 1 -or $q.gap_seconds -lt 5 -or $q.cpu_max -gt 90 -or $q.disk_busy_max -gt 90 -or $q.temp_max_c -gt $t.spike_c -or $q.item_timeout_seconds -lt 60 -or $q.poll_seconds -lt 1 -or $q.poll_seconds -gt 10) { $bad = $true }
     if ($bad) { throw 'Política de gestão ativa ausente ou insegura. Reconstrua pelo projeto oficial.' }
 }
 function Get-FolegoRawHealth($Sample, $Policy, [long]$NowMs) {

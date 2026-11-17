@@ -121,6 +121,44 @@ switch ($Action) {
     'SequenceUp' { Assert-Host; $actionResult = Move-FolegoSequenceItem $DataRoot $HostInfo $Target -1 }
     'SequenceDown' { Assert-Host; $actionResult = Move-FolegoSequenceItem $DataRoot $HostInfo $Target 1 }
     'LogonInventory' { $actionResult = (Get-FolegoLogonInventory $policy) -join "`r`n" }
+    'OrchestrationStart' {
+        # Default orchestration: adopt user-scope entries, then the UI runs the serialized sequence.
+        Assert-Host
+        $enabled = Get-FolegoOrchestrationEnabled $DataRoot $policy
+        $adoption = if ($enabled) { Invoke-FolegoAutoAdoption $DataRoot $HostInfo $policy } else { [pscustomobject]@{ Adopted = @(); Notes = @() } }
+        $seq = Get-FolegoSequenceState $DataRoot $HostInfo
+        $thisBoot = $null -ne $seq.last_run -and $seq.last_run.boot -eq $HostInfo.Boot
+        $handled = if ($thisBoot) { @($seq.last_run.results | ForEach-Object { $_.key }) } else { @() }
+        $serviceNames = @()
+        if ($enabled) {
+            try {
+                $services = Get-FolegoServiceState $DataRoot $HostInfo
+                if ($null -eq $services.attempted) { $serviceNames = @(Get-FolegoServiceCandidates | Where-Object { (Get-FolegoServiceStart $_) -eq 'auto' }) }
+            } catch { $notes.Add('Serviços: ' + [string]$_) }
+        }
+        $data = [pscustomobject]@{ Enabled = $enabled; Keys = @($seq.items | ForEach-Object { $_.key } | Where-Object { $_ -notin $handled }); Names = @($seq.items | ForEach-Object { $_.name }); Adopted = $adoption.Adopted; AlreadyDone = ($thisBoot -and [bool](Get-FolegoValue $seq.last_run done_at '')); ServiceNames = $serviceNames }
+        $actionResult = 'Orquestração do início: ' + $(if ($enabled) { 'ligada' } else { 'desligada' }) + '; ' + @($seq.items).Count + ' item(ns) em série' + $(if ($adoption.Adopted.Count) { '; adotados agora: ' + ($adoption.Adopted -join ', ') } else { '' }) + $(if ($adoption.Notes.Count) { '; ' + ($adoption.Notes -join '; ') } else { '' })
+    }
+    'OrchestrationDone' { Assert-Host; Save-FolegoSequenceDone $DataRoot $HostInfo $Target; $actionResult = 'Inicialização registrada.' }
+    'ServiceDeclined' {
+        Assert-Host
+        $services = Get-FolegoServiceState $DataRoot $HostInfo; Set-FolegoValue $services attempted ('recusado ' + [DateTimeOffset]::UtcNow.ToString('o')); Save-FolegoServiceState $DataRoot $HostInfo $services
+        $actionResult = 'Início atrasado dos serviços não aplicado (administrador recusado); disponível em Opções.'
+    }
+    'OrchestrationOn' { Set-FolegoOrchestration $DataRoot $true; $actionResult = 'Orquestração do início ligada: vale a partir do próximo login.' }
+    'OrchestrationOff' { Set-FolegoOrchestration $DataRoot $false; $actionResult = 'Orquestração automática desligada: nada novo será adotado. Itens já na sequência continuam nela; use Desfazer para devolvê-los.' }
+    'OrchestrationUndo' {
+        # One click: every adopted entry back to Windows (receipts), automatic mode off; services need UAC.
+        Assert-Host
+        Set-FolegoOrchestration $DataRoot $false
+        $lines = @()
+        foreach ($row in @((Get-FolegoSequenceState $DataRoot $HostInfo).items)) {
+            try { $lines += Remove-FolegoSequenceItem $DataRoot $HostInfo $row.key (New-FolegoConfirmation ('sequence-remove:' + $row.key) 'Remove') -KeepAdoptable } catch { $lines += ($row.name + ': ' + $_.Exception.Message) }
+        }
+        $pendingServices = @((Get-FolegoServiceState $DataRoot $HostInfo).receipts | Where-Object { $_.state -in @('applied', 'unknown') }).Count
+        $actionResult = (@('Orquestração desfeita e desligada.') + $lines) -join "`r`n"
+        if ($pendingServices) { throw ('ELEVATION: ' + $pendingServices + ' serviço(s) com início atrasado aplicado pelo Fôlego precisam de administrador para voltar a automático.') }
+    }
     'SequenceTick' {
         # One step of the serialized logon; the run object lives in the UI between ticks.
         Assert-Host
@@ -136,6 +174,9 @@ switch ($Action) {
                 Save-FolegoSequenceResult $DataRoot $HostInfo $decision.Key $outcome.State $outcome.Detail
                 $run.Results = @(@($run.Results) + @([pscustomobject]@{ Key = $decision.Key; State = $outcome.State; Detail = $outcome.Detail }))
                 $actionResult = 'Sequência: ' + $decision.Key + ' → ' + $outcome.State + ' (' + $outcome.Detail + ')'
+            }
+            'done' {
+                $actionResult = 'Sequência: concluída' + $(if ($decision.Reasons.Count) { ' sem calma total — ' + ($decision.Reasons -join ', ') } else { ' com o sistema calmo' })
             }
             'skip' {
                 $detail = 'sem janela de calma em ' + [int]($rules.item_timeout_seconds / 60) + ' min: ' + ($decision.Reasons -join ', ') + '; não iniciado sob estresse'

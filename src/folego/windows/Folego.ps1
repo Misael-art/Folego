@@ -1,11 +1,22 @@
 param([switch]$StartMinimized, [switch]$NoStartup, [switch]$Probe, [ValidateRange(0,120)][int]$DelaySeconds = 0, [ValidateRange(0,300)][int]$SmokeSeconds = 0, [string]$DataRoot,
-      [ValidateSet('', 'Disable', 'Enable', 'Restore')][string]$StartupAction = '', [string]$StartupSubject, [switch]$RunSequence)
+      [ValidateSet('', 'Disable', 'Enable', 'Restore')][string]$StartupAction = '', [string]$StartupSubject, [switch]$RunSequence,
+      [ValidateSet('', 'Apply', 'Restore')][string]$ServicePlan = '')
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Folego.Core.ps1')
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Use Fôlego Windows no Windows nativo. No Linux, use o launcher oficial ./dev.' }
 $policy = Get-FolegoPolicy
 if (-not $DataRoot) { $DataRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Folego' }
 $DataRoot = [IO.Path]::GetFullPath($DataRoot)
+if ($ServicePlan) {
+    # One-shot elevated helper (same account) for the receipted delayed start of third-party services.
+    Add-Type -AssemblyName System.Windows.Forms
+    try {
+        $hostInfo = Get-FolegoHost
+        $text = if ($ServicePlan -eq 'Apply') { Set-FolegoServiceDelays $DataRoot $hostInfo @(Get-FolegoServiceCandidates) } else { Restore-FolegoServiceDelays $DataRoot $hostInfo }
+    } catch { $text = [string]$_ }
+    if ($ServicePlan -eq 'Restore') { $null = [Windows.Forms.MessageBox]::Show([string]$text, 'Fôlego — serviços') }
+    return
+}
 if ($StartupAction) {
     # One-shot helper started through UAC (same account) for machine-wide startup entries.
     # The UI already asked; accepting the UAC prompt is the second confirmation.
@@ -77,6 +88,7 @@ try {
     $script:PendingAction = ''; $script:PendingTarget = $null
     # Serialized logon runs once per boot at session start (or on request with -RunSequence).
     $script:SequenceRun = $null; $script:SequencePending = [bool]($StartMinimized -or $RunSequence); $script:SequenceItems = @()
+    $script:OrchestrationRequested = $false; $script:OrchestrationDone = $null; $script:ServiceNames = @()
     $form = New-Object Windows.Forms.Form
     $form.Text = 'Fôlego — espaço para o que importa'; $form.StartPosition = 'CenterScreen'
     $area = [Windows.Forms.Screen]::PrimaryScreen.WorkingArea
@@ -304,6 +316,16 @@ try {
         try { $status.Text = Set-FolegoStartup $DataRoot $false } catch { $status.Text = [string]$_ }
     }
     Add-FolegoButton $page 'Revisar aplicativos de inicialização do Windows' { Start-Process 'ms-settings:startupapps' }
+    $null = Add-FolegoLabel $page 'Orquestração do início (ligada por padrão): a cada login o Fôlego adota as entradas de início do usuário, inicia-as em série com janelas de calma, mostra o tempo e avisa quando o sistema está completamente inicializado. Uma vez, pede administrador para pôr serviços automáticos de terceiros em início atrasado. Tudo com recibo; Desfazer devolve itens e serviços ao Windows.' 85
+    Add-FolegoButton $page 'Ligar a orquestração do início' { Request-Folego OrchestrationOn }
+    Add-FolegoButton $page 'Desligar a orquestração automática (mantém o que já foi organizado)' { Request-Folego OrchestrationOff }
+    Add-FolegoButton $page 'Desfazer a orquestração: devolver itens e serviços ao Windows' {
+        if (Confirm-Folego 'Orquestração do início' 'Devolver ao Windows todas as entradas adotadas e os serviços com início atrasado, e desligar a orquestração automática? Os serviços pedem administrador.') { Request-Folego OrchestrationUndo }
+    }
+    Add-FolegoButton $page 'Aplicar agora o início atrasado dos serviços (administrador)' {
+        $exe = Join-Path ([Environment]::GetFolderPath('Windows')) 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        try { Start-Process -FilePath $exe -Verb RunAs -WindowStyle Hidden -ArgumentList ('-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $PSScriptRoot 'Folego.ps1') + '" -NoStartup -DataRoot "' + $DataRoot + '" -ServicePlan Apply'); $status.Text = 'Pedido enviado; o resultado aparece em Inicialização → Outros itens de logon.' } catch { $status.Text = 'Administrador recusado; nada foi alterado.' }
+    }
     $null = Add-FolegoLabel $page 'Modo de abertura: central, mini horizontal, widget compacto, laterais ou barra superior. Vale na próxima abertura; o tema de cores e a transparência do widget ficam no menu Tema de cores e Transparência, no topo.' 62
     $startupView = New-Object Windows.Forms.ComboBox
     $startupView.DropDownStyle = 'DropDownList'; $startupView.Width = [Math]::Min(845, $form.ClientSize.Width - 60)
@@ -338,6 +360,7 @@ try {
     $timer.Add_Tick({
         try {
             $now = [long][Folego.Windows.Native]::GetTickCount64()
+            Update-FolegoProgress
             if ($activate.WaitOne(0)) { Show-Folego }
             if ($SmokeSeconds -gt 0 -and $now - $startedMs -ge $SmokeSeconds * 1000) { $script:Leaving = $true; $form.Close(); return }
             if ($null -ne $script:Worker -and $script:Handle.IsCompleted) {
@@ -430,22 +453,36 @@ try {
                         }
                         $seqList.EndUpdate()
                     }
+                    if ($result.Action -eq 'OrchestrationStart' -and $null -ne $result.Data) {
+                        $d = $result.Data
+                        $script:ServiceNames = @($d.ServiceNames)
+                        if ((-not $d.AlreadyDone -or $RunSequence) -and ($d.Enabled -or @($d.Keys).Count)) {
+                            # Once per boot: a restarted Fôlego only continues what this boot has not handled.
+                            $script:SequenceRun = New-FolegoSequenceRun @($d.Keys) $now $policy.windows.sequence
+                            Add-Member -InputObject $script:SequenceRun -NotePropertyName TaskNames -NotePropertyValue $null
+                            Show-FolegoProgress @($d.Keys).Count
+                        }
+                    }
                     if ($result.Action -eq 'SequenceTick' -and $null -ne $script:SequenceRun) {
                         $decision = $result.Data.Decision
                         $startOut.Text = $result.Result + "`r`n" + $startOut.Text.Substring(0, [Math]::Min(4000, $startOut.Text.Length))
                         if ($decision.Action -eq 'skip') { Show-FolegoNotice ('sequence-' + $decision.Key) 'Fôlego — item de início adiado' ($decision.Key + ': sem janela de calma; não foi iniciado sob estresse. Abra Inicialização para iniciar depois.') }
+                        Update-FolegoProgress
                         if ($script:SequenceRun.Done) {
                             $launched = @($script:SequenceRun.Results | Where-Object { $_.State -eq 'launched' }).Count
-                            $tray.BalloonTipTitle = 'Fôlego — sequência de início concluída'; $tray.BalloonTipIcon = 'Info'
-                            $tray.BalloonTipText = ('{0} de {1} itens iniciados em série; detalhes na aba Inicialização.' -f $launched, @($script:SequenceRun.Keys).Count)
-                            $tray.ShowBalloonTip(8000)
+                            $script:OrchestrationDone = Complete-FolegoProgress ([bool]$script:SequenceRun.DoneCalm) $decision.Reasons $launched @($script:SequenceRun.Keys).Count
                             $script:SequenceRun = $null
                         }
                     }
-                    $outputs = @{ EndGentle = $consumersOut; EndForce = $consumersOut; StartupDisable = $startOut; StartupEnable = $startOut; StartupRestore = $startOut; StartupReconcile = $startOut; StartupReview = $startOut; SequenceAdd = $startOut; SequenceRemove = $startOut; SequenceUp = $startOut; SequenceDown = $startOut; LogonInventory = $startOut; Fresco = $thermalBox; Contencao = $thermalBox; ThermalRestore = $thermalBox; ThermalReconcile = $thermalBox; ThermalAdopt = $thermalBox; EnableThermalGuard = $thermalBox; DisableThermalGuard = $thermalBox }
+                    $outputs = @{ EndGentle = $consumersOut; EndForce = $consumersOut; StartupDisable = $startOut; StartupEnable = $startOut; StartupRestore = $startOut; StartupReconcile = $startOut; StartupReview = $startOut; OrchestrationStart = $startOut; OrchestrationOn = $startOut; OrchestrationOff = $startOut; OrchestrationUndo = $startOut; ServiceDeclined = $startOut; SequenceAdd = $startOut; SequenceRemove = $startOut; SequenceUp = $startOut; SequenceDown = $startOut; LogonInventory = $startOut; Fresco = $thermalBox; Contencao = $thermalBox; ThermalRestore = $thermalBox; ThermalReconcile = $thermalBox; ThermalAdopt = $thermalBox; EnableThermalGuard = $thermalBox; DisableThermalGuard = $thermalBox }
                     $message = if ($result.Error) { 'Nada foi alterado ou o resultado ficou registrado como incerto: ' + $result.Error } else { [string]$result.Result }
                     if ($outputs.ContainsKey($result.Action) -and $message) { $outputs[$result.Action].Text = $message + "`r`n`r`n" + $outputs[$result.Action].Text }
                     elseif ($result.Result -and $result.Action -notin @('Consumers', 'StartupList')) { $diagnostic.Text = $result.Result }
+                    if ($result.Error -like 'ELEVATION:*' -and $result.Action -eq 'OrchestrationUndo') {
+                        $exe = Join-Path ([Environment]::GetFolderPath('Windows')) 'System32\WindowsPowerShell\v1.0\powershell.exe'
+                        try { Start-Process -FilePath $exe -Verb RunAs -ArgumentList ('-NoProfile -STA -ExecutionPolicy Bypass -File "' + (Join-Path $PSScriptRoot 'Folego.ps1') + '" -NoStartup -DataRoot "' + $DataRoot + '" -ServicePlan Restore') }
+                        catch { $startOut.Text = 'Administrador recusado: os serviços continuam com início atrasado; tente de novo em Opções.' }
+                    }
                     if ($result.Error -like 'ELEVATION:*' -and $result.Action -in @('StartupDisable', 'StartupEnable', 'StartupRestore')) {
                         if (Confirm-Folego 'Administrador' 'Esta entrada pertence à máquina. Pedir a confirmação de administrador do Windows (UAC) para esta única alteração? O recibo é gravado no mesmo estado do Fôlego.') {
                             $helperAction = $result.Action.Substring(7)
@@ -456,7 +493,7 @@ try {
                         }
                     }
                     $status.Text = if ($result.Error) { 'Operação não concluída: ' + $result.Error } elseif ($result.Notes.Count) { $result.Notes -join ' | ' } else { 'Coleta concluída. Atualização a cada 10 s (5 s com a guarda térmica); sensores/disco detalhado a cada 60 s.' }
-                    if (-not $form.Visible -and $result.Action -notin @('Sample', 'AutoPower', 'Consumers', 'StartupList', 'Processes', 'Temps', 'Events', 'SequenceTick', 'LogonInventory')) {
+                    if (-not $form.Visible -and $result.Action -notin @('Sample', 'AutoPower', 'Consumers', 'StartupList', 'Processes', 'Temps', 'Events', 'SequenceTick', 'LogonInventory', 'OrchestrationStart', 'OrchestrationDone', 'ServiceDeclined')) {
                         # Actions started from the taskbar menu report back without opening the central window.
                         $tray.BalloonTipTitle = 'Fôlego'; $tray.BalloonTipIcon = $(if ($result.Error) { 'Warning' } else { 'Info' })
                         $tray.BalloonTipText = $status.Text.Substring(0, [Math]::Min(250, $status.Text.Length)); $tray.ShowBalloonTip(8000)
@@ -478,20 +515,7 @@ try {
                     $script:WidgetData = [pscustomobject]@{ Metrics = $metricsNow; RamLine = ('RAM ' + $metricsNow.Ram.Text + ' · ' + $freeText); Profile = $profileName; Reasons = (@($raw.Text -split "`r`n")[0..1] -join "`r`n") }
                     $script:WidgetStale = $false
                     Update-FolegoWidget
-                    if ($script:SequencePending -and $null -ne $script:HostInfo) {
-                        $script:SequencePending = $false
-                        try {
-                            $seq = Get-FolegoSequenceState $DataRoot $script:HostInfo
-                            $done = if ($null -ne $seq.last_run -and $seq.last_run.boot -eq $script:HostInfo.Boot) { @($seq.last_run.results | ForEach-Object { $_.key }) } else { @() }
-                            # Once per boot: a restarted Fôlego only continues items not handled yet.
-                            $keys = @($seq.items | ForEach-Object { $_.key } | Where-Object { $_ -notin $done })
-                            if ($keys.Count) {
-                                $script:SequenceRun = New-FolegoSequenceRun $keys $now $policy.windows.sequence
-                                Add-Member -InputObject $script:SequenceRun -NotePropertyName TaskNames -NotePropertyValue $null
-                                $status.Text = 'Sequência de início: ' + $keys.Count + ' item(ns) em série, cada um após leituras calmas.'
-                            }
-                        } catch { $status.Text = 'Sequência de início não executada: ' + [string]$_ }
-                    }
+                    if ($script:SequencePending -and $null -ne $script:HostInfo) { $script:SequencePending = $false; $script:OrchestrationRequested = $true }
                 } catch { $status.Text = [string]$_; $headline.Text = 'Coleta/operação incompleta — confira o estado'; $script:Health.Level = 'unknown'; $script:LowStreak = 0 }
                 finally {
                     $script:Worker.Dispose(); $script:Worker = $null; $script:Handle = $null
@@ -509,7 +533,21 @@ try {
                 if ($null -ne $script:LastPower -and $script:LastPower.enabled -and -not $script:LastPower.paused) {
                     if ($script:LowStreak -ge 2 -or ($script:LastAc -eq $true -and $null -ne $script:LastPower.receipt -and $script:LastPower.receipt.state -eq 'applied')) { $action = 'AutoPower' }
                 }
-                if ($action -eq 'Sample' -and $null -ne $script:SequenceRun -and $null -ne $script:HostInfo) { Request-Folego SequenceTick $script:SequenceRun } else { Request-Folego $action }
+                if ($action -eq 'Sample' -and $script:OrchestrationRequested) { $script:OrchestrationRequested = $false; Request-Folego OrchestrationStart }
+                elseif ($action -eq 'Sample' -and $null -ne $script:OrchestrationDone) {
+                    $summary = $script:OrchestrationDone; $script:OrchestrationDone = $null
+                    Request-Folego OrchestrationDone $summary
+                    # After "fully initialized", once: delayed start for third-party services needs administrator (UAC).
+                    if (@($script:ServiceNames).Count) {
+                        $script:ServiceNames = @()
+                        $exe = Join-Path ([Environment]::GetFolderPath('Windows')) 'System32\WindowsPowerShell\v1.0\powershell.exe'
+                        try { Start-Process -FilePath $exe -Verb RunAs -WindowStyle Hidden -ArgumentList ('-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $PSScriptRoot 'Folego.ps1') + '" -NoStartup -DataRoot "' + $DataRoot + '" -ServicePlan Apply') }
+                        catch { $script:ServiceDeclinedPending = $true }
+                    }
+                }
+                elseif ($action -eq 'Sample' -and $script:ServiceDeclinedPending) { $script:ServiceDeclinedPending = $false; Request-Folego ServiceDeclined }
+                elseif ($action -eq 'Sample' -and $null -ne $script:SequenceRun -and $null -ne $script:HostInfo) { Request-Folego SequenceTick $script:SequenceRun }
+                else { Request-Folego $action }
             }
         } catch { $status.Text = [string]$_ }
     })
@@ -530,6 +568,7 @@ try {
     if ($null -ne (Get-Variable tray -ErrorAction SilentlyContinue)) { $tray.Visible = $false; $tray.Dispose() }
     if ($null -ne (Get-Command Hide-FolegoWidget -ErrorAction SilentlyContinue)) { Hide-FolegoWidget }
     if ($null -ne (Get-Command Hide-FolegoTaskbarIndicators -ErrorAction SilentlyContinue)) { Hide-FolegoTaskbarIndicators }
+    if ($null -ne (Get-Command Close-FolegoProgress -ErrorAction SilentlyContinue)) { Close-FolegoProgress }
     if ($null -ne $script:WidgetMenu) { $script:WidgetMenu.Dispose() }
     if ($null -ne (Get-Variable form -ErrorAction SilentlyContinue)) { $form.Dispose() }
     $activate.Dispose(); if ($ownsMutex) { $mutex.ReleaseMutex() }; $mutex.Dispose()

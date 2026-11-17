@@ -494,3 +494,73 @@ function New-FolegoQuickMenu {
     })
     return $strip
 }
+
+# ------------------------------------------------------------------ startup progress
+# Visible, non-blocking notice while Fôlego serializes the logon; ends with the completion time.
+$script:Progress = $null; $script:ProgressControls = @{}; $script:ProgressCloseAt = 0L
+function Get-FolegoBootElapsed {
+    try { return ([DateTimeOffset]::UtcNow - [DateTimeOffset]::Parse([string]$script:HostInfo.Boot)).TotalSeconds } catch { return $null }
+}
+function Show-FolegoProgress([int]$Total) {
+    if ($null -ne $script:Progress) { return }
+    $window = New-Object Folego.Windows.WidgetForm
+    $window.Text = 'Fôlego — organizando a inicialização'; $window.AccessibleName = 'Progresso da inicialização do Fôlego'
+    $window.Font = New-Object Drawing.Font('Segoe UI', [single]9.5)
+    $window.Padding = New-Object Windows.Forms.Padding (S 10)
+    $flow = New-FolegoFlow 'TopDown'
+    $script:ProgressControls = @{}
+    foreach ($row in @(@('Title', 'Fôlego está organizando a inicialização', 11, $true, 'text'), @('Hint', 'Aguarde: os programas de início sobem um de cada vez para não sobrecarregar o Deck.', 9, $false, 'muted'), @('Timer', 'Desde o boot: —', 14, $true, 'accent'), @('Items', '', 9.5, $false, 'text'), @('Wait', '', 8.5, $false, 'muted'))) {
+        $label = New-FolegoWidgetLabel $row[1] $row[2] $row[3] $row[4]
+        $label.MaximumSize = New-Object Drawing.Size((S 340), 0)
+        $script:ProgressControls[$row[0]] = $label; $flow.Controls.Add($label)
+    }
+    $hide = New-FolegoWidgetButton 'Ocultar' 'Ocultar este aviso; a organização continua' { if ($null -ne $script:Progress) { $script:Progress.Hide() } } 80 28
+    $flow.Controls.Add($hide)
+    $window.Controls.Add($flow)
+    $queue = New-Object 'Collections.Generic.Queue[object]'; $queue.Enqueue($window)
+    while ($queue.Count) { $c = $queue.Dequeue(); if ($c -isnot [Windows.Forms.Button]) { $window.MakeDraggable($c) }; foreach ($child in $c.Controls) { $queue.Enqueue($child) } }
+    Set-FolegoControlTheme $window
+    $size = $flow.GetPreferredSize([Drawing.Size]::Empty)
+    $window.ClientSize = New-Object Drawing.Size(($size.Width + $window.Padding.Horizontal), ($size.Height + $window.Padding.Vertical))
+    $area = [Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $window.Location = New-Object Drawing.Point(($area.Right - $window.Width - 24), ($area.Bottom - $window.Height - 24))
+    $script:Progress = $window
+    $script:ProgressControls['Items'].Text = $(if ($Total) { ('Itens: 0 de ' + $Total) } else { 'Nenhum programa adotado; aguardando o sistema assentar.' })
+    $window.Show()
+}
+function Update-FolegoProgress {
+    if ($null -eq $script:Progress -or $script:Progress.IsDisposed) { return }
+    $elapsed = Get-FolegoBootElapsed
+    if ($null -ne $script:SequenceRun) {
+        if ($null -ne $elapsed) { $script:ProgressControls['Timer'].Text = 'Desde o boot: ' + (Format-FolegoElapsed $elapsed) }
+        $run = $script:SequenceRun; $total = @($run.Keys).Count; $done = [Math]::Min($run.Index, $total)
+        $current = if ($done -lt $total) { [string]@($run.Keys)[$done] } else { '' }
+        $left = $total - $done
+        $estimate = if ($left -gt 0) { ' — restante estimado ≈ ' + (Format-FolegoElapsed ($left * ([double]$policy.windows.sequence.gap_seconds + [double]$policy.windows.sequence.poll_seconds * [double]$policy.windows.sequence.calm_samples))) } else { '' }
+        $script:ProgressControls['Items'].Text = $(if ($total) { ('Itens: ' + $done + ' de ' + $total + $(if ($current) { ' — próximo: ' + ($current -replace '^[^|]*\|', '') } else { ' — confirmando que o sistema assentou' }) + $estimate) } else { 'Nenhum programa adotado; confirmando que o sistema assentou.' })
+        $waiting = @($run.Waiting)
+        $script:ProgressControls['Wait'].Text = $(if ($waiting.Count) { 'Aguardando: ' + ($waiting -join ', ') } else { '' })
+    }
+    if ($script:ProgressCloseAt -gt 0 -and [long][Folego.Windows.Native]::GetTickCount64() -ge $script:ProgressCloseAt) { Close-FolegoProgress }
+}
+function Complete-FolegoProgress([bool]$Calm, $Reasons, [int]$Launched, [int]$Total) {
+    $elapsed = Get-FolegoBootElapsed
+    $time = if ($null -ne $elapsed) { Format-FolegoElapsed $elapsed } else { '—' }
+    $title = if ($Calm) { 'Sistema completamente inicializado em ' + $time } else { 'Inicialização concluída em ' + $time }
+    $detail = ('{0} de {1} programas iniciados em série.' -f $Launched, $Total) + $(if (-not $Calm -and @($Reasons).Count) { ' O sistema ainda não ficou calmo: ' + (@($Reasons) -join ', ') } else { '' })
+    if ($null -ne $script:Progress -and -not $script:Progress.IsDisposed) {
+        Set-FolegoWidgetTextOn $script:ProgressControls['Title'] $title $(if ($Calm) { 'ok' } else { 'warning' })
+        $script:ProgressControls['Hint'].Text = 'Pode usar o Deck normalmente.'
+        $script:ProgressControls['Timer'].Text = $time
+        $script:ProgressControls['Items'].Text = $detail; $script:ProgressControls['Wait'].Text = 'Registro em Inicialização → Sequência de início.'
+        if (-not $script:Progress.Visible) { $script:Progress.Show() }
+        $script:ProgressCloseAt = [long][Folego.Windows.Native]::GetTickCount64() + 20000
+    }
+    $tray.BalloonTipTitle = 'Fôlego'; $tray.BalloonTipIcon = 'Info'; $tray.BalloonTipText = $title + '. ' + $detail; $tray.ShowBalloonTip(10000)
+    return ($title + '. ' + $detail)
+}
+function Set-FolegoWidgetTextOn($Control, [string]$Text, [string]$Role) { $Control.Text = $Text; $Control.Tag = 'role:' + $Role; $Control.ForeColor = Get-FolegoRoleColor $Role }
+function Close-FolegoProgress {
+    if ($null -ne $script:Progress) { $script:Progress.Hide(); $script:Progress.Dispose(); $script:Progress = $null }
+    $script:ProgressCloseAt = 0L
+}

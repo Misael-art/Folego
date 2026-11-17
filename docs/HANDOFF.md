@@ -17,8 +17,19 @@
   inventário conferem; ponta a ponta com item fictício (sem efeito no Windows):
   assentar → calma em 2 leituras → decisão → revalidação pulou → concluída e registrada.
   Estado de tarefa via COM do Agendador (560 ms) em vez do cmdlet (2,4 s por consulta).
-- Pendente: adoção real (ex.: ShareX) e um login real com a sequência; sugerido ao
-  SDK registrar as tarefas do Disco Linux sem gatilho de logon para o Fôlego dispará-las.
+- Atualização do mesmo dia, pedido do usuário: orquestração **por padrão, sem pergunta**.
+  Adoção automática das entradas do usuário a cada login (recibos; devolvidas ficam
+  excluídas), janela de progresso com tempo desde o boot e “Sistema completamente
+  inicializado em mm:ss” só após o último item e o sistema calmo (timeout de 10 min nunca
+  prende o fim), início atrasado de serviços de terceiros com UAC uma vez após o aviso
+  (recibos; Defender/Segurança nunca), Opções com ligar/desligar e Desfazer em um clique.
+- Deck: `Test-Folego.ps1` **358 PASS**; ponta a ponta com orquestração desligada no estado
+  descartável e item fictício: janela de progresso, timer, estimativa e “Sistema
+  completamente inicializado” renderizados (imagem da própria janela) e conclusão gravada;
+  nada adotado no registro real (valores `02` em StartupApproved são do próprio Windows).
+- Pendente: login real com o pacote instalado (adoção de ShareX, UAC dos serviços),
+  aceite do tempo real até “completamente inicializado”; sugerido ao SDK registrar as
+  tarefas do Disco Linux sem gatilho de logon para o Fôlego dispará-las em série.
 
 ## Fôlego Windows: visualizações do widget e temas de cores — 17/11/2026
 

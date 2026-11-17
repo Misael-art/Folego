@@ -25,13 +25,27 @@ function Test-FolegoCalm($Reading, $Rules) {
     return $reasons
 }
 function New-FolegoSequenceRun($Keys, [long]$NowMs, $Rules) {
-    return [pscustomobject]@{ Keys = @($Keys); Index = 0; CalmStreak = 0; StartMs = $NowMs + 1000 * [long]$Rules.start_after_seconds; LastLaunchMs = 0L; ItemSinceMs = 0L; Waiting = @(); Done = $false; Results = @() }
+    return [pscustomobject]@{ Keys = @($Keys); Index = 0; CalmStreak = 0; StartMs = $NowMs + 1000 * [long]$Rules.start_after_seconds; LastLaunchMs = 0L; ItemSinceMs = 0L; SettleSinceMs = 0L; Waiting = @(); Done = $false; DoneCalm = $false; Results = @() }
 }
 function Step-FolegoSequence($Run, $Reading, $Rules, [long]$NowMs) {
-    # Pure decision: wait | launch | skip | done. One item at a time, never in parallel.
-    if ($Run.Done -or $Run.Index -ge @($Run.Keys).Count) { $Run.Done = $true; return [pscustomobject]@{ Action = 'done'; Key = ''; Reasons = @() } }
-    $key = [string]@($Run.Keys)[$Run.Index]
+    # Pure decision: wait | launch | skip | settle | done. One item at a time, never in parallel.
+    # "Done" means every item was handled AND the system settled (calm, no logon task running),
+    # or the settle phase timed out; a stuck reading can never block the end of startup.
+    if ($Run.Done) { return [pscustomobject]@{ Action = 'done'; Key = ''; Reasons = @() } }
+    $key = if ($Run.Index -lt @($Run.Keys).Count) { [string]@($Run.Keys)[$Run.Index] } else { '' }
     if ($NowMs -lt $Run.StartMs) { return [pscustomobject]@{ Action = 'wait'; Key = $key; Reasons = @('aguardando o desktop assentar') } }
+    if (-not $key) {
+        if ($Run.SettleSinceMs -eq 0) { $Run.SettleSinceMs = $NowMs }
+        $reasons = @(Test-FolegoCalm $Reading $Rules); $Run.Waiting = $reasons
+        if ($reasons.Count) {
+            $Run.CalmStreak = 0
+            if ($NowMs - $Run.SettleSinceMs -ge 1000 * [long]$Rules.item_timeout_seconds) { $Run.Done = $true; return [pscustomobject]@{ Action = 'done'; Key = ''; Reasons = $reasons } }
+            return [pscustomobject]@{ Action = 'settle'; Key = ''; Reasons = $reasons }
+        }
+        $Run.CalmStreak++
+        if ($Run.CalmStreak -ge [int]$Rules.calm_samples) { $Run.Done = $true; $Run.DoneCalm = $true; return [pscustomobject]@{ Action = 'done'; Key = ''; Reasons = @() } }
+        return [pscustomobject]@{ Action = 'settle'; Key = ''; Reasons = @('confirmando calma') }
+    }
     if ($Run.ItemSinceMs -eq 0) { $Run.ItemSinceMs = $NowMs }
     $reasons = @(Test-FolegoCalm $Reading $Rules)
     if ($Run.LastLaunchMs -gt 0 -and $NowMs - $Run.LastLaunchMs -lt 1000 * [long]$Rules.gap_seconds) { $reasons += 'intervalo mínimo entre itens' }
@@ -102,7 +116,7 @@ function Add-FolegoSequenceItem([string]$DataRoot, $HostInfo, [string]$Key, $Con
     } finally { $lock.Dispose() }
     return ($item.name + ' entrou na sequência de início: o Windows não o inicia mais em paralelo; o Fôlego o inicia em série, com calma.' + $(if ($note) { ' (' + $note + ')' } else { '' }))
 }
-function Remove-FolegoSequenceItem([string]$DataRoot, $HostInfo, [string]$Key, $Confirmation) {
+function Remove-FolegoSequenceItem([string]$DataRoot, $HostInfo, [string]$Key, $Confirmation, [switch]$KeepAdoptable) {
     Assert-FolegoConfirmation $Confirmation ('sequence-remove:' + $Key) 'Remove'
     $state = Get-FolegoSequenceState $DataRoot $HostInfo
     $row = @($state.items | Where-Object { $_.key -ceq $Key })
@@ -115,6 +129,8 @@ function Remove-FolegoSequenceItem([string]$DataRoot, $HostInfo, [string]$Key, $
     try {
         $state = Get-FolegoSequenceState $DataRoot $HostInfo
         $state.items = @($state.items | Where-Object { $_.key -cne $Key })
+        # A user who gives an item back keeps that choice: automatic adoption skips it from now on.
+        if (-not $KeepAdoptable) { Set-FolegoValue $state excluded @(@(@(Get-FolegoValue $state excluded @()) + @($Key)) | Select-Object -Unique) }
         Save-FolegoSequenceState $DataRoot $HostInfo $state
     } finally { $lock.Dispose() }
     return ($row[0].name + ' saiu da sequência' + $(if ($row[0].receipt) { ' e voltou a iniciar pelo Windows.' } else { '; o estado no Windows não foi alterado.' }))
@@ -201,10 +217,128 @@ function Get-FolegoLogonInventory($Policy) {
     } catch { $lines += '  Tarefas agendadas: leitura indisponível.' }
     try {
         foreach ($service in @(Get-CimInstance Win32_Service -Filter "StartMode='Auto'" -OperationTimeoutSec 5 -ErrorAction Stop | Where-Object { $_.PathName -and $_.PathName -notmatch '(?i)\\Windows\\(system32|SysWOW64)\\(svchost|lsass|services)' -and $_.PathName -notmatch '(?i)^"?[A-Z]:\\Windows\\' })) {
-            $advice = if ($service.Name -in @('WinDefend', 'MDCoreSvc', 'WdNisSvc', 'Sense', 'SecurityHealthService')) { 'segurança do Windows; não alterar.' } else { 'mudar para Manual ou Atrasado é decisão do usuário em services.msc.' }
-            $lines += ('  Serviço automático ' + $service.Name + ' (' + $service.State + '): ' + $advice)
+            $advice = if ($service.Name -in @('WinDefend', 'MDCoreSvc', 'WdNisSvc', 'Sense', 'SecurityHealthService')) { 'segurança do Windows; não alterar.' } else { 'com a orquestração ligada, o Fôlego aplica início atrasado (recibo, reversível em Opções).' }
+            $lines += ('  Serviço automático ' + $service.Name + ' (' + $service.State + ', ' + (Get-FolegoServiceStart $service.Name) + '): ' + $advice)
         }
     } catch { $lines += '  Serviços: leitura indisponível.' }
     foreach ($task in @(Get-FolegoStartupItems $Policy | Where-Object { $_.kind -eq 'dword' })) { $lines += ('  Pacote ' + $task.name + ': ' + $task.state) }
     return $lines
+}
+
+# ------------------------------------------------------------------ default orchestration
+# Requested by the user on 17/11/2026: orchestrate logon by default, without asking first,
+# showing progress and a completion message. Opt-out and one-click undo live in Options.
+function Get-FolegoOrchestrationEnabled([string]$DataRoot, $Policy) {
+    $settings = Read-FolegoJson (Join-Path $DataRoot 'settings.json')
+    $value = Get-FolegoValue $settings orchestration $null
+    if ($value -is [bool]) { return $value }
+    return [bool]$Policy.windows.sequence.orchestration_default
+}
+function Set-FolegoOrchestration([string]$DataRoot, [bool]$Enabled) {
+    $settings = Get-FolegoSettings $DataRoot
+    Set-FolegoValue $settings orchestration $Enabled
+    Write-FolegoJson (Join-Path $DataRoot 'settings.json') $settings
+}
+function Invoke-FolegoAutoAdoption([string]$DataRoot, $HostInfo, $Policy) {
+    # User-scope entries Windows would start in parallel join the sequence, each with a receipt.
+    # Disabled, protected, packaged, machine-scope and previously returned entries are left alone.
+    $state = Get-FolegoSequenceState $DataRoot $HostInfo
+    $excluded = @(Get-FolegoValue $state excluded @())
+    $taken = @($state.items | ForEach-Object { $_.key })
+    $adopted = @(); $notes = @()
+    foreach ($item in @(Get-FolegoStartupItems $Policy)) {
+        if ($item.state -ne 'enabled' -or $item.protected -or $item.kind -ne 'binary' -or $item.scope -notin @('HKCU', 'PastaUsuario')) { continue }
+        if ($item.key -cin $excluded -or $item.key -cin $taken) { continue }
+        try { $null = Add-FolegoSequenceItem $DataRoot $HostInfo $item.key (New-FolegoConfirmation ('sequence-add:' + $item.key) 'Add') $Policy; $adopted += $item.key }
+        catch { $notes += ($item.name + ': ' + $_.Exception.Message) }
+    }
+    return [pscustomobject]@{ Adopted = $adopted; Notes = $notes }
+}
+
+# ------------------------------------------------------------------ services (delayed start)
+$script:FolegoSecurityServices = @('WinDefend', 'MDCoreSvc', 'WdNisSvc', 'WdBoot', 'WdFilter', 'Sense', 'SecurityHealthService', 'wscsvc', 'mpssvc', 'BFE')
+function Get-FolegoServiceStart([string]$Name) {
+    $key = 'HKLM:\SYSTEM\CurrentControlSet\Services\' + $Name
+    if (-not (Test-Path -LiteralPath $key)) { return $null }
+    $values = Get-FolegoRegistryValues $key
+    if (-not $values.Contains('Start')) { return $null }
+    $delayed = $values.Contains('DelayedAutostart') -and [int]$values['DelayedAutostart'] -eq 1
+    switch ([int]$values['Start']) { 2 { if ($delayed) { return 'delayed-auto' } else { return 'auto' } } 3 { return 'demand' } 4 { return 'disabled' } default { return 'other' } }
+}
+function Set-FolegoServiceStart([string]$Name, [string]$Mode) {
+    $exe = Join-Path ([Environment]::GetFolderPath('System')) 'sc.exe'
+    $process = Start-Process -FilePath $exe -ArgumentList @('config', $Name, 'start=', $Mode) -WindowStyle Hidden -PassThru -Wait
+    if ($process.ExitCode -ne 0) { throw ('sc.exe config ' + $Name + ' devolveu ' + $process.ExitCode) }
+}
+function Get-FolegoServiceCandidates {
+    # Third-party automatic services outside the Windows folder; security components never.
+    return @(Get-CimInstance Win32_Service -Filter "StartMode='Auto'" -OperationTimeoutSec 5 -ErrorAction Stop | Where-Object {
+        $_.PathName -and $_.PathName -notmatch '(?i)^"?[A-Z]:\\Windows\\' -and $_.Name -notin $script:FolegoSecurityServices -and $_.PathName -notmatch '(?i)Windows Defender|Microsoft Security Client'
+    } | ForEach-Object { [string]$_.Name })
+}
+function Get-FolegoServiceState([string]$DataRoot, $HostInfo) {
+    $state = Read-FolegoJson (Join-Path $DataRoot ('services-' + $HostInfo.Id + '.json'))
+    if ($null -eq $state) { return [pscustomobject]@{ schema = 1; attempted = $null; receipts = @() } }
+    if (-not (Test-FolegoInt $state.schema) -or $state.schema -ne 1 -or @($state.receipts).Count -gt 60) { throw 'Estado de serviços desconhecido; nada será alterado.' }
+    foreach ($r in @($state.receipts)) { if ($r.state -notin @('intended', 'applied', 'unknown', 'restored') -or $r.name -in $script:FolegoSecurityServices) { throw 'Recibo de serviço inválido.' } }
+    return $state
+}
+function Save-FolegoServiceState([string]$DataRoot, $HostInfo, $State) { Write-FolegoJson (Join-Path $DataRoot ('services-' + $HostInfo.Id + '.json')) $State }
+function Set-FolegoServiceDelays([string]$DataRoot, $HostInfo, $Names) {
+    # Elevated, once: automatic -> automatic (delayed start). Services still start, after the login peak.
+    $lock = Open-FolegoLock $DataRoot
+    try {
+        $state = Get-FolegoServiceState $DataRoot $HostInfo
+        Set-FolegoValue $state attempted ([DateTimeOffset]::UtcNow.ToString('o'))
+        $done = @()
+        foreach ($name in @($Names)) {
+            if ($name -in $script:FolegoSecurityServices) { continue }
+            $original = Get-FolegoServiceStart $name
+            if ($original -ne 'auto') { continue }
+            $receipt = [pscustomobject]@{ id = [Guid]::NewGuid().ToString(); name = $name; original = $original; target = 'delayed-auto'; state = 'intended'; at = [DateTimeOffset]::UtcNow.ToString('o') }
+            $state.receipts = @(@(@($state.receipts) + @($receipt)) | Select-Object -Last 60)
+            Save-FolegoServiceState $DataRoot $HostInfo $state
+            try {
+                Set-FolegoServiceStart $name 'delayed-auto'
+                $receipt.state = if ((Get-FolegoServiceStart $name) -eq 'delayed-auto') { 'applied' } else { 'unknown' }
+            } catch { $receipt.state = 'unknown' }
+            Save-FolegoServiceState $DataRoot $HostInfo $state
+            $done += ($name + '=' + $receipt.state)
+        }
+        Save-FolegoServiceState $DataRoot $HostInfo $state
+        return ('Início atrasado: ' + $(if ($done.Count) { $done -join ', ' } else { 'nenhum serviço automático de terceiros a ajustar' }))
+    } finally { $lock.Dispose() }
+}
+function Restore-FolegoServiceDelays([string]$DataRoot, $HostInfo) {
+    # Elevated: back to automatic only where the value is still the one Fôlego wrote.
+    $lock = Open-FolegoLock $DataRoot
+    try {
+        $state = Get-FolegoServiceState $DataRoot $HostInfo
+        $out = @()
+        foreach ($r in @($state.receipts | Where-Object { $_.state -in @('applied', 'unknown') })) {
+            $current = Get-FolegoServiceStart $r.name
+            if ($current -ne $r.target) { $out += ($r.name + ': alterado por outro; preservado'); continue }
+            try { Set-FolegoServiceStart $r.name $r.original; $r.state = if ((Get-FolegoServiceStart $r.name) -eq $r.original) { 'restored' } else { 'unknown' } } catch { $r.state = 'unknown' }
+            $out += ($r.name + '=' + $r.state)
+        }
+        Save-FolegoServiceState $DataRoot $HostInfo $state
+        return ('Serviços: ' + $(if ($out.Count) { $out -join ', ' } else { 'nada a restaurar' }))
+    } finally { $lock.Dispose() }
+}
+function Save-FolegoSequenceDone([string]$DataRoot, $HostInfo, $Summary) {
+    $lock = Open-FolegoLock $DataRoot
+    try {
+        $seq = Get-FolegoSequenceState $DataRoot $HostInfo
+        $run = $seq.last_run
+        if ($null -eq $run -or $run.boot -ne $HostInfo.Boot) { $run = [pscustomobject]@{ boot = $HostInfo.Boot; at = [DateTimeOffset]::UtcNow.ToString('o'); results = @() } }
+        Set-FolegoValue $run done_at ([DateTimeOffset]::UtcNow.ToString('o'))
+        Set-FolegoValue $run summary ([string]$Summary)
+        Set-FolegoValue $seq last_run $run
+        Save-FolegoSequenceState $DataRoot $HostInfo $seq
+    } finally { $lock.Dispose() }
+}
+function Format-FolegoElapsed([double]$Seconds) {
+    $span = [TimeSpan]::FromSeconds([Math]::Max(0, [Math]::Floor($Seconds)))
+    if ($span.TotalHours -ge 1) { return ('{0}:{1:00}:{2:00}' -f [int][Math]::Floor($span.TotalHours), $span.Minutes, $span.Seconds) }
+    return ('{0:00}:{1:00}' -f $span.Minutes, $span.Seconds)
 }

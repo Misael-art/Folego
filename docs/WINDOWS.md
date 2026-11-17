@@ -214,10 +214,14 @@ no próximo login —, mas apenas se o valor atual ainda for o que o Fôlego gra
 
 Todos os itens de logon disparando juntos estressam o SD e a APU logo no início da
 sessão; os reinícios abruptos deste Deck coincidiram com disco 100% ocupado e zona
-acima de 90 °C. Na aba **Inicialização**, **Adicionar à sequência** adota uma
-entrada (HKCU/HKLM Run ou pasta Startup), com confirmação: o Windows deixa de
-iniciá-la em paralelo — pelo mesmo `StartupApproved` das Configurações, com recibo —
-e o Fôlego a inicia depois do login, **uma por vez**:
+acima de 90 °C. Por pedido do usuário (17/11/2026), a **orquestração do início é
+ligada por padrão e não pergunta antes**: a cada login, o Fôlego adota as entradas
+de início do usuário (HKCU Run e pasta Startup do usuário) que o Windows iniciaria
+em paralelo — pelo mesmo `StartupApproved` das Configurações, com recibo — e as
+inicia depois do login, **uma por vez**. Entradas já desabilitadas, entradas da
+máquina (exigem administrador) e as que o usuário devolveu ao Windows ficam como
+estão; **Adicionar à sequência**, na aba **Inicialização**, adota manualmente
+qualquer outra entrada elegível, inclusive da máquina (com UAC):
 
 | Condição antes de cada item | Valor |
 | --- | --- |
@@ -228,6 +232,15 @@ e o Fôlego a inicia depois do login, **uma por vez**:
 | Confirmação | duas leituras calmas seguidas, a cada 5 s |
 | Intervalo | 20 s desde o item anterior |
 | Tarefas de logon de terceiros | nenhuma em execução (como `\SteamDeck\Disco Linux - montar/unidades`) |
+
+Enquanto organiza, uma janela pequena, que não rouba o foco, avisa “Fôlego está
+organizando a inicialização — aguarde”, com o **tempo desde o boot** correndo, itens
+feitos e restantes, o próximo item, a estimativa do restante e o que está sendo
+aguardado. No fim mostra **“Sistema completamente inicializado em mm:ss”** (e uma
+notificação). “Completamente” só vale depois do último item e de duas leituras calmas
+sem tarefa de logon em execução; se o sistema não acalmar em 10 minutos, o aviso diz
+“Inicialização concluída” com o motivo, para nunca prender o fim do início. A janela
+some depois de 20 s ou em **Ocultar**; o resultado fica em Inicialização.
 
 Leitura ausente nunca conta como calma. Sem janela de calma em 10 minutos, o item
 **não é iniciado sob estresse**: fica registrado como adiado, com o motivo, e o
@@ -241,15 +254,29 @@ não tratados. Pausar o monitoramento pausa a sequência.
 Fôlego e a Segurança do Windows nunca entram; tarefas de pacote continuam com o
 Windows. Uma entrada que já estava desabilitada fora do Fôlego pode ser adotada; ao
 removê-la, continua como estava. **Remover da sequência** devolve a entrada ao
-Windows pelo recibo. Desabilitar o início do próprio Fôlego com itens adotados pede
-confirmação, porque eles só iniciam por ele. Nenhum item é adotado automaticamente.
+Windows pelo recibo e a adoção automática passa a respeitar essa escolha. Desabilitar
+o início do próprio Fôlego com itens adotados pede confirmação, porque eles só
+iniciam por ele.
+
+**Serviços.** Com a orquestração ligada, depois do aviso de sistema inicializado o
+Fôlego pede administrador (UAC) **uma vez** e muda os serviços automáticos de terceiros
+(fora da pasta do Windows, como CodexSandbox, CoworkVM, Everything, usbipd, WSL e
+edgeupdate) de Automático para **Automático (início atrasado)**: continuam iniciando,
+mas fora do pico do login. Recibo antes de cada `sc.exe config`, leitura depois;
+Defender, Segurança do Windows e serviços do próprio Windows nunca são alterados. Se o
+UAC for recusado, a recusa fica registrada e não é repetida sozinha; **Aplicar agora o
+início atrasado** em Opções tenta de novo.
+
+**Opções** traz **Ligar/Desligar a orquestração automática** (desligar não desfaz o que
+já foi organizado) e **Desfazer a orquestração**, que devolve ao Windows todas as
+entradas adotadas e os serviços que ainda têm o valor gravado pelo Fôlego (com UAC) e
+desliga o modo automático.
 
 **Outros itens de logon** lista, sem alterar, as tarefas agendadas de logon de
 terceiros (com atraso e nível), os serviços automáticos fora do Windows e as tarefas
-de pacote. Mudar um serviço para Manual ou Atrasado é decisão do usuário em
-`services.msc`; serviços do Defender aparecem como segurança, sem sugestão. O
-Fôlego não altera serviços nem tarefas agendadas; as tarefas do Disco Linux do
-cartão continuam com o SDK, e a sequência apenas espera por elas.
+de pacote, com o modo de início de cada serviço; os do Defender aparecem como
+segurança. O Fôlego não altera tarefas agendadas: as do Disco Linux do cartão
+continuam com o SDK, e a sequência espera por elas.
 
 O Copilot desktop é baseado no Edge e usa o mecanismo de autolaunch do Edge
 (`edge_autolaunch` no `Local State`): o próprio app grava ou remove o seu valor em
@@ -271,6 +298,8 @@ do usuário: o Windows não oferece API para isso.
 | Economia de energia | **Restaurar o plano registrado** | Opções de energia do Windows |
 | Desabilitar inicialização | **Restaurar a última alteração** ou **Habilitar início** | Configurações → Aplicativos → Inicialização |
 | Item na sequência de início | **Remover da sequência** (devolve ao Windows pelo recibo) | Configurações → Aplicativos → Inicialização |
+| Orquestração inteira | **Desfazer a orquestração** em Opções | Inicialização nas Configurações; `sc.exe config <serviço> start= auto` (administrador) |
+| Serviço em início atrasado | **Desfazer a orquestração** (UAC) | `services.msc` → Automático; o original está em `services-<host>.json` |
 | Encerrar processo | não reversível: abra o app de novo | — |
 | Listas de processos | editar/remover `process-rules.json` | — |
 
@@ -304,7 +333,9 @@ quando um perfil muda ou a guarda é ligada/desligada); `processes-<host>.json`
 guarda até 20 recibos de encerramento e o rastreio de ociosidade (gravado só
 em análise ou ação manual); `startup-<host>.json` guarda até 30 recibos e a
 última revisão de inicialização; `sequence-<host>.json` guarda os itens adotados (com o
-comando completo, para iniciá-los) e o resultado da última execução por boot; `appearance.json` guarda visualização, tema,
+comando completo, para iniciá-los), as entradas devolvidas pelo usuário e o resultado e o
+tempo da última inicialização por boot; `services-<host>.json` guarda os recibos de início
+atrasado; `appearance.json` guarda visualização, tema,
 transparência e posições do widget; `latest-sample.json` conserva somente
 a última amostra, substituída atomicamente no máximo uma vez por minuto.
 Configurações acima de 1 MiB, schema desconhecido e campos essenciais inválidos

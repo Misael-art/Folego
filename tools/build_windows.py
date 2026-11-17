@@ -73,12 +73,13 @@ PROCESSES = {
                         'gameoverlayui', 'handheldcompanion', 'taskmgr'],
 }
 STARTUP = {'protected_names': ['Steam Deck', 'Steam Deck.lnk', 'Folego', 'SecurityHealth']}
-# Serialized logon: one adopted item at a time, only after calm readings. Triage rules for the
-# card (SD + Jupiter APU), not benchmarks. An item never launches under stress; it is reported.
+# Serialized logon: one item at a time, only after calm readings. Triage rules for the card
+# (SD + Jupiter APU), not benchmarks. An item never launches under stress; it is reported.
+# Default orchestration requested by the user on 17/11/2026 (opt-out and undo in Options).
 SEQUENCE = {
     'start_after_seconds': 15, 'gap_seconds': 20, 'calm_samples': 2, 'poll_seconds': 5,
     'cpu_max': 50, 'disk_busy_max': 40, 'disk_queue_max': 1, 'temp_max_c': 80,
-    'item_timeout_seconds': 600, 'automatic_adoption': False,
+    'item_timeout_seconds': 600, 'orchestration_default': True,
 }
 
 

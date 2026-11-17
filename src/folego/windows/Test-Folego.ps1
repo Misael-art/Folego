@@ -445,8 +445,9 @@ try {
 
     # ------------------------------------------------ serialized logon sequence
     $bad = $policy | ConvertTo-Json -Depth 20 | ConvertFrom-Json
-    $bad.windows.sequence.automatic_adoption = $true
-    Reject { Assert-FolegoManagePolicy $bad } 'Startup items are never adopted automatically'
+    $bad.windows.sequence.orchestration_default = 'sim'
+    Reject { Assert-FolegoManagePolicy $bad } 'Orchestration default must be an explicit boolean'
+    Check ($policy.windows.sequence.orchestration_default -eq $true) 'Logon orchestration is on by default (user request)'
     $c = Split-FolegoCommand '"C:\Program Files\Everything\Everything.exe" -startup'
     Check ($c.File -eq 'C:\Program Files\Everything\Everything.exe' -and $c.Arguments -eq '-startup') 'Quoted Run command split like the shell'
     $c = Split-FolegoCommand 'C:\Tools\app.exe --tray now'
@@ -462,8 +463,15 @@ try {
     Check (@(Test-FolegoCalm $blind $rules).Count -eq 3) 'Missing readings never count as calm'
     $run = New-FolegoSequenceRun @('a', 'b') 0 $rules
     $trace = @()
-    foreach ($t in @(5000, 16000, 21000, 26000, 41000, 46000, 51000)) { $trace += (Step-FolegoSequence $run $calm $rules $t).Action }
-    Check (($trace -join ',') -eq 'wait,wait,launch,wait,wait,launch,done') 'One item at a time: settle, two calm readings, gap between items'
+    foreach ($t in @(5000, 16000, 21000, 26000, 41000, 46000, 51000, 56000)) { $trace += (Step-FolegoSequence $run $calm $rules $t).Action }
+    Check (($trace -join ',') -eq 'wait,wait,launch,wait,wait,launch,settle,done' -and $run.DoneCalm) 'One item at a time, gap between items, then fully initialized only when calm'
+    $run = New-FolegoSequenceRun @() 0 $rules
+    $trace = @(); foreach ($t in @(16000, 21000, 26000, 31000)) { $trace += (Step-FolegoSequence $run $(if ($t -eq 21000) { $busy } else { $calm }) $rules $t).Action }
+    Check (($trace -join ',') -eq 'settle,settle,settle,done') 'Without items it still waits for calm and no logon task before declaring the system ready'
+    $run = New-FolegoSequenceRun @() 0 $rules
+    $last = $null; foreach ($t in @(16000, 40000, 70000, 80000)) { $last = Step-FolegoSequence $run $busy $rules $t }
+    Check ($last.Action -eq 'done' -and -not $run.DoneCalm -and @($last.Reasons).Count) 'A stuck reading cannot block the end of startup (timeout, reasons kept)'
+    Check ((Format-FolegoElapsed 75) -eq '01:15' -and (Format-FolegoElapsed 3725) -eq '1:02:05') 'Timer format mm:ss and h:mm:ss'
     $run = New-FolegoSequenceRun @('x') 0 $rules
     $actions = @(); foreach ($t in @(20000, 30000, 50000, 70000, 80000)) { $actions += (Step-FolegoSequence $run $busy $rules $t).Action }
     Check (-not ($actions -contains 'launch') -and ($actions -contains 'skip')) 'Under stress an item is skipped after the timeout, never launched'
@@ -502,6 +510,39 @@ try {
     Check (-not $script:Reg[$approvedRun].Contains('Tool') -and -not @((Get-FolegoSequenceState $fixture $hostInfo).items | Where-Object { $_.key -eq 'HKCU|Tool' }).Count) 'Removing gives the item back to Windows'
     $null = Remove-FolegoSequenceItem $fixture $hostInfo 'HKCU|Tool2' (New-FolegoConfirmation 'sequence-remove:HKCU|Tool2' 'Remove')
     Check ($script:Reg[$approvedRun]['Tool2'][0] -eq 3) 'Item disabled outside Fôlego stays as the user left it'
+
+    # ------------------------------------------------ default orchestration
+    Check (Get-FolegoOrchestrationEnabled $fixture $policy) 'Orchestration enabled when the user has not chosen'
+    Set-FolegoOrchestration $fixture $false
+    Check (-not (Get-FolegoOrchestrationEnabled $fixture $policy) -and (Get-FolegoSettings $fixture).startup -ne $null) 'Opt-out persists without touching other settings'
+    Set-FolegoOrchestration $fixture $true
+    $auto = Invoke-FolegoAutoAdoption $fixture $hostInfo $policy
+    $keys = @($auto.Adopted)
+    Check ('HKCU|MicrosoftCopilotAutoLaunch_X' -in $keys -and 'HKCU|OneDrive' -in $keys -and 'HKCU|NewTool' -in $keys) 'User-scope entries Windows would start are adopted automatically'
+    Check ('HKCU|Tool' -notin $keys -and 'HKCU|Folego' -notin $keys -and 'PastaUsuario|Steam Deck.lnk' -notin $keys -and 'HKLM|Everything' -notin $keys -and @($keys | Where-Object { $_ -like 'Pacote|*' }).Count -eq 0) 'Returned, protected, machine and packaged entries are left alone'
+    Check (@((Invoke-FolegoAutoAdoption $fixture $hostInfo $policy).Adopted).Count -eq 0) 'Automatic adoption is idempotent'
+    Check ($script:Reg[$approvedRun]['OneDrive'][0] -eq 3 -and @((Get-FolegoSequenceState $fixture $hostInfo).items | Where-Object { $_.key -eq 'HKCU|OneDrive' })[0].receipt) 'Every automatic adoption has a receipt'
+    $null = Remove-FolegoSequenceItem $fixture $hostInfo 'HKCU|NewTool' (New-FolegoConfirmation 'sequence-remove:HKCU|NewTool' 'Remove') -KeepAdoptable
+    Check ('HKCU|NewTool' -notin @(Get-FolegoValue (Get-FolegoSequenceState $fixture $hostInfo) excluded @()) -and $script:Reg[$approvedRun].Contains('NewTool') -eq $false) 'Undo returns entries to Windows without excluding them from a later re-enable'
+    foreach ($key in @('HKCU|MicrosoftCopilotAutoLaunch_X', 'HKCU|OneDrive')) { $null = Remove-FolegoSequenceItem $fixture $hostInfo $key (New-FolegoConfirmation ('sequence-remove:' + $key) 'Remove') -KeepAdoptable }
+    Save-FolegoSequenceDone $fixture $hostInfo 'Sistema completamente inicializado em 01:15'
+    Check ([bool](Get-FolegoSequenceState $fixture $hostInfo).last_run.done_at) 'Completion recorded once per boot'
+
+    $script:Svc = @{ Everything = 'auto'; WSLService = 'auto'; WinDefend = 'auto'; MDCoreSvc = 'auto'; ManualOne = 'demand'; Already = 'delayed-auto' }
+    function Get-FolegoServiceStart([string]$Name) { return $script:Svc[$Name] }
+    function Set-FolegoServiceStart([string]$Name, [string]$Mode) {
+        $r = @((Get-FolegoServiceState $fixture $hostInfo).receipts | Where-Object { $_.name -eq $Name })[-1]
+        Check ($r.state -eq 'intended' -or $Mode -eq 'auto') 'Service receipt is durable before sc.exe'
+        $script:Svc[$Name] = $Mode
+    }
+    $out = Set-FolegoServiceDelays $fixture $hostInfo @('Everything', 'WSLService', 'WinDefend', 'MDCoreSvc', 'ManualOne', 'Already')
+    Check ($script:Svc.Everything -eq 'delayed-auto' -and $script:Svc.WSLService -eq 'delayed-auto') 'Third-party automatic services move to delayed start'
+    Check ($script:Svc.WinDefend -eq 'auto' -and $script:Svc.MDCoreSvc -eq 'auto') 'Defender services are never delayed'
+    Check ($script:Svc.ManualOne -eq 'demand' -and $script:Svc.Already -eq 'delayed-auto' -and @((Get-FolegoServiceState $fixture $hostInfo).receipts).Count -eq 2) 'Only automatic services get a change and a receipt'
+    Check ([bool](Get-FolegoServiceState $fixture $hostInfo).attempted) 'Service plan attempt recorded (UAC is asked once)'
+    $script:Svc.WSLService = 'demand'
+    $null = Restore-FolegoServiceDelays $fixture $hostInfo
+    Check ($script:Svc.Everything -eq 'auto' -and $script:Svc.WSLService -eq 'demand') 'Restore returns only values Fôlego still owns'
     $script:Replay
     'PASS: ' + $script:Checks + ' Windows contracts; effect APIs mocked. Native hardware validation remains separate.'
 } finally {
