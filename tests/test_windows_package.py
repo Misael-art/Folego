@@ -178,3 +178,11 @@ def test_replay_fixtures_preserve_the_reset_evidence():
     swing = (FIXTURES / 'monitor-swing-2252.csv').read_text(encoding='ascii').splitlines()[1:]
     temps = [float(line.split(',')[7]) for line in swing if line]
     assert max(temps) >= 90 and min(temps) <= 55
+
+
+def test_health_level_is_not_reused_by_other_ui_blocks():
+    # Regression: the thermal tab once overwrote $level, so the high-pressure notice
+    # could never fire after the thermal block ran.
+    import re
+    ui = (WINDOWS / 'Folego.ps1').read_text(encoding='utf-8-sig')
+    assert len(re.findall(r'\$level\s*=', ui)) == 1

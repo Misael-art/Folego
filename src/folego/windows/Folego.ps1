@@ -317,8 +317,8 @@ try {
                         $thermalLines += ('Turbo: ' + $(if ($result.Processor.ac_boost -eq 0 -and $result.Processor.dc_boost -eq 0) { 'desligado' } elseif ($result.Processor.ac_boost -eq 0 -or $result.Processor.dc_boost -eq 0) { 'desligado só em uma fonte' } else { 'permitido' }))
                     } else { $thermalLines += 'Limites do processador: ilegíveis neste momento.' }
                     if ($null -ne $result.Thermal) {
-                        $level = Get-FolegoThermalProfile $result.Thermal $script:HostInfo
-                        $thermalLines += ('Perfil do Fôlego: ' + $level + ' | guarda automática: ' + $(if ($result.Thermal.enabled) { 'habilitada' } else { 'desligada' }) + $(if ($result.Thermal.paused) { ' | PAUSADA: confira o recibo' } else { '' }))
+                        $thermalLevel = Get-FolegoThermalProfile $result.Thermal $script:HostInfo
+                        $thermalLines += ('Perfil do Fôlego: ' + $thermalLevel + ' | guarda automática: ' + $(if ($result.Thermal.enabled) { 'habilitada' } else { 'desligada' }) + $(if ($result.Thermal.paused) { ' | PAUSADA: confira o recibo' } else { '' }))
                         $r = $result.Thermal.receipt
                         if ($null -ne $r) {
                             $origin = if ($r.automatic) { 'automático' } else { 'manual' }
