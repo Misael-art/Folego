@@ -1,5 +1,40 @@
 # Passagem para o próximo agente — atualizada em 16/11/2026
 
+## Fôlego Windows: gestão ativa (térmica, consumidores, inicialização) — 16/11/2026
+
+- Pedido: após 6 resets abruptos do Deck com Windows no microSD (Kernel-Power 41,
+  bugcheck 0, sem dump/WHEA), evoluir o port Windows de monitor para gestão
+  ativa, reversível e confirmada. Fonte: branch `codex/windows-gestao-ativa-20261116`,
+  base `3e48875` (b17); arquivos Windows idênticos aos da b15 instalada (`c236a77`).
+- Novo `src/folego/windows/Folego.Manage.ps1`: perfis Fresco (99%, turbo 0) e
+  Contenção (80%, turbo 0) em `PROCTHROTTLEMAX`/`PERFBOOSTMODE` do plano ativo,
+  recibo antes e leitura depois, restauração no mesmo host/boot sem disputar
+  alteração de terceiros, adoção manual de recibo de outro boot, guarda
+  automática opt-in com histerese (80 °C média de 3 / pico 90 °C; volta após 60
+  amostras < 70 °C) e quatro trocas/hora. Triagem por delta de CPU/E/S com órfão
+  de agente × protegido, encerramento gentil/forçado sempre confirmado e
+  revalidado (PID + horário de início). Inicialização por `StartupApproved` e
+  tarefas de pacote, com recibo, restauração, revisão de mudanças e UAC pontual
+  para HKLM. Nada de EC/SMU/TDP, serviços, políticas ou remoção de pacotes.
+- Correção encontrada no Deck: o firmware Jupiter informa UUID SMBIOS
+  `FFFFFFFF-…`; `Get-FolegoHost` recusava a identidade, então as ações de energia
+  da b15 nunca tinham host comprovado neste cartão. Fallback para série da BIOS e
+  da placa só com UUID de preenchimento; IDs de hosts com UUID válido não mudam.
+- Verificação neste Deck (sem pytest/`./dev`, host frágil): `Test-Folego.ps1`
+  do pacote **183 contratos PASS** com fixtures e **184** com os três CSVs reais
+  de `SteamDeck\logs-monitor`; replay decide Fresco em 22:27:50 (93 °C), cerca de
+  40 s antes do reset das 22:28. `-Probe -NoStartup` leu 99/99% e turbo 2/2 no
+  plano Equilibrado (único plano), zona `\_TZ.TZ01` e 212 processos. Smoke 5 s
+  com DataRoot descartável passou com WMI aquecido; frio, a primeira coleta
+  passou de 20 s (`Get-Volume` 12,7 s), igual na b15. Testes Python rodados com
+  um stand-in mínimo de pytest: 11/12; o teste que remove `os.getuid` só roda no
+  Linux. Falta `./dev test-headless tests/test_windows_package.py` e a CI Windows.
+- Pacote `dist/folego-windows` 0.2.0b17, `manifest.json` SHA-256
+  `a923b4a8784510a04ad2ece885a4c23a52308ed2d5a0fbabf79742a6365284b8` (local,
+  não é assinatura). **Não instalado** em `Program Files`: exige
+  aprovação. Sem aceite físico: troca real de perfil, guarda automática,
+  encerramento real e alteração real de inicialização.
+
 ## Widgets opcionais na Sessão básica e custo do monitor de entrada — 16/11/2026
 
 - **Opções → Sessão básica do Plasma** e `startup basic-sync --confirmar`

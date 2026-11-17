@@ -1,10 +1,27 @@
-param([switch]$StartMinimized, [switch]$NoStartup, [switch]$Probe, [ValidateRange(0,120)][int]$DelaySeconds = 0, [ValidateRange(0,60)][int]$SmokeSeconds = 0, [string]$DataRoot)
+param([switch]$StartMinimized, [switch]$NoStartup, [switch]$Probe, [ValidateRange(0,120)][int]$DelaySeconds = 0, [ValidateRange(0,60)][int]$SmokeSeconds = 0, [string]$DataRoot,
+      [ValidateSet('', 'Disable', 'Enable', 'Restore')][string]$StartupAction = '', [string]$StartupSubject)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Folego.Core.ps1')
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Use Fôlego Windows no Windows nativo. No Linux, use o launcher oficial ./dev.' }
 $policy = Get-FolegoPolicy
 if (-not $DataRoot) { $DataRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Folego' }
 $DataRoot = [IO.Path]::GetFullPath($DataRoot)
+if ($StartupAction) {
+    # One-shot helper started through UAC (same account) for machine-wide startup entries.
+    # The UI already asked; accepting the UAC prompt is the second confirmation.
+    Add-Type -AssemblyName System.Windows.Forms
+    try {
+        $subject = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($StartupSubject))
+        $hostInfo = Get-FolegoHost
+        $text = switch ($StartupAction) {
+            'Disable' { Set-FolegoStartupItem $DataRoot $hostInfo $subject $false (New-FolegoConfirmation ('startup:' + $subject) 'Disable') $policy }
+            'Enable' { Set-FolegoStartupItem $DataRoot $hostInfo $subject $true (New-FolegoConfirmation ('startup:' + $subject) 'Enable') $policy }
+            'Restore' { Restore-FolegoStartupItem $DataRoot $hostInfo $subject (New-FolegoConfirmation ('startup-restore:' + $subject) 'Restore') }
+        }
+    } catch { $text = [string]$_ }
+    $null = [Windows.Forms.MessageBox]::Show([string]$text, 'Fôlego — inicialização')
+    return
+}
 $startupNote = ''
 try { $settings = Get-FolegoSettings $DataRoot }
 catch { $startupNote = [string]$_; $settings = [pscustomobject]@{ startup = $false; commissioned = $true } }
@@ -19,7 +36,11 @@ $collector = New-Object Folego.Windows.Native
 if ($Probe) {
     $null = $collector.Read([IO.Path]::GetPathRoot($PSScriptRoot))
     Start-Sleep -Milliseconds 250
-    [pscustomobject]@{ Sample = $collector.Read([IO.Path]::GetPathRoot($PSScriptRoot)); ActivePlan = [Folego.Windows.Native]::ActivePlan(); AvailablePlans = [Folego.Windows.Native]::Plans() } | ConvertTo-Json -Depth 8
+    $plan = [Folego.Windows.Native]::ActivePlan()
+    $processor = try { Get-FolegoThermalValues $plan } catch { 'ilegível: ' + [string]$_ }
+    $zones = try { @(Get-FolegoThermalZones) } catch { 'ilegível: ' + [string]$_ }
+    $processes = try { @(Get-FolegoProcessSnapshot).Count } catch { 'ilegível: ' + [string]$_ }
+    [pscustomobject]@{ Sample = $collector.Read([IO.Path]::GetPathRoot($PSScriptRoot)); ActivePlan = $plan; AvailablePlans = [Folego.Windows.Native]::Plans(); Processor = $processor; ThermalZones = $zones; ProcessCount = $processes } | ConvertTo-Json -Depth 8
     return
 }
 [IO.Directory]::CreateDirectory($DataRoot) | Out-Null
@@ -41,6 +62,9 @@ try {
     $script:Paused = $false; $script:Leaving = $false; $script:Notices = @{}; $script:LastAc = $null; $script:LowStreak = 0
     $script:Health = [pscustomobject]@{ Level = 'unknown'; Candidate = ''; Streak = 0 }
     $script:SamplesReceived = 0
+    $script:ThermalGuard = New-FolegoThermalGuard; $script:ThermalPeaks = @(); $script:LastThermal = $null
+    $script:TriageRows = @(); $script:StartupItems = @(); $script:StartupReceipts = @(); $script:TriageFilter = ''
+    $script:PendingAction = ''; $script:PendingTarget = $null
     $form = New-Object Windows.Forms.Form
     $form.Text = 'Fôlego — espaço para o que importa'; $form.StartPosition = 'CenterScreen'
     $area = [Windows.Forms.Screen]::PrimaryScreen.WorkingArea
@@ -72,10 +96,19 @@ try {
         $box.Multiline = $true; $box.ReadOnly = $true; $box.ScrollBars = 'Vertical'
         $box.Width = [Math]::Min(845, $form.ClientSize.Width - 60); $box.Height = $Height; $Page.Controls.Add($box); return $box
     }
-    function Request-Folego([string]$Action = 'Sample') {
+    function New-FolegoList($Page, [string[]]$Columns, [int]$Height = 220) {
+        $list = New-Object Windows.Forms.ListView
+        $list.View = 'Details'; $list.FullRowSelect = $true; $list.MultiSelect = $false; $list.HideSelection = $false
+        $list.Width = [Math]::Min(845, $form.ClientSize.Width - 60); $list.Height = $Height
+        foreach ($column in $Columns) { $null = $list.Columns.Add($column, 110) }
+        $Page.Controls.Add($list); return $list
+    }
+    function Confirm-Folego([string]$Title, [string]$Text) { return [Windows.Forms.MessageBox]::Show($Text, $Title, 'YesNo', 'Warning', 'Button2') -eq 'Yes' }
+    function Request-Folego([string]$Action = 'Sample', $Target = $null, $Confirmation = $null) {
         if ($null -ne $script:Worker) { $status.Text = 'Uma coleta/operação já está em andamento. Aguarde.'; return }
+        $script:PendingAction = $Action; $script:PendingTarget = $Target
         $script:Worker = [powershell]::Create()
-        $null = $script:Worker.AddCommand((Join-Path $PSScriptRoot 'Collect.ps1')).AddParameter('DataRoot', $DataRoot).AddParameter('Collector', $collector).AddParameter('HostInfo', $script:HostInfo).AddParameter('Extended', $script:Extended).AddParameter('Action', $Action)
+        $null = $script:Worker.AddCommand((Join-Path $PSScriptRoot 'Collect.ps1')).AddParameter('DataRoot', $DataRoot).AddParameter('Collector', $collector).AddParameter('HostInfo', $script:HostInfo).AddParameter('Extended', $script:Extended).AddParameter('Action', $Action).AddParameter('Guard', $script:ThermalGuard).AddParameter('Target', $Target).AddParameter('Confirmation', $Confirmation).AddParameter('Policy', $policy)
         $script:Handle = $script:Worker.BeginInvoke()
         $status.Text = 'Atualizando: ' + $Action + '. Uma tarefa por vez.'
     }
@@ -98,8 +131,92 @@ try {
     Add-FolegoButton $page 'Atualizar agora' { Request-Folego Sample }
     Add-FolegoButton $page 'Pausar / retomar monitoramento' { $script:Paused = -not $script:Paused; $status.Text = 'Monitoramento pausado: ' + $script:Paused; $script:NextPoll = 0L }
 
+    $thermalPolicy = $policy.windows.thermal
+    $page = New-FolegoPage 'Temperatura e CPU'
+    $thermalBox = New-FolegoOutput $page 150
+    $null = Add-FolegoLabel $page ('Perfis reversíveis no plano ativo: só limite máximo do processador (PROCTHROTTLEMAX) e turbo (PERFBOOSTMODE), em tomada e bateria. Fresco = {0}% sem turbo; Contenção = {1}% sem turbo. Os originais são registrados antes; a restauração exige o mesmo host/boot e que ninguém mais tenha mudado os valores. Não altera TDP, ventoinha, EC/SMU nem drivers e não comprova que evita reinícios.' -f $thermalPolicy.profiles.Fresco.throttle_max, $thermalPolicy.profiles.Contencao.throttle_max) 100
+    Add-FolegoButton $page 'Aplicar perfil Fresco (turbo desligado)' {
+        if (Confirm-Folego 'Perfil térmico' ('Aplicar Fresco ao plano ativo? CPU máxima ' + $thermalPolicy.profiles.Fresco.throttle_max + '% e turbo desligado em tomada e bateria. Os valores atuais serão registrados antes da troca.')) { Request-Folego Fresco }
+    }
+    Add-FolegoButton $page 'Aplicar perfil Contenção (CPU reduzida, turbo desligado)' {
+        if (Confirm-Folego 'Perfil térmico' ('Aplicar Contenção ao plano ativo? CPU máxima ' + $thermalPolicy.profiles.Contencao.throttle_max + '% e turbo desligado. Tarefas pesadas ficarão mais lentas. Os valores atuais serão registrados antes.')) { Request-Folego Contencao }
+    }
+    Add-FolegoButton $page 'Restaurar os valores originais registrados' {
+        if (Confirm-Folego 'Perfil térmico' 'Devolver os limites originais do recibo? Só ocorre se o host/boot forem os mesmos e ninguém tiver alterado os valores.') { Request-Folego ThermalRestore }
+    }
+    Add-FolegoButton $page 'Conferir recibo térmico interrompido (sem repetir)' { Request-Folego ThermalReconcile }
+    Add-FolegoButton $page 'Adotar recibo de outro boot após revisão' {
+        if (Confirm-Folego 'Recibo de outro boot' 'Os limites sobrevivem a reinícios. Adotar o recibo anterior neste boot como escolha manual, somente se os valores atuais ainda forem os aplicados pelo Fôlego?') { Request-Folego ThermalAdopt $null (New-FolegoConfirmation 'thermal-adopt' 'Adopt') }
+    }
+    Add-FolegoButton $page 'Habilitar guarda térmica automática neste hardware' {
+        $text = 'Autorizar trocas automáticas? Fresco quando a zona ficar ≥{0} °C na média de {1} amostras ou tiver pico ≥{2} °C; Contenção se continuar quente em Fresco; volta após {3} amostras abaixo de {4} °C. Até {5} trocas por hora, amostra a cada {6} s enquanto ativa, recibo antes de cada troca e pausa após resultado incerto. Perfis escolhidos manualmente não são desfeitos.' -f $thermalPolicy.raise_average_c, $thermalPolicy.raise_samples, $thermalPolicy.spike_c, $thermalPolicy.recover_samples, $thermalPolicy.recover_c, $thermalPolicy.max_switches_per_hour, $thermalPolicy.poll_seconds
+        if (Confirm-Folego 'Guarda térmica' $text) { Request-Folego EnableThermalGuard $null (New-FolegoConfirmation 'thermal-guard' 'Enable') }
+    }
+    Add-FolegoButton $page 'Desabilitar guarda térmica automática' { Request-Folego DisableThermalGuard }
+
+    $page = New-FolegoPage 'Consumidores'
+    $consumersPage = $tabs.TabPages[$tabs.TabPages.Count - 1]
+    $null = Add-FolegoLabel $page 'Mede 2 s de CPU e E/S por processo. Órfão = agente cujo processo pai terminou, sem janela. Sistema, outros usuários, dono não comprovado, Fôlego e a sessão que o iniciou, agentes com responsável vivo e árvores de instalador ficam protegidos. Encerrar sempre pede confirmação; forçar só depois de um pedido gentil e com nova confirmação. Nada é encerrado automaticamente.' 100
+    Add-FolegoButton $page 'Analisar consumidores e órfãos agora' { $script:TriageFilter = ''; Request-Folego Consumers }
+    $procList = New-FolegoList $page @('PID', 'Processo', 'Classe', 'Núcleos', 'E/S KB/s', 'Idade min', 'Pai', 'Motivos') 230
+    $procDetail = New-FolegoOutput $page 110
+    function Get-FolegoSelectedProcess { if ($procList.SelectedItems.Count -ne 1) { return $null }; return $script:TriageRows[[int]$procList.SelectedItems[0].Tag] }
+    function Format-FolegoProcess($Row) {
+        return ('{0} (PID {1})' -f $Row.name, $Row.pid) + "`r`nCaminho: " + $Row.path + "`r`nLinha de comando (resumida, segredos ocultos): " + $Row.command + "`r`n" + ('Idade: {0} min | ocioso: {1} min | núcleos: {2} | E/S: {3} KB/s | pai {4} vivo: {5} | janela: {6}' -f $Row.age_min, $Row.idle_min, $Row.cores, $Row.io_kbps, $Row.parent_pid, $Row.parent_alive, $Row.has_window) + "`r`nClasse: " + $Row.class + ' — ' + (@($Row.reasons) -join ', ')
+    }
+    $procList.Add_SelectedIndexChanged({ $row = Get-FolegoSelectedProcess; if ($null -ne $row) { $procDetail.Text = Format-FolegoProcess $row } })
+    Add-FolegoButton $page 'Encerrar selecionado com pedido gentil' {
+        $row = Get-FolegoSelectedProcess
+        if ($null -eq $row) { $status.Text = 'Selecione um processo da triagem.'; return }
+        if (-not $row.killable) { $status.Text = 'Processo protegido: ' + (@($row.reasons) -join ', '); return }
+        if (Confirm-Folego 'Encerrar processo' ('Pedir que este processo feche (sem forçar)? Trabalho não salvo dele pode ser perdido.' + "`r`n`r`n" + (Format-FolegoProcess $row))) { Request-Folego EndGentle $row (New-FolegoConfirmation ('process:' + $row.id) 'Gentle') }
+    }
+    Add-FolegoButton $page 'Forçar encerramento (somente após pedido gentil)' {
+        $row = Get-FolegoSelectedProcess
+        if ($null -eq $row -or -not $row.killable) { $status.Text = 'Selecione um processo elegível da triagem.'; return }
+        if (Confirm-Folego 'Forçar encerramento' ('FORÇAR o encerramento imediato? Não há chance de salvar; use só se o pedido gentil falhou. A identidade (PID e horário de início) é conferida no ato.' + "`r`n`r`n" + (Format-FolegoProcess $row))) { Request-Folego EndForce $row (New-FolegoConfirmation ('process:' + $row.id) 'Force') }
+    }
+    Add-FolegoButton $page 'Editar listas de agentes e protegidos' {
+        $rulesPath = Join-Path $DataRoot 'process-rules.json'
+        if (-not (Test-Path -LiteralPath $rulesPath)) { Write-FolegoJson $rulesPath ([pscustomobject]@{ schema = 1; agent_names = @(); protected_names = @(); help = 'Nomes sem .exe. Protegidos vencem agentes. Somam-se às listas do pacote; nada é encerrado automaticamente.' }) }
+        Start-Process notepad.exe -ArgumentList ('"' + $rulesPath + '"')
+    }
+    $consumersOut = New-FolegoOutput $page 170
+    Add-FolegoButton $page 'Windows Update (página oficial)' { Start-Process 'ms-settings:windowsupdate' }
+    Add-FolegoButton $page 'Otimização de Entrega (página oficial)' { Start-Process 'ms-settings:delivery-optimization' }
+    Add-FolegoButton $page 'Segurança do Windows (página oficial)' { Start-Process 'windowsdefender:' }
+
+    $page = New-FolegoPage 'Inicialização'
+    $null = Add-FolegoLabel $page 'Desabilitar usa o mesmo registro StartupApproved da tela Configurações → Aplicativos → Inicialização: a entrada original fica intacta e pode ser reativada. Recibo antes da troca; restaurar exige que ninguém tenha mudado a entrada depois. Steam Deck, Fôlego e Segurança do Windows são preservados. Entradas da máquina pedem administrador desta conta.' 100
+    Add-FolegoButton $page 'Atualizar lista e mudanças desde a revisão' { Request-Folego StartupList }
+    $startList = New-FolegoList $page @('Entrada', 'Origem', 'App', 'Estado', 'Proteção', 'Comando') 220
+    function Get-FolegoSelectedStartup { if ($startList.SelectedItems.Count -ne 1) { return $null }; return $script:StartupItems[[int]$startList.SelectedItems[0].Tag] }
+    function Request-FolegoStartup([bool]$Enabled) {
+        $item = Get-FolegoSelectedStartup
+        if ($null -eq $item) { $status.Text = 'Selecione uma entrada.'; return }
+        if ($item.protected) { $status.Text = 'Entrada preservada: ' + $item.protected; return }
+        $verb = if ($Enabled) { 'Habilitar' } else { 'Desabilitar' }
+        $mode = if ($Enabled) { 'Enable' } else { 'Disable' }
+        if (Confirm-Folego 'Inicialização' ($verb + ' o início com a sessão de "' + $item.name + '" (' + $item.scope + ')? Instâncias abertas não são encerradas; o valor anterior fica no recibo.')) { Request-Folego ('Startup' + $mode) $item.key (New-FolegoConfirmation ('startup:' + $item.key) $mode) }
+    }
+    Add-FolegoButton $page 'Desabilitar início da entrada selecionada' { Request-FolegoStartup $false }
+    Add-FolegoButton $page 'Habilitar início da entrada selecionada' { Request-FolegoStartup $true }
+    Add-FolegoButton $page 'Restaurar a última alteração do Fôlego nesta entrada' {
+        $item = Get-FolegoSelectedStartup
+        if ($null -eq $item) { $status.Text = 'Selecione uma entrada.'; return }
+        $receipt = @($script:StartupReceipts | Where-Object { $_.key -ceq $item.key -and $_.state -eq 'applied' -and $_.action -ne 'Restore' } | Select-Object -Last 1)
+        if (-not $receipt.Count) { $status.Text = 'Não há alteração aplicada pelo Fôlego nesta entrada.'; return }
+        if (Confirm-Folego 'Inicialização' ('Restaurar "' + $item.name + '" ao estado anterior à alteração de ' + $receipt[0].at + '?')) { Request-Folego StartupRestore $receipt[0].id (New-FolegoConfirmation ('startup-restore:' + $receipt[0].id) 'Restore') }
+    }
+    Add-FolegoButton $page 'Conferir recibos de inicialização interrompidos' { Request-Folego StartupReconcile }
+    Add-FolegoButton $page 'Marcar revisão atual como linha de base' { Request-Folego StartupReview }
+    Add-FolegoButton $page 'Mostrar instâncias do Copilot na triagem' { $script:TriageFilter = 'copilot'; $tabs.SelectedTab = $consumersPage; Request-Folego Consumers }
+    Add-FolegoButton $page 'Desinstalação oficial (Aplicativos instalados)' { Start-Process 'ms-settings:appsfeatures' }
+    Add-FolegoButton $page 'Tela oficial Aplicativos de inicialização' { Start-Process 'ms-settings:startupapps' }
+    $startOut = New-FolegoOutput $page 170
+
     $page = New-FolegoPage 'Trabalho e disco'
-    $null = Add-FolegoLabel $page 'Agentes, projetos, Git, credenciais, bancos e volumes permanecem protegidos. Este port não encerra processos, esvazia memória, apaga temporários nem interrompe WSL ou serviços. Revise a carga antes de iniciar mais trabalho.' 85
+    $null = Add-FolegoLabel $page 'Agentes, projetos, Git, credenciais, bancos e volumes permanecem protegidos. Esta aba não encerra processos, esvazia memória, apaga temporários nem interrompe WSL ou serviços; encerramentos confirmados ficam na aba Consumidores.' 85
     Add-FolegoButton $page 'Ver maiores consumidores de RAM' { Request-Folego Processes }
     Add-FolegoButton $page 'Diagnosticar temporários conhecidos (amostra limitada)' { Request-Folego Temps }
     Add-FolegoButton $page 'Eventos de reinício abrupto do Windows' { Request-Folego Events }
@@ -135,7 +252,7 @@ try {
     Add-FolegoButton $page 'Criar ou conferir atalhos deste usuário' { try { Install-FolegoShortcuts; $status.Text = 'Atalhos conferidos.' } catch { $status.Text = [string]$_ } }
     Add-FolegoButton $page 'Abrir estado e recibos do Fôlego' { Start-Process explorer.exe -ArgumentList ('"' + $DataRoot + '"') }
     Add-FolegoButton $page 'Guia Windows e capacidades' { Start-Process notepad.exe -ArgumentList ('"' + (Join-Path $PSScriptRoot 'LEIA-ME.md') + '"') }
-    $null = Add-FolegoLabel $page 'Linux PSI/zram/tmpfs, KWin, systemd, autorreparo de entrada/áudio, integração com contas/owners de IA e encerramento de apps ainda não têm adaptadores Windows validados. Não são acionados por equivalência de nome. Btrfs/SD/EFI continuam com seus responsáveis.' 100
+    $null = Add-FolegoLabel $page 'Linux PSI/zram/tmpfs, KWin, systemd, autorreparo de entrada/áudio, integração com contas/owners de IA e fechamento automático de apps (Modo Desempenho) ainda não têm adaptadores Windows validados. Não são acionados por equivalência de nome; encerramentos no Windows são só manuais e confirmados. Btrfs/SD/EFI continuam com seus responsáveis.' 100
     Add-FolegoButton $page 'Sair do Fôlego nesta sessão' { $script:Leaving = $true; $form.Close() }
 
     $tray = New-Object Windows.Forms.NotifyIcon
@@ -186,8 +303,72 @@ try {
                     $thermal = @($result.Extended.Thermal | ForEach-Object { '{0}: {1:N1} °C (ACPI)' -f $_.Name, $_.Celsius })
                     if (-not $thermal.Count) { $thermal = @('Temperatura: sem sensor ACPI legível. Não é leitura confirmada da APU/GPU.') }
                     $energy.Text = ('Plano ativo: ' + $result.Plan) + "`r`nGuarda por carga habilitado: " + (Get-FolegoValue $result.Power enabled $false) + "`r`n" + ($thermal -join "`r`n") + "`r`nSaúde do volume: " + $result.Extended.VolumeHealth + "`r`n" + ($result.Extended.Notes -join "`r`n")
-                    if ($result.Result) { $diagnostic.Text = $result.Result }
-                    $status.Text = if ($result.Notes.Count) { $result.Notes -join ' | ' } else { 'Coleta concluída. Atualização a cada 10 s; sensores/disco detalhado a cada 60 s.' }
+                    $script:LastThermal = $result.Thermal
+                    if ($null -ne $result.ThermalNow -and -not @($script:ThermalPeaks | Where-Object { $_.Mono -eq $result.ThermalNow.Mono }).Count) {
+                        $script:ThermalPeaks = @(@(@($script:ThermalPeaks) + @($result.ThermalNow)) | Where-Object { $now - $_.Mono -le 600000 } | Select-Object -Last 240)
+                    }
+                    $thermalLines = @()
+                    if ($null -ne $result.ThermalNow) {
+                        $peak = (@($script:ThermalPeaks) | Measure-Object Celsius -Maximum).Maximum
+                        $thermalLines += ('Zona {0}: {1:N1} °C agora | máxima observada em 10 min: {2:N1} °C' -f $result.ThermalNow.Zone, $result.ThermalNow.Celsius, $peak)
+                    } else { $thermalLines += 'Temperatura: sem zona legível. A guarda não age sem leitura.' }
+                    if ($null -ne $result.Processor) {
+                        $thermalLines += ('Plano ativo: ' + (Format-FolegoThermalValues $result.Processor))
+                        $thermalLines += ('Turbo: ' + $(if ($result.Processor.ac_boost -eq 0 -and $result.Processor.dc_boost -eq 0) { 'desligado' } elseif ($result.Processor.ac_boost -eq 0 -or $result.Processor.dc_boost -eq 0) { 'desligado só em uma fonte' } else { 'permitido' }))
+                    } else { $thermalLines += 'Limites do processador: ilegíveis neste momento.' }
+                    if ($null -ne $result.Thermal) {
+                        $level = Get-FolegoThermalProfile $result.Thermal $script:HostInfo
+                        $thermalLines += ('Perfil do Fôlego: ' + $level + ' | guarda automática: ' + $(if ($result.Thermal.enabled) { 'habilitada' } else { 'desligada' }) + $(if ($result.Thermal.paused) { ' | PAUSADA: confira o recibo' } else { '' }))
+                        $r = $result.Thermal.receipt
+                        if ($null -ne $r) {
+                            $origin = if ($r.automatic) { 'automático' } else { 'manual' }
+                            $thermalLines += ('Último recibo: ' + $r.action + ' ' + $r.state + ' (' + $origin + ') em ' + $r.at + $(if ($r.boot -ne $script:HostInfo.Boot) { ' — OUTRO BOOT' } else { '' }))
+                            $thermalLines += ('Originais registrados: ' + (Format-FolegoThermalValues $r.original))
+                        }
+                    }
+                    $thermalBox.Text = $thermalLines -join "`r`n"
+                    if ($result.Action -eq 'Consumers' -and $null -ne $result.Data) {
+                        $script:TriageRows = @($result.Data.Rows | Where-Object { -not $script:TriageFilter -or ([string]$_.name) -match $script:TriageFilter })
+                        $procList.BeginUpdate(); $procList.Items.Clear()
+                        for ($i = 0; $i -lt $script:TriageRows.Count; $i++) {
+                            $row = $script:TriageRows[$i]
+                            $item = New-Object Windows.Forms.ListViewItem([string]$row.pid)
+                            foreach ($cell in @($row.name, $row.class, $row.cores, $row.io_kbps, $row.age_min, $row.parent_pid, (@($row.reasons) -join ', '))) { $null = $item.SubItems.Add([string]$cell) }
+                            $item.Tag = $i
+                            if ($row.class -eq 'agente-orfao') { $item.ForeColor = [Drawing.Color]::DarkGoldenrod } elseif (-not $row.killable) { $item.ForeColor = [Drawing.Color]::DimGray }
+                            $null = $procList.Items.Add($item)
+                        }
+                        $procList.EndUpdate(); $procDetail.Text = ''
+                        $consumersOut.Text = $result.Result
+                    }
+                    if ($result.Action -eq 'StartupList' -and $null -ne $result.Data) {
+                        $script:StartupItems = @($result.Data.Items); $script:StartupReceipts = @($result.Data.Receipts)
+                        $startList.BeginUpdate(); $startList.Items.Clear()
+                        for ($i = 0; $i -lt $script:StartupItems.Count; $i++) {
+                            $row = $script:StartupItems[$i]
+                            $item = New-Object Windows.Forms.ListViewItem([string]$row.name)
+                            foreach ($cell in @($row.scope, $row.app, $row.state, $row.protected, $row.command)) { $null = $item.SubItems.Add([string]$cell) }
+                            $item.Tag = $i
+                            if ($row.protected) { $item.ForeColor = [Drawing.Color]::DimGray } elseif ($row.state -eq 'disabled') { $item.ForeColor = [Drawing.Color]::DarkGreen }
+                            $null = $startList.Items.Add($item)
+                        }
+                        $startList.EndUpdate()
+                        $startOut.Text = $result.Result
+                    }
+                    $outputs = @{ EndGentle = $consumersOut; EndForce = $consumersOut; StartupDisable = $startOut; StartupEnable = $startOut; StartupRestore = $startOut; StartupReconcile = $startOut; StartupReview = $startOut; Fresco = $thermalBox; Contencao = $thermalBox; ThermalRestore = $thermalBox; ThermalReconcile = $thermalBox; ThermalAdopt = $thermalBox; EnableThermalGuard = $thermalBox; DisableThermalGuard = $thermalBox }
+                    $message = if ($result.Error) { 'Nada foi alterado ou o resultado ficou registrado como incerto: ' + $result.Error } else { [string]$result.Result }
+                    if ($outputs.ContainsKey($result.Action) -and $message) { $outputs[$result.Action].Text = $message + "`r`n`r`n" + $outputs[$result.Action].Text }
+                    elseif ($result.Result -and $result.Action -notin @('Consumers', 'StartupList')) { $diagnostic.Text = $result.Result }
+                    if ($result.Error -like 'ELEVATION:*' -and $result.Action -in @('StartupDisable', 'StartupEnable', 'StartupRestore')) {
+                        if (Confirm-Folego 'Administrador' 'Esta entrada pertence à máquina. Pedir a confirmação de administrador do Windows (UAC) para esta única alteração? O recibo é gravado no mesmo estado do Fôlego.') {
+                            $helperAction = $result.Action.Substring(7)
+                            $subject = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$script:PendingTarget))
+                            $exe = Join-Path ([Environment]::GetFolderPath('Windows')) 'System32\WindowsPowerShell\v1.0\powershell.exe'
+                            try { Start-Process -FilePath $exe -Verb RunAs -ArgumentList ('-NoProfile -STA -ExecutionPolicy Bypass -File "' + (Join-Path $PSScriptRoot 'Folego.ps1') + '" -NoStartup -DataRoot "' + $DataRoot + '" -StartupAction ' + $helperAction + ' -StartupSubject ' + $subject) }
+                            catch { $startOut.Text = 'Elevação cancelada; nada foi alterado.' }
+                        }
+                    }
+                    $status.Text = if ($result.Error) { 'Operação não concluída: ' + $result.Error } elseif ($result.Notes.Count) { $result.Notes -join ' | ' } else { 'Coleta concluída. Atualização a cada 10 s (5 s com a guarda térmica); sensores/disco detalhado a cada 60 s.' }
                     $tray.Text = ('Fôlego | CPU ' + $cpu + ' | bateria ' + $battery).Substring(0, [Math]::Min(63, ('Fôlego | CPU ' + $cpu + ' | bateria ' + $battery).Length))
                     if ($level -eq 'red') { Show-FolegoNotice 'pressure' 'Fôlego — pressão alta' 'Salve o trabalho e adie novas cargas. Abra o painel para conferir RAM, CPU e espaço.' }
                     if ($null -ne $sample.BatteryPercent -and $sample.ExternalPower -eq $false -and $sample.BatteryPercent -le 25) { Show-FolegoNotice 'battery' 'Fôlego — bateria baixa' ('Bateria em ' + $sample.BatteryPercent + '%. Confira a alimentação e salve o trabalho.') }
@@ -200,7 +381,11 @@ try {
                     }
                     $script:SamplesReceived++
                 } catch { $status.Text = [string]$_; $headline.Text = 'Coleta/operação incompleta — confira o estado'; $script:Health.Level = 'unknown'; $script:LowStreak = 0 }
-                finally { $script:Worker.Dispose(); $script:Worker = $null; $script:Handle = $null; $script:NextPoll = $now + 10000 }
+                finally {
+                    $script:Worker.Dispose(); $script:Worker = $null; $script:Handle = $null
+                    $interval = if ($null -ne $script:LastThermal -and $script:LastThermal.enabled -and -not $script:LastThermal.paused) { [int]$policy.windows.thermal.poll_seconds * 1000 } else { 10000 }
+                    $script:NextPoll = $now + $interval
+                }
             }
             if ($null -ne $script:LastSample -and ($now - $script:LastSample.MonotonicMs) -gt 15000) { $headline.Text = if ($script:Paused) { 'Monitoramento pausado — amostra antiga' } else { 'Amostra antiga — aguardando coleta' }; $script:LowStreak = 0 }
             if (-not $script:Paused -and $null -eq $script:Worker -and $now -ge $script:NextPoll) {

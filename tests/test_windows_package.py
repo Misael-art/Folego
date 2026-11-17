@@ -107,3 +107,74 @@ def test_existing_installation_is_never_overwritten_blindly(tmp_path):
         with pytest.raises(ValueError, match='já existe'):
             deployer.prepare(card, package)
     assert (target / 'user.txt').read_text() == 'keep'
+
+
+WINDOWS = ROOT / 'src/folego/windows'
+FIXTURES = ROOT / 'tests/fixtures/windows'
+
+
+def test_active_management_policy_is_opt_in_and_bounded():
+    windows = builder.policy()['windows']
+    thermal, processes = windows['thermal'], windows['processes']
+    assert thermal['automatic_default'] is False and processes['automatic_executor'] is False
+    assert windows['automatic_resource_executor'] is False
+    assert thermal['recover_c'] < thermal['raise_average_c'] <= thermal['spike_c']
+    assert 1 <= thermal['max_switches_per_hour'] <= 4 and thermal['poll_seconds'] <= 5
+    assert thermal['recover_samples'] >= thermal['raise_samples']
+    for profile in thermal['profiles'].values():
+        assert 50 <= profile['throttle_max'] <= 100 and profile['boost_mode'] == 0
+    assert not set(processes['agent_names']) & set(processes['protected_names'])
+    for name in ('explorer', 'csrss', 'svchost', 'steam', 'msiexec', 'tiworker', 'dwm'):
+        assert name in processes['protected_names']
+    assert {'Steam Deck', 'Folego'} <= set(windows['startup']['protected_names'])
+
+
+def test_manifest_lists_capabilities(tmp_path):
+    manifest = builder.build(tmp_path / 'package')
+    assert 'Folego.Manage.ps1' in manifest['files']
+    assert set(manifest['capabilities']) >= {'thermal-profiles', 'process-triage', 'startup-approval'}
+
+
+def _functions():
+    import re
+    defined, sources = set(), {}
+    for path in WINDOWS.glob('*.ps1'):
+        text = path.read_text(encoding='utf-8-sig')
+        sources[path.name] = text
+        defined |= set(re.findall(r'^\s*function ([A-Za-z]+-Folego[A-Za-z]*)', text, re.M))
+    return defined, sources
+
+
+def test_every_production_call_is_defined():
+    import re
+    defined, sources = _functions()
+    for name in ('Folego.ps1', 'Collect.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1'):
+        called = set(re.findall(r'\b([A-Z][a-z]+-Folego[A-Za-z]*)\b', sources[name]))
+        assert called <= defined, (name, sorted(called - defined))
+
+
+def test_effects_stay_within_the_documented_channels():
+    import re
+    _, sources = _functions()
+    native = (WINDOWS / 'Native.cs').read_text(encoding='utf-8')
+    text = '\n'.join(sources.values()) + native
+    for forbidden in ('ryzenadj', 'WinRing0', 'inpout', 'DeviceIoControl', 'Set-Service', 'Stop-Service',
+                      'Remove-AppxPackage', 'Set-MpPreference', r'Policies\Microsoft', 'EnableLUA', 'Stop-Process'):
+        assert forbidden.lower() not in text.lower(), forbidden
+    # Gentle close never forces; force only through the creation-time checked native call.
+    assert not re.search(r"taskkill[^\n]*/F", text, re.I)
+    assert native.count('TerminateProcess(process') == 1 and 'creation != startTicks' in native
+    manage = sources['Folego.Manage.ps1']
+    for effect in ('Set-FolegoStartupItem', 'Restore-FolegoStartupItem', 'Invoke-FolegoProcessAction', 'Confirm-FolegoThermalBoot'):
+        body = manage.split('function ' + effect, 1)[1].split('\nfunction ', 1)[0]
+        assert 'Assert-FolegoConfirmation' in body, effect
+
+
+def test_replay_fixtures_preserve_the_reset_evidence():
+    data = (FIXTURES / 'monitor-reset-2228.csv').read_bytes()
+    assert data.endswith(b'\x00')  # truncated by the abrupt reset; replay must tolerate it
+    rows = [line.split(b',') for line in data.replace(b'\x00', b'').split(b'\r\n')[1:] if line]
+    assert rows[-1][0] == b'22:27:50' and float(rows[-1][7]) >= 90
+    swing = (FIXTURES / 'monitor-swing-2252.csv').read_text(encoding='ascii').splitlines()[1:]
+    temps = [float(line.split(',')[7]) for line in swing if line]
+    assert max(temps) >= 90 and min(temps) <= 55
