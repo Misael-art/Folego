@@ -210,6 +210,58 @@ uma única alteração, com o mesmo recibo. Ao contrário dos perfis térmicos, 
 restauração da inicialização vale **depois de reiniciar** — o efeito só aparece
 no próximo login —, mas apenas se o valor atual ainda for o que o Fôlego gravou.
 
+## Sequência de início (logon em série)
+
+Todos os itens de logon disparando juntos estressam o SD e a APU logo no início da
+sessão; os reinícios abruptos deste Deck coincidiram com disco 100% ocupado e zona
+acima de 90 °C. Na aba **Inicialização**, **Adicionar à sequência** adota uma
+entrada (HKCU/HKLM Run ou pasta Startup), com confirmação: o Windows deixa de
+iniciá-la em paralelo — pelo mesmo `StartupApproved` das Configurações, com recibo —
+e o Fôlego a inicia depois do login, **uma por vez**:
+
+| Condição antes de cada item | Valor |
+| --- | --- |
+| Desktop assentado | 15 s depois de o Fôlego (já atrasado 30 s) obter a primeira leitura |
+| CPU | ≤ 50% |
+| Disco físico (`Win32_PerfFormattedData_PerfDisk_PhysicalDisk`, `_Total`) | ≤ 40% ocupado e fila ≤ 1 |
+| Zona térmica | < 80 °C |
+| Confirmação | duas leituras calmas seguidas, a cada 5 s |
+| Intervalo | 20 s desde o item anterior |
+| Tarefas de logon de terceiros | nenhuma em execução (como `\SteamDeck\Disco Linux - montar/unidades`) |
+
+Leitura ausente nunca conta como calma. Sem janela de calma em 10 minutos, o item
+**não é iniciado sob estresse**: fica registrado como adiado, com o motivo, e o
+Fôlego avisa. No ato, o item precisa continuar adotado, desabilitado no Windows (se
+alguém o reabilitou, não é iniciado em dobro) e com o mesmo comando da adoção (um
+comando alterado não é executado às cegas). A sequência roda uma vez por boot no
+início da sessão; se o Fôlego reiniciar no mesmo boot, só continua os itens ainda
+não tratados. Pausar o monitoramento pausa a sequência.
+
+`Steam Deck.lnk` (o dispatcher do cartão, dono da continuação do login), o próprio
+Fôlego e a Segurança do Windows nunca entram; tarefas de pacote continuam com o
+Windows. Uma entrada que já estava desabilitada fora do Fôlego pode ser adotada; ao
+removê-la, continua como estava. **Remover da sequência** devolve a entrada ao
+Windows pelo recibo. Desabilitar o início do próprio Fôlego com itens adotados pede
+confirmação, porque eles só iniciam por ele. Nenhum item é adotado automaticamente.
+
+**Outros itens de logon** lista, sem alterar, as tarefas agendadas de logon de
+terceiros (com atraso e nível), os serviços automáticos fora do Windows e as tarefas
+de pacote. Mudar um serviço para Manual ou Atrasado é decisão do usuário em
+`services.msc`; serviços do Defender aparecem como segurança, sem sugestão. O
+Fôlego não altera serviços nem tarefas agendadas; as tarefas do Disco Linux do
+cartão continuam com o SDK, e a sequência apenas espera por elas.
+
+O Copilot desktop é baseado no Edge e usa o mecanismo de autolaunch do Edge
+(`edge_autolaunch` no `Local State`): o próprio app grava ou remove o seu valor em
+HKCU Run com `--win-session-start`. Por isso a entrada pode não estar lá quando se
+procura e reaparecer depois; **mudanças desde a revisão** a destaca como nova, e ela
+pode ser desabilitada ou adotada pela sequência.
+
+O Fôlego inicia com a sessão por padrão (entrada própria `Folego` em HKCU Run) e
+mantém o atalho **Fôlego** no menu Iniciar, recriado se tiver sido removido (um
+atalho personalizado é preservado). Fixá-lo na lista principal do Iniciar é escolha
+do usuário: o Windows não oferece API para isso.
+
 ## Como reverter cada ação
 
 | Ação | Reverter no Fôlego | Sem o Fôlego |
@@ -218,6 +270,7 @@ no próximo login —, mas apenas se o valor atual ainda for o que o Fôlego gra
 | Guarda automática | **Desabilitar guarda** (não troca os valores) | apagar não é necessário; desligada ela não age |
 | Economia de energia | **Restaurar o plano registrado** | Opções de energia do Windows |
 | Desabilitar inicialização | **Restaurar a última alteração** ou **Habilitar início** | Configurações → Aplicativos → Inicialização |
+| Item na sequência de início | **Remover da sequência** (devolve ao Windows pelo recibo) | Configurações → Aplicativos → Inicialização |
 | Encerrar processo | não reversível: abra o app de novo | — |
 | Listas de processos | editar/remover `process-rules.json` | — |
 
@@ -250,7 +303,8 @@ e recibo de energia por identidade física, com até 12 recibos anteriores;
 quando um perfil muda ou a guarda é ligada/desligada); `processes-<host>.json`
 guarda até 20 recibos de encerramento e o rastreio de ociosidade (gravado só
 em análise ou ação manual); `startup-<host>.json` guarda até 30 recibos e a
-última revisão de inicialização; `appearance.json` guarda visualização, tema,
+última revisão de inicialização; `sequence-<host>.json` guarda os itens adotados (com o
+comando completo, para iniciá-los) e o resultado da última execução por boot; `appearance.json` guarda visualização, tema,
 transparência e posições do widget; `latest-sample.json` conserva somente
 a última amostra, substituída atomicamente no máximo uma vez por minuto.
 Configurações acima de 1 MiB, schema desconhecido e campos essenciais inválidos
@@ -287,7 +341,7 @@ consulta APIs reais sem registrar início nem mudar energia. Um smoke próprio
 pode usar `-NoStartup -DataRoot <pasta-descartável> -SmokeSeconds 5`; fecha só
 essa janela/instância. No Deck com WMI frio, a primeira coleta pode passar de
 20 s (o provedor de `Get-Volume` sozinho levou 12,7 s), e um smoke de 5 s
-reprova sem defeito do app; a CI usa 25 s. Windows PowerShell 5.1 e hardware físico têm aceites
+reprova sem defeito do app; a CI usa 25 s e o limite é 300 s. Windows PowerShell 5.1 e hardware físico têm aceites
 separados das simulações no Linux e do runner Windows da CI.
 
 ## Fontes dos adaptadores

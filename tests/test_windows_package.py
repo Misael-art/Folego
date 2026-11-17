@@ -206,3 +206,17 @@ def test_health_level_is_not_reused_by_other_ui_blocks():
     import re
     ui = (WINDOWS / 'Folego.ps1').read_text(encoding='utf-8-sig')
     assert len(re.findall(r'\$level\s*=', ui)) == 1
+
+
+def test_logon_sequence_is_opt_in_and_never_launches_under_stress():
+    sequence = builder.policy()['windows']['sequence']
+    assert sequence['automatic_adoption'] is False
+    assert sequence['calm_samples'] >= 2 and sequence['gap_seconds'] >= 10
+    assert sequence['temp_max_c'] < builder.THERMAL['spike_c'] and sequence['cpu_max'] <= 60
+    text = (WINDOWS / 'Folego.Sequence.ps1').read_text(encoding='utf-8')
+    for body_of in ('Add-FolegoSequenceItem', 'Remove-FolegoSequenceItem'):
+        body = text.split('function ' + body_of, 1)[1].split('\nfunction ', 1)[0]
+        assert 'Assert-FolegoConfirmation' in body, body_of
+    # Services and scheduled tasks are only read: no Set-Service / *-ScheduledTask writers.
+    for writer in ('Set-Service', 'Disable-ScheduledTask', 'Set-ScheduledTask', 'Register-ScheduledTask', 'Unregister-ScheduledTask', 'Start-ScheduledTask'):
+        assert writer not in text, writer

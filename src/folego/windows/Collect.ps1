@@ -107,7 +107,8 @@ switch ($Action) {
         $lines = @(Compare-FolegoStartupReview $items $startup.review) + @('') + @(Get-FolegoCopilotReport $items $commands)
         $applied = @($startup.receipts | Where-Object { $_.state -eq 'applied' -and $_.action -ne 'Restore' })
         if ($applied.Count) { $lines += ''; $lines += 'Alterações do Fôlego que podem ser restauradas:'; foreach ($r in $applied) { $lines += ('  ' + $r.key + ' (' + $r.action + ', ' + $r.at + ')') } }
-        $data = [pscustomobject]@{ Items = $items; Receipts = @($startup.receipts) }
+        $sequence = $null; try { $sequence = Get-FolegoSequenceState $DataRoot $HostInfo } catch { $lines += ''; $lines += [string]$_ }
+        $data = [pscustomobject]@{ Items = $items; Receipts = @($startup.receipts); Sequence = $sequence }
         $actionResult = $lines -join "`r`n"
     }
     'StartupDisable' { Assert-Host; $actionResult = Set-FolegoStartupItem $DataRoot $HostInfo $Target $false $Confirmation $policy }
@@ -115,6 +116,37 @@ switch ($Action) {
     'StartupRestore' { Assert-Host; $actionResult = Restore-FolegoStartupItem $DataRoot $HostInfo $Target $Confirmation }
     'StartupReconcile' { Assert-Host; $actionResult = Repair-FolegoStartupReceipts $DataRoot $HostInfo }
     'StartupReview' { Assert-Host; $actionResult = Save-FolegoStartupReview $DataRoot $HostInfo @(Get-FolegoStartupItems $policy) }
+    'SequenceAdd' { Assert-Host; $actionResult = Add-FolegoSequenceItem $DataRoot $HostInfo $Target $Confirmation $policy }
+    'SequenceRemove' { Assert-Host; $actionResult = Remove-FolegoSequenceItem $DataRoot $HostInfo $Target $Confirmation }
+    'SequenceUp' { Assert-Host; $actionResult = Move-FolegoSequenceItem $DataRoot $HostInfo $Target -1 }
+    'SequenceDown' { Assert-Host; $actionResult = Move-FolegoSequenceItem $DataRoot $HostInfo $Target 1 }
+    'LogonInventory' { $actionResult = (Get-FolegoLogonInventory $policy) -join "`r`n" }
+    'SequenceTick' {
+        # One step of the serialized logon; the run object lives in the UI between ticks.
+        Assert-Host
+        $run = $Target; $rules = $policy.windows.sequence
+        if ($null -eq $run.TaskNames) { try { $run.TaskNames = @(Get-FolegoLogonTaskNames) } catch { $run.TaskNames = @() } }
+        $disk = $null; try { $disk = Get-FolegoDiskBusy } catch { }
+        $celsius = $null; try { $hot = @(Get-FolegoThermalZones) | Sort-Object Celsius -Descending | Select-Object -First 1; if ($null -ne $hot) { $celsius = $hot.Celsius } } catch { }
+        $reading = [pscustomobject]@{ Cpu = $sample.CpuPercent; DiskBusy = $(if ($null -ne $disk) { $disk.Busy } else { $null }); DiskQueue = $(if ($null -ne $disk) { $disk.Queue } else { $null }); Celsius = $celsius; TasksRunning = @(Get-FolegoRunningTasks $run.TaskNames) }
+        $decision = Step-FolegoSequence $run $reading $rules $now
+        switch ($decision.Action) {
+            'launch' {
+                $outcome = Invoke-FolegoSequenceLaunch $DataRoot $HostInfo $decision.Key $policy
+                Save-FolegoSequenceResult $DataRoot $HostInfo $decision.Key $outcome.State $outcome.Detail
+                $run.Results = @(@($run.Results) + @([pscustomobject]@{ Key = $decision.Key; State = $outcome.State; Detail = $outcome.Detail }))
+                $actionResult = 'Sequência: ' + $decision.Key + ' → ' + $outcome.State + ' (' + $outcome.Detail + ')'
+            }
+            'skip' {
+                $detail = 'sem janela de calma em ' + [int]($rules.item_timeout_seconds / 60) + ' min: ' + ($decision.Reasons -join ', ') + '; não iniciado sob estresse'
+                Save-FolegoSequenceResult $DataRoot $HostInfo $decision.Key 'skipped' $detail
+                $run.Results = @(@($run.Results) + @([pscustomobject]@{ Key = $decision.Key; State = 'skipped'; Detail = $detail }))
+                $actionResult = 'Sequência: ' + $decision.Key + ' adiado — ' + $detail
+            }
+            default { $actionResult = 'Sequência: ' + $decision.Action + $(if ($decision.Key) { ' ' + $decision.Key } else { '' }) + $(if ($decision.Reasons.Count) { ' — ' + ($decision.Reasons -join ', ') } else { '' }) }
+        }
+        $data = [pscustomobject]@{ Decision = $decision; Reading = $reading }
+    }
     'Processes' {
         $actionResult = 'Amostra de RAM e tempo acumulado de CPU; não é percentual instantâneo. Sem fechar/processar agentes.' + "`r`n"
         $actionResult += (Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 25 Id, ProcessName, @{n='RAM_MiB';e={[Math]::Round($_.WorkingSet64 / 1MB)}}, @{n='CPU_s_acumulada';e={$_.CPU}} | Format-Table -AutoSize | Out-String)

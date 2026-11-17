@@ -1,5 +1,25 @@
 # Passagem para o próximo agente — atualizada em 17/11/2026
 
+## Fôlego Windows: sequência de início em série — 17/11/2026
+
+- Pedido (via sessão do SDK): Fôlego iniciando por padrão e itens de logon em série,
+  para o boot não estressar o Deck. Branch `codex/windows-sequencia-logon-20261117`,
+  sobre `codex/windows-visualizacoes-20261117` (PR #11).
+- `Folego.Sequence.ps1`: adoção confirmada (StartupApproved com recibo), lançamento
+  um por vez com CPU ≤ 50%, disco ≤ 40%/fila ≤ 1, zona < 80 °C em duas leituras, 20 s
+  entre itens e espera por tarefas de logon de terceiros (Disco Linux do SDK); sem
+  calma em 10 min o item é adiado, nunca iniciado sob estresse. Revalida no ato
+  (adotado, desabilitado no Windows, mesmo comando). Inventário somente leitura de
+  tarefas, serviços e pacotes. Serviços e tarefas não são alterados.
+- Copilot: autolaunch herdado do Edge (`edge_autolaunch` no Local State) grava/remove
+  o próprio valor em HKCU Run; hoje inativo (`not_activation_reason` 6).
+- Deck: `Test-Folego.ps1` **332 PASS**; leituras reais (tarefas, disco, zona) e
+  inventário conferem; ponta a ponta com item fictício (sem efeito no Windows):
+  assentar → calma em 2 leituras → decisão → revalidação pulou → concluída e registrada.
+  Estado de tarefa via COM do Agendador (560 ms) em vez do cmdlet (2,4 s por consulta).
+- Pendente: adoção real (ex.: ShareX) e um login real com a sequência; sugerido ao
+  SDK registrar as tarefas do Disco Linux sem gatilho de logon para o Fôlego dispará-las.
+
 ## Fôlego Windows: visualizações do widget e temas de cores — 17/11/2026
 
 - Pedido: levar ao Windows as visualizações do Linux (central, mini horizontal,
