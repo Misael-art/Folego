@@ -556,7 +556,11 @@ try {
         if ($script:AppearanceNote) { $status.Text = 'Aparência: ' + $script:AppearanceNote }
         # Keep the own Start menu entry: recreate it if it was removed (custom shortcuts are preserved).
         if (-not $NoStartup -and $settings.startup -and -not (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'Fôlego.lnk'))) { try { Install-FolegoShortcuts } catch { } }
-        if ($script:Appearance.startup_view -ne 'central') { Show-FolegoView $script:Appearance.startup_view }
+        if ($script:Appearance.startup_view -ne 'central') {
+            Show-FolegoView $script:Appearance.startup_view
+            # Opened by hand (shortcut/Start): also show the central window; at logon only the indicators.
+            if ($script:Appearance.startup_view -eq 'taskbar' -and -not $StartMinimized) { Show-Folego }
+        }
         elseif ($StartMinimized) { $form.Hide() }
         $timer.Start(); Request-Folego Sample
     })
