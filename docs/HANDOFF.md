@@ -20,6 +20,10 @@
   a consulta de incidentes NTFS, armazenamento e WHEA. A triagem explica a
   possibilidade de encerramento e orienta Chrome, Edge e modo IE quando
   encontrados. **Inspect Overview** compara identidade, boot e manifesto.
+- Aceite de código **8e42458**. A [CI Windows](https://github.com/Misael-art/Folego/actions/runs/44309257079)
+  passou 395 contratos PowerShell 5.1, probe Win32, consultas ao log e smoke
+  descartável da interface. A [CI Linux](https://github.com/Misael-art/Folego/actions/runs/44309257010)
+  passou núcleo, CLI e Qt offscreen.
 - Validar no Deck em janela sem QA concorrente, usando instância descartável.
   Aceite físico futuro: observar vários ciclos detalhados, confirmar os quatro
   indicadores e abrir a aba de cotas com fonte conhecida. A sessão atual
