@@ -10,7 +10,7 @@ function Reject([scriptblock]$Operation, [string]$Message) { $failed = $false; t
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('folego-windows-tests-' + [Guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($fixture) | Out-Null
 try {
-    foreach ($file in @('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.Sequence.ps1', 'Folego.AI.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1', 'Collect.ps1', 'Test-Folego.ps1', 'DeckBootstrap.ps1')) {
+    foreach ($file in @('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.Sequence.ps1', 'Folego.AI.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1', 'Folego.Prompts.ps1', 'Folego.PromptMenu.ps1', 'Collect.ps1', 'Test-Folego.ps1', 'DeckBootstrap.ps1')) {
         $tokens = $null; $errors = $null
         $null = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $file), [ref]$tokens, [ref]$errors)
         Check ($errors.Count -eq 0) ('Syntax ' + $file + ': ' + ($errors | Out-String))
@@ -18,6 +18,44 @@ try {
     Add-Type -Path @((Join-Path $PSScriptRoot 'Native.cs'), (Join-Path $PSScriptRoot 'Widget.cs')) -ReferencedAssemblies System.Windows.Forms, System.Drawing
     Check ($null -ne ('Folego.Windows.Native' -as [type])) 'Native C# backend compiles; no Win32 call made by compilation'
     $policy = if ($PolicyPath) { Read-FolegoJson $PolicyPath } else { Get-FolegoPolicy }
+    $catalog = @($policy.windows.prompts)
+    $shippedPrompts = @($catalog | ForEach-Object { $_.items })
+    Check ($catalog.Count -eq 6 -and $shippedPrompts.Count -eq 16) 'Windows exports the shared six groups and sixteen complete prompts'
+    Check (($shippedPrompts | Where-Object key -eq diagnose).text.StartsWith('Trabalhe no projeto atual.')) 'Generated diagnostic includes the shared context'
+    Check (($shippedPrompts | Where-Object key -eq 'design-mockups').text.StartsWith('Atue como especialista')) 'Design mockup retains its separate approval framing'
+    $personal = Join-Path $fixture 'personal'
+    $initial = Get-FolegoCustomPrompts $personal
+    Check ($initial.Revision -eq 'missing' -and $initial.Entries[0].text -ceq '123') 'Private defaults are read without creating a file'
+    Check (-not [IO.File]::Exists((Join-Path $personal 'custom-prompts.json'))) 'Opening the prompt library does not create user state'
+    $own = [pscustomobject]@{ id = 'own-text'; kind = 'text'; title = 'Pedido'; text = '  exemplo  ' }
+    $stored = Save-FolegoCustomPrompts $personal @($own) $initial.Revision
+    Check ($stored.Entries[0].text -ceq '  exemplo  ' -and $stored.Revision -ne 'missing') 'Saving and loading preserves exact whitespace and returns a revision'
+    Reject { Save-FolegoCustomPrompts $personal @() $initial.Revision } 'A stale editor cannot overwrite a newer library'
+    $empty = Save-FolegoCustomPrompts $personal @() $stored.Revision
+    Check ($empty.Entries.Count -eq 0 -and $empty.Revision -ne 'missing') 'An intentionally empty library does not restore examples'
+    $personalPath = Join-Path $personal 'custom-prompts.json'
+    [IO.File]::WriteAllText($personalPath, '{"schema":9,"entries":[]}')
+    Reject { Save-FolegoCustomPrompts $personal @($own) $empty.Revision } 'Unknown library schemas block rewriting'
+    Check ([IO.File]::ReadAllText($personalPath) -ceq '{"schema":9,"entries":[]}') 'Unknown schema remains intact'
+    Check ((@(Get-FolegoShortcutKeys 'Ctrl+Shift+F5') -join ',') -eq '17,16,116') 'One keyboard combination maps to Windows virtual keys'
+    Reject { Get-FolegoShortcutKeys 'Meta+Win+Left' } 'Duplicate Windows modifiers are rejected even when the aliases differ'
+    Reject { Get-FolegoShortcutKeys 'Ctrl+A;Ctrl+V' } 'Shortcut fields reject sequences and shell-like strings'
+    . (Join-Path $PSScriptRoot 'Folego.Widget.ps1')
+    . (Join-Path $PSScriptRoot 'Folego.PromptMenu.ps1')
+    Initialize-FolegoTextContext
+    Check ($null -ne ('Folego.Windows.TextContextWatcher' -as [type]) -and $null -eq $script:PromptWatcher) 'Accessibility adapter compiles without registering a hook'
+    $status = New-Object Windows.Forms.Label
+    $textBox = New-Object Windows.Forms.TextBox
+    $textBox.Multiline = $true
+    $textBox.Text = 'aSWAPz'
+    $textBox.Select(1, 4)
+    try {
+        Add-FolegoEditContext $textBox
+        $editMenu = $textBox.ContextMenuStrip
+        Check ($editMenu.Items[3].Text -eq 'Colar' -and $editMenu.Items[5].Text -eq 'Selecionar tudo' -and $editMenu.Items[7].Text -eq 'Prompts e atalhos') 'Editable fields keep native edit commands and expose the prompt submenu'
+        $editMenu.Items[7].DropDownItems[0].DropDownItems[0].DropDownItems[0].PerformClick()
+        Check ($textBox.Text.StartsWith('aTrabalhe no projeto atual.') -and $textBox.Text.EndsWith('z')) 'A prompt replaces only the selection in an owned editable field'
+    } finally { $textBox.Dispose(); $status.Dispose(); $script:WidgetTips.Dispose() }
     $sample = [pscustomobject]@{ MonotonicMs = 1000L; TotalPhysical = 16GB; AvailablePhysical = 8GB; CommitLimit = 20GB; CommitUsed = 8GB; CpuPercent = 15; DiskAvailable = 30GB; DiskTotal = 120GB; Errors = @() }
     Check ((Get-FolegoRawHealth $sample $policy 1000).Level -eq 'green') 'Healthy known resources'
     Check ((Get-FolegoRawHealth $sample $policy 20000).Level -eq 'unknown') 'Old sample never becomes green'

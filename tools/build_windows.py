@@ -17,14 +17,15 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
 from folego.core.policy import battery_band, HealthThresholds
+from folego.core.development_prompts import PROMPTS, PROMPT_CATEGORIES, text as prompt_text
 from folego.ui.palettes import THEMES, DEFAULT_THEME  # pure module: no Qt import
 
 FILES = ('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.Sequence.ps1', 'Folego.AI.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1',
-         'Collect.ps1', 'Native.cs', 'Widget.cs', 'Test-Folego.ps1', 'DeckBootstrap.ps1')
+         'Folego.Prompts.ps1', 'Folego.PromptMenu.ps1', 'Collect.ps1', 'Native.cs', 'Widget.cs', 'TextContext.cs', 'Test-Folego.ps1', 'DeckBootstrap.ps1')
 CAPABILITIES = ('monitor', 'power-plan-receipts', 'thermal-profiles', 'process-triage', 'startup-approval',
                 'widget-views', 'color-themes', 'taskbar-indicators', 'logon-sequence', 'local-volume-inventory',
                 'desktop-shortcuts', 'battery-runtime-estimate', 'boot-timeline', 'storage-hardware-events',
-                'local-codex-quota')
+                'local-codex-quota', 'prompt-library', 'text-context-companion')
 # Linux widget views (ui/desktop_preferences.py) plus the Windows-only taskbar indicators,
 # which are the default opening view on Windows.
 VIEWS = (('central', 'Central do Fôlego'), ('taskbar', 'Barra de tarefas'), ('mini', 'Mini horizontal'), ('compact', 'Widget compacto'),
@@ -85,6 +86,16 @@ SEQUENCE = {
 }
 
 
+def prompt_catalog() -> list:
+    titles = {prompt.key: prompt.title for prompt in PROMPTS}
+    return [
+        {'key': key, 'name': name, 'items': [
+            {'key': item, 'title': titles[item], 'text': prompt_text(item)} for item in items
+        ]}
+        for key, name, items in PROMPT_CATEGORIES
+    ]
+
+
 def policy() -> dict:
     return {
         'schema': 1,
@@ -102,6 +113,7 @@ def policy() -> dict:
             'startup': STARTUP,
             'appearance': appearance(),
             'sequence': SEQUENCE,
+            'prompts': prompt_catalog(),
         },
     }
 

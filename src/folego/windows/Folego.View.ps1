@@ -27,6 +27,7 @@ function Test-FolegoAppearance($Value, $Policy) {
     if (-not (Test-FolegoInt $alpha) -or $alpha -lt 0 -or $alpha -gt [int]$Policy.windows.appearance.transparency_max) { return 'Transparência fora do intervalo permitido.' }
     if ([string](Get-FolegoValue $Value startup_view '') -notin (Get-FolegoViewKeys $Policy)) { return 'Modo de abertura desconhecido.' }
     if ([string](Get-FolegoValue $Value last_widget '') -notin $script:FolegoWidgetViews) { return 'Último widget desconhecido.' }
+    if ((Get-FolegoValue $Value external_prompt_menu $false) -isnot [bool]) { return 'Preferência do painel de prompts inválida.' }
     $positions = Get-FolegoValue $Value positions
     if ($null -eq $positions) { return 'Posições ausentes.' }
     foreach ($row in @($positions.PSObject.Properties)) {

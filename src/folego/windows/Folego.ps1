@@ -87,6 +87,7 @@ try {
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
     . (Join-Path $PSScriptRoot 'Folego.Widget.ps1')
+    . (Join-Path $PSScriptRoot 'Folego.PromptMenu.ps1')
     Initialize-FolegoAppearance
     [Windows.Forms.Application]::EnableVisualStyles()
     $script:Worker = $null; $script:Handle = $null; $script:HostInfo = $null; $script:Extended = $null
@@ -382,6 +383,8 @@ try {
     $null = Add-FolegoLabel $page 'O diagnóstico Windows usa fontes nativas. A aba Cotas de IA tem leitura local do Codex. Gestão de contas, recuperação de entrada e áudio e automação de encerramento continuam em portabilidade. O encerramento de processos nesta versão exige confirmação manual.' 100
     Add-FolegoButton $page 'Sair do Fôlego nesta sessão' { $script:Leaving = $true; $form.Close() }
 
+    Initialize-FolegoPromptTimers
+    New-FolegoPromptPage
     $tray = New-Object Windows.Forms.NotifyIcon
     $tray.Icon = [Drawing.SystemIcons]::Information; $tray.Text = 'Fôlego — aguardando coleta'; $tray.Visible = $true
     # One quick-function menu for the tray icon and every taskbar indicator; left or right click.
@@ -611,6 +614,9 @@ try {
     })
     $form.Add_Shown({
         Set-FolegoThemeEverywhere
+        if (Get-FolegoValue $script:Appearance external_prompt_menu $false) {
+            try { Set-FolegoExternalPromptMenu $true } catch { $status.Text = 'Painel externo indisponível: ' + $_.Exception.Message }
+        }
         if ($script:AppearanceNote) { $status.Text = 'Aparência: ' + $script:AppearanceNote }
         # Keep the own Start menu entry: recreate it if it was removed (custom shortcuts are preserved).
         if (-not $NoStartup -and $settings.startup -and -not (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'Fôlego.lnk'))) { try { Install-FolegoShortcuts } catch { } }
@@ -626,6 +632,7 @@ try {
     if ($SmokeSeconds -gt 0 -and $script:SamplesReceived -lt 1) { throw 'A janela abriu, mas nenhuma coleta completa chegou à interface no smoke.' }
 } finally {
     if ($null -ne (Get-Variable timer -ErrorAction SilentlyContinue)) { $timer.Stop(); $timer.Dispose() }
+    if ($null -ne (Get-Command Stop-FolegoPromptSurface -ErrorAction SilentlyContinue)) { Stop-FolegoPromptSurface }
     if ($null -ne $script:Worker) { try { $script:Worker.Stop() } finally { $script:Worker.Dispose() } }
     if ($null -ne (Get-Variable tray -ErrorAction SilentlyContinue)) { $tray.Visible = $false; $tray.Dispose() }
     if ($null -ne (Get-Command Hide-FolegoWidget -ErrorAction SilentlyContinue)) { Hide-FolegoWidget }

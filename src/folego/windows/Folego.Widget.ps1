@@ -44,7 +44,8 @@ function Set-FolegoControlTheme($Control) {
             $Control.FlatAppearance.BorderColor = ConvertTo-FolegoColor $t.border
             $Control.FlatAppearance.MouseOverBackColor = ConvertTo-FolegoColor $t.surface
         }
-        '^(TextBox|ListView|ComboBox)$' { $Control.BackColor = ConvertTo-FolegoColor $t.surface; $Control.ForeColor = ConvertTo-FolegoColor $t.text }
+        '^(TextBox|ListView|ListBox|ComboBox)$' { $Control.BackColor = ConvertTo-FolegoColor $t.surface; $Control.ForeColor = ConvertTo-FolegoColor $t.text }
+        '^CheckBox$' { $Control.ForeColor = ConvertTo-FolegoColor $t.text; $Control.BackColor = ConvertTo-FolegoColor $t.background }
         '^HealthRing$' {
             $Control.TrackColor = ConvertTo-FolegoColor $t.surface_alt; $Control.TextColor = ConvertTo-FolegoColor $t.text
             $Control.MutedColor = ConvertTo-FolegoColor $t.muted; $Control.Invalidate()
@@ -157,6 +158,7 @@ function Add-FolegoDesktopItems($Items) {
 }
 function New-FolegoWidgetMenu {
     $strip = New-Object Windows.Forms.ContextMenuStrip
+    Add-FolegoPromptMenu $strip.Items
     Add-FolegoAppearanceItems $strip.Items
     Add-FolegoDesktopItems $strip.Items
     $null = $strip.Items.Add('-')
@@ -500,6 +502,7 @@ function New-FolegoQuickMenu {
     $null = $strip.Items.Add('-')
     $null = $strip.Items.Add('Abrir a central', $null, { Show-Folego })
     $null = $strip.Items.Add('Cotas de IA', $null, { Open-FolegoCentralTab 'Cotas de IA' 'CodexQuota' })
+    Add-FolegoPromptMenu $strip.Items
     $thermal = New-Object Windows.Forms.ToolStripMenuItem 'Temperatura e CPU'
     $null = $thermal.DropDownItems.Add('Aplicar perfil Fresco (turbo desligado)…', $null, {
         if (Confirm-Folego 'Perfil térmico' ('Aplicar Fresco ao plano ativo? CPU máxima ' + $policy.windows.thermal.profiles.Fresco.throttle_max + '% e turbo desligado. Os valores atuais serão registrados antes da troca.')) { Request-Folego Fresco }
