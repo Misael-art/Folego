@@ -17,6 +17,12 @@
   navegador, clique comum em arquivo, campo protegido, mudança de foco, menu
   pequeno, DPI e desligamento da opção durante uso. O teste da interface
   usa campo próprio descartável para seleção e inserção.
+- O [PR #13](https://github.com/Misael-art/Folego/pull/13) usa a branch Windows
+  do PR #12 como base. O commit inicial **a926be7** passou 413 contratos,
+  probe nativo e abertura Forms na [CI Windows](https://github.com/Misael-art/Folego/actions/runs/44323531957).
+  O ajuste posterior cancela atalhos pendentes ao desabilitar o painel e
+  vincula o retorno ao campo da ação. O Deck mantinha QA concorrente de
+  outro projeto, e a interação externa continua com aceite físico pendente.
 
 ## Continuidade das leituras e matriz completa Windows — 18/11/2026
 

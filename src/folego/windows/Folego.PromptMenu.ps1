@@ -223,6 +223,8 @@ function Show-FolegoPromptFlyout($Target) {
 }
 function Set-FolegoExternalPromptMenu([bool]$Enabled) {
     if (-not $Enabled) {
+        $script:PendingPromptShortcut = $null
+        if ($null -ne $script:PromptShortcutTimer) { $script:PromptShortcutTimer.Stop() }
         if ($null -ne $script:PromptWatcher) { $script:PromptWatcher.Dispose(); $script:PromptWatcher = $null }
         Close-FolegoPromptFlyout
         return
@@ -234,8 +236,10 @@ function Set-FolegoExternalPromptMenu([bool]$Enabled) {
     $script:PromptWatcher.Add_Found({ param($sender, $target) Show-FolegoPromptFlyout $target })
     $script:PromptWatcher.Add_ShortcutCompleted({
         param($sender, $result)
-        if ($result.Sent) { Show-FolegoPromptFeedback 'Atalho enviado ao aplicativo.' 'Atalho enviado' }
-        else { Show-FolegoPromptFeedback 'O campo ou o foco mudou. Reabra o painel no destino ou use o teclado virtual.' 'Foco indisponível' }
+        $message = if ($result.Sent) { 'Atalho enviado ao aplicativo.' } else { 'O campo ou o foco mudou. Reabra o painel no destino ou use o teclado virtual.' }
+        if ($null -ne $script:PromptFlyout -and [object]::ReferenceEquals($script:PromptFlyout.Controls[0].Tag, $result.Target)) {
+            Show-FolegoPromptFeedback $message $(if ($result.Sent) { 'Atalho enviado' } else { 'Foco indisponível' })
+        } else { $status.Text = $message }
     })
 }
 function Initialize-FolegoPromptTimers {

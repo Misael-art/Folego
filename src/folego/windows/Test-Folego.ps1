@@ -44,6 +44,9 @@ try {
     . (Join-Path $PSScriptRoot 'Folego.PromptMenu.ps1')
     Initialize-FolegoTextContext
     Check ($null -ne ('Folego.Windows.TextContextWatcher' -as [type]) -and $null -eq $script:PromptWatcher) 'Accessibility adapter compiles without registering a hook'
+    $script:PendingPromptShortcut = [pscustomobject]@{ Keys = @(17, 65) }
+    Set-FolegoExternalPromptMenu $false
+    Check ($null -eq $script:PendingPromptShortcut) 'Disabling the companion drops a pending shortcut'
     $status = New-Object Windows.Forms.Label
     $textBox = New-Object Windows.Forms.TextBox
     $textBox.Multiline = $true

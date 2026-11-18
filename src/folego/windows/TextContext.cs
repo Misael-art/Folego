@@ -34,7 +34,8 @@ namespace Folego.Windows {
 
         public sealed class ShortcutResult : EventArgs {
             public bool Sent { get; private set; }
-            internal ShortcutResult(bool sent) { Sent = sent; }
+            public TextContextTarget Target { get; private set; }
+            internal ShortcutResult(TextContextTarget target, bool sent) { Target = target; Sent = sent; }
         }
 
         delegate IntPtr HookProc(int code, IntPtr message, IntPtr data);
@@ -183,7 +184,7 @@ namespace Folego.Windows {
             IntPtr before;
             if (disposed || keys == null || keys.Length < 1 || keys.Length > 5 || !FocusWindow(target, out before) ||
                 Interlocked.CompareExchange(ref probing, 1, 0) != 0) {
-                Report(false);
+                Report(target, false);
                 return;
             }
             ThreadPool.QueueUserWorkItem(delegate {
@@ -198,7 +199,7 @@ namespace Folego.Windows {
                 QueueToUi(delegate {
                     IntPtr after;
                     bool same = EqualElements(target.Element, identity) && FocusWindow(target, out after) && after == before;
-                    Report(same && SendKeysOnce(keys));
+                    Report(target, same && SendKeysOnce(keys));
                 });
             });
         }
@@ -232,9 +233,9 @@ namespace Folego.Windows {
             }
             return false;
         }
-        void Report(bool sent) {
+        void Report(TextContextTarget target, bool sent) {
             var completed = ShortcutCompleted;
-            if (completed != null) completed(this, new ShortcutResult(sent));
+            if (completed != null) completed(this, new ShortcutResult(target, sent));
         }
         public void Dispose() {
             disposed = true;
