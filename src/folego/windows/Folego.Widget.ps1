@@ -139,9 +139,26 @@ function Sync-FolegoAppearanceChecks {
         }
     }
 }
+function Open-FolegoScreenKeyboard {
+    try { Start-Process -FilePath (Join-Path ([Environment]::SystemDirectory) 'osk.exe') -ErrorAction Stop }
+    catch { $null = [Windows.Forms.MessageBox]::Show('Abra o teclado virtual pelas Configurações de Acessibilidade do Windows ou pressione Win+Ctrl+O.', 'Teclado virtual indisponível') }
+}
+function Switch-FolegoDesktop {
+    $shell = $null
+    try {
+        $shell = New-Object -ComObject Shell.Application -ErrorAction Stop
+        $shell.ToggleDesktop()
+    } catch { $null = [Windows.Forms.MessageBox]::Show('Pressione Win+D para mostrar ou restaurar a área de trabalho.', 'Área de trabalho indisponível') }
+    finally { if ($null -ne $shell) { $null = [Runtime.InteropServices.Marshal]::ReleaseComObject($shell) } }
+}
+function Add-FolegoDesktopItems($Items) {
+    $null = $Items.Add('Abrir teclado virtual do Windows', $null, { Open-FolegoScreenKeyboard })
+    $null = $Items.Add('Mostrar ou restaurar a área de trabalho', $null, { Switch-FolegoDesktop })
+}
 function New-FolegoWidgetMenu {
     $strip = New-Object Windows.Forms.ContextMenuStrip
     Add-FolegoAppearanceItems $strip.Items
+    Add-FolegoDesktopItems $strip.Items
     $null = $strip.Items.Add('-')
     $null = $strip.Items.Add('Pausar / retomar monitoramento', $null, { Switch-FolegoPause })
     $null = $strip.Items.Add('Abrir a central', $null, { Show-FolegoView central })
@@ -152,7 +169,8 @@ function New-FolegoWidgetMenu {
 }
 function Switch-FolegoPause {
     $script:Paused = -not $script:Paused; $script:NextPoll = 0L
-    $status.Text = 'Monitoramento pausado: ' + $script:Paused
+    if (-not $script:Paused) { $script:WidgetStale = $true }
+    $status.Text = if ($script:Paused) { 'Monitoramento pausado' } else { 'Monitoramento retomado. Aguardando leitura.' }
     Update-FolegoWidget
 }
 
@@ -389,6 +407,11 @@ function Set-FolegoNotifyIcon($Notify, $Icon) {
     $old = $Notify.Icon; $Notify.Icon = $Icon
     if ($null -ne $old -and $old -ne [Drawing.SystemIcons]::Information) { $old.Dispose() }
 }
+function Remove-FolegoMetricIcon($Notify) {
+    $Notify.Visible = $false
+    Set-FolegoNotifyIcon $Notify $null
+    $Notify.Dispose()
+}
 function Get-FolegoShortTip([string]$Text) { if ($Text.Length -le 63) { return $Text }; return $Text.Substring(0, 62) + '…' }
 function Update-FolegoTrayStatus {
     # The main tray icon is always a status dot in the current health colour.
@@ -412,26 +435,29 @@ function New-FolegoTaskbarIcon([string]$Key) {
 function Update-FolegoTaskbarIndicators {
     if (-not $script:TaskbarActive -or $null -eq $script:WidgetData) { return }
     $metrics = $script:WidgetData.Metrics
-    $rows = @(Get-FolegoTrayIndicators $metrics)
+    $rows = @(Get-FolegoTrayIndicators $metrics $script:Paused $script:WidgetStale)
     $actions = @((Get-FolegoTheme $policy $script:Appearance.theme).actions)
     $size = [Windows.Forms.SystemInformation]::SmallIconSize.Width
     $wanted = @($rows | ForEach-Object { $_.Key })
     foreach ($key in @($script:TaskbarIcons.Keys)) {
-        if ($key -notin $wanted) { $gone = $script:TaskbarIcons[$key]; $gone.Visible = $false; $gone.Dispose(); $script:TaskbarIcons.Remove($key); $script:TaskbarDrawn.Remove($key) }
+        if ($key -notin $wanted) {
+            Remove-FolegoMetricIcon $script:TaskbarIcons[$key]
+            $script:TaskbarIcons.Remove($key)
+            $script:TaskbarDrawn.Remove($key)
+        }
     }
     foreach ($row in $rows) {
         if (-not $script:TaskbarIcons.Contains($row.Key)) { $script:TaskbarIcons[$row.Key] = New-FolegoTaskbarIcon $row.Key }
         $notify = $script:TaskbarIcons[$row.Key]
-        $role = if ($script:Paused -or $script:WidgetStale) { 'muted' } else { $row.Role }
-        $drawn = $row.Text + '|' + $role + '|' + $script:Appearance.theme + '|' + $size
+        $drawn = $row.Text + '|' + $row.Role + '|' + $script:Appearance.theme + '|' + $size
         if ($script:TaskbarDrawn[$row.Key] -ne $drawn) {
-            $background = Get-FolegoValue $script:Tokens $role $script:Tokens.muted
-            $icon = [Folego.Windows.TrayGlyph]::Text($row.Text, (ConvertTo-FolegoColor $background), (Get-FolegoInk $background), (ConvertTo-FolegoColor $actions[$row.Strip % $actions.Count]), $size)
+            $background = Get-FolegoValue $script:Tokens $row.Role $script:Tokens.muted
+            $caption = $actions[$row.Strip % $actions.Count]
+            $icon = [Folego.Windows.TrayGlyph]::Metric($row.Label, $row.Text, (ConvertTo-FolegoColor $background), (Get-FolegoInk $background), (ConvertTo-FolegoColor $caption), (Get-FolegoInk $caption), $size)
             Set-FolegoNotifyIcon $notify $icon
             $script:TaskbarDrawn[$row.Key] = $drawn
         }
-        $suffix = if ($script:Paused) { ' (pausado)' } elseif ($script:WidgetStale) { ' (amostra antiga)' } else { '' }
-        $notify.Text = Get-FolegoShortTip ($row.Tip + $suffix)
+        $notify.Text = Get-FolegoShortTip $row.Tip
         if (-not $notify.Visible) { $notify.Visible = $true }
     }
 }
@@ -449,7 +475,7 @@ function Show-FolegoTaskbarIndicators {
 }
 function Hide-FolegoTaskbarIndicators {
     $script:TaskbarActive = $false
-    foreach ($notify in @($script:TaskbarIcons.Values)) { $notify.Visible = $false; $notify.Dispose() }
+    foreach ($notify in @($script:TaskbarIcons.Values)) { Remove-FolegoMetricIcon $notify }
     $script:TaskbarIcons = [ordered]@{}; $script:TaskbarDrawn = @{}
 }
 function Open-FolegoCentralTab([string]$Name, [string]$Action = '') {
@@ -460,7 +486,8 @@ function Open-FolegoCentralTab([string]$Name, [string]$Action = '') {
 }
 function New-FolegoQuickMenu {
     $strip = New-Object Windows.Forms.ContextMenuStrip
-    $summary = $strip.Items.Add('Fôlego — aguardando leitura'); $summary.Enabled = $false
+    $null = $strip.Items.Add((New-Object Windows.Forms.ToolStripLabel 'Fôlego — aguardando leitura'))
+    $null = $strip.Items.Add((New-Object Windows.Forms.ToolStripLabel 'CPU —  ·  TEMP ACPI —  ·  RAM —'))
     $null = $strip.Items.Add('-')
     $null = $strip.Items.Add('Abrir a central', $null, { Show-Folego })
     $thermal = New-Object Windows.Forms.ToolStripMenuItem 'Temperatura e CPU'
@@ -476,10 +503,12 @@ function New-FolegoQuickMenu {
     $null = $thermal.DropDownItems.Add('Ver temperatura, perfil e recibo', $null, { Open-FolegoCentralTab 'Temperatura e CPU' })
     $null = $strip.Items.Add($thermal)
     $null = $strip.Items.Add('Analisar consumidores e órfãos', $null, { $script:TriageFilter = ''; Open-FolegoCentralTab 'Consumidores' 'Consumers' })
+    $null = $strip.Items.Add('Ver espaço nos volumes locais', $null, { Open-FolegoCentralTab 'Trabalho e disco' 'Volumes' })
     $null = $strip.Items.Add('Inicialização do Windows', $null, { Open-FolegoCentralTab 'Inicialização' 'StartupList' })
     $null = $strip.Items.Add('Pausar / retomar monitoramento', $null, { Switch-FolegoPause })
     $null = $strip.Items.Add('-')
     Add-FolegoAppearanceItems $strip.Items
+    Add-FolegoDesktopItems $strip.Items
     $null = $strip.Items.Add('Deixar os indicadores sempre visíveis…', $null, { Start-Process 'ms-settings:taskbar'; $status.Text = 'Em Outros ícones da bandeja, ligue os ícones do Fôlego (Windows PowerShell).' })
     $null = $strip.Items.Add('Gerenciador de Tarefas', $null, { Start-Process taskmgr.exe })
     $null = $strip.Items.Add('-')
@@ -489,7 +518,14 @@ function New-FolegoQuickMenu {
         Sync-FolegoAppearanceChecks
         if ($null -ne $script:WidgetData) {
             $m = $script:WidgetData.Metrics
-            $sender.Items[0].Text = Get-FolegoShortTip ('Fôlego — ' + $m.Status.Text + ' · CPU ' + $m.Cpu.Text + ' · ' + $m.Temp.Text + ' · RAM ' + $m.Ram.Text)
+            $summaryText = if ($script:Paused) { 'Monitoramento pausado' } elseif ($script:WidgetStale) { 'Amostra antiga' } else { $m.Status.Text }
+            $sender.Items[0].Text = 'Fôlego — ' + $summaryText
+            $rows = @(Get-FolegoTrayIndicators $m $script:Paused $script:WidgetStale)
+            $sender.Items[1].Text = ($rows | ForEach-Object {
+                $label = if ($_.Key -eq 'Temp') { 'TEMP ACPI' } else { $_.Label }
+                $unit = if ($_.Text -eq '–') { '' } elseif ($_.Key -eq 'Temp') { ' °C' } else { '%' }
+                $label + ' ' + $_.Text + $unit
+            }) -join '  ·  '
         }
     })
     return $strip

@@ -141,6 +141,46 @@ function Get-FolegoExtendedHealth($Extended, $Policy, [long]$NowMs) {
     }
     return [pscustomobject]@{ Level = $level; Text = ($messages -join "`r`n") }
 }
+function Get-FolegoLocalVolumes {
+    $volumes = Get-CimInstance -ClassName Win32_LogicalDisk -Filter 'DriveType = 3' -OperationTimeoutSec 3 -ErrorAction Stop
+    return @($volumes | Sort-Object DeviceID)
+}
+function Format-FolegoVolumeInventory($Volumes) {
+    $lines = foreach ($volume in $Volumes) {
+        $name = if ($volume.VolumeName) { $volume.DeviceID + ' ' + $volume.VolumeName } else { $volume.DeviceID }
+        $filesystem = if ($volume.FileSystem) { $volume.FileSystem } else { 'sistema de arquivos desconhecido' }
+        $capacity = 'capacidade indisponível'
+        if ($null -ne $volume.FreeSpace -and $volume.Size -gt 0 -and $volume.FreeSpace -ge 0 -and $volume.FreeSpace -le $volume.Size) {
+            $capacity = '{0:N1} GiB livres de {1:N1} GiB ({2:P1} ocupado)' -f ($volume.FreeSpace / 1GB), ($volume.Size / 1GB), (1 - [double]$volume.FreeSpace / $volume.Size)
+        }
+        '{0} · {1} · {2}' -f $name, $filesystem, $capacity
+    }
+    if (-not $lines) { return 'O Windows não retornou volumes locais fixos com letra.' }
+    return (@('Volumes locais fixos com letra', '') + $lines) -join "`r`n"
+}
+function Get-FolegoBootTimeline {
+    $sources = [ordered]@{
+        'Microsoft-Windows-Kernel-General' = @{ 12 = 'Windows iniciado'; 13 = 'Windows registrou desligamento' }
+        'Microsoft-Windows-Kernel-Power' = @{ 41 = 'Reiniciou após desligamento inesperado' }
+        'User32' = @{ 1074 = 'Desligamento ou reinício solicitado' }
+        'EventLog' = @{ 6008 = 'Desligamento inesperado registrado' }
+        'Microsoft-Windows-WER-SystemErrorReporting' = @{ 1001 = 'Reinício após erro de parada (bugcheck)' }
+    }
+    $clauses = foreach ($provider in $sources.Keys) {
+        $ids = ($sources[$provider].Keys | ForEach-Object { 'EventID=' + $_ }) -join ' or '
+        "(Provider[@Name='$provider'] and ($ids))"
+    }
+    $xpath = '*[System[' + ($clauses -join ' or ') + ']]'
+    try { $events = @(Get-WinEvent -LogName System -FilterXPath $xpath -MaxEvents 24 -ErrorAction Stop) }
+    catch {
+        if ($_.FullyQualifiedErrorId -like 'NoMatchingEventsFound,*') { return 'O Windows não retornou eventos de inicialização ou reinício.' }
+        throw
+    }
+    $lines = foreach ($event in $events) {
+        '{0:g} · {1} (evento {2})' -f $event.TimeCreated, $sources[$event.ProviderName][[int]$event.Id], $event.Id
+    }
+    return (@('Eventos recentes do Windows · horário local do registro', '') + $lines) -join "`r`n"
+}
 function Get-FolegoPowerState([string]$DataRoot, $HostInfo) {
     $path = Join-Path $DataRoot ('power-' + $HostInfo.Id + '.json')
     $state = Read-FolegoJson $path

@@ -188,6 +188,10 @@ switch ($Action) {
         }
         $data = [pscustomobject]@{ Decision = $decision; Reading = $reading }
     }
+    'Volumes' {
+        try { $actionResult = Format-FolegoVolumeInventory @(Get-FolegoLocalVolumes) }
+        catch { $actionResult = 'Inventário de volumes indisponível: ' + $_.Exception.Message }
+    }
     'Processes' {
         $actionResult = 'Amostra de RAM e tempo acumulado de CPU; não é percentual instantâneo. Sem fechar/processar agentes.' + "`r`n"
         $actionResult += (Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 25 Id, ProcessName, @{n='RAM_MiB';e={[Math]::Round($_.WorkingSet64 / 1MB)}}, @{n='CPU_s_acumulada';e={$_.CPU}} | Format-Table -AutoSize | Out-String)
@@ -204,10 +208,8 @@ switch ($Action) {
         $actionResult = $lines -join "`r`n"
     }
     'Events' {
-        try {
-            $events = @(Get-WinEvent -FilterHashtable @{LogName='System';Id=@(41,6008)} -MaxEvents 12 -ErrorAction Stop)
-            $actionResult = 'Eventos de corte/reinício; registram o incidente e não comprovam sua causa.' + "`r`n" + ($events | Select-Object TimeCreated, Id, ProviderName | Format-Table -AutoSize | Out-String)
-        } catch { $actionResult = 'Sem leitura de eventos disponível: ' + [string]$_ }
+        try { $actionResult = Get-FolegoBootTimeline }
+        catch { $actionResult = 'Histórico de reinícios indisponível: ' + $_.Exception.Message }
     }
 }
 } catch { $actionError = [string]$_.Exception.Message }

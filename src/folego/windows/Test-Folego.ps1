@@ -435,13 +435,38 @@ try {
     Check ($null -ne ('Folego.Windows.WidgetForm' -as [type]) -and $null -ne ('Folego.Windows.HealthRing' -as [type]) -and $null -ne ('Folego.Windows.TrayGlyph' -as [type])) 'Widget window, health ring and tray glyphs compile with Windows Forms'
     $tray = @(Get-FolegoTrayIndicators (Get-FolegoMiniMetrics $healthy ([pscustomobject]@{ Celsius = 59.1 }) 'green' $policy $false))
     Check (($tray | ForEach-Object { $_.Key }) -join ',' -eq 'Cpu,Temp,Ram,Bat') 'Taskbar shows CPU, temperature, RAM and battery'
+    Check (($tray.Label -join ',') -ceq 'CPU,TEMP,RAM,BAT') 'Live icons identify every metric at a glance'
     Check ((@($tray | Where-Object { $_.Key -eq 'Temp' })[0].Text -eq '59') -and (@($tray | Where-Object { $_.Key -eq 'Ram' })[0].Text -eq '50')) 'Indicator numbers fit a small icon'
+    Check ($tray[1].Tip -match 'ACPI.*59 °C' -and $tray[2].Tip -match 'em uso.*50%') 'Tooltips describe the thermal source and distinguish used RAM'
     Check (@($tray | Where-Object { $_.Key -eq 'Bat' })[0].Tip -match 'tomada') 'Battery tooltip says when on external power'
     Check (@($tray | Where-Object { $_.Text.Length -gt 3 -or $_.Tip.Length -gt 63 }).Count -eq 0) 'Icon text and tooltip fit Windows limits'
     $tray = @(Get-FolegoTrayIndicators (Get-FolegoMiniMetrics $null $null 'unknown' $policy $false))
     Check (($tray | ForEach-Object { $_.Key }) -join ',' -eq 'Cpu,Temp,Ram' -and @($tray | Where-Object { $_.Role -ne 'muted' -or $_.Text -ne '–' }).Count -eq 0) 'Unknown readings stay neutral and battery icon hides without a battery'
     $tray = @(Get-FolegoTrayIndicators (Get-FolegoMiniMetrics $hot $null 'red' $policy $false))
     Check (@($tray | Where-Object { $_.Key -eq 'Cpu' })[0].Role -eq 'danger' -and @($tray | Where-Object { $_.Key -eq 'Bat' })[0].Text -eq '5') 'Critical readings colour the indicators'
+    $m = Get-FolegoMiniMetrics $healthy ([pscustomobject]@{ Celsius = -3 }) 'green' $policy $false
+    Check ((@(Get-FolegoTrayIndicators $m))[1].Text -eq '-3') 'Temperature keeps the minus sign'
+    $m = Get-FolegoMiniMetrics $healthy ([pscustomobject]@{ Celsius = $null }) 'green' $policy $false
+    Check ((@(Get-FolegoTrayIndicators $m))[1].Text -eq '–') 'An incomplete thermal reading stays unknown'
+    $stale = @(Get-FolegoTrayIndicators $m $false $true)
+    $paused = @(Get-FolegoTrayIndicators $m $true $false)
+    Check (@($stale | Where-Object { $_.Text -ne '–' -or $_.Tip -notmatch 'amostra antiga' }).Count -eq 0) 'Stale numbers are removed immediately'
+    Check (@($paused | Where-Object { $_.Role -ne 'muted' -or $_.Tip -notmatch 'pausado' }).Count -eq 0) 'Paused icons retain labels and explain why readings are hidden'
+    foreach ($size in @(16, 20, 24, 32)) {
+        foreach ($row in $tray) {
+            $icon = [Folego.Windows.TrayGlyph]::Metric($row.Label, $row.Text, [Drawing.Color]::White, [Drawing.Color]::Black, [Drawing.Color]::Black, [Drawing.Color]::White, $size)
+            try { Check ($icon.Width -eq $size -and $icon.Height -eq $size) ('Icon ' + $row.Label + ' fits ' + $size + ' px') }
+            finally { $icon.Dispose() }
+        }
+    }
+    $batterySource = [pscustomobject]@{ ExternalPower = $false; BatterySeconds = 3660 }
+    Check ((Get-FolegoBatteryEstimate $batterySource) -eq '1 h 01 min restantes') 'Battery time is shown only from the Windows estimate'
+    $batterySource.ExternalPower = $true
+    Check (-not (Get-FolegoBatteryEstimate $batterySource)) 'Battery runtime is hidden on external power'
+    $knownVolume = [pscustomobject]@{ DeviceID = 'C:'; VolumeName = 'Windows'; FileSystem = 'NTFS'; Size = 100GB; FreeSpace = 0 }
+    $unknownVolume = [pscustomobject]@{ DeviceID = 'D:'; VolumeName = ''; FileSystem = ''; Size = 80GB; FreeSpace = $null }
+    $volumes = Format-FolegoVolumeInventory @($knownVolume, $unknownVolume)
+    Check ($volumes -match 'C: Windows.*NTFS.*0[.,]0 GiB livres' -and $volumes -match 'D:.*capacidade indisponível') 'Volume inventory distinguishes full disks and an unavailable reading'
 
     # ------------------------------------------------ serialized logon sequence
     $bad = $policy | ConvertTo-Json -Depth 20 | ConvertFrom-Json

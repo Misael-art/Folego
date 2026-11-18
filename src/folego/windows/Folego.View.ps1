@@ -86,13 +86,21 @@ function Get-FolegoHeadroom($Sample) {
     $commit = 1 - [double]$Sample.CommitUsed / $Sample.CommitLimit
     return [int][Math]::Round(100.0 * [Math]::Max(0.0, [Math]::Min($ram, $commit)))
 }
+function Get-FolegoBatteryEstimate($Sample) {
+    $seconds = Get-FolegoValue $Sample BatterySeconds
+    if ($Sample.ExternalPower -ne $false -or $null -eq $seconds -or $seconds -lt 0) { return '' }
+    if ($seconds -lt 60) { return '<1 min restantes' }
+    $time = [TimeSpan]::FromSeconds($seconds)
+    if ($time.TotalHours -lt 1) { return ('{0} min restantes' -f $time.Minutes) }
+    return ('{0} h {1:00} min restantes' -f [Math]::Floor($time.TotalHours), $time.Minutes)
+}
 function Get-FolegoMiniMetrics($Sample, $ThermalNow, [string]$Level, $Policy, [bool]$Paused) {
     # Text + colour role (ok/warning/danger/muted) for the mini, side and top views.
     $w = $Policy.windows; $t = $w.thermal; $h = $Policy.health
     $verdicts = @{ green = @('Saudável', 'ok'); yellow = @('Atenção', 'warning'); red = @('Crítico', 'danger'); unknown = @('Desconhecido', 'muted') }
     $verdict = $verdicts[$(if ($verdicts.ContainsKey($Level)) { $Level } else { 'unknown' })]
     $status = [pscustomobject]@{ Text = $verdict[0]; Role = $verdict[1] }
-    $celsius = if ($null -ne $ThermalNow) { [double]$ThermalNow.Celsius } else { $null }
+    $celsius = Get-FolegoValue $ThermalNow Celsius
     $temp = [pscustomobject]@{ Text = '— °C'; Role = 'muted' }
     if ($null -ne $celsius) {
         $temp.Text = ('{0:N0} °C' -f $celsius)
@@ -100,13 +108,13 @@ function Get-FolegoMiniMetrics($Sample, $ThermalNow, [string]$Level, $Policy, [b
     }
     $cpu = [pscustomobject]@{ Text = '—'; Role = 'muted' }
     $ram = [pscustomobject]@{ Text = '—'; Role = 'muted' }
-    $bat = [pscustomobject]@{ Text = '—'; Role = 'muted'; Caption = 'BAT'; Visible = $false }
+    $bat = [pscustomobject]@{ Text = '—'; Role = 'muted'; Caption = 'BAT'; Visible = $false; Estimate = '' }
     if ($null -ne $Sample) {
         if ($null -ne $Sample.CpuPercent) {
             $cpu.Text = ('{0:N0}%' -f $Sample.CpuPercent)
             $cpu.Role = if ($Sample.CpuPercent -ge $w.cpu_critical) { 'danger' } elseif ($Sample.CpuPercent -ge $w.cpu_attention) { 'warning' } else { 'ok' }
         }
-        if ($Sample.TotalPhysical -gt 0 -and $Sample.AvailablePhysical -le $Sample.TotalPhysical) {
+        if ($Sample.TotalPhysical -gt 0 -and $null -ne $Sample.AvailablePhysical -and $Sample.AvailablePhysical -le $Sample.TotalPhysical) {
             $available = [double]$Sample.AvailablePhysical / $Sample.TotalPhysical
             $ram.Text = ('{0:N0}%' -f (100 * (1 - $available)))
             $ram.Role = if ($available -le $h.red_available_frac) { 'danger' } elseif ($available -le $h.yellow_available_frac) { 'warning' } else { 'ok' }
@@ -115,6 +123,7 @@ function Get-FolegoMiniMetrics($Sample, $ThermalNow, [string]$Level, $Policy, [b
             $band = [string]$Policy.battery_bands[[int]$Sample.BatteryPercent]
             $bat.Text = ([string]$Sample.BatteryPercent + '%'); $bat.Visible = $true
             $bat.Role = @{ green = 'ok'; yellow = 'warning'; orange = 'warning'; red = 'danger' }[$band]
+            $bat.Estimate = Get-FolegoBatteryEstimate $Sample
             if ($Sample.ExternalPower -eq $true) { $bat.Caption = 'TOMADA' }
         }
     }
@@ -124,17 +133,17 @@ function Get-FolegoMiniMetrics($Sample, $ThermalNow, [string]$Level, $Policy, [b
     elseif ($null -ne $Sample -and $Sample.ExternalPower -eq $false -and $null -ne $Sample.BatteryPercent -and $Sample.BatteryPercent -le 10) { $status.Text = ('Bateria ' + $Sample.BatteryPercent + '%'); $status.Role = 'danger' }
     return [pscustomobject]@{ Status = $status; Cpu = $cpu; Temp = $temp; Ram = $ram; Bat = $bat; Headroom = (Get-FolegoHeadroom $Sample) }
 }
-function Get-FolegoTrayIndicators($Metrics) {
-    # Taskbar view: one notification-area icon per metric. Text is at most 3 characters
-    # (a 16 px icon); the tooltip carries the full reading. Unknown stays neutral, never green.
-    $rows = @()
-    foreach ($spec in @(@('Cpu', 'CPU', '%', 0), @('Temp', 'Temperatura', '', 1), @('Ram', 'RAM em uso', '%', 2), @('Bat', 'Bateria', '%', 3))) {
+function Get-FolegoTrayIndicators($Metrics, [bool]$Paused = $false, [bool]$Stale = $false) {
+    foreach ($spec in @(@('Cpu', 'CPU', 'CPU', 0), @('Temp', 'TEMP', 'Temperatura (zona ACPI)', 1), @('Ram', 'RAM', 'RAM em uso', 2), @('Bat', 'BAT', 'Bateria', 3))) {
         $metric = $Metrics.($spec[0])
         if ($spec[0] -eq 'Bat' -and -not $metric.Visible) { continue }
-        $digits = ([string]$metric.Text) -replace '[^0-9]', ''
-        $text = if (-not $digits) { '–' } elseif ($digits.Length -gt 3) { '999' } else { $digits }
-        $caption = if ($spec[0] -eq 'Bat' -and $metric.Caption -eq 'TOMADA') { 'Bateria (na tomada)' } else { $spec[1] }
-        $rows += [pscustomobject]@{ Key = $spec[0]; Text = $text; Role = [string]$metric.Role; Strip = [int]$spec[3]; Tip = ('Fôlego · ' + $caption + ': ' + $metric.Text) }
+        $number = [string]$metric.Text -replace '(?:%| °C)$', ''
+        $visible = -not ($Paused -or $Stale)
+        $text = if ($visible -and $number.Length -le 3 -and $number -match '^-?[0-9]+$') { $number } else { '–' }
+        $role = if ($text -eq '–') { 'muted' } else { [string]$metric.Role }
+        $caption = if ($spec[0] -eq 'Bat' -and $metric.Caption -eq 'TOMADA') { 'Bateria (na tomada)' } else { $spec[2] }
+        $reading = if ($Paused) { 'monitoramento pausado' } elseif ($Stale) { 'amostra antiga' } elseif ($number -eq '—') { 'indisponível' } else { $metric.Text }
+        if ($visible -and $spec[0] -eq 'Bat' -and $metric.Estimate) { $reading += ' · ' + $metric.Estimate }
+        [pscustomobject]@{ Key = $spec[0]; Label = $spec[1]; Text = $text; Role = $role; Strip = [int]$spec[3]; Tip = ($caption + ': ' + $reading + ' · Fôlego') }
     }
-    return $rows
 }

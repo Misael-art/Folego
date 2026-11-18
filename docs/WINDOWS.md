@@ -39,7 +39,7 @@ central e o último widget usado:
 | Visualização | Forma no Windows |
 | --- | --- |
 | Central do Fôlego | Janela com abas; um widget aberto recolhe a central para a bandeja. |
-| Barra de tarefas (padrão) | Indicadores vivos na área de notificação: um ponto de estado e ícones com o número de CPU, temperatura, RAM e bateria, na cor de saúde e com uma faixa na cor do tema. A dica de cada ícone traz a leitura completa. |
+| Barra de tarefas (padrão) | Indicadores vivos na área de notificação. Cada ícone traz a sigla **CPU**, **TEMP**, **RAM** ou **BAT** acima do valor. A faixa da sigla segue o tema. A cor do valor indica a faixa de saúde. |
 | Mini horizontal | Faixa de 384 × 46 px (escala com o DPI): estado, CPU, temperatura, RAM e bateria, expandir e menu. |
 | Widget compacto | Cartão de 268 px com anel de folga, estado, RAM livre, CPU, zona térmica, bateria e perfil térmico. |
 | Lateral esquerda / direita | Barra na borda da área de trabalho, 112–128 px de largura e altura total, como no Linux. |
@@ -49,8 +49,11 @@ Na **Barra de tarefas**, um clique (esquerdo ou direito) em qualquer indicador a
 menu de funções: resumo atual, abrir a central, aplicar Fresco/Contenção ou
 restaurar os originais (com a mesma confirmação da central), analisar consumidores,
 inicialização, pausar, visualizações, tema, transparência, Gerenciador de Tarefas
-e sair. O resultado de uma ação iniciada ali aparece como notificação, sem abrir a
-central. Os indicadores aparecem neutros ("–") até a primeira leitura. O Windows 11
+e sair. No cabeçalho do menu, as leituras ficam agrupadas e mostram `%` ou `°C`.
+A dica de cada ícone informa a unidade, o uso de RAM e a origem ACPI da temperatura.
+Sem leitura atual, o ícone mantém a sigla e exibe um traço neutro. A dica informa
+se o monitoramento está pausado, a amostra envelheceu ou a leitura está indisponível.
+O Windows 11
 não oferece mais deskbands, e encaixar uma janela dentro do `explorer.exe` seria
 frágil; por isso são ícones nativos da área de notificação, que o próprio Windows
 recoloca se o explorer reiniciar. Ícones novos podem ir para o menu ^: **Deixar os
@@ -77,8 +80,9 @@ menor que o do Linux, que torna transparente só o fundo.
 
 As escolhas ficam em `appearance.json`, gravado só quando o usuário muda visualização,
 tema, transparência, modo de abertura ou posição. Um arquivo inválido é preservado e
-os padrões valem só na sessão, sem sobrescrevê-lo. Os atalhos de área de trabalho,
-cotas de IA e regras do KWin do widget Linux não têm equivalente validado no Windows.
+os padrões valem só na sessão, sem sobrescrevê-lo. Os menus dos indicadores e dos
+widgets oferecem **Abrir teclado virtual do Windows** e **Mostrar ou restaurar a
+área de trabalho**. O teclado também está na **Visão geral**.
 
 ## Recursos e limites do port
 
@@ -86,21 +90,43 @@ cotas de IA e regras do KWin do widget Linux não têm equivalente validado no W
 | --- | --- |
 | RAM e CPU | GlobalMemoryStatusEx e diferença entre GetSystemTimes; CPU exige duas amostras. |
 | Memória comprometida | GetPerformanceInfo: uso e limite de commit; não é tamanho nem uso isolado de pagefile. |
-| Disco do aplicativo | Espaço livre pela API Win32, fila e saúde por consultas Windows. Sem varredura recursiva automática. |
-| Bateria/carregador | GetSystemPowerStatus; ausência/255 permanece desconhecido. Sem inferir tensão ou saúde do carregador. |
+| Disco | Espaço, fila e saúde do volume do aplicativo. Em **Trabalho e disco → Ver espaço nos volumes locais**, inventário sob demanda dos volumes locais fixos com letra, com sistema de arquivos, capacidade, espaço livre e ocupação. Leituras incompletas ficam indisponíveis. |
+| Bateria/carregador | GetSystemPowerStatus. A Visão geral e a dica do ícone **BAT** exibem uma estimativa de tempo em descarga quando o Windows a fornece. Tensão, corrente e saúde do carregador seguem sem leitura própria. |
 | Temperatura | Zonas ACPI de root/wmi; sem elas (usuário comum), a mesma zona pela classe CIM `Win32_PerfFormattedData_Counters_ThermalZoneInformation`, que independe do idioma dos contadores. Limites passivo/crítico só quando o sensor os informa. Não equivale automaticamente à APU/GPU. |
 | Perfis térmicos | `PROCTHROTTLEMAX` e `PERFBOOSTMODE` do plano ativo existente (tomada e bateria) por PowerRead/PowerWrite + PowerSetActiveScheme. Recibo antes, leitura depois, até quatro trocas por hora. Guarda automática opcional, desligada por padrão. |
 | Consumidores e órfãos | Toolhelp + GetProcessTimes/GetProcessIoCounters em duas amostras de 2 s; dono pelo token; linha de comando resumida sem segredos. Encerramento só manual, confirmado e revalidado. |
 | Inicialização | HKCU/HKLM Run, Run32, pastas Startup e tarefas de pacote; desativação pelo mesmo `StartupApproved` das Configurações, com recibo e restauração. |
 | Identidade física | UUID SMBIOS; se o firmware informa um UUID de preenchimento (o Deck LCD informa `FFFFFFFF-…`), número de série da BIOS e depois da placa. Hosts com UUID válido mantêm o identificador anterior. |
 | Alertas | Pressão observada, bateria baixa e desconexão, com intervalo mínimo de cinco minutos por tipo. |
-| Diagnósticos manuais | Até 25 processos por RAM, amostra superficial limitada de temporários e até 12 eventos de corte/reinício. A triagem de consumidores mostra linhas de comando truncadas, com tokens/chaves/senhas ocultos, e não as grava. |
+| Diagnósticos manuais | Até 25 processos por RAM, amostra superficial limitada de temporários e até 24 eventos recentes de inicialização, desligamento, pedido de reinício e erro de parada do Windows. A triagem de consumidores mostra linhas de comando truncadas, com tokens/chaves/senhas ocultos, e não as grava. |
 | Energia | Planos oficiais existentes, intenção durável antes da troca, confirmação por leitura, recuperação e até quatro trocas por hora. |
 | Componentes do sistema | Windows Update, Otimização de Entrega, Defender, UAC e serviços: só detecção e a página oficial correspondente. Nada é alterado pelo app. |
 | Manutenção de armazenamento | Reutiliza o painel do cartão quando presente; fora dele abre as Configurações do Windows. |
 | Linux PSI, zram e tmpfs | Não são métricas equivalentes no Windows; não há leitura sintética ou verde presumido. |
 | KWin, systemd, áudio/entrada e IA | Reparos e integrações com owners/contas Linux não têm adaptador Windows validado e não são executados. |
 | TDP, ventoinha, drivers, EFI e discos Linux | Permanecem com os responsáveis próprios; nenhum acesso EC/SMU ou troca de driver é feito pelo port. |
+
+### Funções que ainda precisam de equivalente Windows
+
+Inventário comparado com a [visão geral do produto Linux](../README.md#o-que-você-pode-fazer)
+e o [guia do widget](COMPACTO.md).
+
+| Área | O que falta portar ou validar |
+| --- | --- |
+| Disco e temporários | Histórico e tendência de ocupação por volume, diagnóstico de arquivos em uso e seus responsáveis, inventário detalhado dos temporários próprios, quarentena, cópia verificada e recuperação. O Windows já tem espaço por volume, saúde básica e amostra superficial de temporários. |
+| Saúde do host | Histórico persistente e correlação de incidentes, falhas de armazenamento, temperatura da APU/GPU e RPM quando houver fonte documentada. Hoje há consulta aos eventos recentes do Windows e temperatura de zona ACPI. Os IDs 41 e 6008 registram o incidente e por si só não identificam a causa. |
+| Energia | Tensão, corrente e descarga mesmo com energia externa, avisos sonoros por faixa, guarda por queda de tensão e economia reversível da tela. Hoje há percentual, estado da tomada, estimativa de descarga, perfis térmicos e guarda por carga baixa. |
+| Entrada e acessibilidade | Diagnóstico de trackpads, toque, controles e endpoints de áudio. Recuperação precisa identificar o responsável pelo dispositivo e a configuração saudável neste Windows. O teclado virtual do Windows já pode ser aberto pelo Fôlego. |
+| Sessões protegidas e desempenho | Registro de trabalho a manter ativo, exclusões por sessão, revisão coordenada de ações e alívio cooperativo entre agentes. A triagem e o encerramento manual confirmados já existem. |
+| Contas de IA | Painel de contas e cotas, janelas de reset, entregas, alertas de MCP e recuperação pelo responsável verificado quando disponível. Credenciais, caminhos e sessões precisam de adaptadores Windows próprios. |
+| Ferramentas do widget | Biblioteca de prompts, textos e macros pessoais, ações de edição/captura e teclado próprio integrado. Já há atalho do Windows para teclado e área de trabalho. |
+| Aparência e diagnóstico pelo terminal | Transparência apenas do fundo, interação por encaixe e paridade da CLI de revisão/recuperação. Hoje há visualizações, temas e probe nativo de leitura. |
+| Ajustes reversíveis | Preferências gerenciadas dos navegadores, orientação de recursos nos IDEs e CLIs e opções que dependam de um launcher compatível. Cada ajuste precisa comprovar o caminho e o responsável no Windows. |
+
+PSI, zram, tmpfs, unidades systemd, layout do Plasma, regras do KWin, PipeWire e
+contadores Btrfs pertencem ao ambiente Linux. A paridade no Windows passa por
+diagnósticos e ações equivalentes para o usuário, usando as fontes e os
+responsáveis do Windows.
 
 Uma coleta por vez, fora da thread da interface. Amostras nativas a cada
 10 segundos; sensores/fila/saúde a cada 60 segundos. CPU/RAM/commit/espaço
@@ -382,6 +408,9 @@ separados das simulações no Linux e do runner Windows da CI.
 - [Commit](https://learn.microsoft.com/windows/win32/api/psapi/nf-psapi-getperformanceinfo)
 - [Energia e bateria](https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-getsystempowerstatus)
 - [Plano ativo](https://learn.microsoft.com/windows/win32/api/powersetting/nf-powersetting-powergetactivescheme)
+- [Capacidade de volumes locais](https://learn.microsoft.com/windows/win32/cimwin32prov/win32-logicaldisk)
+- [Eventos de inicialização e reinício](https://learn.microsoft.com/en-us/troubleshoot/windows-server/performance/troubleshoot-unexpected-reboots-system-event-logs)
+- [Teclado virtual](https://support.microsoft.com/en-us/accessibility/windows/use-the-on-screen-keyboard-osk-to-type) e [alternância da área de trabalho](https://learn.microsoft.com/windows/win32/shell/shell-toggledesktop)
 - [Troca de plano](https://learn.microsoft.com/windows/win32/api/powersetting/nf-powersetting-powersetactivescheme)
 - [HKCU Run](https://learn.microsoft.com/windows/win32/setupapi/run-and-runonce-registry-keys)
 - [Leitura](https://learn.microsoft.com/windows/win32/api/powersetting/nf-powersetting-powerreadacvalueindex) e [escrita](https://learn.microsoft.com/windows/win32/api/powersetting/nf-powersetting-powerwriteacvalueindex) de configurações de energia

@@ -175,6 +175,7 @@ try {
     Add-FolegoButton $page 'Atualizar agora' { Request-Folego Sample }
     Add-FolegoButton $page 'Pausar / retomar monitoramento (Ctrl+Shift+P)' { Switch-FolegoPause }
     Add-FolegoButton $page 'Abrir o widget (Ctrl+Shift+F)' { Show-FolegoView $script:Appearance.last_widget }
+    Add-FolegoButton $page 'Abrir teclado virtual do Windows' { Open-FolegoScreenKeyboard }
 
     $thermalPolicy = $policy.windows.thermal
     $page = New-FolegoPage 'Temperatura e CPU'
@@ -279,9 +280,10 @@ try {
 
     $page = New-FolegoPage 'Trabalho e disco'
     $null = Add-FolegoLabel $page 'Agentes, projetos, Git, credenciais, bancos e volumes permanecem protegidos. Esta aba não encerra processos, esvazia memória, apaga temporários nem interrompe WSL ou serviços; encerramentos confirmados ficam na aba Consumidores.' 85
+    Add-FolegoButton $page 'Ver espaço nos volumes locais' { Request-Folego Volumes }
     Add-FolegoButton $page 'Ver maiores consumidores de RAM' { Request-Folego Processes }
     Add-FolegoButton $page 'Diagnosticar temporários conhecidos (amostra limitada)' { Request-Folego Temps }
-    Add-FolegoButton $page 'Eventos de reinício abrupto do Windows' { Request-Folego Events }
+    Add-FolegoButton $page 'Ver histórico de inicialização e reinícios' { Request-Folego Events }
     $diagnostic = New-FolegoOutput $page 190
     Add-FolegoButton $page 'Abrir Gerenciador de Tarefas' { Start-Process taskmgr.exe }
     Add-FolegoButton $page 'Abrir armazenamento e manutenção' {
@@ -382,6 +384,8 @@ try {
                     $headline.ForeColor = Get-FolegoRoleColor $(switch ($level) { 'red' { 'danger' } 'yellow' { 'warning' } 'green' { 'ok' } default { 'muted' } })
                     $cpu = if ($null -ne $sample.CpuPercent) { '{0:N0}%' -f $sample.CpuPercent } else { 'desconhecida' }
                     $battery = if ($null -ne $sample.BatteryPercent) { [string]$sample.BatteryPercent + '% (' + $policy.battery_bands[[int]$sample.BatteryPercent] + ')' } else { 'indisponível' }
+                    $batteryEstimate = Get-FolegoBatteryEstimate $sample
+                    if ($batteryEstimate) { $battery += ' · ' + $batteryEstimate + ' (estimativa do Windows)' }
                     $ac = if ($null -eq $sample.ExternalPower) { 'desconhecida' } elseif ($sample.ExternalPower) { 'conectada' } else { 'desconectada' }
                     $space = if ($null -ne $sample.DiskAvailable) { '{0:N1} / {1:N1} GiB' -f ($sample.DiskAvailable / 1GB), ($sample.DiskTotal / 1GB) } else { 'desconhecido' }
                     $metrics.Text = ('RAM disponível: {0:N1} / {1:N1} GiB | CPU: {2}' -f ($sample.AvailablePhysical / 1GB), ($sample.TotalPhysical / 1GB), $cpu) + "`r`n" + ('Commit: {0:N1} / {1:N1} GiB | Espaço livre: {2}' -f ($sample.CommitUsed / 1GB), ($sample.CommitLimit / 1GB), $space) + "`r`n" + ('Bateria: ' + $battery + ' | Energia externa: ' + $ac) + "`r`n" + ('Fôlego: {0:N0} MiB RSS | amostra UTC: {1:o}' -f ($sample.SelfRss / 1MB), $sample.AtUtc)
