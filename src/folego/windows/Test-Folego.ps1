@@ -10,7 +10,7 @@ function Reject([scriptblock]$Operation, [string]$Message) { $failed = $false; t
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('folego-windows-tests-' + [Guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($fixture) | Out-Null
 try {
-    foreach ($file in @('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1', 'Collect.ps1', 'Test-Folego.ps1', 'DeckBootstrap.ps1')) {
+    foreach ($file in @('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.Sequence.ps1', 'Folego.AI.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1', 'Collect.ps1', 'Test-Folego.ps1', 'DeckBootstrap.ps1')) {
         $tokens = $null; $errors = $null
         $null = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $file), [ref]$tokens, [ref]$errors)
         Check ($errors.Count -eq 0) ('Syntax ' + $file + ': ' + ($errors | Out-String))
@@ -435,13 +435,182 @@ try {
     Check ($null -ne ('Folego.Windows.WidgetForm' -as [type]) -and $null -ne ('Folego.Windows.HealthRing' -as [type]) -and $null -ne ('Folego.Windows.TrayGlyph' -as [type])) 'Widget window, health ring and tray glyphs compile with Windows Forms'
     $tray = @(Get-FolegoTrayIndicators (Get-FolegoMiniMetrics $healthy ([pscustomobject]@{ Celsius = 59.1 }) 'green' $policy $false))
     Check (($tray | ForEach-Object { $_.Key }) -join ',' -eq 'Cpu,Temp,Ram,Bat') 'Taskbar shows CPU, temperature, RAM and battery'
+    Check (($tray.Label -join ',') -ceq 'CPU,TEMP,RAM,BAT') 'Live icons identify every metric at a glance'
     Check ((@($tray | Where-Object { $_.Key -eq 'Temp' })[0].Text -eq '59') -and (@($tray | Where-Object { $_.Key -eq 'Ram' })[0].Text -eq '50')) 'Indicator numbers fit a small icon'
+    Check ($tray[1].Tip -match 'ACPI.*59 °C' -and $tray[2].Tip -match 'em uso.*50%') 'Tooltips describe the thermal source and distinguish used RAM'
     Check (@($tray | Where-Object { $_.Key -eq 'Bat' })[0].Tip -match 'tomada') 'Battery tooltip says when on external power'
     Check (@($tray | Where-Object { $_.Text.Length -gt 3 -or $_.Tip.Length -gt 63 }).Count -eq 0) 'Icon text and tooltip fit Windows limits'
     $tray = @(Get-FolegoTrayIndicators (Get-FolegoMiniMetrics $null $null 'unknown' $policy $false))
     Check (($tray | ForEach-Object { $_.Key }) -join ',' -eq 'Cpu,Temp,Ram' -and @($tray | Where-Object { $_.Role -ne 'muted' -or $_.Text -ne '–' }).Count -eq 0) 'Unknown readings stay neutral and battery icon hides without a battery'
     $tray = @(Get-FolegoTrayIndicators (Get-FolegoMiniMetrics $hot $null 'red' $policy $false))
     Check (@($tray | Where-Object { $_.Key -eq 'Cpu' })[0].Role -eq 'danger' -and @($tray | Where-Object { $_.Key -eq 'Bat' })[0].Text -eq '5') 'Critical readings colour the indicators'
+    $m = Get-FolegoMiniMetrics $healthy ([pscustomobject]@{ Celsius = -3 }) 'green' $policy $false
+    Check ((@(Get-FolegoTrayIndicators $m))[1].Text -eq '-3') 'Temperature keeps the minus sign'
+    $m = Get-FolegoMiniMetrics $healthy ([pscustomobject]@{ Celsius = $null }) 'green' $policy $false
+    Check ((@(Get-FolegoTrayIndicators $m))[1].Text -eq '–') 'An incomplete thermal reading stays unknown'
+    $stale = @(Get-FolegoTrayIndicators $m $false $true)
+    $paused = @(Get-FolegoTrayIndicators $m $true $false)
+    Check (@($stale | Where-Object { $_.Text -ne '–' -or $_.Tip -notmatch 'amostra antiga' }).Count -eq 0) 'Stale numbers are removed immediately'
+    Check (@($paused | Where-Object { $_.Role -ne 'muted' -or $_.Tip -notmatch 'pausado' }).Count -eq 0) 'Paused icons retain labels and explain why readings are hidden'
+    $trayCache = @{}
+    $stable = [pscustomobject]@{ CpuPercent = 36; BatteryPercent = 48; ExternalPower = $false; TotalPhysical = 16GB; AvailablePhysical = 8GB; CommitLimit = 20GB; CommitUsed = 8GB; MonotonicMs = 1000L; HasBattery = $true }
+    $zone = [pscustomobject]@{ Celsius = 51; Mono = 1000L }
+    $stableMetrics = Get-FolegoMiniMetrics $stable $zone 'green' $policy $false
+    Update-FolegoTrayReadings $trayCache $stableMetrics $stable $zone
+    $pending = @(Get-FolegoTrayIndicators $stableMetrics $false $true $trayCache 16100L 15000L)
+    Check ($pending[0].Text -eq '36' -and $pending[0].Delayed -and $pending[0].Role -eq 'muted' -and $pending[0].Tip -match 'leitura anterior') 'A slow worker keeps the prior number explicitly marked until it expires'
+    Check ($pending[1].Text -eq '51' -and -not $pending[1].Delayed) 'Thermal freshness is independent of CPU timing'
+    $expired = @(Get-FolegoTrayIndicators $stableMetrics $false $true $trayCache 46100L 15000L)
+    Check ($expired[0].Text -eq '–' -and $expired[0].NextChange -eq [long]::MaxValue) 'The tray expires the fallback even if the worker never completes'
+    $stable.BatteryPercent = $null; $stable.HasBattery = $null; $stable.MonotonicMs = 2000L
+    $partialMetrics = Get-FolegoMiniMetrics $stable $null 'unknown' $policy $false
+    Update-FolegoTrayReadings $trayCache $partialMetrics $stable $null
+    $partial = @(Get-FolegoTrayIndicators $partialMetrics $false $false $trayCache 2000L)
+    Check ($partial.Count -eq 4 -and $partial[3].Text -eq '48' -and $partial[3].Delayed) 'One missing battery sample keeps the tray slot and labels the previous reading'
+    $stable.HasBattery = $false
+    Update-FolegoTrayReadings $trayCache $partialMetrics $stable $null
+    Check ((@(Get-FolegoTrayIndicators $partialMetrics $false $false $trayCache 2000L)).Count -eq 3) 'Confirmed absence removes the battery slot'
+    Check (-not (Test-FolegoSequenceLaunch $true $true $false)) 'A manual tray-only restart with NoStartup skips logon orchestration'
+    Check ((Test-FolegoSequenceLaunch $true $false $false) -and (Test-FolegoSequenceLaunch $false $true $true)) 'Logon and explicit sequence request remain supported'
+    foreach ($size in @(16, 20, 24, 32)) {
+        foreach ($row in $tray) {
+            $icon = [Folego.Windows.TrayGlyph]::Metric($row.Label, $row.Text, [Drawing.Color]::White, [Drawing.Color]::Black, [Drawing.Color]::Black, [Drawing.Color]::White, $size)
+            try { Check ($icon.Width -eq $size -and $icon.Height -eq $size) ('Icon ' + $row.Label + ' fits ' + $size + ' px') }
+            finally { $icon.Dispose() }
+        }
+    }
+    $batterySource = [pscustomobject]@{ ExternalPower = $false; BatterySeconds = 3660 }
+    Check ((Get-FolegoBatteryEstimate $batterySource) -eq '1 h 01 min restantes') 'Battery time is shown only from the Windows estimate'
+    $batterySource.ExternalPower = $true
+    Check (-not (Get-FolegoBatteryEstimate $batterySource)) 'Battery runtime is hidden on external power'
+    $knownVolume = [pscustomobject]@{ DeviceID = 'C:'; VolumeName = 'Windows'; FileSystem = 'NTFS'; Size = 100GB; FreeSpace = 0 }
+    $unknownVolume = [pscustomobject]@{ DeviceID = 'D:'; VolumeName = ''; FileSystem = ''; Size = 80GB; FreeSpace = $null }
+    $volumes = Format-FolegoVolumeInventory @($knownVolume, $unknownVolume)
+    Check ($volumes -match 'C: Windows.*NTFS.*0[.,]0 GiB livres' -and $volumes -match 'D:.*capacidade indisponível') 'Volume inventory distinguishes full disks and an unavailable reading'
+    $quotaNow = [DateTimeOffset]::UtcNow
+    $quotaPayload = [pscustomobject]@{
+        timestamp = $quotaNow.AddMinutes(-1).ToString('o'); type = 'event_msg'
+        payload = [pscustomobject]@{ type = 'token_count'; rate_limits = [pscustomobject]@{
+            primary = [pscustomobject]@{ used_percent = 38; window_minutes = 300; resets_at = $quotaNow.AddMinutes(2).ToUnixTimeSeconds() }
+            secondary = [pscustomobject]@{ used_percent = 100; window_minutes = 10080 }
+        } }
+    }
+    $profile = Join-Path $fixture 'codex-fixture'
+    $day = $quotaNow.UtcDateTime.ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture).Replace('-', '\')
+    $folder = [IO.Directory]::CreateDirectory((Join-Path (Join-Path $profile 'sessions') $day))
+    $record = $quotaPayload | ConvertTo-Json -Depth 6 -Compress
+    # A valid-looking second record lacks a newline and must remain invisible.
+    $incomplete = $record.Replace('38', '39')
+    [IO.File]::WriteAllText((Join-Path $folder.FullName 'rollout-contract.jsonl'), $record + [Environment]::NewLine + $incomplete)
+    $quota = Get-FolegoCodexQuota $profile $quotaNow
+    $report = Format-FolegoCodexQuota $quota $quotaNow
+    Check ($report -match '5 h.*62%' -and $report -match '7 d.*0%' -and $report -notmatch '61%') 'Local quota shows both windows, preserves a confirmed zero and ignores incomplete JSONL'
+    $report = Format-FolegoCodexQuota $quota ($quotaNow.AddMinutes(3))
+    Check ($report -notmatch '62%' -and $report -match '0%') 'Only the window whose observed reset elapsed is withdrawn'
+    Check ((Format-FolegoCodexQuota $quota ($quotaNow.AddMinutes(16))) -match 'nenhuma observação local recente') 'Age expiry keeps local usage unavailable until a new observation'
+    $browsers = @(Get-FolegoBrowserSuggestions @([pscustomobject]@{ name = 'chrome.exe' }, [pscustomobject]@{ name = 'iexplore' }))
+    Check ($browsers.Count -eq 2 -and $browsers[0] -match 'Economia de memória' -and $browsers[1] -match 'modo IE') 'Browser advice follows the measured executable families'
+
+    # ------------------------------------------------ serialized logon sequence
+    $bad = $policy | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $bad.windows.sequence.orchestration_default = 'sim'
+    Reject { Assert-FolegoManagePolicy $bad } 'Orchestration default must be an explicit boolean'
+    Check ($policy.windows.sequence.orchestration_default -eq $true) 'Logon orchestration is on by default (user request)'
+    $c = Split-FolegoCommand '"C:\Program Files\Everything\Everything.exe" -startup'
+    Check ($c.File -eq 'C:\Program Files\Everything\Everything.exe' -and $c.Arguments -eq '-startup') 'Quoted Run command split like the shell'
+    $c = Split-FolegoCommand 'C:\Tools\app.exe --tray now'
+    Check ($c.File -eq 'C:\Tools\app.exe' -and $c.Arguments -eq '--tray now') 'Unquoted command split at the executable'
+    Check ((Split-FolegoCommand '%windir%\notepad.exe').File -eq (Join-Path $env:windir 'notepad.exe')) 'Environment variables expand'
+    Reject { Split-FolegoCommand '"C:\broken' } 'Incomplete quotes rejected'
+    $rules = [pscustomobject]@{ start_after_seconds = 15; gap_seconds = 20; calm_samples = 2; cpu_max = 50; disk_busy_max = 40; disk_queue_max = 1; temp_max_c = 80; item_timeout_seconds = 60 }
+    $calm = [pscustomobject]@{ Cpu = 10; DiskBusy = 5; DiskQueue = 0; Celsius = 58; TasksRunning = @() }
+    Check (@(Test-FolegoCalm $calm $rules).Count -eq 0) 'Calm reading opens the gate'
+    $busy = [pscustomobject]@{ Cpu = 90; DiskBusy = 100; DiskQueue = 3; Celsius = 92; TasksRunning = @('\SteamDeck\Disco Linux - montar') }
+    Check (@(Test-FolegoCalm $busy $rules).Count -eq 5) 'CPU, disk busy, disk queue, heat and a running logon task each hold the gate'
+    $blind = [pscustomobject]@{ Cpu = $null; DiskBusy = $null; DiskQueue = $null; Celsius = $null; TasksRunning = @() }
+    Check (@(Test-FolegoCalm $blind $rules).Count -eq 3) 'Missing readings never count as calm'
+    $run = New-FolegoSequenceRun @('a', 'b') 0 $rules
+    $trace = @()
+    foreach ($t in @(5000, 16000, 21000, 26000, 41000, 46000, 51000, 56000)) { $trace += (Step-FolegoSequence $run $calm $rules $t).Action }
+    Check (($trace -join ',') -eq 'wait,wait,launch,wait,wait,launch,settle,done' -and $run.DoneCalm) 'One item at a time, gap between items, then fully initialized only when calm'
+    $run = New-FolegoSequenceRun @() 0 $rules
+    $trace = @(); foreach ($t in @(16000, 21000, 26000, 31000)) { $trace += (Step-FolegoSequence $run $(if ($t -eq 21000) { $busy } else { $calm }) $rules $t).Action }
+    Check (($trace -join ',') -eq 'settle,settle,settle,done') 'Without items it still waits for calm and no logon task before declaring the system ready'
+    $run = New-FolegoSequenceRun @() 0 $rules
+    $last = $null; foreach ($t in @(16000, 40000, 70000, 80000)) { $last = Step-FolegoSequence $run $busy $rules $t }
+    Check ($last.Action -eq 'done' -and -not $run.DoneCalm -and @($last.Reasons).Count) 'A stuck reading cannot block the end of startup (timeout, reasons kept)'
+    Check ((Format-FolegoElapsed 75) -eq '01:15' -and (Format-FolegoElapsed 3725) -eq '1:02:05') 'Timer format mm:ss and h:mm:ss'
+    $run = New-FolegoSequenceRun @('x') 0 $rules
+    $actions = @(); foreach ($t in @(20000, 30000, 50000, 70000, 80000)) { $actions += (Step-FolegoSequence $run $busy $rules $t).Action }
+    Check (-not ($actions -contains 'launch') -and ($actions -contains 'skip')) 'Under stress an item is skipped after the timeout, never launched'
+    $run = New-FolegoSequenceRun @('y') 0 $rules
+    $null = Step-FolegoSequence $run $calm $rules 20000
+    Check ((Step-FolegoSequence $run $busy $rules 25000).Action -eq 'wait' -and (Step-FolegoSequence $run $calm $rules 30000).Action -eq 'wait') 'A busy reading resets the calm streak'
+
+    $script:Launched = @()
+    function Start-FolegoSequenceProcess([string]$File, [string]$Arguments) { $script:Launched += ($File + '|' + $Arguments); return 4242 }
+    $script:Reg[$runKey]['Tool'] = '"C:\fixture\tool.exe" --tray'
+    Reject { Add-FolegoSequenceItem $fixture $hostInfo 'HKCU|Tool' $null $policy } 'Adopting requires confirmation'
+    Reject { Add-FolegoSequenceItem $fixture $hostInfo 'PastaUsuario|Steam Deck.lnk' (New-FolegoConfirmation 'sequence-add:PastaUsuario|Steam Deck.lnk' 'Add') $policy } 'SDK dispatcher is never adopted'
+    Reject { Add-FolegoSequenceItem $fixture $hostInfo $pkg (New-FolegoConfirmation ('sequence-add:' + $pkg) 'Add') $policy } 'Packaged startup tasks stay with Windows'
+    $null = Add-FolegoSequenceItem $fixture $hostInfo 'HKCU|Tool' (New-FolegoConfirmation 'sequence-add:HKCU|Tool' 'Add') $policy
+    $seq = Get-FolegoSequenceState $fixture $hostInfo
+    Check (@($seq.items).Count -eq 1 -and $seq.items[0].command -eq '"C:\fixture\tool.exe" --tray' -and $seq.items[0].receipt) 'Adopted item keeps its full command and a startup receipt'
+    Check ($script:Reg[$approvedRun]['Tool'][0] -eq 3 -and $script:Reg[$runKey].Contains('Tool')) 'Windows no longer starts it in parallel; the Run entry is intact'
+    $outcome = Invoke-FolegoSequenceLaunch $fixture $hostInfo 'HKCU|Tool' $policy
+    Check ($outcome.State -eq 'launched' -and $script:Launched[-1] -eq 'C:\fixture\tool.exe|--tray') 'Sequence launches the original command'
+    Save-FolegoSequenceResult $fixture $hostInfo 'HKCU|Tool' $outcome.State $outcome.Detail
+    Check ((Get-FolegoSequenceState $fixture $hostInfo).last_run.results[0].state -eq 'launched') 'Launch result recorded for this boot'
+    $script:Reg[$runKey]['Tool'] = '"C:\other\evil.exe"'
+    Check ((Invoke-FolegoSequenceLaunch $fixture $hostInfo 'HKCU|Tool' $policy).State -eq 'skipped' -and $script:Launched.Count -eq 1) 'Changed command is not launched blindly'
+    $script:Reg[$runKey]['Tool'] = '"C:\fixture\tool.exe" --tray'
+    $saved = $script:Reg[$approvedRun]['Tool']; $script:Reg[$approvedRun]['Tool'] = [byte[]](2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    Check ((Invoke-FolegoSequenceLaunch $fixture $hostInfo 'HKCU|Tool' $policy).State -eq 'skipped' -and $script:Launched.Count -eq 1) 'Item re-enabled in Windows is not started twice'
+    $script:Reg[$approvedRun]['Tool'] = $saved
+    $script:Reg[$runKey]['Tool2'] = 'C:\fixture\tool2.exe'
+    $script:Reg[$approvedRun]['Tool2'] = [byte[]](3, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8)
+    $null = Add-FolegoSequenceItem $fixture $hostInfo 'HKCU|Tool2' (New-FolegoConfirmation 'sequence-add:HKCU|Tool2' 'Add') $policy
+    Check (-not @((Get-FolegoSequenceState $fixture $hostInfo).items)[1].receipt) 'Item disabled outside Fôlego is adopted without a receipt'
+    $null = Move-FolegoSequenceItem $fixture $hostInfo 'HKCU|Tool2' -1
+    Check (@((Get-FolegoSequenceState $fixture $hostInfo).items)[0].key -eq 'HKCU|Tool2') 'Order can be changed'
+    Reject { Remove-FolegoSequenceItem $fixture $hostInfo 'HKCU|Tool' $null } 'Removing requires confirmation'
+    $null = Remove-FolegoSequenceItem $fixture $hostInfo 'HKCU|Tool' (New-FolegoConfirmation 'sequence-remove:HKCU|Tool' 'Remove')
+    Check (-not $script:Reg[$approvedRun].Contains('Tool') -and -not @((Get-FolegoSequenceState $fixture $hostInfo).items | Where-Object { $_.key -eq 'HKCU|Tool' }).Count) 'Removing gives the item back to Windows'
+    $null = Remove-FolegoSequenceItem $fixture $hostInfo 'HKCU|Tool2' (New-FolegoConfirmation 'sequence-remove:HKCU|Tool2' 'Remove')
+    Check ($script:Reg[$approvedRun]['Tool2'][0] -eq 3) 'Item disabled outside Fôlego stays as the user left it'
+
+    # ------------------------------------------------ default orchestration
+    Check (Get-FolegoOrchestrationEnabled $fixture $policy) 'Orchestration enabled when the user has not chosen'
+    Set-FolegoOrchestration $fixture $false
+    Check (-not (Get-FolegoOrchestrationEnabled $fixture $policy) -and (Get-FolegoSettings $fixture).startup -ne $null) 'Opt-out persists without touching other settings'
+    Set-FolegoOrchestration $fixture $true
+    $auto = Invoke-FolegoAutoAdoption $fixture $hostInfo $policy
+    $keys = @($auto.Adopted)
+    Check ('HKCU|MicrosoftCopilotAutoLaunch_X' -in $keys -and 'HKCU|OneDrive' -in $keys -and 'HKCU|NewTool' -in $keys) 'User-scope entries Windows would start are adopted automatically'
+    Check ('HKCU|Tool' -notin $keys -and 'HKCU|Folego' -notin $keys -and 'PastaUsuario|Steam Deck.lnk' -notin $keys -and 'HKLM|Everything' -notin $keys -and @($keys | Where-Object { $_ -like 'Pacote|*' }).Count -eq 0) 'Returned, protected, machine and packaged entries are left alone'
+    Check (@((Invoke-FolegoAutoAdoption $fixture $hostInfo $policy).Adopted).Count -eq 0) 'Automatic adoption is idempotent'
+    Check ($script:Reg[$approvedRun]['OneDrive'][0] -eq 3 -and @((Get-FolegoSequenceState $fixture $hostInfo).items | Where-Object { $_.key -eq 'HKCU|OneDrive' })[0].receipt) 'Every automatic adoption has a receipt'
+    $null = Remove-FolegoSequenceItem $fixture $hostInfo 'HKCU|NewTool' (New-FolegoConfirmation 'sequence-remove:HKCU|NewTool' 'Remove') -KeepAdoptable
+    Check ('HKCU|NewTool' -notin @(Get-FolegoValue (Get-FolegoSequenceState $fixture $hostInfo) excluded @()) -and $script:Reg[$approvedRun].Contains('NewTool') -eq $false) 'Undo returns entries to Windows without excluding them from a later re-enable'
+    foreach ($key in @('HKCU|MicrosoftCopilotAutoLaunch_X', 'HKCU|OneDrive')) { $null = Remove-FolegoSequenceItem $fixture $hostInfo $key (New-FolegoConfirmation ('sequence-remove:' + $key) 'Remove') -KeepAdoptable }
+    Save-FolegoSequenceDone $fixture $hostInfo 'Sistema completamente inicializado em 01:15'
+    Check ([bool](Get-FolegoSequenceState $fixture $hostInfo).last_run.done_at) 'Completion recorded once per boot'
+
+    $script:Svc = @{ Everything = 'auto'; WSLService = 'auto'; WinDefend = 'auto'; MDCoreSvc = 'auto'; ManualOne = 'demand'; Already = 'delayed-auto' }
+    function Get-FolegoServiceStart([string]$Name) { return $script:Svc[$Name] }
+    function Set-FolegoServiceStart([string]$Name, [string]$Mode) {
+        $r = @((Get-FolegoServiceState $fixture $hostInfo).receipts | Where-Object { $_.name -eq $Name })[-1]
+        Check ($r.state -eq 'intended' -or $Mode -eq 'auto') 'Service receipt is durable before sc.exe'
+        $script:Svc[$Name] = $Mode
+    }
+    $out = Set-FolegoServiceDelays $fixture $hostInfo @('Everything', 'WSLService', 'WinDefend', 'MDCoreSvc', 'ManualOne', 'Already')
+    Check ($script:Svc.Everything -eq 'delayed-auto' -and $script:Svc.WSLService -eq 'delayed-auto') 'Third-party automatic services move to delayed start'
+    Check ($script:Svc.WinDefend -eq 'auto' -and $script:Svc.MDCoreSvc -eq 'auto') 'Defender services are never delayed'
+    Check ($script:Svc.ManualOne -eq 'demand' -and $script:Svc.Already -eq 'delayed-auto' -and @((Get-FolegoServiceState $fixture $hostInfo).receipts).Count -eq 2) 'Only automatic services get a change and a receipt'
+    Check ([bool](Get-FolegoServiceState $fixture $hostInfo).attempted) 'Service plan attempt recorded (UAC is asked once)'
+    $script:Svc.WSLService = 'demand'
+    $null = Restore-FolegoServiceDelays $fixture $hostInfo
+    Check ($script:Svc.Everything -eq 'auto' -and $script:Svc.WSLService -eq 'demand') 'Restore returns only values Fôlego still owns'
     $script:Replay
     'PASS: ' + $script:Checks + ' Windows contracts; effect APIs mocked. Native hardware validation remains separate.'
 } finally {

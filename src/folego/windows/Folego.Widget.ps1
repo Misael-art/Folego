@@ -139,9 +139,26 @@ function Sync-FolegoAppearanceChecks {
         }
     }
 }
+function Open-FolegoScreenKeyboard {
+    try { Start-Process -FilePath (Join-Path ([Environment]::SystemDirectory) 'osk.exe') -ErrorAction Stop }
+    catch { $null = [Windows.Forms.MessageBox]::Show('Abra o teclado virtual pelas Configurações de Acessibilidade do Windows ou pressione Win+Ctrl+O.', 'Teclado virtual indisponível') }
+}
+function Switch-FolegoDesktop {
+    $shell = $null
+    try {
+        $shell = New-Object -ComObject Shell.Application -ErrorAction Stop
+        $shell.ToggleDesktop()
+    } catch { $null = [Windows.Forms.MessageBox]::Show('Pressione Win+D para mostrar ou restaurar a área de trabalho.', 'Área de trabalho indisponível') }
+    finally { if ($null -ne $shell) { $null = [Runtime.InteropServices.Marshal]::ReleaseComObject($shell) } }
+}
+function Add-FolegoDesktopItems($Items) {
+    $null = $Items.Add('Abrir teclado virtual do Windows', $null, { Open-FolegoScreenKeyboard })
+    $null = $Items.Add('Mostrar ou restaurar a área de trabalho', $null, { Switch-FolegoDesktop })
+}
 function New-FolegoWidgetMenu {
     $strip = New-Object Windows.Forms.ContextMenuStrip
     Add-FolegoAppearanceItems $strip.Items
+    Add-FolegoDesktopItems $strip.Items
     $null = $strip.Items.Add('-')
     $null = $strip.Items.Add('Pausar / retomar monitoramento', $null, { Switch-FolegoPause })
     $null = $strip.Items.Add('Abrir a central', $null, { Show-FolegoView central })
@@ -152,7 +169,11 @@ function New-FolegoWidgetMenu {
 }
 function Switch-FolegoPause {
     $script:Paused = -not $script:Paused; $script:NextPoll = 0L
-    $status.Text = 'Monitoramento pausado: ' + $script:Paused
+    if (-not $script:Paused) {
+        $script:WidgetStale = $true
+        foreach ($last in $script:TrayReadings.Values) { $last.Unconfirmed = $true }
+    }
+    $status.Text = if ($script:Paused) { 'Monitoramento pausado' } else { 'Monitoramento retomado. Aguardando leitura.' }
     Update-FolegoWidget
 }
 
@@ -377,6 +398,7 @@ function Update-FolegoWidget {
 # host where the shell already restarts. Native notification-area icons are re-added by
 # Windows after an explorer restart and need no privilege.
 $script:TaskbarActive = $false; $script:TaskbarIcons = [ordered]@{}; $script:TaskbarDrawn = @{}; $script:TrayDrawn = ''
+$script:TrayReadings = @{}; $script:TrayNextChange = [long]::MaxValue
 function Get-FolegoInk([string]$Hex) {
     $c = ConvertTo-FolegoColor $Hex
     $channel = { param($v) $x = $v / 255.0; if ($x -le 0.04045) { $x / 12.92 } else { [Math]::Pow(($x + 0.055) / 1.055, 2.4) } }
@@ -388,6 +410,11 @@ function Get-FolegoInk([string]$Hex) {
 function Set-FolegoNotifyIcon($Notify, $Icon) {
     $old = $Notify.Icon; $Notify.Icon = $Icon
     if ($null -ne $old -and $old -ne [Drawing.SystemIcons]::Information) { $old.Dispose() }
+}
+function Remove-FolegoMetricIcon($Notify) {
+    $Notify.Visible = $false
+    Set-FolegoNotifyIcon $Notify $null
+    $Notify.Dispose()
 }
 function Get-FolegoShortTip([string]$Text) { if ($Text.Length -le 63) { return $Text }; return $Text.Substring(0, 62) + '…' }
 function Update-FolegoTrayStatus {
@@ -409,29 +436,37 @@ function New-FolegoTaskbarIcon([string]$Key) {
     $notify.Add_MouseUp({ param($sender, $e) if ($e.Button -eq [Windows.Forms.MouseButtons]::Left) { Show-FolegoQuickMenu $sender } })
     return $notify
 }
+function Get-FolegoLiveTrayRows {
+    $now = [long][Folego.Windows.Native]::GetTickCount64()
+    Get-FolegoTrayIndicators $script:WidgetData.Metrics $script:Paused $script:WidgetStale $script:TrayReadings $now ($policy.health.stale_after_s * 1000L)
+}
 function Update-FolegoTaskbarIndicators {
     if (-not $script:TaskbarActive -or $null -eq $script:WidgetData) { return }
-    $metrics = $script:WidgetData.Metrics
-    $rows = @(Get-FolegoTrayIndicators $metrics)
+    $rows = @(Get-FolegoLiveTrayRows)
+    $script:TrayNextChange = [long]::MaxValue
     $actions = @((Get-FolegoTheme $policy $script:Appearance.theme).actions)
     $size = [Windows.Forms.SystemInformation]::SmallIconSize.Width
     $wanted = @($rows | ForEach-Object { $_.Key })
     foreach ($key in @($script:TaskbarIcons.Keys)) {
-        if ($key -notin $wanted) { $gone = $script:TaskbarIcons[$key]; $gone.Visible = $false; $gone.Dispose(); $script:TaskbarIcons.Remove($key); $script:TaskbarDrawn.Remove($key) }
+        if ($key -notin $wanted) {
+            Remove-FolegoMetricIcon $script:TaskbarIcons[$key]
+            $script:TaskbarIcons.Remove($key)
+            $script:TaskbarDrawn.Remove($key)
+        }
     }
     foreach ($row in $rows) {
+        $script:TrayNextChange = [Math]::Min($script:TrayNextChange, [long]$row.NextChange)
         if (-not $script:TaskbarIcons.Contains($row.Key)) { $script:TaskbarIcons[$row.Key] = New-FolegoTaskbarIcon $row.Key }
         $notify = $script:TaskbarIcons[$row.Key]
-        $role = if ($script:Paused -or $script:WidgetStale) { 'muted' } else { $row.Role }
-        $drawn = $row.Text + '|' + $role + '|' + $script:Appearance.theme + '|' + $size
+        $drawn = $row.Text + '|' + $row.Role + '|' + $row.Delayed + '|' + $script:Appearance.theme + '|' + $size
         if ($script:TaskbarDrawn[$row.Key] -ne $drawn) {
-            $background = Get-FolegoValue $script:Tokens $role $script:Tokens.muted
-            $icon = [Folego.Windows.TrayGlyph]::Text($row.Text, (ConvertTo-FolegoColor $background), (Get-FolegoInk $background), (ConvertTo-FolegoColor $actions[$row.Strip % $actions.Count]), $size)
+            $background = Get-FolegoValue $script:Tokens $row.Role $script:Tokens.muted
+            $caption = $actions[$row.Strip % $actions.Count]
+            $icon = [Folego.Windows.TrayGlyph]::Metric($row.Label, $row.Text, (ConvertTo-FolegoColor $background), (Get-FolegoInk $background), (ConvertTo-FolegoColor $caption), (Get-FolegoInk $caption), $size, $row.Delayed)
             Set-FolegoNotifyIcon $notify $icon
             $script:TaskbarDrawn[$row.Key] = $drawn
         }
-        $suffix = if ($script:Paused) { ' (pausado)' } elseif ($script:WidgetStale) { ' (amostra antiga)' } else { '' }
-        $notify.Text = Get-FolegoShortTip ($row.Tip + $suffix)
+        $notify.Text = Get-FolegoShortTip $row.Tip
         if (-not $notify.Visible) { $notify.Visible = $true }
     }
 }
@@ -449,7 +484,7 @@ function Show-FolegoTaskbarIndicators {
 }
 function Hide-FolegoTaskbarIndicators {
     $script:TaskbarActive = $false
-    foreach ($notify in @($script:TaskbarIcons.Values)) { $notify.Visible = $false; $notify.Dispose() }
+    foreach ($notify in @($script:TaskbarIcons.Values)) { Remove-FolegoMetricIcon $notify }
     $script:TaskbarIcons = [ordered]@{}; $script:TaskbarDrawn = @{}
 }
 function Open-FolegoCentralTab([string]$Name, [string]$Action = '') {
@@ -460,9 +495,11 @@ function Open-FolegoCentralTab([string]$Name, [string]$Action = '') {
 }
 function New-FolegoQuickMenu {
     $strip = New-Object Windows.Forms.ContextMenuStrip
-    $summary = $strip.Items.Add('Fôlego — aguardando leitura'); $summary.Enabled = $false
+    $null = $strip.Items.Add((New-Object Windows.Forms.ToolStripLabel 'Fôlego — aguardando leitura'))
+    $null = $strip.Items.Add((New-Object Windows.Forms.ToolStripLabel 'CPU —  ·  TEMP ACPI —  ·  RAM —'))
     $null = $strip.Items.Add('-')
     $null = $strip.Items.Add('Abrir a central', $null, { Show-Folego })
+    $null = $strip.Items.Add('Cotas de IA', $null, { Open-FolegoCentralTab 'Cotas de IA' 'CodexQuota' })
     $thermal = New-Object Windows.Forms.ToolStripMenuItem 'Temperatura e CPU'
     $null = $thermal.DropDownItems.Add('Aplicar perfil Fresco (turbo desligado)…', $null, {
         if (Confirm-Folego 'Perfil térmico' ('Aplicar Fresco ao plano ativo? CPU máxima ' + $policy.windows.thermal.profiles.Fresco.throttle_max + '% e turbo desligado. Os valores atuais serão registrados antes da troca.')) { Request-Folego Fresco }
@@ -476,10 +513,12 @@ function New-FolegoQuickMenu {
     $null = $thermal.DropDownItems.Add('Ver temperatura, perfil e recibo', $null, { Open-FolegoCentralTab 'Temperatura e CPU' })
     $null = $strip.Items.Add($thermal)
     $null = $strip.Items.Add('Analisar consumidores e órfãos', $null, { $script:TriageFilter = ''; Open-FolegoCentralTab 'Consumidores' 'Consumers' })
+    $null = $strip.Items.Add('Ver espaço nos volumes locais', $null, { Open-FolegoCentralTab 'Trabalho e disco' 'Volumes' })
     $null = $strip.Items.Add('Inicialização do Windows', $null, { Open-FolegoCentralTab 'Inicialização' 'StartupList' })
     $null = $strip.Items.Add('Pausar / retomar monitoramento', $null, { Switch-FolegoPause })
     $null = $strip.Items.Add('-')
     Add-FolegoAppearanceItems $strip.Items
+    Add-FolegoDesktopItems $strip.Items
     $null = $strip.Items.Add('Deixar os indicadores sempre visíveis…', $null, { Start-Process 'ms-settings:taskbar'; $status.Text = 'Em Outros ícones da bandeja, ligue os ícones do Fôlego (Windows PowerShell).' })
     $null = $strip.Items.Add('Gerenciador de Tarefas', $null, { Start-Process taskmgr.exe })
     $null = $strip.Items.Add('-')
@@ -489,8 +528,86 @@ function New-FolegoQuickMenu {
         Sync-FolegoAppearanceChecks
         if ($null -ne $script:WidgetData) {
             $m = $script:WidgetData.Metrics
-            $sender.Items[0].Text = Get-FolegoShortTip ('Fôlego — ' + $m.Status.Text + ' · CPU ' + $m.Cpu.Text + ' · ' + $m.Temp.Text + ' · RAM ' + $m.Ram.Text)
+            $summaryText = if ($script:Paused) { 'Monitoramento pausado' } elseif ($script:WidgetStale) { 'Amostra antiga' } else { $m.Status.Text }
+            $sender.Items[0].Text = 'Fôlego — ' + $summaryText
+            $rows = @(Get-FolegoLiveTrayRows)
+            $sender.Items[1].Text = ($rows | ForEach-Object {
+                $label = if ($_.Key -eq 'Temp') { 'TEMP ACPI' } else { $_.Label }
+                $unit = if ($_.Text -eq '–') { '' } elseif ($_.Key -eq 'Temp') { ' °C' } else { '%' }
+                $value = if ($_.Delayed) { '~' + $_.Text } else { $_.Text }
+                $label + ' ' + $value + $unit
+            }) -join '  ·  '
         }
     })
     return $strip
+}
+
+# ------------------------------------------------------------------ startup progress
+# Visible, non-blocking notice while Fôlego serializes the logon; ends with the completion time.
+$script:Progress = $null; $script:ProgressControls = @{}; $script:ProgressCloseAt = 0L
+function Get-FolegoBootElapsed {
+    try { return ([DateTimeOffset]::UtcNow - [DateTimeOffset]::Parse([string]$script:HostInfo.Boot)).TotalSeconds } catch { return $null }
+}
+function Show-FolegoProgress([int]$Total) {
+    if ($null -ne $script:Progress) { return }
+    $window = New-Object Folego.Windows.WidgetForm
+    $window.Text = 'Fôlego — organizando a inicialização'; $window.AccessibleName = 'Progresso da inicialização do Fôlego'
+    $window.Font = New-Object Drawing.Font('Segoe UI', [single]9.5)
+    $window.Padding = New-Object Windows.Forms.Padding (S 10)
+    $flow = New-FolegoFlow 'TopDown'
+    $script:ProgressControls = @{}
+    foreach ($row in @(@('Title', 'Fôlego está organizando a inicialização', 11, $true, 'text'), @('Hint', 'Aguarde: os programas de início sobem um de cada vez para não sobrecarregar o Deck.', 9, $false, 'muted'), @('Timer', 'Desde o boot: —', 14, $true, 'accent'), @('Items', '', 9.5, $false, 'text'), @('Wait', '', 8.5, $false, 'muted'))) {
+        $label = New-FolegoWidgetLabel $row[1] $row[2] $row[3] $row[4]
+        $label.MaximumSize = New-Object Drawing.Size((S 340), 0)
+        $script:ProgressControls[$row[0]] = $label; $flow.Controls.Add($label)
+    }
+    $hide = New-FolegoWidgetButton 'Ocultar' 'Ocultar este aviso; a organização continua' { if ($null -ne $script:Progress) { $script:Progress.Hide() } } 80 28
+    $flow.Controls.Add($hide)
+    $window.Controls.Add($flow)
+    $queue = New-Object 'Collections.Generic.Queue[object]'; $queue.Enqueue($window)
+    while ($queue.Count) { $c = $queue.Dequeue(); if ($c -isnot [Windows.Forms.Button]) { $window.MakeDraggable($c) }; foreach ($child in $c.Controls) { $queue.Enqueue($child) } }
+    Set-FolegoControlTheme $window
+    $size = $flow.GetPreferredSize([Drawing.Size]::Empty)
+    $window.ClientSize = New-Object Drawing.Size(($size.Width + $window.Padding.Horizontal), ($size.Height + $window.Padding.Vertical))
+    $area = [Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $window.Location = New-Object Drawing.Point(($area.Right - $window.Width - 24), ($area.Bottom - $window.Height - 24))
+    $script:Progress = $window
+    $script:ProgressControls['Items'].Text = $(if ($Total) { ('Itens: 0 de ' + $Total) } else { 'Nenhum programa adotado; aguardando o sistema assentar.' })
+    $window.Show()
+}
+function Update-FolegoProgress {
+    if ($null -eq $script:Progress -or $script:Progress.IsDisposed) { return }
+    $elapsed = Get-FolegoBootElapsed
+    if ($null -ne $script:SequenceRun) {
+        if ($null -ne $elapsed) { $script:ProgressControls['Timer'].Text = 'Desde o boot: ' + (Format-FolegoElapsed $elapsed) }
+        $run = $script:SequenceRun; $total = @($run.Keys).Count; $done = [Math]::Min($run.Index, $total)
+        $current = if ($done -lt $total) { [string]@($run.Keys)[$done] } else { '' }
+        $left = $total - $done
+        $estimate = if ($left -gt 0) { ' — restante estimado ≈ ' + (Format-FolegoElapsed ($left * ([double]$policy.windows.sequence.gap_seconds + [double]$policy.windows.sequence.poll_seconds * [double]$policy.windows.sequence.calm_samples))) } else { '' }
+        $script:ProgressControls['Items'].Text = $(if ($total) { ('Itens: ' + $done + ' de ' + $total + $(if ($current) { ' — próximo: ' + ($current -replace '^[^|]*\|', '') } else { ' — confirmando que o sistema assentou' }) + $estimate) } else { 'Nenhum programa adotado; confirmando que o sistema assentou.' })
+        $waiting = @($run.Waiting)
+        $script:ProgressControls['Wait'].Text = $(if ($waiting.Count) { 'Aguardando: ' + ($waiting -join ', ') } else { '' })
+    }
+    if ($script:ProgressCloseAt -gt 0 -and [long][Folego.Windows.Native]::GetTickCount64() -ge $script:ProgressCloseAt) { Close-FolegoProgress }
+}
+function Complete-FolegoProgress([bool]$Calm, $Reasons, [int]$Launched, [int]$Total) {
+    $elapsed = Get-FolegoBootElapsed
+    $time = if ($null -ne $elapsed) { Format-FolegoElapsed $elapsed } else { '—' }
+    $title = if ($Calm) { 'Sistema completamente inicializado em ' + $time } else { 'Inicialização concluída em ' + $time }
+    $detail = ('{0} de {1} programas iniciados em série.' -f $Launched, $Total) + $(if (-not $Calm -and @($Reasons).Count) { ' O sistema ainda não ficou calmo: ' + (@($Reasons) -join ', ') } else { '' })
+    if ($null -ne $script:Progress -and -not $script:Progress.IsDisposed) {
+        Set-FolegoWidgetTextOn $script:ProgressControls['Title'] $title $(if ($Calm) { 'ok' } else { 'warning' })
+        $script:ProgressControls['Hint'].Text = 'Pode usar o Deck normalmente.'
+        $script:ProgressControls['Timer'].Text = $time
+        $script:ProgressControls['Items'].Text = $detail; $script:ProgressControls['Wait'].Text = 'Registro em Inicialização → Sequência de início.'
+        if (-not $script:Progress.Visible) { $script:Progress.Show() }
+        $script:ProgressCloseAt = [long][Folego.Windows.Native]::GetTickCount64() + 20000
+    }
+    $tray.BalloonTipTitle = 'Fôlego'; $tray.BalloonTipIcon = 'Info'; $tray.BalloonTipText = $title + '. ' + $detail; $tray.ShowBalloonTip(10000)
+    return ($title + '. ' + $detail)
+}
+function Set-FolegoWidgetTextOn($Control, [string]$Text, [string]$Role) { $Control.Text = $Text; $Control.Tag = 'role:' + $Role; $Control.ForeColor = Get-FolegoRoleColor $Role }
+function Close-FolegoProgress {
+    if ($null -ne $script:Progress) { $script:Progress.Hide(); $script:Progress.Dispose(); $script:Progress = $null }
+    $script:ProgressCloseAt = 0L
 }

@@ -18,7 +18,10 @@ jobs:
         run: '& ./dist/folego-windows/Test-Folego.ps1 -ReplayCsv (Get-ChildItem tests/fixtures/windows/*.csv).FullName'
       - name: Native read-only API probe
         shell: powershell
-        run: '& ./dist/folego-windows/Folego.ps1 -Probe -NoStartup'
+        run: |
+          & ./dist/folego-windows/Folego.ps1 -Probe -NoStartup
+          & ./dist/folego-windows/Folego.ps1 -Inspect Boot
+          & ./dist/folego-windows/Folego.ps1 -Inspect Incidents
       - name: Own disposable Forms lifecycle
         shell: powershell
         run: '& ./dist/folego-windows/Folego.ps1 -NoStartup -DataRoot "$env:RUNNER_TEMP\folego-smoke" -SmokeSeconds 25'

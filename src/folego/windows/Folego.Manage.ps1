@@ -681,6 +681,18 @@ function Get-FolegoCopilotReport($Items, $Commands) {
     $lines += 'Desinstalação: use a tela oficial Aplicativos instalados (o desinstalador é do sistema e pede administrador).'
     return $lines
 }
+function Get-FolegoBrowserSuggestions($Groups) {
+    $names = @($Groups | ForEach-Object { [IO.Path]::GetFileNameWithoutExtension([string]$_.name) })
+    if ('chrome' -in $names) {
+        'Chrome · Em Configurações → Desempenho, revise Economia de memória. Confira abas e extensões no Gerenciador de tarefas do Chrome.'
+    }
+    if ('msedge' -in $names) {
+        'Edge · Revise Inicialização rápida e a execução em segundo plano em Sistema e desempenho. Confira antes se uma extensão ou site precisa continuar ativo.'
+    }
+    if ('iexplore' -in $names) {
+        'Internet Explorer · Para um site legado, prefira o modo IE do Microsoft Edge conforme a política da organização.'
+    }
+}
 function Get-FolegoSystemLoadReport {
     # Detect-only. Services, Update, Delivery Optimization, Defender and UAC are never changed here.
     $lines = @('Itens de sistema/segurança: somente detecção; use a página oficial correspondente.')

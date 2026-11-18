@@ -39,7 +39,7 @@ central e o último widget usado:
 | Visualização | Forma no Windows |
 | --- | --- |
 | Central do Fôlego | Janela com abas; um widget aberto recolhe a central para a bandeja. |
-| Barra de tarefas (padrão) | Indicadores vivos na área de notificação: um ponto de estado e ícones com o número de CPU, temperatura, RAM e bateria, na cor de saúde e com uma faixa na cor do tema. A dica de cada ícone traz a leitura completa. |
+| Barra de tarefas (padrão) | Indicadores vivos na área de notificação. Cada ícone traz a sigla **CPU**, **TEMP**, **RAM** ou **BAT** acima do valor. A faixa da sigla segue o tema. A cor do valor indica a faixa de saúde. |
 | Mini horizontal | Faixa de 384 × 46 px (escala com o DPI): estado, CPU, temperatura, RAM e bateria, expandir e menu. |
 | Widget compacto | Cartão de 268 px com anel de folga, estado, RAM livre, CPU, zona térmica, bateria e perfil térmico. |
 | Lateral esquerda / direita | Barra na borda da área de trabalho, 112–128 px de largura e altura total, como no Linux. |
@@ -49,8 +49,15 @@ Na **Barra de tarefas**, um clique (esquerdo ou direito) em qualquer indicador a
 menu de funções: resumo atual, abrir a central, aplicar Fresco/Contenção ou
 restaurar os originais (com a mesma confirmação da central), analisar consumidores,
 inicialização, pausar, visualizações, tema, transparência, Gerenciador de Tarefas
-e sair. O resultado de uma ação iniciada ali aparece como notificação, sem abrir a
-central. Os indicadores aparecem neutros ("–") até a primeira leitura. O Windows 11
+e sair. No cabeçalho do menu, as leituras ficam agrupadas e mostram `%` ou `°C`.
+A dica de cada ícone informa a unidade, o uso de RAM e a origem ACPI da temperatura.
+Se uma consulta atrasar ou vier parcial, o último valor confirmado fica por até
+30 s além do seu prazo normal, com fundo neutro, marca pontilhada e dica
+**leitura anterior**. O menu indica esse valor com **~**. CPU, RAM e bateria
+têm prazo de 15 s e a zona ACPI tem prazo de 90 s. Cada fonte vence separadamente.
+Depois da janela adicional, ou durante a pausa, aparece um traço. A guarda e os
+alertas usam os prazos originais e as próprias leituras atuais.
+O Windows 11
 não oferece mais deskbands, e encaixar uma janela dentro do `explorer.exe` seria
 frágil; por isso são ícones nativos da área de notificação, que o próprio Windows
 recoloca se o explorer reiniciar. Ícones novos podem ir para o menu ^: **Deixar os
@@ -77,8 +84,9 @@ menor que o do Linux, que torna transparente só o fundo.
 
 As escolhas ficam em `appearance.json`, gravado só quando o usuário muda visualização,
 tema, transparência, modo de abertura ou posição. Um arquivo inválido é preservado e
-os padrões valem só na sessão, sem sobrescrevê-lo. Os atalhos de área de trabalho,
-cotas de IA e regras do KWin do widget Linux não têm equivalente validado no Windows.
+os padrões valem só na sessão, sem sobrescrevê-lo. Os menus dos indicadores e dos
+widgets oferecem **Abrir teclado virtual do Windows** e **Mostrar ou restaurar a
+área de trabalho**. O teclado também está na **Visão geral**.
 
 ## Recursos e limites do port
 
@@ -86,21 +94,68 @@ cotas de IA e regras do KWin do widget Linux não têm equivalente validado no W
 | --- | --- |
 | RAM e CPU | GlobalMemoryStatusEx e diferença entre GetSystemTimes; CPU exige duas amostras. |
 | Memória comprometida | GetPerformanceInfo: uso e limite de commit; não é tamanho nem uso isolado de pagefile. |
-| Disco do aplicativo | Espaço livre pela API Win32, fila e saúde por consultas Windows. Sem varredura recursiva automática. |
-| Bateria/carregador | GetSystemPowerStatus; ausência/255 permanece desconhecido. Sem inferir tensão ou saúde do carregador. |
+| Disco | Espaço, fila e saúde do volume do aplicativo. Em **Trabalho e disco → Ver espaço nos volumes locais**, inventário sob demanda dos volumes locais fixos com letra, com sistema de arquivos, capacidade, espaço livre e ocupação. Leituras incompletas ficam indisponíveis. |
+| Bateria/carregador | GetSystemPowerStatus. A Visão geral e a dica do ícone **BAT** exibem uma estimativa de tempo em descarga quando o Windows a fornece. Tensão, corrente e saúde do carregador seguem sem leitura própria. |
 | Temperatura | Zonas ACPI de root/wmi; sem elas (usuário comum), a mesma zona pela classe CIM `Win32_PerfFormattedData_Counters_ThermalZoneInformation`, que independe do idioma dos contadores. Limites passivo/crítico só quando o sensor os informa. Não equivale automaticamente à APU/GPU. |
 | Perfis térmicos | `PROCTHROTTLEMAX` e `PERFBOOSTMODE` do plano ativo existente (tomada e bateria) por PowerRead/PowerWrite + PowerSetActiveScheme. Recibo antes, leitura depois, até quatro trocas por hora. Guarda automática opcional, desligada por padrão. |
 | Consumidores e órfãos | Toolhelp + GetProcessTimes/GetProcessIoCounters em duas amostras de 2 s; dono pelo token; linha de comando resumida sem segredos. Encerramento só manual, confirmado e revalidado. |
 | Inicialização | HKCU/HKLM Run, Run32, pastas Startup e tarefas de pacote; desativação pelo mesmo `StartupApproved` das Configurações, com recibo e restauração. |
 | Identidade física | UUID SMBIOS; se o firmware informa um UUID de preenchimento (o Deck LCD informa `FFFFFFFF-…`), número de série da BIOS e depois da placa. Hosts com UUID válido mantêm o identificador anterior. |
 | Alertas | Pressão observada, bateria baixa e desconexão, com intervalo mínimo de cinco minutos por tipo. |
-| Diagnósticos manuais | Até 25 processos por RAM, amostra superficial limitada de temporários e até 12 eventos de corte/reinício. A triagem de consumidores mostra linhas de comando truncadas, com tokens/chaves/senhas ocultos, e não as grava. |
+| Diagnósticos manuais | Até 25 processos por RAM, amostra superficial limitada de temporários, eventos de boot e até 24 eventos de disco, NTFS e WHEA dos últimos sete dias. A triagem mostra condições do encerramento, classificação e motivos de proteção. As linhas de comando são truncadas e ocultam tokens/chaves/senhas na apresentação. |
+| Cota local do Codex | A aba **Cotas de IA** mostra a janela e a reposição quando há um registro recente de uso no perfil local. Só durante a consulta manual ou enquanto a aba está visível, com atualização automática no máximo uma vez por minuto. A fonte local não confirma a conta nem atribui a observação a CLI ou Desktop. |
 | Energia | Planos oficiais existentes, intenção durável antes da troca, confirmação por leitura, recuperação e até quatro trocas por hora. |
 | Componentes do sistema | Windows Update, Otimização de Entrega, Defender, UAC e serviços: só detecção e a página oficial correspondente. Nada é alterado pelo app. |
 | Manutenção de armazenamento | Reutiliza o painel do cartão quando presente; fora dele abre as Configurações do Windows. |
 | Linux PSI, zram e tmpfs | Não são métricas equivalentes no Windows; não há leitura sintética ou verde presumido. |
 | KWin, systemd, áudio/entrada e IA | Reparos e integrações com owners/contas Linux não têm adaptador Windows validado e não são executados. |
 | TDP, ventoinha, drivers, EFI e discos Linux | Permanecem com os responsáveis próprios; nenhum acesso EC/SMU ou troca de driver é feito pelo port. |
+
+### Funções que ainda precisam de equivalente Windows
+
+Inventário comparado com a [visão geral do produto Linux](../README.md#o-que-você-pode-fazer)
+e o [guia do widget](COMPACTO.md).
+
+| Área | Implementado no Windows | Pendências e critérios de aceite |
+| --- | --- | --- |
+| Identidade de contas de IA | Leitura local do perfil Codex. | Inventário de perfis do Codex CLI, Desktop e Web, Claude CLI/Desktop e Grok nas fontes nativas e no inventário opcional do responsável. Vincular conta, organização, instalação e cliente por evidência. Trocar de conta ou organização invalida a observação anterior mesmo no mesmo diretório. Mostrar distintamente fonte ausente, parcial, sem vínculo, vencida e indisponível. |
+| Cotas, resets e ofertas | Observação recente de janelas do Codex, disponibilidade e reposição quando registradas localmente. | Adaptadores de leitura por conta, orçamento e cache por provedor, tratamento de HTTP 429 e sessão expirada, reposição confirmada antes de alertar, saldo/extra quando disponível, tickets e ofertas com seu prazo real, lembretes declarados e referência mensal separada da data de cobrança confirmada. Preservar zero confirmado e esconder números expirados. Validar sem resgatar tickets ou gastar uma mensagem. |
+| Trabalho dos agentes | Triagem Win32 com dono, criação, janelas, CPU e E/S. | Relacionar sessão, projeto, responsável, execução ativa, fila, entregas e histórico. Portar alertas de MCP e capacidade do Codex Web e o pedido de recuperação pelo responsável da mesma conta, com orçamento, recibo e deduplicação. O aviso de um processo e a confirmação de uma entrega são evidências diferentes. |
+| Sessões e encerramento | Classes, motivos, reapuração da identidade, pedido gentil e força após nova confirmação. | Proteção explícita de trabalho por sessão e heartbeat, exclusões, vínculo com Job Objects/ancestrais, agrupamento por aplicação e perfil, opções cooperativas e recibo recuperável. Testar PID reaproveitado, pai/janela ausentes, dono desconhecido e agente ocupado. Preservar processos compartilhados, sessões, instaladores, segurança e projetos. A automação de encerramento tem contrato separado. |
+| Navegadores | Sugestões para Chrome, Edge e entradas do Internet Explorer identificadas na triagem. | Distinguir navegador, renderizadores, extensões, apps instalados, WebView2 e automações ativas. Recomendar ajustes pela evidência de uso. Para ajustes persistentes, detectar política gerenciada e exigir confirmação, recibo, leitura posterior e restauração quando o valor ainda pertencer ao Fôlego. Manter modo IE do Edge para compatibilidade com sites legados. |
+| Inicialização | Inventário, recibos, início em série sob condições de calma e retorno ao Windows. Reabertura com **NoStartup** desvia do logon. | Qualificar em outro equipamento e no Deck real: login, reinício no mesmo boot, cancelamento, duas sessões, UAC negado, mudanças externas, comando inválido, ausência de sensores, timeout e retorno ao Windows. Medir tempo até desktop responsivo, duração total, CPU, fila e temperatura. Guardar as ações por host e deixar operações inconclusivas para revisão. |
+| Disco e temporários | Capacidade e ocupação dos volumes locais, fila do volume do aplicativo, saúde via consulta CIM, leitura superficial dos temporários e eventos conhecidos do Windows. | Histórico limitado de espaço e tendência, bytes/segundo, latência, fila e pressão sustentada por volume e dispositivo físico. Mapear cartão SD, NVMe, NTFS, pontos de montagem, WSL e Btrfs pelo identificador e responsável. Portar inventário por escopo, arquivos com handles abertos, cópia verificada, quarentena e restauração. Medir custo em repouso e qualidade com volume bloqueado, desconectado ou somente leitura. |
+| Incidentes e retomada depois de crash | Eventos de boot, desligamento, WER, disco, NTFS e WHEA sob demanda. | Dossiê por host e boot com últimos recursos observados, atividade de disco, evidências de temperatura/energia, eventos de falha e lacunas. Distinguir erro de parada, desligamento por aplicativo e reinício sem causa comprovada. Contexto de dumps, SMART, APU/GPU e drivers vem dos responsáveis documentados. Testar corrupção de estado, escrita interrompida, recuperação e tolerância a fontes lentas sem provocar falhas físicas. |
+| Sensores, energia e tela | CPU, RAM/commit, ACPI, estado da tomada e da carga, autonomia estimada, perfis térmicos e guarda por carga. | Temperatura de APU/GPU, RPM, tensão/corrente, descarga com tomada detectada, bateria crítica e guarda por queda de tensão quando houver um adaptador confiável. Adicionar alertas sustentados e temporizador reversível da tela interna respeitando dock, jogos e acessibilidade. Verificar ausência de sensor e perda de telemetria sem acionar mudança. |
+| Entrada e acessibilidade | Atalho para teclado virtual nativo. | Inventariar teclado, controle, trackpads, toque, entrada e saída de áudio e responsável de cada perfil. Confirmar estado saudável no mesmo host antes de qualquer reparo sob supervisão. Validar navegação por teclado e toque, leitores de tela e erro recuperável. |
+| Portabilidade do SDK | Identidade física derivada do SMBIOS, recibos de ações vinculados ao host, manifesto e **Inspect Overview**. | Inventário global por dispositivo, usuário/perfil, versão do esquema, boot e responsável. Conciliar versão/commit e SHA-256 do pacote com o SDK e exportar status sanitizado com idade da leitura. Migrar preferências compatíveis e manter históricos consultáveis, com poderes e recibos vinculados à máquina original. Testar mudança de letra de disco, novo hardware, mesmos dados de usuário, acesso parcial, versões desconhecidas e retorno ao equipamento anterior. |
+| Interface e CLI | Temas, bandeja legendada, visualizações, Central e consultas **Inspect** de leitura. | Navegação por tarefas, origem e idade junto de cada valor, tela de revisão com motivo e retorno, agrupamento das contas e entregas, filtros e busca em listas, preferências de movimento, contraste e DPI, encaixe e transparência do fundo. Portar biblioteca de prompts, macros, ações de edição/captura e CLI estruturada para diagnóstico, revisão e recuperação. Validar a 100/125/150% de escala e no tamanho real da bandeja. |
+| Integração com responsáveis | Painel de manutenção do cartão quando instalado e atalhos do Windows. | Contratos versionados e opcionais para PhaseZero, componentes do SDK, recuperação de conectores e instruções de recursos aos IDEs/CLIs. Mostrar ausente, desligado, protegido, erro e recuperação disponível. Conferir escopo, assinatura/integridade e proprietário antes de solicitar qualquer ação. |
+
+PSI, zram, tmpfs, unidades systemd, layout do Plasma, regras do KWin, PipeWire e
+contadores Btrfs pertencem ao ambiente Linux. A paridade no Windows passa por
+diagnósticos e ações equivalentes para o usuário, usando as fontes e os
+responsáveis do Windows.
+
+Para transportar um diagnóstico entre máquinas, execute no PowerShell 5.1
+o ponto de entrada do pacote com uma destas opções. **Overview** inclui o
+identificador de dispositivo, boot, versão do Windows, versão e SHA-256 do
+manifesto. O resultado ajuda a comparar instalações da mesma versão; contém um
+identificador estável de dispositivo, então revise antes de compartilhar.
+
+~~~powershell
+.\Folego.ps1 -Inspect Overview
+.\Folego.ps1 -Inspect CodexQuota
+.\Folego.ps1 -Inspect Volumes
+.\Folego.ps1 -Inspect Incidents
+.\Folego.ps1 -Inspect Boot
+~~~
+
+A consulta Codex lê no máximo seis finais de arquivos, limitados a 256 KiB
+cada, nas pastas do dia atual e do anterior em UTC e horário local. Ignora
+linhas incompletas, aceita observações de até 15 minutos e retira uma janela
+assim que chega sua reposição registrada. O diagnóstico mantém a fonte local
+explícita. O scanner não consulta credenciais nem endpoints.
 
 Uma coleta por vez, fora da thread da interface. Amostras nativas a cada
 10 segundos; sensores/fila/saúde a cada 60 segundos. CPU/RAM/commit/espaço
@@ -210,6 +265,85 @@ uma única alteração, com o mesmo recibo. Ao contrário dos perfis térmicos, 
 restauração da inicialização vale **depois de reiniciar** — o efeito só aparece
 no próximo login —, mas apenas se o valor atual ainda for o que o Fôlego gravou.
 
+## Sequência de início (logon em série)
+
+Todos os itens de logon disparando juntos estressam o SD e a APU logo no início da
+sessão; os reinícios abruptos deste Deck coincidiram com disco 100% ocupado e zona
+acima de 90 °C. Por pedido do usuário (17/11/2026), a **orquestração do início é
+ligada por padrão e não pergunta antes**: a cada login, o Fôlego adota as entradas
+de início do usuário (HKCU Run e pasta Startup do usuário) que o Windows iniciaria
+em paralelo — pelo mesmo `StartupApproved` das Configurações, com recibo — e as
+inicia depois do login, **uma por vez**. Entradas já desabilitadas, entradas da
+máquina (exigem administrador) e as que o usuário devolveu ao Windows ficam como
+estão; **Adicionar à sequência**, na aba **Inicialização**, adota manualmente
+qualquer outra entrada elegível, inclusive da máquina (com UAC):
+
+| Condição antes de cada item | Valor |
+| --- | --- |
+| Desktop assentado | 15 s depois de o Fôlego (já atrasado 30 s) obter a primeira leitura |
+| CPU | ≤ 50% |
+| Disco físico (`Win32_PerfFormattedData_PerfDisk_PhysicalDisk`, `_Total`) | ≤ 40% ocupado e fila ≤ 1 |
+| Zona térmica | < 80 °C |
+| Confirmação | duas leituras calmas seguidas, a cada 5 s |
+| Intervalo | 20 s desde o item anterior |
+| Tarefas de logon de terceiros | nenhuma em execução (como `\SteamDeck\Disco Linux - montar/unidades`) |
+
+Enquanto organiza, uma janela pequena, que não rouba o foco, avisa “Fôlego está
+organizando a inicialização — aguarde”, com o **tempo desde o boot** correndo, itens
+feitos e restantes, o próximo item, a estimativa do restante e o que está sendo
+aguardado. No fim mostra **“Sistema completamente inicializado em mm:ss”** (e uma
+notificação). “Completamente” só vale depois do último item e de duas leituras calmas
+sem tarefa de logon em execução; se o sistema não acalmar em 10 minutos, o aviso diz
+“Inicialização concluída” com o motivo, para nunca prender o fim do início. A janela
+some depois de 20 s ou em **Ocultar**; o resultado fica em Inicialização.
+
+Leitura ausente nunca conta como calma. Sem janela de calma em 10 minutos, o item
+**não é iniciado sob estresse**: fica registrado como adiado, com o motivo, e o
+Fôlego avisa. No ato, o item precisa continuar adotado, desabilitado no Windows (se
+alguém o reabilitou, não é iniciado em dobro) e com o mesmo comando da adoção (um
+comando alterado não é executado às cegas). A sequência roda uma vez por boot no
+início da sessão; se o Fôlego reiniciar no mesmo boot, só continua os itens ainda
+não tratados. Pausar o monitoramento pausa a sequência.
+
+`Steam Deck.lnk` (o dispatcher do cartão, dono da continuação do login), o próprio
+Fôlego e a Segurança do Windows nunca entram; tarefas de pacote continuam com o
+Windows. Uma entrada que já estava desabilitada fora do Fôlego pode ser adotada; ao
+removê-la, continua como estava. **Remover da sequência** devolve a entrada ao
+Windows pelo recibo e a adoção automática passa a respeitar essa escolha. Desabilitar
+o início do próprio Fôlego com itens adotados pede confirmação, porque eles só
+iniciam por ele.
+
+**Serviços.** Com a orquestração ligada, depois do aviso de sistema inicializado o
+Fôlego pede administrador (UAC) **uma vez** e muda os serviços automáticos de terceiros
+(fora da pasta do Windows, como CodexSandbox, CoworkVM, Everything, usbipd, WSL e
+edgeupdate) de Automático para **Automático (início atrasado)**: continuam iniciando,
+mas fora do pico do login. Recibo antes de cada `sc.exe config`, leitura depois;
+Defender, Segurança do Windows e serviços do próprio Windows nunca são alterados. Se o
+UAC for recusado, a recusa fica registrada e não é repetida sozinha; **Aplicar agora o
+início atrasado** em Opções tenta de novo.
+
+**Opções** traz **Ligar/Desligar a orquestração automática** (desligar não desfaz o que
+já foi organizado) e **Desfazer a orquestração**, que devolve ao Windows todas as
+entradas adotadas e os serviços que ainda têm o valor gravado pelo Fôlego (com UAC) e
+desliga o modo automático.
+
+**Outros itens de logon** lista, sem alterar, as tarefas agendadas de logon de
+terceiros (com atraso e nível), os serviços automáticos fora do Windows e as tarefas
+de pacote, com o modo de início de cada serviço; os do Defender aparecem como
+segurança. O Fôlego não altera tarefas agendadas: as do Disco Linux do cartão
+continuam com o SDK, e a sequência espera por elas.
+
+O Copilot desktop é baseado no Edge e usa o mecanismo de autolaunch do Edge
+(`edge_autolaunch` no `Local State`): o próprio app grava ou remove o seu valor em
+HKCU Run com `--win-session-start`. Por isso a entrada pode não estar lá quando se
+procura e reaparecer depois; **mudanças desde a revisão** a destaca como nova, e ela
+pode ser desabilitada ou adotada pela sequência.
+
+O Fôlego inicia com a sessão por padrão (entrada própria `Folego` em HKCU Run) e
+mantém o atalho **Fôlego** no menu Iniciar, recriado se tiver sido removido (um
+atalho personalizado é preservado). Fixá-lo na lista principal do Iniciar é escolha
+do usuário: o Windows não oferece API para isso.
+
 ## Como reverter cada ação
 
 | Ação | Reverter no Fôlego | Sem o Fôlego |
@@ -218,6 +352,9 @@ no próximo login —, mas apenas se o valor atual ainda for o que o Fôlego gra
 | Guarda automática | **Desabilitar guarda** (não troca os valores) | apagar não é necessário; desligada ela não age |
 | Economia de energia | **Restaurar o plano registrado** | Opções de energia do Windows |
 | Desabilitar inicialização | **Restaurar a última alteração** ou **Habilitar início** | Configurações → Aplicativos → Inicialização |
+| Item na sequência de início | **Remover da sequência** (devolve ao Windows pelo recibo) | Configurações → Aplicativos → Inicialização |
+| Orquestração inteira | **Desfazer a orquestração** em Opções | Inicialização nas Configurações; `sc.exe config <serviço> start= auto` (administrador) |
+| Serviço em início atrasado | **Desfazer a orquestração** (UAC) | `services.msc` → Automático; o original está em `services-<host>.json` |
 | Encerrar processo | não reversível: abra o app de novo | — |
 | Listas de processos | editar/remover `process-rules.json` | — |
 
@@ -250,7 +387,10 @@ e recibo de energia por identidade física, com até 12 recibos anteriores;
 quando um perfil muda ou a guarda é ligada/desligada); `processes-<host>.json`
 guarda até 20 recibos de encerramento e o rastreio de ociosidade (gravado só
 em análise ou ação manual); `startup-<host>.json` guarda até 30 recibos e a
-última revisão de inicialização; `appearance.json` guarda visualização, tema,
+última revisão de inicialização; `sequence-<host>.json` guarda os itens adotados (com o
+comando completo, para iniciá-los), as entradas devolvidas pelo usuário e o resultado e o
+tempo da última inicialização por boot; `services-<host>.json` guarda os recibos de início
+atrasado; `appearance.json` guarda visualização, tema,
 transparência e posições do widget; `latest-sample.json` conserva somente
 a última amostra, substituída atomicamente no máximo uma vez por minuto.
 Configurações acima de 1 MiB, schema desconhecido e campos essenciais inválidos
@@ -287,7 +427,7 @@ consulta APIs reais sem registrar início nem mudar energia. Um smoke próprio
 pode usar `-NoStartup -DataRoot <pasta-descartável> -SmokeSeconds 5`; fecha só
 essa janela/instância. No Deck com WMI frio, a primeira coleta pode passar de
 20 s (o provedor de `Get-Volume` sozinho levou 12,7 s), e um smoke de 5 s
-reprova sem defeito do app; a CI usa 25 s. Windows PowerShell 5.1 e hardware físico têm aceites
+reprova sem defeito do app; a CI usa 25 s e o limite é 300 s. Windows PowerShell 5.1 e hardware físico têm aceites
 separados das simulações no Linux e do runner Windows da CI.
 
 ## Fontes dos adaptadores
@@ -297,6 +437,11 @@ separados das simulações no Linux e do runner Windows da CI.
 - [Commit](https://learn.microsoft.com/windows/win32/api/psapi/nf-psapi-getperformanceinfo)
 - [Energia e bateria](https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-getsystempowerstatus)
 - [Plano ativo](https://learn.microsoft.com/windows/win32/api/powersetting/nf-powersetting-powergetactivescheme)
+- [Capacidade de volumes locais](https://learn.microsoft.com/windows/win32/cimwin32prov/win32-logicaldisk)
+- [Saúde de volumes](https://learn.microsoft.com/windows-hardware/drivers/storage/msft-volume) e [eventos de E/S](https://learn.microsoft.com/en-us/troubleshoot/windows-server/backup-and-storage/windows-server-mpio-troubleshooting)
+- [Inicialização rápida do Edge](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/startupboostenabled) e [modo IE](https://learn.microsoft.com/en-gb/lifecycle/faq/internet-explorer-microsoft-edge)
+- [Eventos de inicialização e reinício](https://learn.microsoft.com/en-us/troubleshoot/windows-server/performance/troubleshoot-unexpected-reboots-system-event-logs)
+- [Teclado virtual](https://support.microsoft.com/en-us/accessibility/windows/use-the-on-screen-keyboard-osk-to-type) e [alternância da área de trabalho](https://learn.microsoft.com/windows/win32/shell/shell-toggledesktop)
 - [Troca de plano](https://learn.microsoft.com/windows/win32/api/powersetting/nf-powersetting-powersetactivescheme)
 - [HKCU Run](https://learn.microsoft.com/windows/win32/setupapi/run-and-runonce-registry-keys)
 - [Leitura](https://learn.microsoft.com/windows/win32/api/powersetting/nf-powersetting-powerreadacvalueindex) e [escrita](https://learn.microsoft.com/windows/win32/api/powersetting/nf-powersetting-powerwriteacvalueindex) de configurações de energia

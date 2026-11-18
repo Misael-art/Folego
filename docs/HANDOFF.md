@@ -1,4 +1,88 @@
-# Passagem para o próximo agente — atualizada em 17/11/2026
+# Passagem para o próximo agente — atualizada em 18/11/2026
+
+## Continuidade das leituras e matriz completa Windows — 18/11/2026
+
+- Referência Linux em E: no commit **3e48875**, com alterações em andamento.
+  Desenvolvimento no checkout Windows e no [PR #12](https://github.com/Misael-art/Folego/pull/12).
+  A [matriz por capacidade e aceite](WINDOWS.md#funções-que-ainda-precisam-de-equivalente-windows)
+  liga cotas, agentes, processos, logon, disco, incidentes e portabilidade do SDK.
+- A instalação anterior perdia valores quando a amostra ultrapassava 15 s.
+  A cadência regular era 10 s e a consulta de volume do cartão já levou 12,7 s.
+  Agora a amostra de apresentação sai depois das sondagens lentas, a leitura do
+  volume é uma consulta CIM dirigida e cada indicador tem prazo próprio. A
+  bandeja mantém por até 30 s a leitura anterior com marca pontilhada; alertas,
+  guardas e decisões de inicialização continuam exigindo evidência atual.
+- Reabrir minimizado com **NoStartup** passa a preservar o modo de abertura sem
+  solicitar logon. O pacote anterior **a8e9232** reabriu o ShareX nesse cenário.
+  O início com a sessão e o pedido explícito de sequência seguem como antes.
+- **Cotas de IA** consulta somente registros locais Codex e expira cada janela.
+  A fonte local não vincula conta, CLI ou Desktop. **Trabalho e disco** traz
+  a consulta de incidentes NTFS, armazenamento e WHEA. A triagem explica a
+  possibilidade de encerramento e orienta Chrome, Edge e modo IE quando
+  encontrados. **Inspect Overview** compara identidade, boot e manifesto.
+- Aceite de código **8e42458**. A [CI Windows](https://github.com/Misael-art/Folego/actions/runs/44309257079)
+  passou 395 contratos PowerShell 5.1, probe Win32, consultas ao log e smoke
+  descartável da interface. A [CI Linux](https://github.com/Misael-art/Folego/actions/runs/44309257010)
+  passou núcleo, CLI e Qt offscreen.
+- Validar no Deck em janela sem QA concorrente, usando instância descartável.
+  Aceite físico futuro: observar vários ciclos detalhados, confirmar os quatro
+  indicadores e abrir a aba de cotas com fonte conhecida. A sessão atual
+  continua com o pacote instalado **a8e9232**.
+
+## Legendas da bandeja e paridade Windows — 18/11/2026
+
+- O checkout Windows em `C:\SteamDeck\dev\Folego` recebe o incremento no
+  [PR #12](https://github.com/Misael-art/Folego/pull/12). A referência Linux
+  em `E:\misael\Projects\Folego` tinha trabalho em andamento e foi usada para
+  leitura. A [matriz de paridade](WINDOWS.md#funções-que-ainda-precisam-de-equivalente-windows)
+  lista as lacunas e os equivalentes nativos disponíveis.
+- A bandeja identifica **CPU**, **TEMP**, **RAM** e **BAT** em duas linhas.
+  Menu e dicas mostram unidades e fonte térmica. Pausa, amostra antiga e leitura
+  indisponível usam traço neutro. **Trabalho e disco** ganhou inventário de volumes
+  e uma linha do tempo de inicialização, pedidos de desligamento e reinícios.
+  Os menus ganharam atalhos do Windows para teclado virtual e área de trabalho.
+  A Central e a dica de bateria usam a estimativa de descarga do Windows.
+- Validação em `a8e9232`: [Windows PowerShell 5.1, probe, Forms](https://github.com/Misael-art/Folego/actions/runs/44287815433)
+  e [núcleo, CLI e Qt offscreen](https://github.com/Misael-art/Folego/actions/runs/44287815340)
+  aprovados. No Deck, `Test-Folego.ps1 -ReplayCsv` aprovou 383 contratos e a
+  consulta de leitura encontrou C: (NTFS), E: (Btrfs) e eventos 12, 13, 41, 1074 e
+  6008. Antes do lote local havia 6.331 MiB disponíveis, zero páginas de entrada e
+  saída por segundo, 19% de CPU, fila de disco zero, 57 GiB livres em C: e zona
+  ACPI a 46,1 °C. Build, contratos e renderização foram sequenciais.
+- A renderização de ícones foi feita fora do Explorer. A atualização da cópia
+  ativa em `Program Files` depende de elevação. Consulte a matriz para retomar
+  paridade de armazenamento, entrada, energia, sessões e contas de IA.
+
+## Fôlego Windows: sequência de início em série — 17/11/2026
+
+- Pedido (via sessão do SDK): Fôlego iniciando por padrão e itens de logon em série,
+  para o boot não estressar o Deck. Branch `codex/windows-sequencia-logon-20261117`,
+  sobre `codex/windows-visualizacoes-20261117` (PR #11).
+- `Folego.Sequence.ps1`: adoção confirmada (StartupApproved com recibo), lançamento
+  um por vez com CPU ≤ 50%, disco ≤ 40%/fila ≤ 1, zona < 80 °C em duas leituras, 20 s
+  entre itens e espera por tarefas de logon de terceiros (Disco Linux do SDK); sem
+  calma em 10 min o item é adiado, nunca iniciado sob estresse. Revalida no ato
+  (adotado, desabilitado no Windows, mesmo comando). Inventário somente leitura de
+  tarefas, serviços e pacotes. Serviços e tarefas não são alterados.
+- Copilot: autolaunch herdado do Edge (`edge_autolaunch` no Local State) grava/remove
+  o próprio valor em HKCU Run; hoje inativo (`not_activation_reason` 6).
+- Deck: `Test-Folego.ps1` **332 PASS**; leituras reais (tarefas, disco, zona) e
+  inventário conferem; ponta a ponta com item fictício (sem efeito no Windows):
+  assentar → calma em 2 leituras → decisão → revalidação pulou → concluída e registrada.
+  Estado de tarefa via COM do Agendador (560 ms) em vez do cmdlet (2,4 s por consulta).
+- Atualização do mesmo dia, pedido do usuário: orquestração **por padrão, sem pergunta**.
+  Adoção automática das entradas do usuário a cada login (recibos; devolvidas ficam
+  excluídas), janela de progresso com tempo desde o boot e “Sistema completamente
+  inicializado em mm:ss” só após o último item e o sistema calmo (timeout de 10 min nunca
+  prende o fim), início atrasado de serviços de terceiros com UAC uma vez após o aviso
+  (recibos; Defender/Segurança nunca), Opções com ligar/desligar e Desfazer em um clique.
+- Deck: `Test-Folego.ps1` **358 PASS**; ponta a ponta com orquestração desligada no estado
+  descartável e item fictício: janela de progresso, timer, estimativa e “Sistema
+  completamente inicializado” renderizados (imagem da própria janela) e conclusão gravada;
+  nada adotado no registro real (valores `02` em StartupApproved são do próprio Windows).
+- Pendente: login real com o pacote instalado (adoção de ShareX, UAC dos serviços),
+  aceite do tempo real até “completamente inicializado”; sugerido ao SDK registrar as
+  tarefas do Disco Linux sem gatilho de logon para o Fôlego dispará-las em série.
 
 ## Fôlego Windows: visualizações do widget e temas de cores — 17/11/2026
 

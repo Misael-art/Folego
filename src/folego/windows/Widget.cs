@@ -42,8 +42,8 @@ namespace Folego.Windows {
         }
     }
 
-    // Live notification-area indicators: a number on the health colour, with a strip in the
-    // metric's theme colour. Each icon owns its handle; the caller disposes the previous one.
+    // Live notification-area indicators. The caption has its own background so the
+    // metric's identity stays legible when the health colour changes.
     public static class TrayGlyph {
         [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr icon);
         static Icon Own(Bitmap bitmap) {
@@ -51,20 +51,61 @@ namespace Folego.Windows {
             try { using (Icon borrowed = Icon.FromHandle(handle)) return (Icon)borrowed.Clone(); }
             finally { DestroyIcon(handle); }
         }
-        public static Icon Text(string text, Color background, Color ink, Color strip, int size) {
+        // 3×5 pixel capitals keep four letters legible inside the shell's 16 px slot.
+        static string CaptionGlyph(char letter) {
+            switch (letter) {
+                case 'A': return "010101111101101";
+                case 'B': return "110101110101110";
+                case 'C': return "011100100100011";
+                case 'E': return "111100110100111";
+                case 'M': return "101111111101101";
+                case 'P': return "110101110100100";
+                case 'R': return "110101110101101";
+                case 'T': return "111010010010010";
+                case 'U': return "101101101101111";
+                default: throw new ArgumentOutOfRangeException("letter");
+            }
+        }
+        static int Pixel(float unit, float scale) { return (int)Math.Round(unit * scale, MidpointRounding.AwayFromZero); }
+        static void DrawCaption(Graphics g, string label, Color ink, int size) {
+            float scale = size / 16f;
+            float left = (16 - (4 * label.Length - 1)) / 2f;
+            using (SolidBrush brush = new SolidBrush(ink)) {
+                for (int letter = 0; letter < label.Length; letter++) {
+                    string glyph = CaptionGlyph(label[letter]);
+                    for (int cell = 0; cell < glyph.Length; cell++) {
+                        if (glyph[cell] != '1') continue;
+                        float x = left + 4 * letter + cell % 3;
+                        int y = cell / 3;
+                        int x0 = Pixel(x, scale), y0 = Pixel(y, scale);
+                        g.FillRectangle(brush, x0, y0, Pixel(x + 1, scale) - x0, Pixel(y + 1, scale) - y0);
+                    }
+                }
+            }
+        }
+        public static Icon Metric(string label, string value, Color background, Color ink, Color caption, Color captionInk, int size) {
+            return Metric(label, value, background, ink, caption, captionInk, size, false);
+        }
+        public static Icon Metric(string label, string value, Color background, Color ink, Color caption, Color captionInk, int size, bool delayed) {
             using (Bitmap bitmap = new Bitmap(size, size))
             using (Graphics g = Graphics.FromImage(bitmap)) {
-                g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-                g.Clear(Color.Transparent);
-                using (SolidBrush fill = new SolidBrush(background)) g.FillRectangle(fill, 0, 0, size, size);
-                int band = Math.Max(2, size / 7);
-                using (SolidBrush top = new SolidBrush(strip)) g.FillRectangle(top, 0, 0, size, band);
-                float em = text.Length >= 3 ? size * 0.46f : size * 0.62f;
+                g.Clear(background);
+                int band = Pixel(6, size / 16f);
+                using (SolidBrush top = new SolidBrush(caption)) g.FillRectangle(top, 0, 0, size, band);
+                DrawCaption(g, label, captionInk, size);
+                float em = value.Length >= 3 ? size * 0.51f : size * 0.60f;
+                using (StringFormat text = (StringFormat)StringFormat.GenericTypographic.Clone())
                 using (Font font = new Font("Segoe UI", em, FontStyle.Bold, GraphicsUnit.Pixel))
                 using (SolidBrush brush = new SolidBrush(ink))
-                using (StringFormat center = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center }) {
-                    g.DrawString(text, font, brush, new RectangleF(-2, band - 1, size + 4, size - band + 2), center);
+                {
+                    SizeF extent = g.MeasureString(value, font, PointF.Empty, text);
+                    int mark = delayed ? Math.Max(1, size / 16) : 0;
+                    g.DrawString(value, font, brush, new PointF((size - extent.Width) / 2, (size + band - extent.Height - mark) / 2), text);
+                    if (delayed) {
+                        for (int x = size / 4; x < size * 3 / 4; x += 3 * mark)
+                            g.FillRectangle(brush, x, size - mark, mark, mark);
+                    }
                 }
                 return Own(bitmap);
             }
