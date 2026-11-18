@@ -1,5 +1,30 @@
 # Passagem para o próximo agente — atualizada em 18/11/2026
 
+## Continuidade das leituras e matriz completa Windows — 18/11/2026
+
+- Referência Linux em E: no commit **3e48875**, com alterações em andamento.
+  Desenvolvimento no checkout Windows e no [PR #12](https://github.com/Misael-art/Folego/pull/12).
+  A [matriz por capacidade e aceite](WINDOWS.md#funções-que-ainda-precisam-de-equivalente-windows)
+  liga cotas, agentes, processos, logon, disco, incidentes e portabilidade do SDK.
+- A instalação anterior perdia valores quando a amostra ultrapassava 15 s.
+  A cadência regular era 10 s e a consulta de volume do cartão já levou 12,7 s.
+  Agora a amostra de apresentação sai depois das sondagens lentas, a leitura do
+  volume é uma consulta CIM dirigida e cada indicador tem prazo próprio. A
+  bandeja mantém por até 30 s a leitura anterior com marca pontilhada; alertas,
+  guardas e decisões de inicialização continuam exigindo evidência atual.
+- Reabrir minimizado com **NoStartup** passa a preservar o modo de abertura sem
+  solicitar logon. O pacote anterior **a8e9232** reabriu o ShareX nesse cenário.
+  O início com a sessão e o pedido explícito de sequência seguem como antes.
+- **Cotas de IA** consulta somente registros locais Codex e expira cada janela.
+  A fonte local não vincula conta, CLI ou Desktop. **Trabalho e disco** traz
+  a consulta de incidentes NTFS, armazenamento e WHEA. A triagem explica a
+  possibilidade de encerramento e orienta Chrome, Edge e modo IE quando
+  encontrados. **Inspect Overview** compara identidade, boot e manifesto.
+- Validar no Deck em janela sem QA concorrente, usando instância descartável.
+  Aceite físico futuro: observar vários ciclos detalhados, confirmar os quatro
+  indicadores e abrir a aba de cotas com fonte conhecida. A sessão atual
+  continua com o pacote instalado **a8e9232**.
+
 ## Legendas da bandeja e paridade Windows — 18/11/2026
 
 - O checkout Windows em `C:\SteamDeck\dev\Folego` recebe o incremento no

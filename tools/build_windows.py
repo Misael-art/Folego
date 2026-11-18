@@ -19,11 +19,12 @@ sys.path.insert(0, str(ROOT / 'src'))
 from folego.core.policy import battery_band, HealthThresholds
 from folego.ui.palettes import THEMES, DEFAULT_THEME  # pure module: no Qt import
 
-FILES = ('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.Sequence.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1',
+FILES = ('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.Sequence.ps1', 'Folego.AI.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1',
          'Collect.ps1', 'Native.cs', 'Widget.cs', 'Test-Folego.ps1', 'DeckBootstrap.ps1')
 CAPABILITIES = ('monitor', 'power-plan-receipts', 'thermal-profiles', 'process-triage', 'startup-approval',
                 'widget-views', 'color-themes', 'taskbar-indicators', 'logon-sequence', 'local-volume-inventory',
-                'desktop-shortcuts', 'battery-runtime-estimate', 'boot-timeline')
+                'desktop-shortcuts', 'battery-runtime-estimate', 'boot-timeline', 'storage-hardware-events',
+                'local-codex-quota')
 # Linux widget views (ui/desktop_preferences.py) plus the Windows-only taskbar indicators,
 # which are the default opening view on Windows.
 VIEWS = (('central', 'Central do Fôlego'), ('taskbar', 'Barra de tarefas'), ('mini', 'Mini horizontal'), ('compact', 'Widget compacto'),

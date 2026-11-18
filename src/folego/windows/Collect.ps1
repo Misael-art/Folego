@@ -5,10 +5,11 @@ if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'O cole
 # The UI passes its validated policy; parsing it again on every poll costs ~1 s on the card.
 $policy = if ($null -ne $Policy) { $Policy } else { Get-FolegoPolicy }
 $notes = New-Object 'Collections.Generic.List[string]'
-$sample = $Collector.Read([IO.Path]::GetPathRoot($PSScriptRoot))
+$root = [IO.Path]::GetPathRoot($PSScriptRoot)
+$sample = $null
 if ($null -eq $HostInfo) { try { $HostInfo = Get-FolegoHost } catch { $notes.Add([string]$_) } }
 $now = [long][Folego.Windows.Native]::GetTickCount64()
-if ($null -eq $Extended -or $now - $Extended.Mono -ge 60000) {
+if ($null -eq $Extended -or $now - $Extended.Mono -ge $policy.windows.extended_seconds * 1000L) {
     $Extended = [pscustomobject]@{ Mono = $now; Thermal = @(); DiskQueue = $null; VolumeHealth = 'desconhecida'; Notes = @() }
     $warnings = @()
     try {
@@ -25,14 +26,13 @@ if ($null -eq $Extended -or $now - $Extended.Mono -ge 60000) {
         if (-not $Extended.Thermal.Count) { $warnings += 'Temperatura ACPI indisponível; não foi substituída por uma leitura de CPU/GPU.' }
     }
     try {
-        $letter = ([IO.Path]::GetPathRoot($PSScriptRoot)).TrimEnd([char]'\')
+        $letter = $root.TrimEnd([char]'\')
         $disk = Get-CimInstance Win32_PerfFormattedData_PerfDisk_LogicalDisk -Filter ("Name='" + $letter + "'") -OperationTimeoutSec 3 -ErrorAction Stop
         if ($null -ne $disk) { $Extended.DiskQueue = $disk.CurrentDiskQueueLength }
     } catch { $warnings += 'Contador de fila do disco indisponível.' }
     try {
-        $drive = ([IO.Path]::GetPathRoot($PSScriptRoot)).Substring(0, 1)
-        $volume = Get-Volume -DriveLetter $drive -ErrorAction Stop
-        $Extended.VolumeHealth = [string]$volume.HealthStatus
+        $Extended.VolumeHealth = Get-FolegoVolumeHealth $root
+        if ($Extended.VolumeHealth -eq 'desconhecida') { $warnings += 'Saúde do volume desconhecida.' }
     } catch { $warnings += 'Saúde do volume indisponível para este usuário.' }
     $Extended.Notes = $warnings
 }
@@ -72,6 +72,7 @@ switch ($Action) {
     }
     'AutoPower' {
         if ($null -ne $power -and $power.enabled -and -not $power.paused) {
+            $sample = $Collector.Read($root)
             if ($sample.ExternalPower -eq $true -and $null -ne $power.receipt -and $power.receipt.state -eq 'applied') {
                 $actionResult = Invoke-FolegoPower $DataRoot $HostInfo Restore -Automatic
             } elseif ($sample.ExternalPower -eq $false -and $null -ne $sample.BatteryPercent -and $sample.BatteryPercent -le 10) {
@@ -94,6 +95,8 @@ switch ($Action) {
         if ($data.Note) { $lines += $data.Note }
         $lines += 'Maiores grupos por executável:'
         foreach ($g in $data.Groups) { $lines += ('  {0} x{1}: {2} núcleos, {3} KB/s' -f $g.name, $g.count, $g.cores, $g.io_kbps) }
+        $browserHints = @(Get-FolegoBrowserSuggestions $data.Groups)
+        if ($browserHints.Count) { $lines += ''; $lines += @('Revisão de navegadores') + $browserHints }
         $lines += Get-FolegoSystemLoadReport
         $actionResult = $lines -join "`r`n"
     }
@@ -166,7 +169,9 @@ switch ($Action) {
         if ($null -eq $run.TaskNames) { try { $run.TaskNames = @(Get-FolegoLogonTaskNames) } catch { $run.TaskNames = @() } }
         $disk = $null; try { $disk = Get-FolegoDiskBusy } catch { }
         $celsius = $null; try { $hot = @(Get-FolegoThermalZones) | Sort-Object Celsius -Descending | Select-Object -First 1; if ($null -ne $hot) { $celsius = $hot.Celsius } } catch { }
-        $reading = [pscustomobject]@{ Cpu = $sample.CpuPercent; DiskBusy = $(if ($null -ne $disk) { $disk.Busy } else { $null }); DiskQueue = $(if ($null -ne $disk) { $disk.Queue } else { $null }); Celsius = $celsius; TasksRunning = @(Get-FolegoRunningTasks $run.TaskNames) }
+        $tasks = @(Get-FolegoRunningTasks $run.TaskNames)
+        $sample = $Collector.Read($root)
+        $reading = [pscustomobject]@{ Cpu = $sample.CpuPercent; DiskBusy = $(if ($null -ne $disk) { $disk.Busy } else { $null }); DiskQueue = $(if ($null -ne $disk) { $disk.Queue } else { $null }); Celsius = $celsius; TasksRunning = $tasks }
         $decision = Step-FolegoSequence $run $reading $rules $now
         switch ($decision.Action) {
             'launch' {
@@ -211,6 +216,14 @@ switch ($Action) {
         try { $actionResult = Get-FolegoBootTimeline }
         catch { $actionResult = 'Histórico de reinícios indisponível: ' + $_.Exception.Message }
     }
+    'Incidents' {
+        try { $actionResult = Get-FolegoResourceIncidents }
+        catch { $actionResult = 'Log de disco e hardware indisponível: ' + $_.Exception.Message }
+    }
+    'CodexQuota' {
+        $data = Get-FolegoCodexQuota
+        $actionResult = Format-FolegoCodexQuota $data ([DateTimeOffset]::UtcNow)
+    }
 }
 } catch { $actionError = [string]$_.Exception.Message }
 # Automatic thermal guard: opt-in, hysteresis, budget and the same receipts as manual use.
@@ -230,5 +243,11 @@ try { $processor = Get-FolegoThermalValues $activePlan } catch { $notes.Add('Lim
 if ($null -ne $HostInfo) {
     try { $power = Get-FolegoPowerState $DataRoot $HostInfo } catch { $notes.Add([string]$_) }
     try { $thermalState = Get-FolegoThermalState $DataRoot $HostInfo } catch { $notes.Add([string]$_) }
+}
+# A consulta detalhada pode levar mais que o prazo da amostra Win32. Carimbe a
+# telemetria da interface após o trabalho lento, sem mudar os limites da guarda.
+$completed = [long][Folego.Windows.Native]::GetTickCount64()
+if ($null -eq $sample -or $completed - $sample.MonotonicMs -gt ($policy.health.stale_after_s * 1000L)) {
+    $sample = $Collector.Read($root)
 }
 return [pscustomobject]@{ Sample = $sample; HostInfo = $HostInfo; Extended = $Extended; Power = $power; Plan = $activePlan; Action = $Action; Result = $actionResult; Notes = @($notes); Thermal = $thermalState; ThermalNow = $thermalNow; Processor = $processor; Data = $data; Error = $actionError }

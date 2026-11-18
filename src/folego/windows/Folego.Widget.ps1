@@ -169,7 +169,10 @@ function New-FolegoWidgetMenu {
 }
 function Switch-FolegoPause {
     $script:Paused = -not $script:Paused; $script:NextPoll = 0L
-    if (-not $script:Paused) { $script:WidgetStale = $true }
+    if (-not $script:Paused) {
+        $script:WidgetStale = $true
+        foreach ($last in $script:TrayReadings.Values) { $last.Unconfirmed = $true }
+    }
     $status.Text = if ($script:Paused) { 'Monitoramento pausado' } else { 'Monitoramento retomado. Aguardando leitura.' }
     Update-FolegoWidget
 }
@@ -395,6 +398,7 @@ function Update-FolegoWidget {
 # host where the shell already restarts. Native notification-area icons are re-added by
 # Windows after an explorer restart and need no privilege.
 $script:TaskbarActive = $false; $script:TaskbarIcons = [ordered]@{}; $script:TaskbarDrawn = @{}; $script:TrayDrawn = ''
+$script:TrayReadings = @{}; $script:TrayNextChange = [long]::MaxValue
 function Get-FolegoInk([string]$Hex) {
     $c = ConvertTo-FolegoColor $Hex
     $channel = { param($v) $x = $v / 255.0; if ($x -le 0.04045) { $x / 12.92 } else { [Math]::Pow(($x + 0.055) / 1.055, 2.4) } }
@@ -432,10 +436,14 @@ function New-FolegoTaskbarIcon([string]$Key) {
     $notify.Add_MouseUp({ param($sender, $e) if ($e.Button -eq [Windows.Forms.MouseButtons]::Left) { Show-FolegoQuickMenu $sender } })
     return $notify
 }
+function Get-FolegoLiveTrayRows {
+    $now = [long][Folego.Windows.Native]::GetTickCount64()
+    Get-FolegoTrayIndicators $script:WidgetData.Metrics $script:Paused $script:WidgetStale $script:TrayReadings $now ($policy.health.stale_after_s * 1000L)
+}
 function Update-FolegoTaskbarIndicators {
     if (-not $script:TaskbarActive -or $null -eq $script:WidgetData) { return }
-    $metrics = $script:WidgetData.Metrics
-    $rows = @(Get-FolegoTrayIndicators $metrics $script:Paused $script:WidgetStale)
+    $rows = @(Get-FolegoLiveTrayRows)
+    $script:TrayNextChange = [long]::MaxValue
     $actions = @((Get-FolegoTheme $policy $script:Appearance.theme).actions)
     $size = [Windows.Forms.SystemInformation]::SmallIconSize.Width
     $wanted = @($rows | ForEach-Object { $_.Key })
@@ -447,13 +455,14 @@ function Update-FolegoTaskbarIndicators {
         }
     }
     foreach ($row in $rows) {
+        $script:TrayNextChange = [Math]::Min($script:TrayNextChange, [long]$row.NextChange)
         if (-not $script:TaskbarIcons.Contains($row.Key)) { $script:TaskbarIcons[$row.Key] = New-FolegoTaskbarIcon $row.Key }
         $notify = $script:TaskbarIcons[$row.Key]
-        $drawn = $row.Text + '|' + $row.Role + '|' + $script:Appearance.theme + '|' + $size
+        $drawn = $row.Text + '|' + $row.Role + '|' + $row.Delayed + '|' + $script:Appearance.theme + '|' + $size
         if ($script:TaskbarDrawn[$row.Key] -ne $drawn) {
             $background = Get-FolegoValue $script:Tokens $row.Role $script:Tokens.muted
             $caption = $actions[$row.Strip % $actions.Count]
-            $icon = [Folego.Windows.TrayGlyph]::Metric($row.Label, $row.Text, (ConvertTo-FolegoColor $background), (Get-FolegoInk $background), (ConvertTo-FolegoColor $caption), (Get-FolegoInk $caption), $size)
+            $icon = [Folego.Windows.TrayGlyph]::Metric($row.Label, $row.Text, (ConvertTo-FolegoColor $background), (Get-FolegoInk $background), (ConvertTo-FolegoColor $caption), (Get-FolegoInk $caption), $size, $row.Delayed)
             Set-FolegoNotifyIcon $notify $icon
             $script:TaskbarDrawn[$row.Key] = $drawn
         }
@@ -490,6 +499,7 @@ function New-FolegoQuickMenu {
     $null = $strip.Items.Add((New-Object Windows.Forms.ToolStripLabel 'CPU —  ·  TEMP ACPI —  ·  RAM —'))
     $null = $strip.Items.Add('-')
     $null = $strip.Items.Add('Abrir a central', $null, { Show-Folego })
+    $null = $strip.Items.Add('Cotas de IA', $null, { Open-FolegoCentralTab 'Cotas de IA' 'CodexQuota' })
     $thermal = New-Object Windows.Forms.ToolStripMenuItem 'Temperatura e CPU'
     $null = $thermal.DropDownItems.Add('Aplicar perfil Fresco (turbo desligado)…', $null, {
         if (Confirm-Folego 'Perfil térmico' ('Aplicar Fresco ao plano ativo? CPU máxima ' + $policy.windows.thermal.profiles.Fresco.throttle_max + '% e turbo desligado. Os valores atuais serão registrados antes da troca.')) { Request-Folego Fresco }
@@ -520,11 +530,12 @@ function New-FolegoQuickMenu {
             $m = $script:WidgetData.Metrics
             $summaryText = if ($script:Paused) { 'Monitoramento pausado' } elseif ($script:WidgetStale) { 'Amostra antiga' } else { $m.Status.Text }
             $sender.Items[0].Text = 'Fôlego — ' + $summaryText
-            $rows = @(Get-FolegoTrayIndicators $m $script:Paused $script:WidgetStale)
+            $rows = @(Get-FolegoLiveTrayRows)
             $sender.Items[1].Text = ($rows | ForEach-Object {
                 $label = if ($_.Key -eq 'Temp') { 'TEMP ACPI' } else { $_.Label }
                 $unit = if ($_.Text -eq '–') { '' } elseif ($_.Key -eq 'Temp') { ' °C' } else { '%' }
-                $label + ' ' + $_.Text + $unit
+                $value = if ($_.Delayed) { '~' + $_.Text } else { $_.Text }
+                $label + ' ' + $value + $unit
             }) -join '  ·  '
         }
     })

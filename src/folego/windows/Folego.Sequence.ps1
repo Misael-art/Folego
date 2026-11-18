@@ -342,3 +342,6 @@ function Format-FolegoElapsed([double]$Seconds) {
     if ($span.TotalHours -ge 1) { return ('{0}:{1:00}:{2:00}' -f [int][Math]::Floor($span.TotalHours), $span.Minutes, $span.Seconds) }
     return ('{0:00}:{1:00}' -f $span.Minutes, $span.Seconds)
 }
+function Test-FolegoSequenceLaunch([bool]$StartMinimized, [bool]$NoStartup, [bool]$RunSequence) {
+    return $RunSequence -or ($StartMinimized -and -not $NoStartup)
+}

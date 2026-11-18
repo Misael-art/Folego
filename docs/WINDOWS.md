@@ -51,8 +51,12 @@ restaurar os originais (com a mesma confirmação da central), analisar consumid
 inicialização, pausar, visualizações, tema, transparência, Gerenciador de Tarefas
 e sair. No cabeçalho do menu, as leituras ficam agrupadas e mostram `%` ou `°C`.
 A dica de cada ícone informa a unidade, o uso de RAM e a origem ACPI da temperatura.
-Sem leitura atual, o ícone mantém a sigla e exibe um traço neutro. A dica informa
-se o monitoramento está pausado, a amostra envelheceu ou a leitura está indisponível.
+Se uma consulta atrasar ou vier parcial, o último valor confirmado fica por até
+30 s além do seu prazo normal, com fundo neutro, marca pontilhada e dica
+**leitura anterior**. O menu indica esse valor com **~**. CPU, RAM e bateria
+têm prazo de 15 s e a zona ACPI tem prazo de 90 s. Cada fonte vence separadamente.
+Depois da janela adicional, ou durante a pausa, aparece um traço. A guarda e os
+alertas usam os prazos originais e as próprias leituras atuais.
 O Windows 11
 não oferece mais deskbands, e encaixar uma janela dentro do `explorer.exe` seria
 frágil; por isso são ícones nativos da área de notificação, que o próprio Windows
@@ -98,7 +102,8 @@ widgets oferecem **Abrir teclado virtual do Windows** e **Mostrar ou restaurar a
 | Inicialização | HKCU/HKLM Run, Run32, pastas Startup e tarefas de pacote; desativação pelo mesmo `StartupApproved` das Configurações, com recibo e restauração. |
 | Identidade física | UUID SMBIOS; se o firmware informa um UUID de preenchimento (o Deck LCD informa `FFFFFFFF-…`), número de série da BIOS e depois da placa. Hosts com UUID válido mantêm o identificador anterior. |
 | Alertas | Pressão observada, bateria baixa e desconexão, com intervalo mínimo de cinco minutos por tipo. |
-| Diagnósticos manuais | Até 25 processos por RAM, amostra superficial limitada de temporários e até 24 eventos recentes de inicialização, desligamento, pedido de reinício e erro de parada do Windows. A triagem de consumidores mostra linhas de comando truncadas, com tokens/chaves/senhas ocultos, e não as grava. |
+| Diagnósticos manuais | Até 25 processos por RAM, amostra superficial limitada de temporários, eventos de boot e até 24 eventos de disco, NTFS e WHEA dos últimos sete dias. A triagem mostra condições do encerramento, classificação e motivos de proteção. As linhas de comando são truncadas e ocultam tokens/chaves/senhas na apresentação. |
+| Cota local do Codex | A aba **Cotas de IA** mostra a janela e a reposição quando há um registro recente de uso no perfil local. Só durante a consulta manual ou enquanto a aba está visível, com atualização automática no máximo uma vez por minuto. A fonte local não confirma a conta nem atribui a observação a CLI ou Desktop. |
 | Energia | Planos oficiais existentes, intenção durável antes da troca, confirmação por leitura, recuperação e até quatro trocas por hora. |
 | Componentes do sistema | Windows Update, Otimização de Entrega, Defender, UAC e serviços: só detecção e a página oficial correspondente. Nada é alterado pelo app. |
 | Manutenção de armazenamento | Reutiliza o painel do cartão quando presente; fora dele abre as Configurações do Windows. |
@@ -111,22 +116,46 @@ widgets oferecem **Abrir teclado virtual do Windows** e **Mostrar ou restaurar a
 Inventário comparado com a [visão geral do produto Linux](../README.md#o-que-você-pode-fazer)
 e o [guia do widget](COMPACTO.md).
 
-| Área | O que falta portar ou validar |
-| --- | --- |
-| Disco e temporários | Histórico e tendência de ocupação por volume, diagnóstico de arquivos em uso e seus responsáveis, inventário detalhado dos temporários próprios, quarentena, cópia verificada e recuperação. O Windows já tem espaço por volume, saúde básica e amostra superficial de temporários. |
-| Saúde do host | Histórico persistente e correlação de incidentes, falhas de armazenamento, temperatura da APU/GPU e RPM quando houver fonte documentada. Hoje há consulta aos eventos recentes do Windows e temperatura de zona ACPI. Os IDs 41 e 6008 registram o incidente e por si só não identificam a causa. |
-| Energia | Tensão, corrente e descarga mesmo com energia externa, avisos sonoros por faixa, guarda por queda de tensão e economia reversível da tela. Hoje há percentual, estado da tomada, estimativa de descarga, perfis térmicos e guarda por carga baixa. |
-| Entrada e acessibilidade | Diagnóstico de trackpads, toque, controles e endpoints de áudio. Recuperação precisa identificar o responsável pelo dispositivo e a configuração saudável neste Windows. O teclado virtual do Windows já pode ser aberto pelo Fôlego. |
-| Sessões protegidas e desempenho | Registro de trabalho a manter ativo, exclusões por sessão, revisão coordenada de ações e alívio cooperativo entre agentes. A triagem e o encerramento manual confirmados já existem. |
-| Contas de IA | Painel de contas e cotas, janelas de reset, entregas, alertas de MCP e recuperação pelo responsável verificado quando disponível. Credenciais, caminhos e sessões precisam de adaptadores Windows próprios. |
-| Ferramentas do widget | Biblioteca de prompts, textos e macros pessoais, ações de edição/captura e teclado próprio integrado. Já há atalho do Windows para teclado e área de trabalho. |
-| Aparência e diagnóstico pelo terminal | Transparência apenas do fundo, interação por encaixe e paridade da CLI de revisão/recuperação. Hoje há visualizações, temas e probe nativo de leitura. |
-| Ajustes reversíveis | Preferências gerenciadas dos navegadores, orientação de recursos nos IDEs e CLIs e opções que dependam de um launcher compatível. Cada ajuste precisa comprovar o caminho e o responsável no Windows. |
+| Área | Implementado no Windows | Pendências e critérios de aceite |
+| --- | --- | --- |
+| Identidade de contas de IA | Leitura local do perfil Codex. | Inventário de perfis do Codex CLI, Desktop e Web, Claude CLI/Desktop e Grok nas fontes nativas e no inventário opcional do responsável. Vincular conta, organização, instalação e cliente por evidência. Trocar de conta ou organização invalida a observação anterior mesmo no mesmo diretório. Mostrar distintamente fonte ausente, parcial, sem vínculo, vencida e indisponível. |
+| Cotas, resets e ofertas | Observação recente de janelas do Codex, disponibilidade e reposição quando registradas localmente. | Adaptadores de leitura por conta, orçamento e cache por provedor, tratamento de HTTP 429 e sessão expirada, reposição confirmada antes de alertar, saldo/extra quando disponível, tickets e ofertas com seu prazo real, lembretes declarados e referência mensal separada da data de cobrança confirmada. Preservar zero confirmado e esconder números expirados. Validar sem resgatar tickets ou gastar uma mensagem. |
+| Trabalho dos agentes | Triagem Win32 com dono, criação, janelas, CPU e E/S. | Relacionar sessão, projeto, responsável, execução ativa, fila, entregas e histórico. Portar alertas de MCP e capacidade do Codex Web e o pedido de recuperação pelo responsável da mesma conta, com orçamento, recibo e deduplicação. O aviso de um processo e a confirmação de uma entrega são evidências diferentes. |
+| Sessões e encerramento | Classes, motivos, reapuração da identidade, pedido gentil e força após nova confirmação. | Proteção explícita de trabalho por sessão e heartbeat, exclusões, vínculo com Job Objects/ancestrais, agrupamento por aplicação e perfil, opções cooperativas e recibo recuperável. Testar PID reaproveitado, pai/janela ausentes, dono desconhecido e agente ocupado. Preservar processos compartilhados, sessões, instaladores, segurança e projetos. A automação de encerramento tem contrato separado. |
+| Navegadores | Sugestões para Chrome, Edge e entradas do Internet Explorer identificadas na triagem. | Distinguir navegador, renderizadores, extensões, apps instalados, WebView2 e automações ativas. Recomendar ajustes pela evidência de uso. Para ajustes persistentes, detectar política gerenciada e exigir confirmação, recibo, leitura posterior e restauração quando o valor ainda pertencer ao Fôlego. Manter modo IE do Edge para compatibilidade com sites legados. |
+| Inicialização | Inventário, recibos, início em série sob condições de calma e retorno ao Windows. Reabertura com **NoStartup** desvia do logon. | Qualificar em outro equipamento e no Deck real: login, reinício no mesmo boot, cancelamento, duas sessões, UAC negado, mudanças externas, comando inválido, ausência de sensores, timeout e retorno ao Windows. Medir tempo até desktop responsivo, duração total, CPU, fila e temperatura. Guardar as ações por host e deixar operações inconclusivas para revisão. |
+| Disco e temporários | Capacidade e ocupação dos volumes locais, fila do volume do aplicativo, saúde via consulta CIM, leitura superficial dos temporários e eventos conhecidos do Windows. | Histórico limitado de espaço e tendência, bytes/segundo, latência, fila e pressão sustentada por volume e dispositivo físico. Mapear cartão SD, NVMe, NTFS, pontos de montagem, WSL e Btrfs pelo identificador e responsável. Portar inventário por escopo, arquivos com handles abertos, cópia verificada, quarentena e restauração. Medir custo em repouso e qualidade com volume bloqueado, desconectado ou somente leitura. |
+| Incidentes e retomada depois de crash | Eventos de boot, desligamento, WER, disco, NTFS e WHEA sob demanda. | Dossiê por host e boot com últimos recursos observados, atividade de disco, evidências de temperatura/energia, eventos de falha e lacunas. Distinguir erro de parada, desligamento por aplicativo e reinício sem causa comprovada. Contexto de dumps, SMART, APU/GPU e drivers vem dos responsáveis documentados. Testar corrupção de estado, escrita interrompida, recuperação e tolerância a fontes lentas sem provocar falhas físicas. |
+| Sensores, energia e tela | CPU, RAM/commit, ACPI, estado da tomada e da carga, autonomia estimada, perfis térmicos e guarda por carga. | Temperatura de APU/GPU, RPM, tensão/corrente, descarga com tomada detectada, bateria crítica e guarda por queda de tensão quando houver um adaptador confiável. Adicionar alertas sustentados e temporizador reversível da tela interna respeitando dock, jogos e acessibilidade. Verificar ausência de sensor e perda de telemetria sem acionar mudança. |
+| Entrada e acessibilidade | Atalho para teclado virtual nativo. | Inventariar teclado, controle, trackpads, toque, entrada e saída de áudio e responsável de cada perfil. Confirmar estado saudável no mesmo host antes de qualquer reparo sob supervisão. Validar navegação por teclado e toque, leitores de tela e erro recuperável. |
+| Portabilidade do SDK | Identidade física derivada do SMBIOS, recibos de ações vinculados ao host, manifesto e **Inspect Overview**. | Inventário global por dispositivo, usuário/perfil, versão do esquema, boot e responsável. Conciliar versão/commit e SHA-256 do pacote com o SDK e exportar status sanitizado com idade da leitura. Migrar preferências compatíveis e manter históricos consultáveis, com poderes e recibos vinculados à máquina original. Testar mudança de letra de disco, novo hardware, mesmos dados de usuário, acesso parcial, versões desconhecidas e retorno ao equipamento anterior. |
+| Interface e CLI | Temas, bandeja legendada, visualizações, Central e consultas **Inspect** de leitura. | Navegação por tarefas, origem e idade junto de cada valor, tela de revisão com motivo e retorno, agrupamento das contas e entregas, filtros e busca em listas, preferências de movimento, contraste e DPI, encaixe e transparência do fundo. Portar biblioteca de prompts, macros, ações de edição/captura e CLI estruturada para diagnóstico, revisão e recuperação. Validar a 100/125/150% de escala e no tamanho real da bandeja. |
+| Integração com responsáveis | Painel de manutenção do cartão quando instalado e atalhos do Windows. | Contratos versionados e opcionais para PhaseZero, componentes do SDK, recuperação de conectores e instruções de recursos aos IDEs/CLIs. Mostrar ausente, desligado, protegido, erro e recuperação disponível. Conferir escopo, assinatura/integridade e proprietário antes de solicitar qualquer ação. |
 
 PSI, zram, tmpfs, unidades systemd, layout do Plasma, regras do KWin, PipeWire e
 contadores Btrfs pertencem ao ambiente Linux. A paridade no Windows passa por
 diagnósticos e ações equivalentes para o usuário, usando as fontes e os
 responsáveis do Windows.
+
+Para transportar um diagnóstico entre máquinas, execute no PowerShell 5.1
+o ponto de entrada do pacote com uma destas opções. **Overview** inclui o
+identificador de dispositivo, boot, versão do Windows, versão e SHA-256 do
+manifesto. O resultado ajuda a comparar instalações da mesma versão; contém um
+identificador estável de dispositivo, então revise antes de compartilhar.
+
+~~~powershell
+.\Folego.ps1 -Inspect Overview
+.\Folego.ps1 -Inspect CodexQuota
+.\Folego.ps1 -Inspect Volumes
+.\Folego.ps1 -Inspect Incidents
+.\Folego.ps1 -Inspect Boot
+~~~
+
+A consulta Codex lê no máximo seis finais de arquivos, limitados a 256 KiB
+cada, nas pastas do dia atual e do anterior em UTC e horário local. Ignora
+linhas incompletas, aceita observações de até 15 minutos e retira uma janela
+assim que chega sua reposição registrada. O diagnóstico mantém a fonte local
+explícita. O scanner não consulta credenciais nem endpoints.
 
 Uma coleta por vez, fora da thread da interface. Amostras nativas a cada
 10 segundos; sensores/fila/saúde a cada 60 segundos. CPU/RAM/commit/espaço
@@ -409,6 +438,8 @@ separados das simulações no Linux e do runner Windows da CI.
 - [Energia e bateria](https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-getsystempowerstatus)
 - [Plano ativo](https://learn.microsoft.com/windows/win32/api/powersetting/nf-powersetting-powergetactivescheme)
 - [Capacidade de volumes locais](https://learn.microsoft.com/windows/win32/cimwin32prov/win32-logicaldisk)
+- [Saúde de volumes](https://learn.microsoft.com/windows-hardware/drivers/storage/msft-volume) e [eventos de E/S](https://learn.microsoft.com/en-us/troubleshoot/windows-server/backup-and-storage/windows-server-mpio-troubleshooting)
+- [Inicialização rápida do Edge](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/startupboostenabled) e [modo IE](https://learn.microsoft.com/en-gb/lifecycle/faq/internet-explorer-microsoft-edge)
 - [Eventos de inicialização e reinício](https://learn.microsoft.com/en-us/troubleshoot/windows-server/performance/troubleshoot-unexpected-reboots-system-event-logs)
 - [Teclado virtual](https://support.microsoft.com/en-us/accessibility/windows/use-the-on-screen-keyboard-osk-to-type) e [alternância da área de trabalho](https://learn.microsoft.com/windows/win32/shell/shell-toggledesktop)
 - [Troca de plano](https://learn.microsoft.com/windows/win32/api/powersetting/nf-powersetting-powersetactivescheme)

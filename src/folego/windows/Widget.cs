@@ -84,6 +84,9 @@ namespace Folego.Windows {
             }
         }
         public static Icon Metric(string label, string value, Color background, Color ink, Color caption, Color captionInk, int size) {
+            return Metric(label, value, background, ink, caption, captionInk, size, false);
+        }
+        public static Icon Metric(string label, string value, Color background, Color ink, Color caption, Color captionInk, int size, bool delayed) {
             using (Bitmap bitmap = new Bitmap(size, size))
             using (Graphics g = Graphics.FromImage(bitmap)) {
                 g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
@@ -97,7 +100,12 @@ namespace Folego.Windows {
                 using (SolidBrush brush = new SolidBrush(ink))
                 {
                     SizeF extent = g.MeasureString(value, font, PointF.Empty, text);
-                    g.DrawString(value, font, brush, new PointF((size - extent.Width) / 2, (size + band - extent.Height) / 2), text);
+                    int mark = delayed ? Math.Max(1, size / 16) : 0;
+                    g.DrawString(value, font, brush, new PointF((size - extent.Width) / 2, (size + band - extent.Height - mark) / 2), text);
+                    if (delayed) {
+                        for (int x = size / 4; x < size * 3 / 4; x += 3 * mark)
+                            g.FillRectangle(brush, x, size - mark, mark, mark);
+                    }
                 }
                 return Own(bitmap);
             }

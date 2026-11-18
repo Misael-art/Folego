@@ -59,7 +59,7 @@ function Get-FolegoHost {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $id = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes(($seed + '|' + $computer.Manufacturer + '|' + $computer.Model))))).Replace('-', '').Substring(0, 20) }
     finally { $sha.Dispose() }
-    return [pscustomobject]@{ Id = $id; Boot = $os.LastBootUpTime.ToUniversalTime().ToString('o'); Model = [string]$computer.Model; Manufacturer = [string]$computer.Manufacturer }
+    return [pscustomobject]@{ Id = $id; Boot = $os.LastBootUpTime.ToUniversalTime().ToString('o'); Model = [string]$computer.Model; Manufacturer = [string]$computer.Manufacturer; WindowsVersion = [string]$os.Version }
 }
 function Get-FolegoPolicy {
     $value = Read-FolegoJson (Join-Path $script:FolegoRoot 'policy.json')
@@ -141,6 +141,32 @@ function Get-FolegoExtendedHealth($Extended, $Policy, [long]$NowMs) {
     }
     return [pscustomobject]@{ Level = $level; Text = ($messages -join "`r`n") }
 }
+function Get-FolegoOverview([string]$PackageRoot) {
+    $hostInfo = Get-FolegoHost
+    $path = Join-Path $PackageRoot 'manifest.json'
+    $manifest = Read-FolegoJson $path
+    [pscustomobject]@{
+        schema = 1; observed_utc = [DateTimeOffset]::UtcNow.ToString('o')
+        device_id = $hostInfo.Id; boot_id = $hostInfo.Boot
+        windows_version = $hostInfo.WindowsVersion
+        app_version = (Get-FolegoValue $manifest version)
+        manifest_sha256 = $(if ($null -ne $manifest) { (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() } else { $null })
+        capabilities = @(Get-FolegoValue $manifest capabilities @())
+    }
+}
+function Get-FolegoVolumeHealth([string]$Root) {
+    if ($Root -notmatch '^([A-Za-z]):\\$') { return 'desconhecida' }
+    $filter = "DriveLetter = '$($Matches[1])'"
+    $rows = @(Get-CimInstance -Namespace root/Microsoft/Windows/Storage -ClassName MSFT_Volume -Filter $filter -OperationTimeoutSec 3 -ErrorAction Stop)
+    if ($rows.Count -ne 1) { return 'desconhecida' }
+    switch (Get-FolegoValue $rows[0] HealthStatus) {
+        0 { 'Healthy' }
+        1 { 'Warning' }
+        2 { 'Unhealthy' }
+        3 { 'Unhealthy' }
+        default { 'desconhecida' }
+    }
+}
 function Get-FolegoLocalVolumes {
     $volumes = Get-CimInstance -ClassName Win32_LogicalDisk -Filter 'DriveType = 3' -OperationTimeoutSec 3 -ErrorAction Stop
     return @($volumes | Sort-Object DeviceID)
@@ -158,6 +184,24 @@ function Format-FolegoVolumeInventory($Volumes) {
     if (-not $lines) { return 'O Windows não retornou volumes locais fixos com letra.' }
     return (@('Volumes locais fixos com letra', '') + $lines) -join "`r`n"
 }
+function Get-FolegoSystemEvents($Sources, [string]$Heading, [string]$Empty, [long]$WithinMs = 0) {
+    $time = if ($WithinMs -gt 0) { " and TimeCreated[timediff(@SystemTime) <= $WithinMs]" } else { '' }
+    $select = foreach ($provider in $Sources.Keys) {
+        $ids = ($sources[$provider].Keys | ForEach-Object { 'EventID=' + $_ }) -join ' or '
+        $xpath = "*[System[Provider[@Name='$provider'] and ($ids)$time]]"
+        '<Select Path="System">' + [Security.SecurityElement]::Escape($xpath) + '</Select>'
+    }
+    $filter = [xml]('<QueryList><Query Id="0" Path="System">' + ($select -join '') + '</Query></QueryList>')
+    try { $events = @(Get-WinEvent -FilterXml $filter -MaxEvents 24 -ErrorAction Stop) }
+    catch {
+        if ($_.FullyQualifiedErrorId -like 'NoMatchingEventsFound,*') { return $Empty }
+        throw
+    }
+    $lines = foreach ($event in ($events | Sort-Object TimeCreated -Descending)) {
+        '{0:g} · {1} (evento {2})' -f $event.TimeCreated, $sources[$event.ProviderName][[int]$event.Id], $event.Id
+    }
+    return (@($Heading, '') + $lines) -join "`r`n"
+}
 function Get-FolegoBootTimeline {
     $sources = [ordered]@{
         'Microsoft-Windows-Kernel-General' = @{ 12 = 'Windows iniciado'; 13 = 'Windows registrou desligamento' }
@@ -166,20 +210,23 @@ function Get-FolegoBootTimeline {
         'EventLog' = @{ 6008 = 'Desligamento inesperado registrado' }
         'Microsoft-Windows-WER-SystemErrorReporting' = @{ 1001 = 'Reinício após erro de parada (bugcheck)' }
     }
-    $clauses = foreach ($provider in $sources.Keys) {
-        $ids = ($sources[$provider].Keys | ForEach-Object { 'EventID=' + $_ }) -join ' or '
-        "(Provider[@Name='$provider'] and ($ids))"
+    Get-FolegoSystemEvents $sources 'Eventos recentes do Windows · horário local do registro' 'O Windows não retornou eventos de inicialização ou reinício.'
+}
+function Get-FolegoResourceIncidents {
+    $ntfs = @{ 55 = 'NTFS registrou corrupção'; 98 = 'NTFS registrou necessidade de verificação' }
+    $timeout = @{ 129 = 'Reinicialização de dispositivo registrada pelo controlador de armazenamento' }
+    $whea = @{}
+    foreach ($id in @(1, 17, 18, 19, 20, 46, 47)) { $whea[$id] = 'WHEA registrou erro de hardware' }
+    $sources = [ordered]@{
+        'disk' = @{ 7 = 'Disco registrou bloco inválido'; 11 = 'Disco registrou erro de controlador'; 51 = 'Falha de E/S durante operação de paginação'; 153 = 'Operação de E/S repetida'; 157 = 'Remoção inesperada de disco' }
+        'Ntfs' = $ntfs
+        'Microsoft-Windows-Ntfs' = $ntfs
+        'stornvme' = $timeout
+        'storahci' = $timeout
+        'Microsoft-Windows-StorPort' = $timeout
+        'Microsoft-Windows-WHEA-Logger' = $whea
     }
-    $xpath = '*[System[' + ($clauses -join ' or ') + ']]'
-    try { $events = @(Get-WinEvent -LogName System -FilterXPath $xpath -MaxEvents 24 -ErrorAction Stop) }
-    catch {
-        if ($_.FullyQualifiedErrorId -like 'NoMatchingEventsFound,*') { return 'O Windows não retornou eventos de inicialização ou reinício.' }
-        throw
-    }
-    $lines = foreach ($event in ($events | Sort-Object TimeCreated -Descending)) {
-        '{0:g} · {1} (evento {2})' -f $event.TimeCreated, $sources[$event.ProviderName][[int]$event.Id], $event.Id
-    }
-    return (@('Eventos recentes do Windows · horário local do registro', '') + $lines) -join "`r`n"
+    Get-FolegoSystemEvents $sources 'Disco e hardware · até 24 eventos dos últimos 7 dias' 'O log Sistema não retornou os eventos consultados nos últimos 7 dias. Confira também o estado do dispositivo com o responsável pelo disco.' 604800000L
 }
 function Get-FolegoPowerState([string]$DataRoot, $HostInfo) {
     $path = Join-Path $DataRoot ('power-' + $HostInfo.Id + '.json')
@@ -306,3 +353,4 @@ function Save-FolegoSample([string]$DataRoot, $Value) {
 . (Join-Path $script:FolegoRoot 'Folego.Manage.ps1')
 . (Join-Path $script:FolegoRoot 'Folego.View.ps1')
 . (Join-Path $script:FolegoRoot 'Folego.Sequence.ps1')
+. (Join-Path $script:FolegoRoot 'Folego.AI.ps1')

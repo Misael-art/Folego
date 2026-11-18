@@ -13,7 +13,7 @@ namespace Folego.Windows {
         public ulong TotalPhysical, AvailablePhysical, CommitUsed, CommitLimit;
         public double? CpuPercent;
         public int? BatteryPercent;
-        public bool? ExternalPower, Charging;
+        public bool? ExternalPower, Charging, HasBattery;
         public long? BatterySeconds;
         public ulong? DiskAvailable, DiskTotal;
         public long SelfRss;
@@ -118,7 +118,8 @@ namespace Folego.Windows {
             PowerStatus power;
             if (GetSystemPowerStatus(out power)) {
                 if (power.AcLine <= 1) sample.ExternalPower = power.AcLine == 1;
-                if (power.BatteryFlag != 255 && (power.BatteryFlag & 128) == 0) {
+                if (power.BatteryFlag != 255) sample.HasBattery = (power.BatteryFlag & 128) == 0;
+                if (sample.HasBattery == true) {
                     if (power.BatteryPercent <= 100) sample.BatteryPercent = power.BatteryPercent;
                     sample.Charging = (power.BatteryFlag & 8) != 0;
                     if (power.LifeSeconds != UInt32.MaxValue) sample.BatterySeconds = power.LifeSeconds;

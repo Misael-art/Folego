@@ -10,7 +10,7 @@ function Reject([scriptblock]$Operation, [string]$Message) { $failed = $false; t
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('folego-windows-tests-' + [Guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($fixture) | Out-Null
 try {
-    foreach ($file in @('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.Sequence.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1', 'Collect.ps1', 'Test-Folego.ps1', 'DeckBootstrap.ps1')) {
+    foreach ($file in @('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.Sequence.ps1', 'Folego.AI.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1', 'Collect.ps1', 'Test-Folego.ps1', 'DeckBootstrap.ps1')) {
         $tokens = $null; $errors = $null
         $null = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $file), [ref]$tokens, [ref]$errors)
         Check ($errors.Count -eq 0) ('Syntax ' + $file + ': ' + ($errors | Out-String))
@@ -452,6 +452,26 @@ try {
     $paused = @(Get-FolegoTrayIndicators $m $true $false)
     Check (@($stale | Where-Object { $_.Text -ne '–' -or $_.Tip -notmatch 'amostra antiga' }).Count -eq 0) 'Stale numbers are removed immediately'
     Check (@($paused | Where-Object { $_.Role -ne 'muted' -or $_.Tip -notmatch 'pausado' }).Count -eq 0) 'Paused icons retain labels and explain why readings are hidden'
+    $trayCache = @{}
+    $stable = [pscustomobject]@{ CpuPercent = 36; BatteryPercent = 48; ExternalPower = $false; TotalPhysical = 16GB; AvailablePhysical = 8GB; CommitLimit = 20GB; CommitUsed = 8GB; MonotonicMs = 1000L; HasBattery = $true }
+    $zone = [pscustomobject]@{ Celsius = 51; Mono = 1000L }
+    $stableMetrics = Get-FolegoMiniMetrics $stable $zone 'green' $policy $false
+    Update-FolegoTrayReadings $trayCache $stableMetrics $stable $zone
+    $pending = @(Get-FolegoTrayIndicators $stableMetrics $false $true $trayCache 16100L 15000L)
+    Check ($pending[0].Text -eq '36' -and $pending[0].Delayed -and $pending[0].Role -eq 'muted' -and $pending[0].Tip -match 'leitura anterior') 'A slow worker keeps the prior number explicitly marked until it expires'
+    Check ($pending[1].Text -eq '51' -and -not $pending[1].Delayed) 'Thermal freshness is independent of CPU timing'
+    $expired = @(Get-FolegoTrayIndicators $stableMetrics $false $true $trayCache 46100L 15000L)
+    Check ($expired[0].Text -eq '–' -and $expired[0].NextChange -eq [long]::MaxValue) 'The tray expires the fallback even if the worker never completes'
+    $stable.BatteryPercent = $null; $stable.HasBattery = $null; $stable.MonotonicMs = 2000L
+    $partialMetrics = Get-FolegoMiniMetrics $stable $null 'unknown' $policy $false
+    Update-FolegoTrayReadings $trayCache $partialMetrics $stable $null
+    $partial = @(Get-FolegoTrayIndicators $partialMetrics $false $false $trayCache 2000L)
+    Check ($partial.Count -eq 4 -and $partial[3].Text -eq '48' -and $partial[3].Delayed) 'One missing battery sample keeps the tray slot and labels the previous reading'
+    $stable.HasBattery = $false
+    Update-FolegoTrayReadings $trayCache $partialMetrics $stable $null
+    Check ((@(Get-FolegoTrayIndicators $partialMetrics $false $false $trayCache 2000L)).Count -eq 3) 'Confirmed absence removes the battery slot'
+    Check (-not (Test-FolegoSequenceLaunch $true $true $false)) 'A manual tray-only restart with NoStartup skips logon orchestration'
+    Check ((Test-FolegoSequenceLaunch $true $false $false) -and (Test-FolegoSequenceLaunch $false $true $true)) 'Logon and explicit sequence request remain supported'
     foreach ($size in @(16, 20, 24, 32)) {
         foreach ($row in $tray) {
             $icon = [Folego.Windows.TrayGlyph]::Metric($row.Label, $row.Text, [Drawing.Color]::White, [Drawing.Color]::Black, [Drawing.Color]::Black, [Drawing.Color]::White, $size)
@@ -467,6 +487,29 @@ try {
     $unknownVolume = [pscustomobject]@{ DeviceID = 'D:'; VolumeName = ''; FileSystem = ''; Size = 80GB; FreeSpace = $null }
     $volumes = Format-FolegoVolumeInventory @($knownVolume, $unknownVolume)
     Check ($volumes -match 'C: Windows.*NTFS.*0[.,]0 GiB livres' -and $volumes -match 'D:.*capacidade indisponível') 'Volume inventory distinguishes full disks and an unavailable reading'
+    $quotaNow = [DateTimeOffset]::UtcNow
+    $quotaPayload = [pscustomobject]@{
+        timestamp = $quotaNow.AddMinutes(-1).ToString('o'); type = 'event_msg'
+        payload = [pscustomobject]@{ type = 'token_count'; rate_limits = [pscustomobject]@{
+            primary = [pscustomobject]@{ used_percent = 38; window_minutes = 300; resets_at = $quotaNow.AddMinutes(2).ToUnixTimeSeconds() }
+            secondary = [pscustomobject]@{ used_percent = 100; window_minutes = 10080 }
+        } }
+    }
+    $profile = Join-Path $fixture 'codex-fixture'
+    $day = $quotaNow.UtcDateTime.ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture).Replace('-', '\')
+    $folder = [IO.Directory]::CreateDirectory((Join-Path (Join-Path $profile 'sessions') $day))
+    $record = $quotaPayload | ConvertTo-Json -Depth 6 -Compress
+    # A valid-looking second record lacks a newline and must remain invisible.
+    $incomplete = $record.Replace('38', '39')
+    [IO.File]::WriteAllText((Join-Path $folder.FullName 'rollout-contract.jsonl'), $record + [Environment]::NewLine + $incomplete)
+    $quota = Get-FolegoCodexQuota $profile $quotaNow
+    $report = Format-FolegoCodexQuota $quota $quotaNow
+    Check ($report -match '5 h.*62%' -and $report -match '7 d.*0%' -and $report -notmatch '61%') 'Local quota shows both windows, preserves a confirmed zero and ignores incomplete JSONL'
+    $report = Format-FolegoCodexQuota $quota ($quotaNow.AddMinutes(3))
+    Check ($report -notmatch '62%' -and $report -match '0%') 'Only the window whose observed reset elapsed is withdrawn'
+    Check ((Format-FolegoCodexQuota $quota ($quotaNow.AddMinutes(16))) -match 'nenhuma observação local recente') 'Age expiry keeps local usage unavailable until a new observation'
+    $browsers = @(Get-FolegoBrowserSuggestions @([pscustomobject]@{ name = 'chrome.exe' }, [pscustomobject]@{ name = 'iexplore' }))
+    Check ($browsers.Count -eq 2 -and $browsers[0] -match 'Economia de memória' -and $browsers[1] -match 'modo IE') 'Browser advice follows the measured executable families'
 
     # ------------------------------------------------ serialized logon sequence
     $bad = $policy | ConvertTo-Json -Depth 20 | ConvertFrom-Json

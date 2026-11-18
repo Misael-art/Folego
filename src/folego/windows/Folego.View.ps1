@@ -133,17 +133,49 @@ function Get-FolegoMiniMetrics($Sample, $ThermalNow, [string]$Level, $Policy, [b
     elseif ($null -ne $Sample -and $Sample.ExternalPower -eq $false -and $null -ne $Sample.BatteryPercent -and $Sample.BatteryPercent -le 10) { $status.Text = ('Bateria ' + $Sample.BatteryPercent + '%'); $status.Role = 'danger' }
     return [pscustomobject]@{ Status = $status; Cpu = $cpu; Temp = $temp; Ram = $ram; Bat = $bat; Headroom = (Get-FolegoHeadroom $Sample) }
 }
-function Get-FolegoTrayIndicators($Metrics, [bool]$Paused = $false, [bool]$Stale = $false) {
+function Update-FolegoTrayReadings([hashtable]$Readings, $Metrics, $Sample, $Thermal) {
+    foreach ($key in @('Cpu', 'Temp', 'Ram', 'Bat')) {
+        if ($key -eq 'Bat' -and (Get-FolegoValue $Sample HasBattery) -eq $false) { $Readings.Remove($key); continue }
+        $source = if ($key -eq 'Temp') { $Thermal } else { $Sample }
+        $mono = Get-FolegoValue $source $(if ($key -eq 'Temp') { 'Mono' } else { 'MonotonicMs' })
+        $metric = $Metrics.$key
+        $last = $Readings[$key]
+        if ($null -ne $mono -and $metric.Role -ne 'muted') {
+            if ($null -eq $last -or $mono -ge $last.Mono) {
+                $Readings[$key] = [pscustomobject]@{ Metric = $metric; Mono = [long]$mono; Unconfirmed = $false }
+            }
+        } elseif ($null -ne $last) { $last.Unconfirmed = $true }
+    }
+}
+function Get-FolegoTrayIndicators($Metrics, [bool]$Paused = $false, [bool]$Stale = $false,
+                                  [hashtable]$Readings, [long]$NowMs = 0, [long]$FastFreshMs = 15000) {
     foreach ($spec in @(@('Cpu', 'CPU', 'CPU', 0), @('Temp', 'TEMP', 'Temperatura (zona ACPI)', 1), @('Ram', 'RAM', 'RAM em uso', 2), @('Bat', 'BAT', 'Bateria', 3))) {
-        $metric = $Metrics.($spec[0])
-        if ($spec[0] -eq 'Bat' -and -not $metric.Visible) { continue }
+        $key = $spec[0]; $metric = $Metrics.$key
+        $state = if ($Stale) { 'expired' } else { 'current' }
+        $nextChange = [long]::MaxValue
+        $last = if ($null -ne $Readings) { $Readings[$key] } else { $null }
+        if ($key -eq 'Bat' -and -not $metric.Visible -and $null -eq $last) { continue }
+        if ($null -ne $last) {
+            $metric = $last.Metric
+            $fresh = if ($key -eq 'Temp') { 90000L } else { $FastFreshMs }
+            $age = $NowMs - $last.Mono
+            if ($age -lt 0 -or $age -gt $fresh + 30000L) { $state = 'expired' }
+            elseif ($age -gt $fresh -or $last.Unconfirmed) { $state = 'delayed'; $nextChange = $last.Mono + $fresh + 30001L }
+            else { $state = 'current'; $nextChange = $last.Mono + $fresh + 1L }
+        }
+        if ($Paused) { $state = 'paused'; $nextChange = [long]::MaxValue }
         $number = [string]$metric.Text -replace '(?:%| °C)$', ''
-        $visible = -not ($Paused -or $Stale)
+        $visible = $state -in @('current', 'delayed')
         $text = if ($visible -and $number.Length -le 3 -and $number -match '^-?[0-9]+$') { $number } else { '–' }
-        $role = if ($text -eq '–') { 'muted' } else { [string]$metric.Role }
-        $caption = if ($spec[0] -eq 'Bat' -and $metric.Caption -eq 'TOMADA') { 'Bateria (na tomada)' } else { $spec[2] }
-        $reading = if ($Paused) { 'monitoramento pausado' } elseif ($Stale) { 'amostra antiga' } elseif ($number -eq '—') { 'indisponível' } else { $metric.Text }
-        if ($visible -and $spec[0] -eq 'Bat' -and $metric.Estimate) { $reading += ' · ' + $metric.Estimate }
-        [pscustomobject]@{ Key = $spec[0]; Label = $spec[1]; Text = $text; Role = $role; Strip = [int]$spec[3]; Tip = ($caption + ': ' + $reading + ' · Fôlego') }
+        $role = if ($text -eq '–' -or $state -eq 'delayed') { 'muted' } else { [string]$metric.Role }
+        $caption = if ($key -eq 'Bat' -and $state -eq 'current' -and $metric.Caption -eq 'TOMADA') { 'Bateria (na tomada)' } else { $spec[2] }
+        $reading = switch ($state) {
+            'paused' { 'monitoramento pausado' }
+            'expired' { 'amostra antiga' }
+            'delayed' { $metric.Text + ' · leitura anterior' }
+            default { if ($number -eq '—') { 'indisponível' } else { $metric.Text } }
+        }
+        if ($state -eq 'current' -and $key -eq 'Bat' -and $metric.Estimate) { $reading += ' · ' + $metric.Estimate }
+        [pscustomobject]@{ Key = $key; Label = $spec[1]; Text = $text; Role = $role; Strip = [int]$spec[3]; Delayed = ($state -eq 'delayed'); NextChange = $nextChange; Tip = ($caption + ': ' + $reading + ' · Fôlego') }
     }
 }
