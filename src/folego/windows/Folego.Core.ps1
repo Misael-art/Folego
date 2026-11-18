@@ -354,3 +354,4 @@ function Save-FolegoSample([string]$DataRoot, $Value) {
 . (Join-Path $script:FolegoRoot 'Folego.View.ps1')
 . (Join-Path $script:FolegoRoot 'Folego.Sequence.ps1')
 . (Join-Path $script:FolegoRoot 'Folego.AI.ps1')
+. (Join-Path $script:FolegoRoot 'Folego.Prompts.ps1')

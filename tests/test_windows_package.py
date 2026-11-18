@@ -28,6 +28,19 @@ def test_windows_policy_is_compiled_from_shared_core():
     assert policy['windows']['automatic_resource_executor'] is False
 
 
+def test_windows_prompt_catalog_reuses_the_linux_texts():
+    from folego.core.development_prompts import PROMPT_CATEGORIES, text
+
+    groups = builder.policy()['windows']['prompts']
+    assert [(group['key'], group['name']) for group in groups] == [
+        (key, name) for key, name, _ in PROMPT_CATEGORIES
+    ]
+    for group, (_, _, keys) in zip(groups, PROMPT_CATEGORIES, strict=True):
+        assert [(item['key'], item['text']) for item in group['items']] == [
+            (key, text(key)) for key in keys
+        ]
+
+
 def test_builder_imports_without_linux_getuid_in_a_fresh_process():
     import subprocess
     import sys
@@ -148,7 +161,8 @@ def _functions():
 def test_every_production_call_is_defined():
     import re
     defined, sources = _functions()
-    for name in ('Folego.ps1', 'Collect.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1'):
+    for name in ('Folego.ps1', 'Collect.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.View.ps1',
+                 'Folego.Widget.ps1', 'Folego.Prompts.ps1', 'Folego.PromptMenu.ps1'):
         called = set(re.findall(r'\b([A-Z][a-z]+-Folego[A-Za-z]*)\b', sources[name]))
         assert called <= defined, (name, sorted(called - defined))
 

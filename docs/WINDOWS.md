@@ -88,6 +88,50 @@ os padrões valem só na sessão, sem sobrescrevê-lo. Os menus dos indicadores 
 widgets oferecem **Abrir teclado virtual do Windows** e **Mostrar ou restaurar a
 área de trabalho**. O teclado também está na **Visão geral**.
 
+## Prompts, atalhos e textos pessoais
+
+O clique esquerdo ou direito em um indicador da bandeja abre **Prompts e
+atalhos**. O mesmo submenu fica no widget. A biblioteca reúne os 16 prompts
+do Linux em seis categorias e inclui diagnóstico, implantação a partir de
+achados, desempenho, design e continuidade. Escolher um prompt nesses menus
+copia o texto integral. Cole no agente quando quiser enviá-lo.
+
+Na Central, **Prompts e atalhos** permite criar, editar e remover textos e
+macros. O clique direito nos campos do editor oferece os comandos habituais de
+edição e o submenu do Fôlego. Um prompt escolhido no campo de várias linhas
+substitui apenas a seleção ou é inserido no cursor. O campo de título oferece
+copiar os prompts longos. Os textos pessoais também aparecem no menu.
+
+Para usar em um aplicativo externo, ligue **Abrir painel ao clicar com o botão
+direito em campos editáveis de outros aplicativos** na mesma aba. Com o
+aplicativo em primeiro plano, clique com o botão direito em um campo. Ao
+identificar um campo editável por UI Automation, o Fôlego mostra um botão
+flutuante **Prompts e atalhos** perto do clique. Clique nele para selecionar
+um item. Cada aplicativo continua responsável pelo seu menu de contexto e
+pela ação Colar. Use o menu da bandeja como alternativa em campos de senha,
+áreas somente leitura, controles sem acessibilidade compatível e telas
+protegidas.
+
+Com um campo externo identificado, o submenu de atalhos traz opções de
+**Janelas**, **Edição** e **Terminal**, além do **Teclado virtual do Windows** e
+**Mostrar ou restaurar a área de trabalho**. Uma macro personalizada pode
+invocar a área de trabalho ou uma combinação, como **Ctrl+Shift+F5**.
+O Fôlego revalida o foco e o campo antes de enviar uma combinação uma vez.
+Um aplicativo pode usar outras associações, manter seu menu aberto ou ter
+privilégios que impeçam o envio. Nesses casos use o teclado virtual ou o
+próprio menu do aplicativo. Selecionar um texto externo copia para a área de
+transferência, sem enviá-lo ao agente.
+
+A preferência do painel externo começa desligada e fica em **appearance.json**.
+O observador de clique preserva o evento original e usa o provedor de
+acessibilidade fora da interface. Consulta a editabilidade do controle, sem
+ler seu texto. A biblioteca privada fica em **custom-prompts.json** no estado
+do Fôlego. Suporta até 32 itens e 512 KiB, com títulos de até 80 caracteres e
+textos de até 16.000. Exemplos aparecem na primeira leitura. Uma biblioteca
+salva vazia permanece vazia. Se o arquivo mudou desde a edição, recarregue
+antes de salvar. Formatos incompatíveis ficam disponíveis para revisão e
+bloqueiam gravações.
+
 ## Recursos e limites do port
 
 | Função | Backend e comportamento Windows |
@@ -129,7 +173,7 @@ e o [guia do widget](COMPACTO.md).
 | Sensores, energia e tela | CPU, RAM/commit, ACPI, estado da tomada e da carga, autonomia estimada, perfis térmicos e guarda por carga. | Temperatura de APU/GPU, RPM, tensão/corrente, descarga com tomada detectada, bateria crítica e guarda por queda de tensão quando houver um adaptador confiável. Adicionar alertas sustentados e temporizador reversível da tela interna respeitando dock, jogos e acessibilidade. Verificar ausência de sensor e perda de telemetria sem acionar mudança. |
 | Entrada e acessibilidade | Atalho para teclado virtual nativo. | Inventariar teclado, controle, trackpads, toque, entrada e saída de áudio e responsável de cada perfil. Confirmar estado saudável no mesmo host antes de qualquer reparo sob supervisão. Validar navegação por teclado e toque, leitores de tela e erro recuperável. |
 | Portabilidade do SDK | Identidade física derivada do SMBIOS, recibos de ações vinculados ao host, manifesto e **Inspect Overview**. | Inventário global por dispositivo, usuário/perfil, versão do esquema, boot e responsável. Conciliar versão/commit e SHA-256 do pacote com o SDK e exportar status sanitizado com idade da leitura. Migrar preferências compatíveis e manter históricos consultáveis, com poderes e recibos vinculados à máquina original. Testar mudança de letra de disco, novo hardware, mesmos dados de usuário, acesso parcial, versões desconhecidas e retorno ao equipamento anterior. |
-| Interface e CLI | Temas, bandeja legendada, visualizações, Central e consultas **Inspect** de leitura. | Navegação por tarefas, origem e idade junto de cada valor, tela de revisão com motivo e retorno, agrupamento das contas e entregas, filtros e busca em listas, preferências de movimento, contraste e DPI, encaixe e transparência do fundo. Portar biblioteca de prompts, macros, ações de edição/captura e CLI estruturada para diagnóstico, revisão e recuperação. Validar a 100/125/150% de escala e no tamanho real da bandeja. |
+| Interface e CLI | Temas, bandeja legendada, visualizações, Central, consultas **Inspect**, catálogo compartilhado de prompts, textos pessoais, macros e painel de contexto opcional. | Navegação por tarefas, origem e idade junto de cada valor, tela de revisão com motivo e retorno, agrupamento das contas e entregas, filtros e busca em listas, preferências de movimento, contraste e DPI, encaixe e transparência do fundo. Ampliar compatibilidade dos campos externos, ações de captura e CLI estruturada para diagnóstico, revisão e recuperação. Validar a 100/125/150% de escala e no tamanho real da bandeja. |
 | Integração com responsáveis | Painel de manutenção do cartão quando instalado e atalhos do Windows. | Contratos versionados e opcionais para PhaseZero, componentes do SDK, recuperação de conectores e instruções de recursos aos IDEs/CLIs. Mostrar ausente, desligado, protegido, erro e recuperação disponível. Conferir escopo, assinatura/integridade e proprietário antes de solicitar qualquer ação. |
 
 PSI, zram, tmpfs, unidades systemd, layout do Plasma, regras do KWin, PipeWire e
@@ -442,6 +486,7 @@ separados das simulações no Linux e do runner Windows da CI.
 - [Inicialização rápida do Edge](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/startupboostenabled) e [modo IE](https://learn.microsoft.com/en-gb/lifecycle/faq/internet-explorer-microsoft-edge)
 - [Eventos de inicialização e reinício](https://learn.microsoft.com/en-us/troubleshoot/windows-server/performance/troubleshoot-unexpected-reboots-system-event-logs)
 - [Teclado virtual](https://support.microsoft.com/en-us/accessibility/windows/use-the-on-screen-keyboard-osk-to-type) e [alternância da área de trabalho](https://learn.microsoft.com/windows/win32/shell/shell-toggledesktop)
+- [Observação nativa do mouse](https://learn.microsoft.com/windows/win32/winmsg/lowlevelmouseproc), [UI Automation fora da interface](https://learn.microsoft.com/dotnet/framework/ui-automation/ui-automation-threading-issues) e [envio de teclas](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-sendinput)
 - [Troca de plano](https://learn.microsoft.com/windows/win32/api/powersetting/nf-powersetting-powersetactivescheme)
 - [HKCU Run](https://learn.microsoft.com/windows/win32/setupapi/run-and-runonce-registry-keys)
 - [Leitura](https://learn.microsoft.com/windows/win32/api/powersetting/nf-powersetting-powerreadacvalueindex) e [escrita](https://learn.microsoft.com/windows/win32/api/powersetting/nf-powersetting-powerwriteacvalueindex) de configurações de energia

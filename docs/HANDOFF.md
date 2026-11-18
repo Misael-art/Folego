@@ -1,5 +1,29 @@
 # Passagem para o próximo agente — atualizada em 18/11/2026
 
+## Prompts e atalhos contextuais no Windows — 18/11/2026
+
+- A fonte Linux no E: e o port no C: têm o mesmo remoto Folego, dois diretórios
+  Git independentes e branches diferentes. O catálogo Windows é gerado do
+  mesmo módulo de prompts, incluindo os 16 textos integrais. O checkout
+  Linux tem trabalho em andamento e foi consultado para referência.
+- Implementação em três partes: catálogo compartilhado na bandeja e widget,
+  editor privado com submenu nos campos próprios e painel flutuante
+  opcional nos campos externos comprovados pelo provedor de acessibilidade.
+  As escolhas de texto externo copiam, e uma combinação de teclas exige
+  revalidação do destino na hora da ação.
+- O [guia Windows](WINDOWS.md#prompts-atalhos-e-textos-pessoais) descreve a
+  experiência, as limitações do Windows e o formato da biblioteca. Aceites de
+  uso físico incluem Deck sem teclado, Notepad e um campo de agente no
+  navegador, clique comum em arquivo, campo protegido, mudança de foco, menu
+  pequeno, DPI e desligamento da opção durante uso. O teste da interface
+  usa campo próprio descartável para seleção e inserção.
+- O [PR #13](https://github.com/Misael-art/Folego/pull/13) usa a branch Windows
+  do PR #12 como base. O commit inicial **a926be7** passou 413 contratos,
+  probe nativo e abertura Forms na [CI Windows](https://github.com/Misael-art/Folego/actions/runs/44323531957).
+  O ajuste posterior cancela atalhos pendentes ao desabilitar o painel e
+  vincula o retorno ao campo da ação. O Deck mantinha QA concorrente de
+  outro projeto, e a interação externa continua com aceite físico pendente.
+
 ## Continuidade das leituras e matriz completa Windows — 18/11/2026
 
 - Referência Linux em E: no commit **3e48875**, com alterações em andamento.
