@@ -1,4 +1,28 @@
-# Passagem para o próximo agente — atualizada em 17/11/2026
+# Passagem para o próximo agente — atualizada em 18/11/2026
+
+## Legendas da bandeja e paridade Windows — 18/11/2026
+
+- O checkout Windows em `C:\SteamDeck\dev\Folego` recebe o incremento no
+  [PR #12](https://github.com/Misael-art/Folego/pull/12). A referência Linux
+  em `E:\misael\Projects\Folego` tinha trabalho em andamento e foi usada para
+  leitura. A [matriz de paridade](WINDOWS.md#funções-que-ainda-precisam-de-equivalente-windows)
+  lista as lacunas e os equivalentes nativos disponíveis.
+- A bandeja identifica **CPU**, **TEMP**, **RAM** e **BAT** em duas linhas.
+  Menu e dicas mostram unidades e fonte térmica. Pausa, amostra antiga e leitura
+  indisponível usam traço neutro. **Trabalho e disco** ganhou inventário de volumes
+  e uma linha do tempo de inicialização, pedidos de desligamento e reinícios.
+  Os menus ganharam atalhos do Windows para teclado virtual e área de trabalho.
+  A Central e a dica de bateria usam a estimativa de descarga do Windows.
+- Validação em `a8e9232`: [Windows PowerShell 5.1, probe, Forms](https://github.com/Misael-art/Folego/actions/runs/44287815433)
+  e [núcleo, CLI e Qt offscreen](https://github.com/Misael-art/Folego/actions/runs/44287815340)
+  aprovados. No Deck, `Test-Folego.ps1 -ReplayCsv` aprovou 383 contratos e a
+  consulta de leitura encontrou C: (NTFS), E: (Btrfs) e eventos 12, 13, 41, 1074 e
+  6008. Antes do lote local havia 6.331 MiB disponíveis, zero páginas de entrada e
+  saída por segundo, 19% de CPU, fila de disco zero, 57 GiB livres em C: e zona
+  ACPI a 46,1 °C. Build, contratos e renderização foram sequenciais.
+- A renderização de ícones foi feita fora do Explorer. A atualização da cópia
+  ativa em `Program Files` depende de elevação. Consulte a matriz para retomar
+  paridade de armazenamento, entrada, energia, sessões e contas de IA.
 
 ## Fôlego Windows: sequência de início em série — 17/11/2026
 

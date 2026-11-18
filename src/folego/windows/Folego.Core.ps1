@@ -176,7 +176,7 @@ function Get-FolegoBootTimeline {
         if ($_.FullyQualifiedErrorId -like 'NoMatchingEventsFound,*') { return 'O Windows não retornou eventos de inicialização ou reinício.' }
         throw
     }
-    $lines = foreach ($event in $events) {
+    $lines = foreach ($event in ($events | Sort-Object TimeCreated -Descending)) {
         '{0:g} · {1} (evento {2})' -f $event.TimeCreated, $sources[$event.ProviderName][[int]$event.Id], $event.Id
     }
     return (@('Eventos recentes do Windows · horário local do registro', '') + $lines) -join "`r`n"
