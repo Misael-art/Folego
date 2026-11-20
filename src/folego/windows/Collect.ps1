@@ -2,6 +2,11 @@ param([string]$DataRoot, $Collector, $HostInfo, $Extended, [string]$Action = 'Sa
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Folego.Core.ps1')
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'O coletor nativo exige Windows.' }
+if ($Action -eq 'StorageDiagnostic') {
+    . (Join-Path $PSScriptRoot 'Folego.Performance.ps1')
+    . (Join-Path $PSScriptRoot 'Folego.StorageDiagnostic.ps1')
+    return Invoke-FolegoStorageDiagnostic $DataRoot $Target
+}
 # The UI passes its validated policy; parsing it again on every poll costs ~1 s on the card.
 $policy = if ($null -ne $Policy) { $Policy } else { Get-FolegoPolicy }
 $notes = New-Object 'Collections.Generic.List[string]'

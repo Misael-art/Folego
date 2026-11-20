@@ -10,13 +10,98 @@ function Reject([scriptblock]$Operation, [string]$Message) { $failed = $false; t
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('folego-windows-tests-' + [Guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($fixture) | Out-Null
 try {
-    foreach ($file in @('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.Sequence.ps1', 'Folego.AI.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1', 'Folego.Prompts.ps1', 'Folego.PromptMenu.ps1', 'Collect.ps1', 'Test-Folego.ps1', 'DeckBootstrap.ps1')) {
+    foreach ($file in @('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.Sequence.ps1', 'Folego.AI.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1', 'Folego.Prompts.ps1', 'Folego.PromptMenu.ps1', 'Collect.ps1', 'Folego.Performance.ps1', 'Folego.StorageDiagnostic.ps1', 'Test-Folego.ps1', 'DeckBootstrap.ps1')) {
         $tokens = $null; $errors = $null
         $null = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $file), [ref]$tokens, [ref]$errors)
         Check ($errors.Count -eq 0) ('Syntax ' + $file + ': ' + ($errors | Out-String))
     }
     Add-Type -Path @((Join-Path $PSScriptRoot 'Native.cs'), (Join-Path $PSScriptRoot 'Widget.cs')) -ReferencedAssemblies System.Windows.Forms, System.Drawing
     Check ($null -ne ('Folego.Windows.Native' -as [type])) 'Native C# backend compiles; no Win32 call made by compilation'
+    . (Join-Path $PSScriptRoot 'Folego.Performance.ps1')
+    $perfRoot = Join-Path $fixture 'performance'
+    $perfDefaults = Get-FolegoPerformanceSettings $perfRoot
+    Check (@($script:FolegoPerformanceKeys | Where-Object { $perfDefaults[$_] -eq $true }).Count -eq 6) 'All six Windows performance options start enabled'
+    Check (-not (Test-Path -LiteralPath $perfRoot)) 'Opening performance options does not write defaults'
+    $null = Set-FolegoPerformanceOption $perfRoot delivery $false
+    $null = Set-FolegoPerformanceOption $perfRoot effects $false
+    $perfChosen = Get-FolegoPerformanceSettings $perfRoot
+    Check (-not $perfChosen.delivery -and -not $perfChosen.effects -and $perfChosen.edge -and $perfChosen.storage) 'Performance options persist independently'
+    $perfChosen = Set-FolegoPerformanceOption $perfRoot delivery $true
+    Check ($perfChosen.delivery -and -not $perfChosen.effects) 'An option can be individually reenabled'
+    $perfPath = Join-Path $perfRoot 'windows-performance.json'
+    [IO.File]::WriteAllText($perfPath, '{"schema":1,"delivery":false}')
+    $perfLegacy = Get-FolegoPerformanceSettings $perfRoot
+    Check (-not $perfLegacy.delivery -and $perfLegacy.indexing) 'Partial settings preserve opt-out and use defaults for new keys'
+    [IO.File]::WriteAllText($perfPath, 'null')
+    Reject { Set-FolegoPerformanceOption $perfRoot delivery $true } 'Invalid performance preferences are protected'
+    Check ([IO.File]::ReadAllText($perfPath) -eq 'null') 'An invalid preference file is not rewritten'
+
+    $deliveryBefore = [pscustomobject]@{ AtUtc = 'start'; Active = 2; Partial = $false; Jobs = @{
+        same_key = [pscustomobject]@{ Bytes = 120; Priority = 'Background' }
+        other_key = [pscustomobject]@{ Bytes = 80; Priority = 'Foreground' }
+    } }
+    $deliveryAfter = [pscustomobject]@{ AtUtc = 'end'; Active = 1; Partial = $false; Jobs = @{
+        same_key = [pscustomobject]@{ Bytes = 130; Priority = 'Background' }
+        other_key = [pscustomobject]@{ Bytes = 110; Priority = 'Foreground' }
+    } }
+    $deliveryDiff = Measure-FolegoDeliveryActivity $deliveryBefore $deliveryAfter $true
+    Check ($deliveryDiff.state -eq 'available' -and $deliveryDiff.downloaded_bytes -eq 40 -and $deliveryDiff.background_bytes -eq 10) 'Delivery bytes are measured only as matched deltas and by priority'
+    Check (($deliveryDiff | ConvertTo-Json) -notmatch 'same_key|other_key') 'Delivery export has no job identifiers'
+    $deliveryAfter.Jobs.Remove('other_key')
+    $deliveryAfter.Jobs.new_key = [pscustomobject]@{ Bytes = 500; Priority = 'Background' }
+    $deliveryDiff = Measure-FolegoDeliveryActivity $deliveryBefore $deliveryAfter $true
+    Check ($deliveryDiff.state -eq 'partial' -and $deliveryDiff.matched_jobs -eq 1 -and $deliveryDiff.downloaded_bytes -eq 10) 'Changed job IDs report only comparable bytes and partial coverage'
+    $deliveryAfter.Jobs.same_key.Bytes = 80
+    $deliveryDiff = Measure-FolegoDeliveryActivity $deliveryBefore $deliveryAfter $true
+    Check ($deliveryDiff.state -eq 'partial' -and $null -eq $deliveryDiff.downloaded_bytes) 'Reset counters do not become zero activity'
+    Check ((Measure-FolegoDeliveryActivity $null $null $true).state -eq 'unavailable') 'Provider failure leaves delivery activity unavailable'
+    Check ((Measure-FolegoDeliveryActivity $null $null $false).state -eq 'disabled') 'Opt-out is distinct from missing data'
+
+    . (Join-Path $PSScriptRoot 'Folego.StorageDiagnostic.ps1')
+    Add-Type -Path (Join-Path $PSScriptRoot 'StorageDiagnostic.cs')
+    $diskCounter = [Folego.Windows.DiagnosticCounters]
+    Check ($diskCounter::IsDiskInstance('0 C:', '0') -and $diskCounter::IsDiskInstance('0', '0')) 'PhysicalDisk instance maps exact disk number'
+    Check (-not $diskCounter::IsDiskInstance('01 X:', '0') -and -not $diskCounter::IsDiskInstance('_Total', '0')) 'Prefix collision and aggregate are not attributed to the target'
+    Check ($null -eq [Folego.Windows.DiagnosticDisk]::Resolve('\\invalid\volume\')) 'An unresolved volume never falls back to disk zero'
+    Check (Test-FolegoDiagnosticEventDevice @('\Device\Harddisk0\DR1', '0') '\Device\Harddisk0\DR1') 'Disk event matches the full current device'
+    Check (-not (Test-FolegoDiagnosticEventDevice @('\Device\Harddisk0\DR2', '0') '\Device\Harddisk0\DR1')) 'Reused disk number alone is insufficient to correlate an event'
+    $inactive = [pscustomobject]@{ reads = 0.0; latency = 0.0; seconds = 2.0 }
+    $missing = [pscustomobject]@{ reads = $null; latency = 0.0; seconds = 3.0 }
+    $active = [pscustomobject]@{ reads = 3.0; latency = 0.125; seconds = 4.0 }
+    $idle = Measure-FolegoDiagnosticOperation @($inactive) 'reads' 'latency'
+    Check ($idle.operations -eq 0 -and $idle.latency.state -eq 'no_activity') 'A valid idle window records zero operations and no latency'
+    $unknown = Measure-FolegoDiagnosticOperation @($missing) 'reads' 'latency'
+    Check ($null -eq $unknown.operations -and $unknown.latency.state -eq 'unavailable') 'An absent rate cannot make a latency zero'
+    $partial = Measure-FolegoDiagnosticOperation @($inactive, $missing) 'reads' 'latency'
+    Check ($partial.latency.state -eq 'unavailable' -and $partial.rate.valid_windows -eq 1) 'Missing intervals prevent a whole-run idle claim'
+    $mixed = Measure-FolegoDiagnosticOperation @($inactive, $missing, $active) 'reads' 'latency'
+    Check ($mixed.operations -eq 12 -and $mixed.latency.median -eq 125 -and $mixed.latency.valid_windows -eq 1) 'Latency uses active valid intervals and operations use elapsed time'
+    Check ((Get-FolegoNextStorageWindow 3000 9000 3000) -eq 12000) 'Delayed sampling skips missed slots'
+    Check ((Get-FolegoNextStorageWindow 3000 3020 3000) -eq 6000) 'A small delay keeps the original cadence'
+    $measurementRoot = Join-Path $fixture 'storage'
+    $cancel = [Threading.ManualResetEventSlim]::new($false)
+    $diagWorker = [powershell]::Create()
+    try {
+        $null = $diagWorker.AddCommand((Join-Path $PSScriptRoot 'Collect.ps1')).AddParameter('Action', 'StorageDiagnostic').AddParameter('DataRoot', $measurementRoot).AddParameter('Target', $cancel)
+        $job = $diagWorker.BeginInvoke()
+        Start-Sleep -Milliseconds 700
+        $cancel.Set()
+        Check ($job.AsyncWaitHandle.WaitOne(10000)) 'A cancelled worker returns without waiting for a full diagnostic'
+        Check (@($diagWorker.EndInvoke($job)).Count -eq 0 -and -not (Test-Path -LiteralPath $measurementRoot)) 'Cancellation leaves no export'
+    } finally {
+        $cancel.Set()
+        $diagWorker.Dispose()
+        $cancel.Dispose()
+    }
+    $null = Set-FolegoPerformanceOption $measurementRoot delivery $false
+    $restart = [Threading.ManualResetEventSlim]::new($false)
+    try {
+        $storage = Measure-FolegoStorageDiagnostic $measurementRoot $restart 900 300
+        Check ($null -ne $storage -and (Test-Path -LiteralPath $storage.Path)) 'A fresh diagnostic saves after cancellation'
+        Check ($storage.Report.delivery.state -eq 'disabled') 'The production collector honors the persisted opt-out'
+        for ($slot = 0; $slot -lt 7; $slot++) { $null = Save-FolegoStorageDiagnostic $measurementRoot $storage.Report }
+        Check (@(Get-ChildItem -LiteralPath $measurementRoot -Filter 'storage-diagnostic-*.json' -File).Count -eq 6) 'Only six owned reports are retained'
+    } finally { $restart.Dispose() }
     $policy = if ($PolicyPath) { Read-FolegoJson $PolicyPath } else { Get-FolegoPolicy }
     $catalog = @($policy.windows.prompts)
     $shippedPrompts = @($catalog | ForEach-Object { $_.items })

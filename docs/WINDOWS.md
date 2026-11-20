@@ -9,7 +9,11 @@ Não exige Python, Qt, WSL, serviço privilegiado ou download no primeiro iníci
 ## Usar e iniciar com a sessão
 
 No cartão preparado, use **Steam Deck → Fôlego**. No próximo login, o dispatcher
-existente do cartão solicita o primeiro início com 30 segundos de atraso.
+existente do cartão chama o Fôlego com uma espera de 30 s antes da coleta
+completa e da fila de aplicativos. No logon, o Fôlego publica antes dessa
+espera uma leitura nativa de RAM, commit, espaço e energia. A CPU fica
+desconhecida até a segunda leitura. A fila aguarda a coleta completa e aplica
+seus próprios critérios de estabilidade.
 O Fôlego registra uma única entrada própria `Folego` em HKCU Run e começa na
 bandeja. Depois dessa configuração inicial, o dispatcher deixa de solicitá-lo;
 a entrada do próprio Fôlego assume o início. O atraso dá espaço à abertura do
@@ -218,6 +222,49 @@ temporários não certifica abandono: só mostra até 1000 arquivos diretamente
 em cada pasta conhecida, sem recursão. Encerrar um processo é sempre uma
 escolha do usuário na aba **Consumidores**, descrita abaixo.
 
+## Desempenho no Windows
+
+A aba **Desempenho** reúne downloads, indexação, Edge, aplicativos de
+inicialização, efeitos visuais e armazenamento. Cada opção vem ligada e pode
+ser desligada separadamente. A preferência é salva em `windows-performance.json`,
+no perfil de dados do Fôlego. Os botões abrem os controles oficiais para revisar
+ou confirmar cada ajuste do sistema.
+
+**Medir pressão do disco** usa o mesmo diagnóstico de **Trabalho e disco**.
+Com a opção de downloads ligada, a coleta registra duas observações do Delivery
+Optimization e calcula as diferenças entre trabalhos comparáveis. Desligá-la
+omite a leitura do provedor nas próximas coletas, incluindo pela CLI. O JSON
+registra a hora das duas observações, bytes comparáveis e cobertura parcial.
+Trabalhos novos, removidos ou com contadores reiniciados tornam a evidência
+parcial. A medição registra coincidência temporal. A atribuição de I/O físico
+a um processo requer uma captura própria.
+
+## Medição de disco do Windows
+
+Em **Trabalho e disco**, use **Medir disco do Windows (36 s)** durante o fluxo
+que você quer comparar. Na linha de comando, `Folego.ps1 -Inspect Storage`
+usa o mesmo diagnóstico. A medição usa janelas de 3 s em um worker próprio e não
+interrompe a atualização normal do Fôlego. Só uma medição pode estar ativa por
+usuário e sessão. **Cancelar medição de disco** encerra a janela em andamento
+sem publicar um resumo incompleto.
+
+O painel identifica o disco físico do volume do Windows em vez de usar
+a letra como nome de contador. Mostra a mediana das latências das janelas com
+operações e a fila, as operações estimadas, RAM disponível, commit, indicadores
+de paginação do sistema e os eventos `disk` 51/153 cujo caminho corresponde ao
+dispositivo no boot atual, até 24 horas. Volume sem associação comprovada,
+contador ausente e direção sem operações têm estados próprios. O disco físico
+pode reunir I/O de outros volumes, e a paginação inclui arquivos mapeados.
+
+Cada medição concluída salva um dos seis arquivos
+`storage-diagnostic-0.json` a `storage-diagnostic-5.json` na pasta de dados.
+O resumo inclui início e fim, tempo de preparo, duração e intervalos reais,
+fontes, unidades, janelas válidas e CPU do processo durante a coleta. Ele não inclui linhas de
+comando, números de série, IDs de volume nem mensagens completas de eventos.
+Para comparar, use a mesma alimentação e o mesmo fluxo de trabalho, anote
+quais aplicativos já estavam abertos e copie o resumo que quiser manter antes
+que o Fôlego reutilize a vaga mais antiga.
+
 ## Guarda térmica e perfis do processador
 
 A aba **Temperatura e CPU** mostra a zona atual e a máxima dos últimos 10
@@ -324,7 +371,7 @@ qualquer outra entrada elegível, inclusive da máquina (com UAC):
 
 | Condição antes de cada item | Valor |
 | --- | --- |
-| Desktop assentado | 15 s depois de o Fôlego (já atrasado 30 s) obter a primeira leitura |
+| Desktop assentado | 15 s após a coleta completa realizada depois da espera inicial de 30 s |
 | CPU | ≤ 50% |
 | Disco físico (`Win32_PerfFormattedData_PerfDisk_PhysicalDisk`, `_Total`) | ≤ 40% ocupado e fila ≤ 1 |
 | Zona térmica | < 80 °C |

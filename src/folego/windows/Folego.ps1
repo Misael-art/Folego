@@ -1,9 +1,12 @@
 param([switch]$StartMinimized, [switch]$NoStartup, [switch]$Probe, [ValidateRange(0,120)][int]$DelaySeconds = 0, [ValidateRange(0,300)][int]$SmokeSeconds = 0, [string]$DataRoot,
       [ValidateSet('', 'Disable', 'Enable', 'Restore')][string]$StartupAction = '', [string]$StartupSubject, [switch]$RunSequence,
       [ValidateSet('', 'Apply', 'Restore')][string]$ServicePlan = '',
-      [ValidateSet('', 'Overview', 'CodexQuota', 'Volumes', 'Incidents', 'Boot')][string]$Inspect = '')
+      [ValidateSet('', 'Overview', 'CodexQuota', 'Volumes', 'Incidents', 'Boot', 'Storage')][string]$Inspect = '')
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Folego.Core.ps1')
+. (Join-Path $PSScriptRoot 'Folego.Performance.ps1')
+. (Join-Path $PSScriptRoot 'Folego.StorageDiagnostic.ps1')
+$script:DiskMeasurement = $null
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Use Fôlego Windows no Windows nativo. No Linux, use o launcher oficial ./dev.' }
 if ($Inspect) {
     switch ($Inspect) {
@@ -12,6 +15,15 @@ if ($Inspect) {
         'Volumes' { Format-FolegoVolumeInventory @(Get-FolegoLocalVolumes) }
         'Incidents' { Get-FolegoResourceIncidents }
         'Boot' { Get-FolegoBootTimeline }
+        'Storage' {
+            if (-not $DataRoot) { $DataRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Folego' }
+            Add-Type -Path (Join-Path $PSScriptRoot 'Native.cs')
+            $cancel = [Threading.ManualResetEventSlim]::new($false)
+            try {
+                $measurement = & (Join-Path $PSScriptRoot 'Collect.ps1') -DataRoot ([IO.Path]::GetFullPath($DataRoot)) -Action StorageDiagnostic -Target $cancel
+                if ($null -ne $measurement) { Format-FolegoStorageDiagnostic $measurement }
+            } finally { $cancel.Dispose() }
+        }
     }
     return
 }
@@ -48,7 +60,9 @@ $startupNote = ''
 try { $settings = Get-FolegoSettings $DataRoot }
 catch { $startupNote = [string]$_; $settings = [pscustomobject]@{ startup = $false; commissioned = $true } }
 if ($StartMinimized -and -not $settings.startup -and -not $NoStartup) { return }
-if ($DelaySeconds) {
+$sampleBeforeDelay = $StartMinimized -and -not $Probe -and $DelaySeconds -gt 0
+$delayTimer = if ($sampleBeforeDelay) { [Diagnostics.Stopwatch]::StartNew() }
+if ($DelaySeconds -and -not $sampleBeforeDelay) {
     Start-Sleep -Seconds $DelaySeconds
     $settings = Get-FolegoSettings $DataRoot
     if ($StartMinimized -and -not $settings.startup -and -not $NoStartup) { return }
@@ -79,8 +93,29 @@ $mutex = New-Object Threading.Mutex($false, ('Local\Folego.Windows.' + $instance
 $ownsMutex = $false
 try { $ownsMutex = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $ownsMutex = $true }
 $activate = New-Object Threading.EventWaitHandle($false, [Threading.EventResetMode]::AutoReset, ('Local\Folego.Activate.' + $instance))
-if (-not $ownsMutex) { if (-not $StartMinimized) { $null = $activate.Set() }; $activate.Dispose(); $mutex.Dispose(); return }
 try {
+    if ($sampleBeforeDelay) {
+        if ($ownsMutex) {
+            try {
+                # Publish only passive Win32 readings. The full collector and logon queue still start after the delay.
+                $sampleHost = Get-FolegoHost
+                $sample = $collector.Read([IO.Path]::GetPathRoot($PSScriptRoot))
+                $initialLevel = (Get-FolegoRawHealth $sample $policy ([long][Folego.Windows.Native]::GetTickCount64())).Level
+                Save-FolegoSample $DataRoot ([pscustomobject]@{ schema = 1; host = $sampleHost; sample = $sample; level = $initialLevel; source = 'Win32 native; initial logon sample' })
+            } catch {
+                $startupNote = 'Primeira amostra indisponível: ' + $_.Exception.Message
+            } finally {
+                # A manual launch must be able to become the resident instance during the wait.
+                $mutex.ReleaseMutex(); $ownsMutex = $false
+            }
+        }
+        $remainingMs = $DelaySeconds * 1000 - $delayTimer.ElapsedMilliseconds
+        if ($remainingMs -gt 0) { Start-Sleep -Milliseconds $remainingMs }
+        $settings = Get-FolegoSettings $DataRoot
+        if (-not $settings.startup -and -not $NoStartup) { return }
+        try { $ownsMutex = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $ownsMutex = $true }
+    }
+    if (-not $ownsMutex) { if (-not $StartMinimized) { $null = $activate.Set() }; return }
     if (-not $NoStartup -and -not $settings.commissioned) {
         try { $startupNote = Set-FolegoStartup $DataRoot $settings.startup; Install-FolegoShortcuts } catch { $startupNote = [string]$_ }
     }
@@ -143,10 +178,11 @@ try {
         $label = New-Object Windows.Forms.Label; $label.Text = $Text
         $label.Width = [Math]::Min(845, $form.ClientSize.Width - 60); $label.Height = $Height; $Page.Controls.Add($label); return $label
     }
-    function Add-FolegoButton($Page, [string]$Text, [scriptblock]$Action) {
+    function Add-FolegoButton($Page, [string]$Text, [scriptblock]$Action, [switch]$PassThru) {
         $button = New-Object Windows.Forms.Button; $button.Text = $Text
         $button.Width = [Math]::Min(845, $form.ClientSize.Width - 60); $button.Height = 46
         $button.Add_Click($Action); $Page.Controls.Add($button)
+        if ($PassThru) { return $button }
     }
     function New-FolegoOutput($Page, [int]$Height = 200) {
         $box = New-Object Windows.Forms.TextBox
@@ -326,6 +362,43 @@ try {
     Add-FolegoButton $page 'Ver histórico de inicialização e reinícios' { Request-Folego Events }
     Add-FolegoButton $page 'Ver eventos de disco e hardware' { Request-Folego Incidents }
     $diagnostic = New-FolegoOutput $page 190
+    $diskMeasure = Add-FolegoButton $page 'Medir disco do Windows (36 s)' { Start-FolegoDiskMeasurement } -PassThru
+    $diskCancel = Add-FolegoButton $page 'Cancelar medição de disco' {
+        $script:DiskMeasurement.Cancel.Set()
+        $diskCancel.Enabled = $false
+        $diskReport.Text = 'Cancelando medição…'
+    } -PassThru
+    $diskCancel.Enabled = $false
+    $diskReport = New-FolegoOutput $page 196
+    function Start-FolegoDiskMeasurement {
+        if ($null -ne $script:DiskMeasurement) { return }
+        $cancel = New-Object Threading.ManualResetEventSlim($false)
+        $worker = [powershell]::Create()
+        try {
+            $null = $worker.AddCommand((Join-Path $PSScriptRoot 'Collect.ps1')).AddParameter('Action', 'StorageDiagnostic').AddParameter('DataRoot', $DataRoot).AddParameter('Target', $cancel)
+            $handle = $worker.BeginInvoke()
+            $script:DiskMeasurement = [pscustomobject]@{ Worker = $worker; Handle = $handle; Cancel = $cancel }
+            $diskMeasure.Enabled = $false; $diskCancel.Enabled = $true
+            $diskReport.Text = 'Medindo o disco do Windows por 36 segundos…'
+        } catch {
+            $worker.Dispose(); $cancel.Dispose()
+            $diskReport.Text = 'Medição indisponível: ' + $_.Exception.Message
+        }
+    }
+    function Complete-FolegoDiskMeasurement {
+        $job = $script:DiskMeasurement
+        if ($null -eq $job -or -not $job.Handle.IsCompleted) { return }
+        try {
+            $rows = @($job.Worker.EndInvoke($job.Handle))
+            if ($rows.Count -eq 1 -and $null -ne $rows[0]) { $diskReport.Text = Format-FolegoStorageDiagnostic $rows[0] }
+            elseif ($job.Cancel.IsSet) { $diskReport.Text = 'Medição cancelada.' }
+            else { $diskReport.Text = 'Medição incompleta.' }
+        } catch { $diskReport.Text = 'Medição indisponível: ' + $_.Exception.Message }
+        finally {
+            $job.Worker.Dispose(); $job.Cancel.Dispose(); $script:DiskMeasurement = $null
+            $diskMeasure.Enabled = $true; $diskCancel.Enabled = $false
+        }
+    }
     Add-FolegoButton $page 'Abrir Gerenciador de Tarefas' { Start-Process taskmgr.exe }
     Add-FolegoButton $page 'Abrir armazenamento e manutenção' {
         $deckPanel = Join-Path ([IO.Path]::GetPathRoot($PSScriptRoot)) 'SteamDeck\scripts\otimizar-windows.ps1'
@@ -348,6 +421,74 @@ try {
     }
     Add-FolegoButton $page 'Desabilitar proteção por carga baixa' { Request-Folego DisableGuard }
     Add-FolegoButton $page 'Opções de energia do Windows' { Start-Process 'ms-settings:powersleep' }
+
+    $page = New-FolegoPage 'Desempenho'
+    $null = Add-FolegoLabel $page 'Escolha o que acompanhar e revisar no Fôlego. Use os botões à direita para abrir cada controle. Os ajustes do Windows e do Edge são confirmados nas telas correspondentes.' 56
+    Add-FolegoButton $page 'Medir pressão do disco' {
+        $tabs.SelectedTab = $diskMeasure.Parent.Parent
+        Start-FolegoDiskMeasurement
+    }
+    $performanceSettings = $null
+    try { $performanceSettings = Get-FolegoPerformanceSettings $DataRoot }
+    catch { $null = Add-FolegoLabel $page $_.Exception.Message 36 }
+    $script:SyncingPerformanceToggle = $false
+    $performanceRows = @(
+        @{ Key = 'delivery'; Label = 'Medir downloads do Windows'; Action = 'Limites de download'; Target = 'ms-settings:delivery-optimization-advanced' }
+        @{ Key = 'indexing'; Label = 'Revisar indexação'; Action = 'Pastas indexadas'; Target = 'indexing' }
+        @{ Key = 'edge'; Label = 'Revisar desempenho do Edge'; Action = 'Sistema e desempenho'; Target = 'edge' }
+        @{ Key = 'logon'; Label = 'Revisar aplicativos no login'; Action = 'Inicialização'; Target = 'ms-settings:startupapps' }
+        @{ Key = 'effects'; Label = 'Revisar efeitos visuais'; Action = 'Animações e transparência'; Target = 'ms-settings:easeofaccess-visualeffects' }
+        @{ Key = 'storage'; Label = 'Revisar espaço no disco'; Action = 'Armazenamento'; Target = 'ms-settings:storagesense' }
+    )
+    foreach ($definition in $performanceRows) {
+        $row = New-Object Windows.Forms.TableLayoutPanel
+        $row.Width = [Math]::Min(845, $form.ClientSize.Width - 60); $row.Height = 48
+        $row.ColumnCount = 2; $row.RowCount = 1
+        $null = $row.ColumnStyles.Add([Windows.Forms.ColumnStyle]::new('Percent', 52))
+        $null = $row.ColumnStyles.Add([Windows.Forms.ColumnStyle]::new('Percent', 48))
+        $toggle = New-Object Windows.Forms.CheckBox
+        $toggle.Text = $definition.Label; $toggle.Dock = 'Fill'
+        $toggle.Enabled = $null -ne $performanceSettings
+        $toggle.Checked = $toggle.Enabled -and $performanceSettings[$definition.Key]
+        $button = New-Object Windows.Forms.Button
+        $button.Text = $definition.Action; $button.Dock = 'Fill'
+        $button.Enabled = $toggle.Checked; $button.Tag = $definition.Target
+        $toggle.Tag = [pscustomobject]@{ Key = $definition.Key; Button = $button }
+        $toggle.Add_CheckedChanged({
+            param($control, $eventArgs)
+            if ($script:SyncingPerformanceToggle) { return }
+            try {
+                $null = Set-FolegoPerformanceOption $DataRoot $control.Tag.Key $control.Checked
+                $control.Tag.Button.Enabled = $control.Checked
+                $status.Text = 'Preferência de desempenho salva.'
+            } catch {
+                $script:SyncingPerformanceToggle = $true
+                try { $control.Checked = -not $control.Checked }
+                finally { $script:SyncingPerformanceToggle = $false }
+                $status.Text = $_.Exception.Message
+            }
+        })
+        $button.Add_Click({
+            param($control, $eventArgs)
+            try {
+                switch ($control.Tag) {
+                    'edge' {
+                        $edge = @([Environment]::GetFolderPath('ProgramFilesX86'), [Environment]::GetFolderPath('ProgramFiles')) |
+                            Where-Object { $_ } | ForEach-Object { Join-Path $_ 'Microsoft\Edge\Application\msedge.exe' } |
+                            Where-Object { [IO.File]::Exists($_) } | Select-Object -First 1
+                        if (-not $edge) { throw 'Microsoft Edge indisponível neste computador.' }
+                        Start-Process -FilePath $edge -ArgumentList 'edge://settings/system' -ErrorAction Stop
+                    }
+                    'indexing' {
+                        Start-Process -FilePath (Join-Path ([Environment]::SystemDirectory) 'control.exe') -ArgumentList '/name Microsoft.IndexingOptions' -ErrorAction Stop
+                    }
+                    default { Start-Process -FilePath $control.Tag -ErrorAction Stop }
+                }
+            } catch { $status.Text = $_.Exception.Message }
+        })
+        $row.Controls.Add($toggle, 0, 0); $row.Controls.Add($button, 1, 0)
+        $page.Controls.Add($row)
+    }
 
     $page = New-FolegoPage 'Opções e recuperação'
     $null = Add-FolegoLabel $page 'Início com a sessão ligado por padrão para este usuário, com atraso de 30 segundos e bandeja. Uma entrada própria, uma instância por sessão. Sair encerra só esta instância; não muda a preferência para o próximo login.' 85
@@ -406,6 +547,7 @@ try {
         try {
             $now = [long][Folego.Windows.Native]::GetTickCount64()
             Update-FolegoProgress
+            Complete-FolegoDiskMeasurement
             if ($activate.WaitOne(0)) { Show-Folego }
             if ($SmokeSeconds -gt 0 -and $now - $startedMs -ge $SmokeSeconds * 1000) { $script:Leaving = $true; $form.Close(); return }
             if ($null -ne $script:Worker -and $script:Handle.IsCompleted) {
@@ -633,6 +775,11 @@ try {
 } finally {
     if ($null -ne (Get-Variable timer -ErrorAction SilentlyContinue)) { $timer.Stop(); $timer.Dispose() }
     if ($null -ne (Get-Command Stop-FolegoPromptSurface -ErrorAction SilentlyContinue)) { Stop-FolegoPromptSurface }
+    if ($null -ne $script:DiskMeasurement) {
+        $script:DiskMeasurement.Cancel.Set()
+        try { $script:DiskMeasurement.Worker.Stop() }
+        finally { $script:DiskMeasurement.Worker.Dispose(); $script:DiskMeasurement.Cancel.Dispose() }
+    }
     if ($null -ne $script:Worker) { try { $script:Worker.Stop() } finally { $script:Worker.Dispose() } }
     if ($null -ne (Get-Variable tray -ErrorAction SilentlyContinue)) { $tray.Visible = $false; $tray.Dispose() }
     if ($null -ne (Get-Command Hide-FolegoWidget -ErrorAction SilentlyContinue)) { Hide-FolegoWidget }
