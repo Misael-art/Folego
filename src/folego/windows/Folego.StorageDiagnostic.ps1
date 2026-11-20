@@ -110,6 +110,7 @@ function Measure-FolegoStorageDiagnostic([string]$DataRoot, [Threading.ManualRes
     if ($Cancel.IsSet) { return }
     $root = [IO.Path]::GetPathRoot([Environment]::SystemDirectory)
     $native = New-Object Folego.Windows.Native
+    $deliveryEnabled = try { (Get-FolegoPerformanceSettings $DataRoot).delivery } catch { $null }
     $disk = [Folego.Windows.DiagnosticDisk]::Resolve($root)
     $diskNumber = if ($null -ne $disk) { $disk.Number } else { -1 }
     $paths = @('\PhysicalDisk(*)\Disk Reads/sec', '\PhysicalDisk(*)\Disk Writes/sec',
@@ -123,6 +124,8 @@ function Measure-FolegoStorageDiagnostic([string]$DataRoot, [Threading.ManualRes
         $cpuStart = $self.TotalProcessorTime.TotalMilliseconds
         $counters = [Folego.Windows.DiagnosticCounters]::new([string[]]$paths, 5, $diskNumber)
         try {
+            $deliveryBefore = if ($deliveryEnabled -eq $true) { Get-FolegoDeliverySnapshot } else { $null }
+            if ($Cancel.IsSet) { return }
             $null = $native.Read($root)
             $started = [DateTime]::UtcNow
             $setupMs = $watch.ElapsedMilliseconds
@@ -156,11 +159,14 @@ function Measure-FolegoStorageDiagnostic([string]$DataRoot, [Threading.ManualRes
         $samplingCpu = [Math]::Max(0, $cpuEnd - $samplingCpuStart)
     } finally { $self.Dispose() }
     $finished = [DateTime]::UtcNow
+    $deliveryAfter = if ($deliveryEnabled -eq $true) { Get-FolegoDeliverySnapshot } else { $null }
+    if ($Cancel.IsSet) { return }
     $diskWindows = if ($diskMatches) { @($windows.ToArray()) } else { @() }
     $limitations = @(
         'Latência por janela ativa; a mediana não é um percentil das operações individuais.'
         'Operações estimadas pela taxa PDH vezes a duração de cada janela válida.'
         'Paginação do sistema inclui arquivos mapeados; estes contadores não isolam o pagefile.'
+        'Downloads são diferenças entre duas consultas de trabalhos visíveis. Os horários podem diferir da janela de disco e o resumo não atribui I/O físico ao serviço.'
         'CPU do processo inclui a interface e outros trabalhos do mesmo Fôlego durante a amostra.'
         'Eventos exigem caminho de dispositivo correspondente no boot atual. O histórico anterior pode estar incompleto.'
     )
@@ -192,6 +198,7 @@ function Measure-FolegoStorageDiagnostic([string]$DataRoot, [Threading.ManualRes
         pages_output = Measure-FolegoDiagnosticMetric @($windows | ForEach-Object { $_.pages_out }) 'pages/s' 'PDH Memory'
         page_reads = Measure-FolegoDiagnosticMetric @($windows | ForEach-Object { $_.page_reads }) 'ops/s' 'PDH Memory'
         page_writes = Measure-FolegoDiagnosticMetric @($windows | ForEach-Object { $_.page_writes }) 'ops/s' 'PDH Memory'
+        delivery = Measure-FolegoDeliveryActivity $deliveryBefore $deliveryAfter $deliveryEnabled
         events = Get-FolegoDiagnosticEvents $disk $boot $finished
         limitations = $limitations
     }
@@ -225,6 +232,7 @@ function Format-FolegoStorageDiagnostic($Outcome) {
         ('RAM disponível · {0} | Commit · {1} de {2}' -f (Format-FolegoStorageMetric $r.ram_available),
             (Format-FolegoStorageMetric $r.commit_used), (Format-FolegoStorageMetric $r.commit_limit))
         ('Paginação · entrada {0} | saída {1}' -f (Format-FolegoStorageMetric $r.pages_input), (Format-FolegoStorageMetric $r.pages_output))
+        (Format-FolegoDeliveryActivity $r.delivery)
         ('Eventos 51/153 · ' + $events)
     ) + @($r.events.matches | ForEach-Object {
         ('Evento {0} · {1:g}' -f $_.id, [DateTimeOffset]::Parse($_.at_utc).LocalDateTime)

@@ -4,6 +4,7 @@ param([switch]$StartMinimized, [switch]$NoStartup, [switch]$Probe, [ValidateRang
       [ValidateSet('', 'Overview', 'CodexQuota', 'Volumes', 'Incidents', 'Boot', 'Storage')][string]$Inspect = '')
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Folego.Core.ps1')
+. (Join-Path $PSScriptRoot 'Folego.Performance.ps1')
 . (Join-Path $PSScriptRoot 'Folego.StorageDiagnostic.ps1')
 $script:DiskMeasurement = $null
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Use Fôlego Windows no Windows nativo. No Linux, use o launcher oficial ./dev.' }
@@ -397,6 +398,74 @@ try {
     }
     Add-FolegoButton $page 'Desabilitar proteção por carga baixa' { Request-Folego DisableGuard }
     Add-FolegoButton $page 'Opções de energia do Windows' { Start-Process 'ms-settings:powersleep' }
+
+    $page = New-FolegoPage 'Desempenho'
+    $null = Add-FolegoLabel $page 'Escolha o que acompanhar e revisar no Fôlego. Use os botões à direita para abrir cada controle. Os ajustes do Windows e do Edge são confirmados nas telas correspondentes.' 56
+    Add-FolegoButton $page 'Medir pressão do disco' {
+        $tabs.SelectedTab = $diskMeasure.Parent.Parent
+        Start-FolegoDiskMeasurement
+    }
+    $performanceSettings = $null
+    try { $performanceSettings = Get-FolegoPerformanceSettings $DataRoot }
+    catch { $null = Add-FolegoLabel $page $_.Exception.Message 36 }
+    $script:SyncingPerformanceToggle = $false
+    $performanceRows = @(
+        @{ Key = 'delivery'; Label = 'Medir downloads do Windows'; Action = 'Limites de download'; Target = 'ms-settings:delivery-optimization-advanced' }
+        @{ Key = 'indexing'; Label = 'Revisar indexação'; Action = 'Pastas indexadas'; Target = 'indexing' }
+        @{ Key = 'edge'; Label = 'Revisar desempenho do Edge'; Action = 'Sistema e desempenho'; Target = 'edge' }
+        @{ Key = 'logon'; Label = 'Revisar aplicativos no login'; Action = 'Inicialização'; Target = 'ms-settings:startupapps' }
+        @{ Key = 'effects'; Label = 'Revisar efeitos visuais'; Action = 'Animações e transparência'; Target = 'ms-settings:easeofaccess-visualeffects' }
+        @{ Key = 'storage'; Label = 'Revisar espaço no disco'; Action = 'Armazenamento'; Target = 'ms-settings:storagesense' }
+    )
+    foreach ($definition in $performanceRows) {
+        $row = New-Object Windows.Forms.TableLayoutPanel
+        $row.Width = [Math]::Min(845, $form.ClientSize.Width - 60); $row.Height = 48
+        $row.ColumnCount = 2; $row.RowCount = 1
+        $null = $row.ColumnStyles.Add([Windows.Forms.ColumnStyle]::new('Percent', 52))
+        $null = $row.ColumnStyles.Add([Windows.Forms.ColumnStyle]::new('Percent', 48))
+        $toggle = New-Object Windows.Forms.CheckBox
+        $toggle.Text = $definition.Label; $toggle.Dock = 'Fill'
+        $toggle.Enabled = $null -ne $performanceSettings
+        $toggle.Checked = $toggle.Enabled -and $performanceSettings[$definition.Key]
+        $button = New-Object Windows.Forms.Button
+        $button.Text = $definition.Action; $button.Dock = 'Fill'
+        $button.Enabled = $toggle.Checked; $button.Tag = $definition.Target
+        $toggle.Tag = [pscustomobject]@{ Key = $definition.Key; Button = $button }
+        $toggle.Add_CheckedChanged({
+            param($control, $eventArgs)
+            if ($script:SyncingPerformanceToggle) { return }
+            try {
+                $null = Set-FolegoPerformanceOption $DataRoot $control.Tag.Key $control.Checked
+                $control.Tag.Button.Enabled = $control.Checked
+                $status.Text = 'Preferência de desempenho salva.'
+            } catch {
+                $script:SyncingPerformanceToggle = $true
+                try { $control.Checked = -not $control.Checked }
+                finally { $script:SyncingPerformanceToggle = $false }
+                $status.Text = $_.Exception.Message
+            }
+        })
+        $button.Add_Click({
+            param($control, $eventArgs)
+            try {
+                switch ($control.Tag) {
+                    'edge' {
+                        $edge = @([Environment]::GetFolderPath('ProgramFilesX86'), [Environment]::GetFolderPath('ProgramFiles')) |
+                            Where-Object { $_ } | ForEach-Object { Join-Path $_ 'Microsoft\Edge\Application\msedge.exe' } |
+                            Where-Object { [IO.File]::Exists($_) } | Select-Object -First 1
+                        if (-not $edge) { throw 'Microsoft Edge indisponível neste computador.' }
+                        Start-Process -FilePath $edge -ArgumentList 'edge://settings/system' -ErrorAction Stop
+                    }
+                    'indexing' {
+                        Start-Process -FilePath (Join-Path ([Environment]::SystemDirectory) 'control.exe') -ArgumentList '/name Microsoft.IndexingOptions' -ErrorAction Stop
+                    }
+                    default { Start-Process -FilePath $control.Tag -ErrorAction Stop }
+                }
+            } catch { $status.Text = $_.Exception.Message }
+        })
+        $row.Controls.Add($toggle, 0, 0); $row.Controls.Add($button, 1, 0)
+        $page.Controls.Add($row)
+    }
 
     $page = New-FolegoPage 'Opções e recuperação'
     $null = Add-FolegoLabel $page 'Início com a sessão ligado por padrão para este usuário, com atraso de 30 segundos e bandeja. Uma entrada própria, uma instância por sessão. Sair encerra só esta instância; não muda a preferência para o próximo login.' 85

@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Folego.Core.ps1')
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'O coletor nativo exige Windows.' }
 if ($Action -eq 'StorageDiagnostic') {
+    . (Join-Path $PSScriptRoot 'Folego.Performance.ps1')
     . (Join-Path $PSScriptRoot 'Folego.StorageDiagnostic.ps1')
     return Invoke-FolegoStorageDiagnostic $DataRoot $Target
 }

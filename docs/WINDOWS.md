@@ -218,6 +218,23 @@ temporários não certifica abandono: só mostra até 1000 arquivos diretamente
 em cada pasta conhecida, sem recursão. Encerrar um processo é sempre uma
 escolha do usuário na aba **Consumidores**, descrita abaixo.
 
+## Desempenho no Windows
+
+A aba **Desempenho** reúne downloads, indexação, Edge, aplicativos de
+inicialização, efeitos visuais e armazenamento. Cada opção vem ligada e pode
+ser desligada separadamente. A preferência é salva em `windows-performance.json`,
+no perfil de dados do Fôlego. Os botões abrem os controles oficiais para revisar
+ou confirmar cada ajuste do sistema.
+
+**Medir pressão do disco** usa o mesmo diagnóstico de **Trabalho e disco**.
+Com a opção de downloads ligada, a coleta registra duas observações do Delivery
+Optimization e calcula as diferenças entre trabalhos comparáveis. Desligá-la
+omite a leitura do provedor nas próximas coletas, incluindo pela CLI. O JSON
+registra a hora das duas observações, bytes comparáveis e cobertura parcial.
+Trabalhos novos, removidos ou com contadores reiniciados tornam a evidência
+parcial. A medição registra coincidência temporal. A atribuição de I/O físico
+a um processo requer uma captura própria.
+
 ## Medição de disco do Windows
 
 Em **Trabalho e disco**, use **Medir disco do Windows (36 s)** durante o fluxo
