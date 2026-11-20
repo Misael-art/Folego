@@ -100,8 +100,8 @@ try {
                 # Publish only passive Win32 readings. The full collector and logon queue still start after the delay.
                 $sampleHost = Get-FolegoHost
                 $sample = $collector.Read([IO.Path]::GetPathRoot($PSScriptRoot))
-                $level = (Get-FolegoRawHealth $sample $policy ([long][Folego.Windows.Native]::GetTickCount64())).Level
-                Save-FolegoSample $DataRoot ([pscustomobject]@{ schema = 1; host = $sampleHost; sample = $sample; level = $level; source = 'Win32 native; initial logon sample' })
+                $initialLevel = (Get-FolegoRawHealth $sample $policy ([long][Folego.Windows.Native]::GetTickCount64())).Level
+                Save-FolegoSample $DataRoot ([pscustomobject]@{ schema = 1; host = $sampleHost; sample = $sample; level = $initialLevel; source = 'Win32 native; initial logon sample' })
             } catch {
                 $startupNote = 'Primeira amostra indisponível: ' + $_.Exception.Message
             } finally {
