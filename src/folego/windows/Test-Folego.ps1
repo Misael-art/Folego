@@ -10,13 +10,56 @@ function Reject([scriptblock]$Operation, [string]$Message) { $failed = $false; t
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('folego-windows-tests-' + [Guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($fixture) | Out-Null
 try {
-    foreach ($file in @('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.Sequence.ps1', 'Folego.AI.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1', 'Folego.Prompts.ps1', 'Folego.PromptMenu.ps1', 'Collect.ps1', 'Test-Folego.ps1', 'DeckBootstrap.ps1')) {
+    foreach ($file in @('Folego.ps1', 'Folego.Core.ps1', 'Folego.Manage.ps1', 'Folego.Sequence.ps1', 'Folego.AI.ps1', 'Folego.View.ps1', 'Folego.Widget.ps1', 'Folego.Prompts.ps1', 'Folego.PromptMenu.ps1', 'Collect.ps1', 'Folego.StorageDiagnostic.ps1', 'Test-Folego.ps1', 'DeckBootstrap.ps1')) {
         $tokens = $null; $errors = $null
         $null = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $file), [ref]$tokens, [ref]$errors)
         Check ($errors.Count -eq 0) ('Syntax ' + $file + ': ' + ($errors | Out-String))
     }
     Add-Type -Path @((Join-Path $PSScriptRoot 'Native.cs'), (Join-Path $PSScriptRoot 'Widget.cs')) -ReferencedAssemblies System.Windows.Forms, System.Drawing
     Check ($null -ne ('Folego.Windows.Native' -as [type])) 'Native C# backend compiles; no Win32 call made by compilation'
+    . (Join-Path $PSScriptRoot 'Folego.StorageDiagnostic.ps1')
+    Add-Type -Path (Join-Path $PSScriptRoot 'StorageDiagnostic.cs')
+    $diskCounter = [Folego.Windows.DiagnosticCounters]
+    Check ($diskCounter::IsDiskInstance('0 C:', '0') -and $diskCounter::IsDiskInstance('0', '0')) 'PhysicalDisk instance maps exact disk number'
+    Check (-not $diskCounter::IsDiskInstance('01 X:', '0') -and -not $diskCounter::IsDiskInstance('_Total', '0')) 'Prefix collision and aggregate are not attributed to the target'
+    Check ($null -eq [Folego.Windows.DiagnosticDisk]::Resolve('\\invalid\volume\')) 'An unresolved volume never falls back to disk zero'
+    Check (Test-FolegoDiagnosticEventDevice @('\Device\Harddisk0\DR1', '0') '\Device\Harddisk0\DR1') 'Disk event matches the full current device'
+    Check (-not (Test-FolegoDiagnosticEventDevice @('\Device\Harddisk0\DR2', '0') '\Device\Harddisk0\DR1')) 'Reused disk number alone is insufficient to correlate an event'
+    $inactive = [pscustomobject]@{ reads = 0.0; latency = 0.0; seconds = 2.0 }
+    $missing = [pscustomobject]@{ reads = $null; latency = 0.0; seconds = 3.0 }
+    $active = [pscustomobject]@{ reads = 3.0; latency = 0.125; seconds = 4.0 }
+    $idle = Measure-FolegoDiagnosticOperation @($inactive) 'reads' 'latency'
+    Check ($idle.operations -eq 0 -and $idle.latency.state -eq 'no_activity') 'A valid idle window records zero operations and no latency'
+    $unknown = Measure-FolegoDiagnosticOperation @($missing) 'reads' 'latency'
+    Check ($null -eq $unknown.operations -and $unknown.latency.state -eq 'unavailable') 'An absent rate cannot make a latency zero'
+    $partial = Measure-FolegoDiagnosticOperation @($inactive, $missing) 'reads' 'latency'
+    Check ($partial.latency.state -eq 'unavailable' -and $partial.rate.valid_windows -eq 1) 'Missing intervals prevent a whole-run idle claim'
+    $mixed = Measure-FolegoDiagnosticOperation @($inactive, $missing, $active) 'reads' 'latency'
+    Check ($mixed.operations -eq 12 -and $mixed.latency.median -eq 125 -and $mixed.latency.valid_windows -eq 1) 'Latency uses active valid intervals and operations use elapsed time'
+    Check ((Get-FolegoNextStorageWindow 3000 9000 3000) -eq 12000) 'Delayed sampling skips missed slots'
+    Check ((Get-FolegoNextStorageWindow 3000 3020 3000) -eq 6000) 'A small delay keeps the original cadence'
+    $measurementRoot = Join-Path $fixture 'storage'
+    $cancel = [Threading.ManualResetEventSlim]::new($false)
+    $diagWorker = [powershell]::Create()
+    try {
+        $null = $diagWorker.AddCommand((Join-Path $PSScriptRoot 'Collect.ps1')).AddParameter('Action', 'StorageDiagnostic').AddParameter('DataRoot', $measurementRoot).AddParameter('Target', $cancel)
+        $job = $diagWorker.BeginInvoke()
+        Start-Sleep -Milliseconds 700
+        $cancel.Set()
+        Check ($job.AsyncWaitHandle.WaitOne(10000)) 'A cancelled worker returns without waiting for a full diagnostic'
+        Check (@($diagWorker.EndInvoke($job)).Count -eq 0 -and -not (Test-Path -LiteralPath $measurementRoot)) 'Cancellation leaves no export'
+    } finally {
+        $cancel.Set()
+        $diagWorker.Dispose()
+        $cancel.Dispose()
+    }
+    $restart = [Threading.ManualResetEventSlim]::new($false)
+    try {
+        $storage = Measure-FolegoStorageDiagnostic $measurementRoot $restart 900 300
+        Check ($null -ne $storage -and (Test-Path -LiteralPath $storage.Path)) 'A fresh diagnostic saves after cancellation'
+        for ($slot = 0; $slot -lt 7; $slot++) { $null = Save-FolegoStorageDiagnostic $measurementRoot $storage.Report }
+        Check (@(Get-ChildItem -LiteralPath $measurementRoot -File).Count -eq 6) 'Only six owned reports are retained'
+    } finally { $restart.Dispose() }
     $policy = if ($PolicyPath) { Read-FolegoJson $PolicyPath } else { Get-FolegoPolicy }
     $catalog = @($policy.windows.prompts)
     $shippedPrompts = @($catalog | ForEach-Object { $_.items })

@@ -218,6 +218,32 @@ temporários não certifica abandono: só mostra até 1000 arquivos diretamente
 em cada pasta conhecida, sem recursão. Encerrar um processo é sempre uma
 escolha do usuário na aba **Consumidores**, descrita abaixo.
 
+## Medição de disco do Windows
+
+Em **Trabalho e disco**, use **Medir disco do Windows (36 s)** durante o fluxo
+que você quer comparar. Na linha de comando, `Folego.ps1 -Inspect Storage`
+usa o mesmo diagnóstico. A medição usa janelas de 3 s em um worker próprio e não
+interrompe a atualização normal do Fôlego. Só uma medição pode estar ativa por
+usuário e sessão. **Cancelar medição de disco** encerra a janela em andamento
+sem publicar um resumo incompleto.
+
+O painel identifica o disco físico do volume do Windows em vez de usar
+a letra como nome de contador. Mostra a mediana das latências das janelas com
+operações e a fila, as operações estimadas, RAM disponível, commit, indicadores
+de paginação do sistema e os eventos `disk` 51/153 cujo caminho corresponde ao
+dispositivo no boot atual, até 24 horas. Volume sem associação comprovada,
+contador ausente e direção sem operações têm estados próprios. O disco físico
+pode reunir I/O de outros volumes, e a paginação inclui arquivos mapeados.
+
+Cada medição concluída salva um dos seis arquivos
+`storage-diagnostic-0.json` a `storage-diagnostic-5.json` na pasta de dados.
+O resumo inclui início e fim, tempo de preparo, duração e intervalos reais,
+fontes, unidades, janelas válidas e CPU do processo durante a coleta. Ele não inclui linhas de
+comando, números de série, IDs de volume nem mensagens completas de eventos.
+Para comparar, use a mesma alimentação e o mesmo fluxo de trabalho, anote
+quais aplicativos já estavam abertos e copie o resumo que quiser manter antes
+que o Fôlego reutilize a vaga mais antiga.
+
 ## Guarda térmica e perfis do processador
 
 A aba **Temperatura e CPU** mostra a zona atual e a máxima dos últimos 10

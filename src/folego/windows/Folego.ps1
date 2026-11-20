@@ -1,9 +1,11 @@
 param([switch]$StartMinimized, [switch]$NoStartup, [switch]$Probe, [ValidateRange(0,120)][int]$DelaySeconds = 0, [ValidateRange(0,300)][int]$SmokeSeconds = 0, [string]$DataRoot,
       [ValidateSet('', 'Disable', 'Enable', 'Restore')][string]$StartupAction = '', [string]$StartupSubject, [switch]$RunSequence,
       [ValidateSet('', 'Apply', 'Restore')][string]$ServicePlan = '',
-      [ValidateSet('', 'Overview', 'CodexQuota', 'Volumes', 'Incidents', 'Boot')][string]$Inspect = '')
+      [ValidateSet('', 'Overview', 'CodexQuota', 'Volumes', 'Incidents', 'Boot', 'Storage')][string]$Inspect = '')
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Folego.Core.ps1')
+. (Join-Path $PSScriptRoot 'Folego.StorageDiagnostic.ps1')
+$script:DiskMeasurement = $null
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Use Fôlego Windows no Windows nativo. No Linux, use o launcher oficial ./dev.' }
 if ($Inspect) {
     switch ($Inspect) {
@@ -12,6 +14,15 @@ if ($Inspect) {
         'Volumes' { Format-FolegoVolumeInventory @(Get-FolegoLocalVolumes) }
         'Incidents' { Get-FolegoResourceIncidents }
         'Boot' { Get-FolegoBootTimeline }
+        'Storage' {
+            if (-not $DataRoot) { $DataRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Folego' }
+            Add-Type -Path (Join-Path $PSScriptRoot 'Native.cs')
+            $cancel = [Threading.ManualResetEventSlim]::new($false)
+            try {
+                $measurement = & (Join-Path $PSScriptRoot 'Collect.ps1') -DataRoot ([IO.Path]::GetFullPath($DataRoot)) -Action StorageDiagnostic -Target $cancel
+                if ($null -ne $measurement) { Format-FolegoStorageDiagnostic $measurement }
+            } finally { $cancel.Dispose() }
+        }
     }
     return
 }
@@ -143,10 +154,11 @@ try {
         $label = New-Object Windows.Forms.Label; $label.Text = $Text
         $label.Width = [Math]::Min(845, $form.ClientSize.Width - 60); $label.Height = $Height; $Page.Controls.Add($label); return $label
     }
-    function Add-FolegoButton($Page, [string]$Text, [scriptblock]$Action) {
+    function Add-FolegoButton($Page, [string]$Text, [scriptblock]$Action, [switch]$PassThru) {
         $button = New-Object Windows.Forms.Button; $button.Text = $Text
         $button.Width = [Math]::Min(845, $form.ClientSize.Width - 60); $button.Height = 46
         $button.Add_Click($Action); $Page.Controls.Add($button)
+        if ($PassThru) { return $button }
     }
     function New-FolegoOutput($Page, [int]$Height = 200) {
         $box = New-Object Windows.Forms.TextBox
@@ -326,6 +338,43 @@ try {
     Add-FolegoButton $page 'Ver histórico de inicialização e reinícios' { Request-Folego Events }
     Add-FolegoButton $page 'Ver eventos de disco e hardware' { Request-Folego Incidents }
     $diagnostic = New-FolegoOutput $page 190
+    $diskMeasure = Add-FolegoButton $page 'Medir disco do Windows (36 s)' { Start-FolegoDiskMeasurement } -PassThru
+    $diskCancel = Add-FolegoButton $page 'Cancelar medição de disco' {
+        $script:DiskMeasurement.Cancel.Set()
+        $diskCancel.Enabled = $false
+        $diskReport.Text = 'Cancelando medição…'
+    } -PassThru
+    $diskCancel.Enabled = $false
+    $diskReport = New-FolegoOutput $page 196
+    function Start-FolegoDiskMeasurement {
+        if ($null -ne $script:DiskMeasurement) { return }
+        $cancel = New-Object Threading.ManualResetEventSlim($false)
+        $worker = [powershell]::Create()
+        try {
+            $null = $worker.AddCommand((Join-Path $PSScriptRoot 'Collect.ps1')).AddParameter('Action', 'StorageDiagnostic').AddParameter('DataRoot', $DataRoot).AddParameter('Target', $cancel)
+            $handle = $worker.BeginInvoke()
+            $script:DiskMeasurement = [pscustomobject]@{ Worker = $worker; Handle = $handle; Cancel = $cancel }
+            $diskMeasure.Enabled = $false; $diskCancel.Enabled = $true
+            $diskReport.Text = 'Medindo o disco do Windows por 36 segundos…'
+        } catch {
+            $worker.Dispose(); $cancel.Dispose()
+            $diskReport.Text = 'Medição indisponível: ' + $_.Exception.Message
+        }
+    }
+    function Complete-FolegoDiskMeasurement {
+        $job = $script:DiskMeasurement
+        if ($null -eq $job -or -not $job.Handle.IsCompleted) { return }
+        try {
+            $rows = @($job.Worker.EndInvoke($job.Handle))
+            if ($rows.Count -eq 1 -and $null -ne $rows[0]) { $diskReport.Text = Format-FolegoStorageDiagnostic $rows[0] }
+            elseif ($job.Cancel.IsSet) { $diskReport.Text = 'Medição cancelada.' }
+            else { $diskReport.Text = 'Medição incompleta.' }
+        } catch { $diskReport.Text = 'Medição indisponível: ' + $_.Exception.Message }
+        finally {
+            $job.Worker.Dispose(); $job.Cancel.Dispose(); $script:DiskMeasurement = $null
+            $diskMeasure.Enabled = $true; $diskCancel.Enabled = $false
+        }
+    }
     Add-FolegoButton $page 'Abrir Gerenciador de Tarefas' { Start-Process taskmgr.exe }
     Add-FolegoButton $page 'Abrir armazenamento e manutenção' {
         $deckPanel = Join-Path ([IO.Path]::GetPathRoot($PSScriptRoot)) 'SteamDeck\scripts\otimizar-windows.ps1'
@@ -406,6 +455,7 @@ try {
         try {
             $now = [long][Folego.Windows.Native]::GetTickCount64()
             Update-FolegoProgress
+            Complete-FolegoDiskMeasurement
             if ($activate.WaitOne(0)) { Show-Folego }
             if ($SmokeSeconds -gt 0 -and $now - $startedMs -ge $SmokeSeconds * 1000) { $script:Leaving = $true; $form.Close(); return }
             if ($null -ne $script:Worker -and $script:Handle.IsCompleted) {
@@ -633,6 +683,11 @@ try {
 } finally {
     if ($null -ne (Get-Variable timer -ErrorAction SilentlyContinue)) { $timer.Stop(); $timer.Dispose() }
     if ($null -ne (Get-Command Stop-FolegoPromptSurface -ErrorAction SilentlyContinue)) { Stop-FolegoPromptSurface }
+    if ($null -ne $script:DiskMeasurement) {
+        $script:DiskMeasurement.Cancel.Set()
+        try { $script:DiskMeasurement.Worker.Stop() }
+        finally { $script:DiskMeasurement.Worker.Dispose(); $script:DiskMeasurement.Cancel.Dispose() }
+    }
     if ($null -ne $script:Worker) { try { $script:Worker.Stop() } finally { $script:Worker.Dispose() } }
     if ($null -ne (Get-Variable tray -ErrorAction SilentlyContinue)) { $tray.Visible = $false; $tray.Dispose() }
     if ($null -ne (Get-Command Hide-FolegoWidget -ErrorAction SilentlyContinue)) { Hide-FolegoWidget }

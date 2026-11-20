@@ -1,5 +1,26 @@
 # Passagem para o próximo agente — atualizada em 18/11/2026
 
+## Diagnóstico manual do disco do Windows — 20/11/2026
+
+- **Trabalho e disco** e `Folego.ps1 -Inspect Storage` usam o mesmo coletor
+  Win32/PDH. A janela padrão é de 36 s. A exportação distingue o preparo da
+  amostragem, identifica o disco do sistema por extents, diferencia zero de
+  dados ausentes e mantém seis resumos privados. O worker aceita cancelamento
+  e deixa o monitoramento regular ativo.
+- No Jupiter, Windows PowerShell 5.1.26100.9444, a coleta CLI identificou C:
+  no disco físico 0 e registrou 12 janelas. Medianas de janela ativa de
+  102,043 ms de leitura e 155,369 ms de gravação. Fila mediana 3,143. São
+  dados da sessão em uso e representam uma linha de base.
+- O pacote Windows foi verificado com `Test-Folego.ps1 -ReplayCsv`, com
+  430 contratos na árvore isolada. Inclui identidade, ausência de contador,
+  janela sem operações, atraso, cancelamento, reinício e retenção. No log
+  do host os eventos 51/153 de 18/11 são anteriores ao boot atual.
+- A implementação foi isolada a partir do head do PR #13. Trabalho local
+  prévio no clone NTFS e no checkout do Btrfs ficou fora desse incremento.
+  Operação física de entrada, efeito em jogos e ganho antes/depois
+  dependem de validação no cenário alvo.
+- [Guia da medição no port Windows](WINDOWS.md#medição-de-disco-do-windows)
+
 ## Prompts e atalhos contextuais no Windows — 18/11/2026
 
 - A fonte Linux no E: e o port no C: têm o mesmo remoto Folego, dois diretórios
