@@ -60,7 +60,9 @@ $startupNote = ''
 try { $settings = Get-FolegoSettings $DataRoot }
 catch { $startupNote = [string]$_; $settings = [pscustomobject]@{ startup = $false; commissioned = $true } }
 if ($StartMinimized -and -not $settings.startup -and -not $NoStartup) { return }
-if ($DelaySeconds) {
+$sampleBeforeDelay = $StartMinimized -and -not $Probe -and $DelaySeconds -gt 0
+$delayTimer = if ($sampleBeforeDelay) { [Diagnostics.Stopwatch]::StartNew() }
+if ($DelaySeconds -and -not $sampleBeforeDelay) {
     Start-Sleep -Seconds $DelaySeconds
     $settings = Get-FolegoSettings $DataRoot
     if ($StartMinimized -and -not $settings.startup -and -not $NoStartup) { return }
@@ -91,8 +93,29 @@ $mutex = New-Object Threading.Mutex($false, ('Local\Folego.Windows.' + $instance
 $ownsMutex = $false
 try { $ownsMutex = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $ownsMutex = $true }
 $activate = New-Object Threading.EventWaitHandle($false, [Threading.EventResetMode]::AutoReset, ('Local\Folego.Activate.' + $instance))
-if (-not $ownsMutex) { if (-not $StartMinimized) { $null = $activate.Set() }; $activate.Dispose(); $mutex.Dispose(); return }
 try {
+    if ($sampleBeforeDelay) {
+        if ($ownsMutex) {
+            try {
+                # Publish only passive Win32 readings. The full collector and logon queue still start after the delay.
+                $sampleHost = Get-FolegoHost
+                $sample = $collector.Read([IO.Path]::GetPathRoot($PSScriptRoot))
+                $level = (Get-FolegoRawHealth $sample $policy ([long][Folego.Windows.Native]::GetTickCount64())).Level
+                Save-FolegoSample $DataRoot ([pscustomobject]@{ schema = 1; host = $sampleHost; sample = $sample; level = $level; source = 'Win32 native; initial logon sample' })
+            } catch {
+                $startupNote = 'Primeira amostra indisponível: ' + $_.Exception.Message
+            } finally {
+                # A manual launch must be able to become the resident instance during the wait.
+                $mutex.ReleaseMutex(); $ownsMutex = $false
+            }
+        }
+        $remainingMs = $DelaySeconds * 1000 - $delayTimer.ElapsedMilliseconds
+        if ($remainingMs -gt 0) { Start-Sleep -Milliseconds $remainingMs }
+        $settings = Get-FolegoSettings $DataRoot
+        if (-not $settings.startup -and -not $NoStartup) { return }
+        try { $ownsMutex = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $ownsMutex = $true }
+    }
+    if (-not $ownsMutex) { if (-not $StartMinimized) { $null = $activate.Set() }; return }
     if (-not $NoStartup -and -not $settings.commissioned) {
         try { $startupNote = Set-FolegoStartup $DataRoot $settings.startup; Install-FolegoShortcuts } catch { $startupNote = [string]$_ }
     }

@@ -9,7 +9,11 @@ Não exige Python, Qt, WSL, serviço privilegiado ou download no primeiro iníci
 ## Usar e iniciar com a sessão
 
 No cartão preparado, use **Steam Deck → Fôlego**. No próximo login, o dispatcher
-existente do cartão solicita o primeiro início com 30 segundos de atraso.
+existente do cartão chama o Fôlego com uma espera de 30 s antes da coleta
+completa e da fila de aplicativos. No logon, o Fôlego publica antes dessa
+espera uma leitura nativa de RAM, commit, espaço e energia. A CPU fica
+desconhecida até a segunda leitura. A fila aguarda a coleta completa e aplica
+seus próprios critérios de estabilidade.
 O Fôlego registra uma única entrada própria `Folego` em HKCU Run e começa na
 bandeja. Depois dessa configuração inicial, o dispatcher deixa de solicitá-lo;
 a entrada do próprio Fôlego assume o início. O atraso dá espaço à abertura do
@@ -367,7 +371,7 @@ qualquer outra entrada elegível, inclusive da máquina (com UAC):
 
 | Condição antes de cada item | Valor |
 | --- | --- |
-| Desktop assentado | 15 s depois de o Fôlego (já atrasado 30 s) obter a primeira leitura |
+| Desktop assentado | 15 s após a coleta completa realizada depois da espera inicial de 30 s |
 | CPU | ≤ 50% |
 | Disco físico (`Win32_PerfFormattedData_PerfDisk_PhysicalDisk`, `_Total`) | ≤ 40% ocupado e fila ≤ 1 |
 | Zona térmica | < 80 °C |
