@@ -18,6 +18,7 @@ from .. import audit_profile, paths
 from ..actions.accessibility import private_path
 from ..core.collector import MetricsCollector
 from ..core.instance import InstanceLock
+from ..core.sessions import read_boot_id
 from ..safely.atomicfile import fsync_dir
 from ..safely.mounts import destination_verdict
 from .accessibility import bounded_command
@@ -30,12 +31,20 @@ PACKAGE_INTERVAL = 300
 JOURNAL_LIMIT = 256
 CRASH_ID = "fc2e22bc6ee647b6b90729ab34a250b1"
 LABELS = {
-    "metrics": "Recursos", "system": "Sistema", "packages": "Pacotes do sistema",
+    "metrics": "Recursos", "boot": "Tempo de boot", "system": "Sistema",
+    "packages": "Pacotes do sistema",
     "flatpak-system": "Flatpak do sistema", "flatpak-user": "Flatpak do usuário",
     "services-system": "Serviços do sistema", "services-user": "Serviços do usuário",
     "enabled-system": "Habilitação no sistema", "enabled-user": "Habilitação no usuário",
     "disks": "Discos e partições", "mounts": "Montagens",
     "journal": "Avisos e erros", "crash": "Falhas de aplicativos",
+}
+BOOT_TIMINGS = {
+    "total_s": "Do firmware ao fim da inicialização",
+    "system_s": "Do kernel ao fim da inicialização",
+    "firmware_s": "Firmware", "loader_s": "Carregador de boot",
+    "kernel_s": "Kernel", "initrd_s": "Initrd", "userspace_s": "Serviços do sistema",
+    "graphical_target_s": "Do kernel ao alvo gráfico",
 }
 KERNEL_INCIDENTS = {
     "memória esgotada": re.compile(r"out of memory|oom.kill|invoked oom", re.I),
@@ -205,6 +214,58 @@ def _system():
                if key in release}}
 
 
+def _boot_times(boot):
+    properties = (
+        "FirmwareTimestampMonotonic", "LoaderTimestampMonotonic", "InitRDTimestampMonotonic",
+        "UserspaceTimestampMonotonic", "FinishTimestampMonotonic", "SecurityStartTimestampMonotonic",
+        "FinishTimestamp", "SoftRebootsCount",
+    )
+    if read_boot_id() != boot:
+        raise ValueError("Identidade do boot atual não comprovada")
+    raw = _query("systemctl", "--system", "--no-pager", "--all", "--timestamp=unix",
+                 "--property=" + ",".join(properties), "show", budget=4096).stdout
+    values = dict(line.split("=", 1) for line in raw.splitlines())
+    if int(values.get("SoftRebootsCount", 0)):
+        raise ValueError("Reinício em software sem medida de um novo boot completo")
+    firmware, loader, initrd, userspace, finish, security = (int(values[key]) for key in properties[:6])
+    if finish == 0:
+        raise ValueError("O systemd ainda está inicializando")
+    if security == 0:
+        raise ValueError("O systemd não confirmou uma inicialização do host")
+    if (min(firmware, loader, initrd) < 0 or (firmware and firmware < loader)
+            or not 0 < userspace < finish <= time.monotonic() * 1e6 or initrd > userspace
+            or not 0 < security <= finish):
+        raise ValueError("Marcos do systemd incoerentes")
+    try:
+        graphical = int(_query("systemctl", "--system", "--no-pager", "--value",
+                               "--property=ActiveEnterTimestampMonotonic", "show", "graphical.target",
+                               budget=4096).stdout.strip())
+    except (OSError, ValueError, subprocess.SubprocessError):
+        graphical = None
+    if read_boot_id() != boot:
+        raise ValueError("O boot mudou durante a leitura")
+    stamp = values.get("FinishTimestamp", "")
+    ended_at = int(stamp[1:]) if re.fullmatch(r"@[0-9]{1,12}", stamp) else None
+    timings = {
+        "total_s": (firmware + finish) / 1e6 if firmware else None,
+        "system_s": finish / 1e6,
+        "firmware_s": (firmware - loader) / 1e6 if firmware and loader else None,
+        "loader_s": loader / 1e6 if loader else None,
+        "kernel_s": (initrd or userspace) / 1e6,
+        "initrd_s": (userspace - initrd) / 1e6 if initrd else None,
+        "userspace_s": (finish - userspace) / 1e6,
+        "graphical_target_s": graphical / 1e6 if graphical and userspace <= graphical <= finish else None,
+    }
+    return ended_at, timings
+
+
+def boot_seconds(seconds):
+    milliseconds = round(seconds * 1000)
+    minutes, remainder = divmod(milliseconds, 60000)
+    value = f"{remainder / 1000:.3f}".replace(".", ",")
+    return f"{minutes} min {value} s" if minutes else f"{value} s"
+
+
 def _mounts():
     rows = {}
     for mount in read_mountinfo(Path(paths.proc_root())):
@@ -279,6 +340,39 @@ def _event(db, at, boot, source, kind, subject, data, journal_id=None):
     db.execute("INSERT INTO events(at,boot,source,kind,subject,data,journal_id) VALUES(?,?,?,?,?,?,?) "
                "ON CONFLICT(journal_id) DO NOTHING",
                (at, boot, source, kind, subject, _json(data), journal_id))
+
+
+def _record_boot(db, boot):
+    previous = db.execute("SELECT boot, quality, reason FROM sources WHERE name='boot'").fetchone()
+    if previous and previous[0] == boot and previous[1] in ("ok", "partial"):
+        return
+    if db.execute("SELECT 1 FROM events WHERE boot=? AND source='boot' AND kind='startup'", (boot,)).fetchone():
+        return
+    checked = time.time()
+    confirmed = None
+    try:
+        ended_at, times = _boot_times(boot)
+    except (OSError, ValueError, subprocess.SubprocessError, KeyError) as exc:
+        quality = "unsupported" if isinstance(exc, FileNotFoundError) else "unknown"
+        reason = str(exc)[:240]
+        if previous != (boot, quality, reason):
+            _event(db, checked, boot, "boot", "source", "", {"quality": quality, "reason": reason})
+    else:
+        confirmed = time.time()
+        ended_at = ended_at if ended_at and ended_at <= confirmed else None
+        missing = []
+        if times["firmware_s"] is None:
+            missing.append("firmware ou carregador com leitura incompleta")
+        if ended_at is None:
+            missing.append("horário de conclusão indisponível")
+        quality = "partial" if missing else "ok"
+        reason = " · ".join(missing)
+        label = "Total " + boot_seconds(times["total_s"]) if times["total_s"] is not None else (
+            "Sistema " + boot_seconds(times["system_s"]))
+        _event(db, ended_at or confirmed, boot, "boot", "startup", label,
+               {**times, "quality": quality, "reason": reason, "observed_at": _iso(confirmed)})
+    db.execute("INSERT OR REPLACE INTO sources VALUES('boot',?,?,?,?,?,NULL)",
+               (checked, quality, reason, confirmed, boot))
 
 
 def _record_source(db, boot, at, name, probe, *, journal=False):
@@ -366,6 +460,8 @@ class HostAuditRecorder:
             # independently, so an interruption retains the completed evidence.
             with _connect(write=True) as db:
                 _event(db, at, boot, "metrics", "sample", "", metrics)
+                db.commit()
+                _record_boot(db, boot)
                 db.commit()
                 for name, probe in probes.items():
                     started = time.time()

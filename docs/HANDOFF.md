@@ -1,5 +1,29 @@
 # Passagem para o próximo agente — atualizada em 22/11/2026
 
+## Tempo de boot na Auditoria — 22/11/2026
+
+- **Auditoria → Tempo de boot** e `audit history --source boot` mostram uma
+  medição por boot observado. O histórico guarda os marcos do systemd,
+  incluindo o intervalo comparável do kernel até o fim da inicialização e o
+  intervalo completo quando o firmware fornece o início. O alvo gráfico é
+  registrado quando seu marco pertence à inicialização. A ausência de um
+  marco fica explícita. O coletor tenta novamente se o systemd ainda iniciar.
+- No boot atual do Jupiter, o coletor registrou **683,974992 s** desde o
+  firmware, **123,051041 s** a partir do kernel e **119,806029 s** até o alvo
+  gráfico. O firmware respondeu por **471,600661 s**. Os valores conferem com
+  `systemd-analyze time`. O alvo gráfico é um marco do systemd e a
+  disponibilidade prática do Plasma depende da sessão. Nenhum reboot foi
+  necessário para a leitura.
+- A GUI real em KDE/Wayland e a CLI leram o mesmo registro a partir de
+  estado isolado, em `.scratch/audit-boot-wayland-DBOrB3ID/`. O lote
+  Qt com regressões aprovou **25 testes** em 2,35 s (`run-xqvr2shw`), e
+  o headless aprovou **9 testes** em 0,72 s (`run-72ctk54q`). Python
+  3.14.7 e HOME/XDG privados. A retenção revisada recebeu `run-sgpz4o13`
+  e `run-xaw9huz6` após conferência dos recibos, inodes e ausência de uso.
+- Revisão no [PR #15](https://github.com/Misael-art/Folego/pull/15).
+  O incremento está na fonte de desenvolvimento. A instalação ativa segue
+  com o binário anterior.
+
 ## Modo Auditor — 22/11/2026
 
 - **Opções → Modo Auditor** e `audit enable|disable|status` compartilham a

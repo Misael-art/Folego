@@ -3,6 +3,7 @@ import time
 
 from folego import audit_profile
 from folego.core.snapshot import BatteryInfo
+from folego.ui.audit_tab import AuditTab
 from folego.ui.main_window import MainWindow
 
 
@@ -49,3 +50,17 @@ def test_leaving_audit_resumes_energy_from_current_sample_and_web_from_now(qapp,
     window._observe_power_profile(charger, True)
     window._observe_power_profile(charger, True)
     assert calls == [("web", {"from_now": True}), ("observe", None), ("observe", "external")]
+
+
+def test_boot_timing_is_readable_in_audit_timeline(qapp):
+    tab = AuditTab()
+    tab.source.setCurrentIndex(tab.source.findData("boot"))
+    record = {"id": 1, "at": "2026-11-22T07:00:00+00:00", "source": "boot", "kind": "startup",
+              "subject": "Total 1 min 5,500 s", "boot_id": "boot-id",
+              "data": {"total_s": 65.5, "system_s": 41, "firmware_s": None}}
+    tab._show_history((("boot", None), {"sources": {}, "events": [record]}))
+    assert tab.table.item(0, 2).text() == "Inicialização"
+    tab.table.selectRow(0)
+    detail = tab.details.toPlainText()
+    assert "Do firmware ao fim da inicialização  1 min 5,500 s" in detail
+    assert "Do kernel ao fim da inicialização  41,000 s" in detail

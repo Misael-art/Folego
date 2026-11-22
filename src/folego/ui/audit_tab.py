@@ -7,12 +7,13 @@ from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QPlainTextEdit,
                                QPushButton, QTableWidget, QTableWidgetItem,
                                QHeaderView, QVBoxLayout, QWidget)
 
-from ..adapters.host_audit import LABELS, history
+from ..adapters.host_audit import BOOT_TIMINGS, LABELS, boot_seconds, history
 from .workers import Poller
 
 KINDS = {
     "sample": "Amostra", "incident": "Incidente", "baseline": "Primeira leitura",
     "added": "Adicionado", "removed": "Removido", "changed": "Alterado", "source": "Cobertura da fonte",
+    "startup": "Inicialização",
 }
 
 
@@ -135,7 +136,15 @@ class AuditTab(QWidget):
     def show_detail(self, row, *_):
         if 0 <= row < len(self._events):
             event = self._events[row]
-            evidence = json.dumps(event["data"], ensure_ascii=False, indent=2)
+            data = event["data"]
+            if event["kind"] == "startup":
+                lines = [f"{label}  {boot_seconds(data[key])}" for key, label in BOOT_TIMINGS.items()
+                         if data.get(key) is not None]
+                if data.get("reason"):
+                    lines.append(data["reason"])
+                evidence = "\n".join(lines)
+            else:
+                evidence = json.dumps(data, ensure_ascii=False, indent=2)
             self.details.setPlainText(f"Registro {event['id']} · Boot {event['boot_id']}\n{evidence}")
         else:
             self.details.clear()

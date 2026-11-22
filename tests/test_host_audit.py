@@ -114,6 +114,9 @@ def test_recorder_keeps_voltage_and_metrics_at_a_bounded_cadence(monkeypatch):
     for name in ("_mounts", "_disks", "_disk_capacity", "_packages", "_flatpak", "_services"):
         monkeypatch.setattr(audit, name, lambda *args, **kwargs: {})
     monkeypatch.setattr(audit, "_journal", lambda *args, **kwargs: ([], ""))
+    monkeypatch.setattr(audit, "_boot_times", lambda boot: (1000, {
+        "total_s": 30, "system_s": 20, "firmware_s": 8, "loader_s": 2,
+    }))
     recorder = audit.HostAuditRecorder()
     recorder.record(_snapshot(100))
     assert audit.history()["quality"] == "missing"
@@ -127,9 +130,64 @@ def test_recorder_keeps_voltage_and_metrics_at_a_bounded_cadence(monkeypatch):
     assert [event["data"]["mono_ns"] for event in report["events"]] == [100 * 10**9, 160 * 10**9]
     assert report["events"][-1]["data"]["battery_voltage_uv"] == 7200000
     assert report["events"][-1]["data"]["temperature_c"] == 81
+    assert len(audit.history(source="boot")["events"]) == 1
     with closing(sqlite3.connect(audit._database())) as db:
         db.execute("PRAGMA user_version=2")
     assert audit.history()["quality"] == "unknown"
+
+
+@pytest.mark.parametrize("firmware, loader, initrd, total", [(13000000, 3000000, 2000000, 33000000),
+                                                           (0, 0, 0, None)])
+def test_boot_durations_come_from_systemd_markers(monkeypatch, firmware, loader, initrd, total):
+    raw = {
+        "FirmwareTimestampMonotonic": firmware, "LoaderTimestampMonotonic": loader,
+        "InitRDTimestampMonotonic": initrd, "UserspaceTimestampMonotonic": 5000000,
+        "FinishTimestampMonotonic": 20000000, "SecurityStartTimestampMonotonic": 5100000,
+        "FinishTimestamp": "@1000", "SoftRebootsCount": 0,
+    }
+
+    def query(*argv, **_):
+        result = "18000000\n" if "graphical.target" in argv else "".join(f"{key}={val}\n" for key, val in raw.items())
+        return SimpleNamespace(stdout=result)
+
+    monkeypatch.setattr(audit, "_query", query)
+    monkeypatch.setattr(audit, "read_boot_id", lambda: BOOT)
+    monkeypatch.setattr(audit, "time", SimpleNamespace(monotonic=lambda: 30))
+    stamp, times = audit._boot_times(BOOT)
+    assert stamp == 1000
+    assert times["system_s"] == 20
+    assert times["total_s"] == (None if total is None else total / 1e6)
+    assert times["kernel_s"] == (2 if initrd else 5)
+    assert times["initrd_s"] == (3 if initrd else None)
+    assert times["userspace_s"] == 15
+    assert times["graphical_target_s"] == 18
+    raw["FinishTimestampMonotonic"] = 0
+    with pytest.raises(ValueError, match="ainda está inicializando"):
+        audit._boot_times(BOOT)
+
+
+def test_boot_source_recovers_from_incomplete_startup_and_registers_once_per_boot(monkeypatch, capsys):
+    def pending(boot):
+        raise ValueError("O systemd ainda está inicializando")
+
+    with audit._connect(write=True) as db:
+        monkeypatch.setattr(audit, "_boot_times", pending)
+        audit._record_boot(db, BOOT)
+        audit._record_boot(db, BOOT)
+    assert audit.history(source="boot")["sources"]["boot"]["quality"] == "unknown"
+    other_boot = "00000000-0000-0000-0000-000000000001"
+    timing = {"total_s": None, "system_s": 20, "firmware_s": None}
+    monkeypatch.setattr(audit, "_boot_times", lambda boot: (1000, timing))
+    with audit._connect(write=True) as db:
+        audit._record_boot(db, BOOT)
+        audit._record_boot(db, BOOT)
+        audit._record_boot(db, other_boot)
+        audit._record_boot(db, BOOT)
+    assert cli.main(["audit", "history", "--source", "boot", "--json"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert len(report["events"]) == 3
+    assert {e["boot_id"] for e in report["events"] if e["kind"] == "startup"} == {BOOT, other_boot}
+    assert report["sources"]["boot"]["quality"] == "partial"
 
 
 def test_cli_watcher_refuses_a_second_writer(capsys):

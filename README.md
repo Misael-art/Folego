@@ -96,6 +96,15 @@ Incidentes do journal mantêm horário, boot e metadados disponíveis, sem guard
 mensagens brutas, argumentos de processos ou conteúdo pessoal.
 [Campos e filtros do journal](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html).
 
+O filtro **Tempo de boot**, também disponível por `folego audit history --source boot`,
+guarda uma medição por inicialização observada. Mostra a duração do kernel até
+o término da inicialização pelo systemd, o total desde o firmware e as fases
+comprovadas pelo sistema. Quando disponível, mostra também o tempo até o alvo
+gráfico. O total fica indisponível quando falta o horário de início do
+firmware. A medição usa os marcos do boot atual, inclusive quando a coleta
+começa mais tarde, e o histórico preserva os boots já medidos.
+[Marcos de inicialização do systemd](https://www.freedesktop.org/software/systemd/man/latest/org.freedesktop.systemd1.html).
+
 O banco fica em `${XDG_STATE_HOME:-~/.local/state}/folego/host-audit.sqlite3`.
 Quando o limite de 64 MiB é atingido, a gravação avisa e preserva o histórico.
 Use `--boot`, `--since`, `--until` e `--before-id` para consultar períodos
