@@ -29,15 +29,33 @@
   A prova verificou disponibilidade dos controles na interface. A abertura
   física do teclado, os botões do Deck e um ciclo longo de coleta continuam
   sem medição deste incremento.
-- Antes de uma suíte completa local, reavaliar swap e I/O. Em 22/11 o host
-  tinha 6,8 GiB de MemAvailable, cerca de 14 GiB livres no Btrfs, 60 °C no
-  sensor com limite passivo de 100 °C e atividade de restauração de outro
-  projeto. O progresso dessa tarefa foi preservado.
+- O modo de primeiro plano registrou **uma amostra e 12 fontes** com a janela
+  fechada e encerrou após `audit disable`. Evidência privada em
+  `.scratch/audit-headless-ou5tykzw/`. A retomada das automações após desativar
+  passou com **59 testes focados** em 13,86 s (`run-sgpz4o13`).
+- Código da revisão confirmada em
+  `9668805e4444ee1ff23f2e4c11fb32d48fe1e31d`, no
+  [PR #15](https://github.com/Misael-art/Folego/pull/15), com base na
+  continuidade da b17. No [CI da revisão](https://github.com/Misael-art/Folego/actions/runs/45013634730),
+  headless **1.517 aprovados, 2 pulados** e Qt **1.958 aprovados, 2 pulados**.
+  Os contratos de CLI em HOME descartável e a prévia nativa Windows também passaram.
+- As suítes locais completas rodaram em sequência depois da carga de outro
+  projeto, em escopos de um núcleo e 2 GiB com 13 GiB livres no Btrfs. O sensor
+  ACPI variou de 55 a 71 °C com limite passivo de 100 °C. `./dev check`
+  terminou na etapa headless com **1.539 aprovados, 2 pulados e 1 falha**
+  (`run-xaw9huz6`). `./dev test` terminou com **1.981 aprovados, 2 pulados
+  e 1 falha** (`run-3hqhjw9p`). Ambos encontraram a mesma falha de permissões
+  em `tests/test_codex_rendering.py`, pré-existente no checkout e fora do PR.
+  Sob umask `077`, a fixture já nasce com modo `0600` e o teste aplica o
+  mesmo modo antes de esperar um conflito.
 - Quatro execuções encerradas foram movidas integralmente para
   `.scratch/dev-tests-reviewed/` para respeitar o limite de QA. Foram
   conferidos a ausência de uso observada, o filesystem, o inode e o hash
   de cada recibo: `run-poop9bs8`, `run-cx2h17p9`, `run-z1mja7qi` e
-  `run-ixlh8o8t`. A instalação local b17 permanece com seu binário anterior.
+  `run-ixlh8o8t`. Os três primeiros lotes desta tarefa
+  (`run-c54frnxy`, `run-mvk6g9ff` e `run-znezn39y`) foram preservados no
+  mesmo destino com as mesmas verificações. A instalação local b17 permanece
+  com seu binário anterior.
 
 ## Widgets opcionais na Sessão básica e custo do monitor de entrada — 16/11/2026
 
