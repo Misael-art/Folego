@@ -306,7 +306,10 @@ class AgentGuidelines:
             raise ValueError('Gravação da orientação não confirmada')
 
     def configure(self, enabled=None, *, reconcile=False, adopt=None):
-        with Coordinator().lock(wait=.2):
+        from ..audit_profile import SUSPENDED, normal_effects
+        with Coordinator().lock(wait=.2), normal_effects() as allowed:
+            if not allowed:
+                return {**self.status(), "outcome": "recusa", "message": SUSPENDED}
             preference = self.preference()  # Unknown schema protects explicit enable too.
             if enabled is False:
                 # Opt-out remains durable even if a receipt cannot be restored.

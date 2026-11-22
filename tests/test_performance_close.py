@@ -135,6 +135,27 @@ def test_automatic_trigger_requires_automatic_mode(tmp_path):
         proc.kill()
 
 
+def test_audit_activation_during_revalidation_prevents_the_close(fake_home, tmp_path):
+    from folego import audit_profile
+
+    proc = child()
+    try:
+        plan, coordinator, _journal, observe, read = harness(tmp_path, proc, mode=perf_rules.AUTOMATIC)
+        plan = executor.ActionPlan(plan.action, plan.target, {**plan.params, "trigger": executor.AUTO})
+        calls = []
+
+        def enable_audit():
+            assert audit_profile.configure(True)["enabled"] is True
+            return observe()
+
+        verdict = run(plan, coordinator, enable_audit, read, calls.append)
+        assert verdict.outcome is Outcome.REFUSED
+        assert "Modo Auditor" in verdict.reason
+        assert calls == [] and proc.poll() is None
+    finally:
+        proc.kill()
+
+
 def test_manual_close_reviews_exact_plan_and_cli_recovers_same_id(fake_home, monkeypatch, capsys):
     from folego import cli
     from folego.core.snapshot import Snapshot

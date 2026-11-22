@@ -71,7 +71,11 @@ class WebRecovery:
             if len(attempts) >= 3 or any(self.clock() - t < 60 for t in attempts):
                 return result(Outcome.REFUSED, 'Recuperação em espera ou disjuntor aberto (3 solicitações/10 min)')
             try:
-                accepted = backend.request(core, registered, env=self.env)
+                from ..audit_profile import SUSPENDED, normal_effects
+                with normal_effects() as allowed:
+                    if not allowed:
+                        return result(Outcome.REFUSED, SUSPENDED)
+                    accepted = backend.request(core, registered, env=self.env)
             except ValueError as error:
                 return result(Outcome.REFUSED, str(error))
             return result(Outcome.PARTIAL if accepted else Outcome.UNKNOWN,

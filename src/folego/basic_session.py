@@ -293,7 +293,10 @@ class BasicSession:
         return result
 
     def _configure(self, enabled=None, *, reconcile=False):
-        with Coordinator().lock(wait=.2):
+        from .audit_profile import SUSPENDED, normal_effects
+        with Coordinator().lock(wait=.2), normal_effects() as allowed:
+            if not allowed:
+                return {**self.status(), "outcome": "recusa", "message": SUSPENDED}
             receipt = self._receipt()
             if reconcile:
                 if not receipt: return self.status()

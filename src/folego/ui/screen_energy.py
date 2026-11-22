@@ -329,4 +329,10 @@ class ScreenEnergy:
     def perform(self, action, value=None):
         if action not in ("status", "enable", "disable", "reconcile", "wake", "attention"):
             raise ScreenEnergyError("Ação de tela desconhecida")
-        return getattr(self, action)()
+        if action in ("status", "attention"):
+            return getattr(self, action)()
+        from ..audit_profile import SUSPENDED, normal_effects
+        with normal_effects() as allowed:
+            if not allowed:
+                return {"enabled": False, "message": SUSPENDED}
+            return getattr(self, action)()

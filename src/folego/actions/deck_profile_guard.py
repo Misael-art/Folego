@@ -245,7 +245,12 @@ class DeckProfileGuard:
                 self._fault_seen = {key: 0 for key in KEYS}
                 self._healthy_seen = {key: 0 for key in KEYS}
         self._last_sample = mono
+        from ..audit_profile import normal
+        regular_profile = normal()
         for key in KEYS:
+            if key == "microphone" and not regular_profile:
+                self._fault_seen[key] = self._healthy_seen[key] = 0
+                continue
             current = observed.get(key, {})
             if current.get("state") != "fault":
                 self._fault_seen[key] = 0
@@ -330,7 +335,14 @@ class DeckProfileGuard:
         policy["profile_attempts"] = attempts
         self.store.save(policy)  # The journal already contains the intent.
         try:
-            self.profiles.restore(key, before)
+            if key == "microphone" and automatic:
+                from ..audit_profile import SUSPENDED, normal_effects
+                with normal_effects() as allowed:
+                    if not allowed:
+                        return result(Outcome.REFUSED, SUSPENDED)
+                    self.profiles.restore(key, before)
+            else:
+                self.profiles.restore(key, before)
             deadline = time.monotonic() + (8 if before['identity'].get('recovery') else 4)
             stable_since = None
             while time.monotonic() < deadline:

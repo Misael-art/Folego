@@ -114,6 +114,7 @@ class AccessibilityTab(QWidget):
         self._pending = ""
         self._emergency_previous = ""
         self._stopped = False
+        self._audit_restricted = False
         self._verifying = False
         self._active_scope = []
         self._verified = {}
@@ -399,16 +400,22 @@ class AccessibilityTab(QWidget):
         if self._report is not None:
             self.report_ready.emit(report)
 
+    def set_audit_restricted(self, restricted):
+        self._audit_restricted = restricted
+        self._update_actions()
+
     def _update_actions(self):
         allowed = not self._busy and not self._stopped
-        self.enable_all_button.setEnabled(allowed)
-        self.capture_button.setEnabled(allowed and not self._pending)
-        self.audio_reprobe_choice.setEnabled(allowed)
+        self.enable_all_button.setEnabled(allowed and not self._audit_restricted)
+        self.capture_button.setEnabled(allowed and not self._pending and not self._audit_restricted)
+        self.audio_reprobe_choice.setEnabled(allowed and not self._audit_restricted)
         self.pending_choice.setEnabled(allowed)
         for key, button in self.profile_rearm_buttons.items():
-            button.setEnabled(allowed and not self._capability_pending(key))
+            button.setEnabled(allowed and not self._capability_pending(key)
+                              and (not self._audit_restricted or key != "microphone"))
         for key, card in self.cards.items():
-            card.setEnabled(allowed and not self._capability_pending(key))
+            card.setEnabled(allowed and not self._capability_pending(key)
+                            and (not self._audit_restricted or key not in ("audio", "microphone")))
 
     def _capability_pending(self, key):
         if key in ('virtual-keyboard', 'all'):

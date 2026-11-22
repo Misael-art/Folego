@@ -9,6 +9,8 @@ from .theme import TOKENS, THEMES, choose_theme, on_theme_change, choose_transpa
 
 
 def options_argv(action, target, confirm):
+    if action.startswith("audit-"):
+        return [sys.executable, "-m", "folego", "audit", action.removeprefix("audit-"), "--json"]
     if action.startswith('agent-care-'):
         argv = [sys.executable, '-m', 'folego', 'ai', action.removeprefix('agent-'), '--json']
         if confirm: argv.append('--confirmar')
@@ -29,9 +31,14 @@ class OptionsTab(QWidget):
     sound_preview = Signal(str)
     screen_energy_requested = Signal(str)
     power_guard_requested = Signal(str)
+    audit_changed = Signal()
+    audit_history_requested = Signal()
     def __init__(self, *, jobs=None):
         super().__init__()
         self._stopped = False
+        self._audit_restricted = False
+        self._audit_pending = False
+        self._audit_groups = []
         self._care_sync_on_start = False
         self._care_generation = 0
         self._care_poller = None
@@ -113,6 +120,18 @@ class OptionsTab(QWidget):
                       "e para a unit própria do monitor de entrada; o Fôlego aberto continua na tela.")
         text.setWordWrap(True)
         outer = QVBoxLayout(self)
+        audit_group = QGroupBox("Modo Auditor")
+        audit_layout = QVBoxLayout(audit_group)
+        self.audit_choice = QCheckBox("Ativar o Modo Auditor")
+        self.audit_choice.clicked.connect(self.change_audit_profile)
+        self.audit_status = QLabel("Guarda métricas, mudanças e falhas do host. Mantém teclado, atalhos e controle.")
+        self.audit_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.audit_status.setWordWrap(True)
+        self.audit_history = QPushButton("Abrir linha do tempo")
+        self.audit_history.clicked.connect(self.audit_history_requested.emit)
+        for control in (self.audit_choice, self.audit_status, self.audit_history):
+            audit_layout.addWidget(control)
+        outer.addWidget(audit_group)
         area = QScrollArea()
         area.setWidgetResizable(True)
         content = QWidget()
@@ -147,9 +166,45 @@ class OptionsTab(QWidget):
             for widget in controls:
                 group_layout.addWidget(widget)
             box.addWidget(group)
+            if controls[0] not in (self.startup_view_choice, self.choice):
+                self._audit_groups.append(group)
         box.addStretch(1)
         area.setWidget(content)
         outer.addWidget(area)
+
+    def change_audit_profile(self, checked):
+        self._audit_pending = True
+        self.audit_choice.setEnabled(False)
+        self.jobs.run("audit-enable" if checked else "audit-disable", "", done=self._audit_saved)
+
+    def _audit_saved(self, result):
+        from ..audit_profile import status
+        self._audit_pending = False
+        self.show_audit_profile(status())
+        if not (result or {}).get("ok"):
+            self.audit_status.setText((result or {}).get("reason") or "Alteração sem confirmação. Confira a opção salva.")
+        self.audit_changed.emit()
+
+    def show_audit_profile(self, result):
+        enabled = result["enabled"]
+        self._audit_restricted = enabled is not False
+        if not self._audit_pending:
+            self.audit_choice.setTristate(enabled is None)
+            self.audit_choice.setCheckState(Qt.CheckState.PartiallyChecked if enabled is None else
+                                            Qt.CheckState.Checked if enabled else Qt.CheckState.Unchecked)
+            self.audit_choice.setEnabled(enabled is not None)
+            if result.get("reason"):
+                self.audit_status.setText(result["reason"])
+            if enabled is True:
+                self.audit_status.setText("Perfil ativo. Teclado, atalhos e controle continuam disponíveis.")
+            elif enabled is False:
+                self.audit_status.setText("Guarda métricas, mudanças e falhas do host. Mantém teclado, atalhos e controle.")
+        for group in self._audit_groups:
+            group.setEnabled(not self._audit_restricted)
+        if self._audit_restricted:
+            self._care_timer.stop()
+        elif self.care_choice.isChecked() and self.care_choice.isEnabled():
+            self._care_timer.start()
 
     def _save_startup_view(self):
         mode = self.startup_view_choice.currentData()
@@ -322,6 +377,9 @@ class OptionsTab(QWidget):
         for widget in (self.power_guard_choice, self.power_guard_status, power_hint):
             power_layout.addWidget(widget)
         self.settings_box.insertWidget(1, power_group)
+        for effect_group in (screen_group, power_group, group):
+            self._audit_groups.append(effect_group)
+            effect_group.setEnabled(not self._audit_restricted)
         self.show_power_guard(self._power_guard_state)
         self.show_screen_energy(self._screen_energy_state)
         self.cooperative_status = QLabel(self._cooperative_message)
@@ -368,6 +426,10 @@ class OptionsTab(QWidget):
 
     def start(self, *, sync=False):
         if self._stopped: return
+        if self._audit_restricted:
+            self.choice.setEnabled(False)
+            self.jobs.run("startup-status", "", done=self.done)
+            return
         self._care_sync_on_start = sync
         self.jobs.run('agent-care-status', '', done=self.show_agent_care)
         self.choice.setEnabled(False)
@@ -516,7 +578,7 @@ class OptionsTab(QWidget):
                                  'Resultado desconhecido; diretrizes preservadas.')
         if payload.get('operation_id'):
             self.care_status.setText(self.care_status.text() + '\nOperação: ' + str(payload['operation_id']))
-        if enabled is True and payload.get('state') not in ('pending', 'conflict'):
+        if enabled is True and not self._audit_restricted and payload.get('state') not in ('pending', 'conflict'):
             self._care_timer.start()
         else:
             self._care_timer.stop()

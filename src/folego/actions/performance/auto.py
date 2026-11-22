@@ -45,6 +45,10 @@ def notify(item, *, run=subprocess.run) -> None:
 
 def cycle(*, collector, tracker, store, rules_path, protected_fn=None, notify_fn=notify,
           execute=executor.execute, boot_id_fn=read_boot_id, now=time.time) -> dict:
+    from ...audit_profile import normal
+    if not normal():
+        tracker.forget_unseen(set())
+        return {"ok": True, "trigger": "audit", "announced": 0, "waiting": 0}
     snapshot = collector.collect()
     view = perf_model.observe(snapshot, protected_fn=protected_fn() if protected_fn else None)
     try:
@@ -110,7 +114,6 @@ def watch(*, interval=10.0, cycles=None, log=sys.stdout) -> dict:
         except BlockingIOError:
             return {"ok": False, "reason": "já existe um executor do Modo Desempenho"}
         collector = MetricsCollector()
-        collector.collect()  # CPU fractions need a previous sample
         tracker = perf_rules.ConditionTracker()
         count = 0
         while cycles is None or count < cycles:

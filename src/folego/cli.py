@@ -234,6 +234,23 @@ def build_parser() -> argparse.ArgumentParser:
         prog="folego",
         description="Bem-estar do Steam Deck: diagnóstico e higiene com confirmação.")
     commands = parser.add_subparsers(dest="command")
+    audit = commands.add_parser("audit", help="Modo Auditor: coleta do host e histórico local")
+    audit_sub = audit.add_subparsers(dest="sub", required=True)
+    for name, description in (
+            ("enable", "ativar o perfil"), ("disable", "voltar ao perfil normal"),
+            ("status", "ver o perfil salvo"), ("watch", "coletar em primeiro plano sem a interface")):
+        command = audit_sub.add_parser(name, help=description)
+        command.add_argument("--json", action="store_true")
+    history = audit_sub.add_parser("history", help="consultar mudanças, falhas e amostras")
+    from .adapters.host_audit import LABELS as audit_sources
+    history.add_argument("--source", choices=audit_sources)
+    history.add_argument("--boot")
+    history.add_argument("--since", help="início inclusivo em ISO 8601")
+    history.add_argument("--until", help="fim exclusivo em ISO 8601")
+    history.add_argument("--before-id", type=int, help="paginar a partir do primeiro ID da página anterior")
+    history.add_argument("--limit", type=int, default=100)
+    history.add_argument("--changes", action="store_true", help="focar mudanças e incidentes")
+    history.add_argument("--json", action="store_true")
 
     ai = commands.add_parser("ai", help="cotas, diagnóstico e recuperação pelo responsável Web")
     ai.add_argument("sub", choices=["status", "recover-web", "reset-note", "limit-note", "care-status", "care-enable", "care-disable",
@@ -2861,8 +2878,66 @@ def _cmd_accessibility(args):
         return _emit_gate_refusal(args, "accessibility", str(exc))
 
 
+def _cmd_audit(args):
+    from datetime import datetime
+    from . import audit_profile
+    from .adapters import host_audit
+    from .core.instance import AlreadyRunning
+
+    if args.sub == "watch":
+        if audit_profile.status()["enabled"] is not True:
+            return _emit_gate_refusal(args, "audit", "Ative primeiro com folego audit enable")
+        try:
+            for cycle in host_audit.watch():
+                print(json.dumps(cycle, ensure_ascii=False) if args.json else
+                      f"{cycle['at']} · {cycle['reason'] or 'amostragem ativa'}"
+                      + (f" · histórico de recursos: {cycle['timeline_issue']}" if cycle["timeline_issue"] else ""),
+                      flush=True)
+        except KeyboardInterrupt:
+            return EXIT_OK
+        except (AlreadyRunning, OSError) as exc:
+            return _emit_gate_refusal(args, "audit", str(exc))
+        return EXIT_OK
+    if args.sub == "history":
+        try:
+            since, until = (datetime.fromisoformat(value).timestamp() if value else None
+                            for value in (args.since, args.until))
+            if since is not None and until is not None and since >= until:
+                raise ValueError("O início precisa anteceder o fim")
+            result = host_audit.history(source=args.source, boot=args.boot, since=since,
+                                        until=until, before_id=args.before_id, limit=args.limit,
+                                        changes_only=args.changes)
+        except (ValueError, OSError, OverflowError) as exc:
+            return _emit_gate_refusal(args, "audit", str(exc))
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False))
+        else:
+            for event in result["events"]:
+                print(event["at"], f'#{event["id"]}', host_audit.LABELS[event["source"]],
+                      event["kind"], repr(event["subject"]), json.dumps(event["data"], ensure_ascii=False))
+            if result["reason"]:
+                print(result["reason"])
+            for name, source in result["sources"].items():
+                if source["quality"] != "ok":
+                    print(f"{host_audit.LABELS[name]} · {source['quality']} · {source['reason']}")
+            if result.get("limited"):
+                print(f"Página anterior no tempo: --before-id {result['events'][0]['id']}")
+        return EXIT_REFUSED if result["quality"] == "unknown" else EXIT_OK
+    result = (audit_profile.status() if args.sub == "status" else
+              audit_profile.configure(args.sub == "enable"))
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False))
+    elif not result["ok"]:
+        print(result["reason"], file=sys.stderr)
+    else:
+        print("Modo Auditor " + ("ligado." if result["enabled"] else "desligado."))
+    return EXIT_OK if result["ok"] else EXIT_REFUSED
+
+
 def _dispatch(ns, argv) -> int:
     """Dispatch without importing Qt in CLI invocations."""
+    if ns.command == "audit":
+        return _cmd_audit(ns)
     if ns.command == "performance":
         return _cmd_performance(ns)
     if ns.command == "ai":

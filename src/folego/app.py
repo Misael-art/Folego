@@ -38,6 +38,7 @@ def main() -> int:
         apply_theme(app)
         from .actions.accessibility import Supervisor
         from .adapters.host_guard import HostObserver
+        from .adapters.host_audit import HostAuditRecorder
         from .adapters.host_timeline import HostTimelineRecorder, record_snapshot
 
         def resource_collector():
@@ -52,7 +53,8 @@ def main() -> int:
 
         win = MainWindow(collector_factory=resource_collector, accessibility_factory=Supervisor,
                          startup_defaults=True,
-                         host_guard_factory=lambda: HostObserver(record=True))
+                         host_guard_factory=lambda: HostObserver(record=True),
+                         audit_recorder=HostAuditRecorder())
         win.start()
         win.show_startup_view()
         try:

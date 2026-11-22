@@ -144,7 +144,11 @@ class PressureBackend:
 
     def perform(self, action, value=None):
         if action == "publish":
-            payload = publish(value)
+            from ..audit_profile import SUSPENDED, normal_effects
+            with normal_effects() as allowed:
+                if not allowed:
+                    return {"message": SUSPENDED}
+                payload = publish(value)
             confirmed = receipt(payload) is not None
             return {"message": ("Pedido recebido por ao menos um hook; redução de carga não comprovada."
                                 if confirmed else "Pedido publicado; recebimento e redução de carga não confirmados."),

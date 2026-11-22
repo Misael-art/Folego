@@ -83,8 +83,11 @@ def watch(*, supervisor=None, interval=10, cycles=None):
             except (OSError, ValueError) as exc:
                 result["transition_error"] = str(exc)
             try:
+                from ..audit_profile import normal_effects
                 from ..safely.jobtemp import maintain_registered
-                result["temporary_retention"] = maintain_registered(cursor=count)
+                with normal_effects() as allowed:
+                    if allowed:
+                        result["temporary_retention"] = maintain_registered(cursor=count)
             except (OSError, ValueError) as exc:
                 result["temporary_retention"] = {"archived": 0, "reason": str(exc)}
             save_object(supervisor.store.root / "watch-status.json",

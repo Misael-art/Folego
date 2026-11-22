@@ -24,8 +24,11 @@ class Recovery:
         self.backend = backend or DesktopRecovery(supervisor.native)
 
     def prepare(self, capability, *, save=False):
+        from ..audit_profile import SUSPENDED, normal
         if capability not in (*LABELS, "all"):
             raise ValueError("capacidade desconhecida")
+        if (save or capability in ("all", "audio", "microphone")) and not normal():
+            raise ValueError(SUSPENDED + " Selecione uma capacidade de entrada.")
         if save and capability != "all":
             raise ValueError("perfil persistente exige revisão de todas as capacidades")
         scope = list(ORDER) if capability == "all" else [capability]
@@ -79,7 +82,7 @@ class Recovery:
                 or list(plan.params["capabilities"]) != (list(ORDER) if plan.target.key == "all" else [plan.target.key])):
             return ActionResult(plan.action, Outcome.REFUSED, plan.operation_id, target_key=plan.target.key,
                                 reason="plano manual/confirmacão inválido")
-        def run(_):
+        def act():
             report = self.supervisor.native.collect()
             if (not fresh(report) or not report["boot_id"] or report["boot_id"] != plan.params["boot_id"]
                     or report["service_owner"] != plan.params["service_owner"]
@@ -192,6 +195,15 @@ class Recovery:
             receipt.update(complete=outcome != Outcome.UNKNOWN, result=result.to_dict())
             save_object(self._receipt(plan.operation_id), receipt)
             return result
+        def run(_):
+            if plan.action == SAVE_ACTION or set(plan.params["capabilities"]) - INPUTS:
+                from ..audit_profile import SUSPENDED, normal_effects
+                with normal_effects() as allowed:
+                    if not allowed:
+                        return self._result(plan, [], Outcome.REFUSED, SUSPENDED)
+                    return act()
+            return act()
+
         return self.supervisor.coordinator.run(plan, run, wait=.2)
 
     def _reserve_touch_attempt(self, plan):

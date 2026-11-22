@@ -55,8 +55,53 @@ regras de adaptação e evidências de cada superfície.
 | **Widget e bandeja** | Consultar o estado em uma janela compacta e retornar à central. No Plasma/Wayland, a regra opcional do KWin exige confirmação. |
 | **CLI independente de Qt** | Investigar o ambiente e consultar operações diretamente pelo terminal. |
 | **Entrada e acessibilidade** | Observar teclado, ponteiro, trackpads, toque, controles e áudio; solicitar reparo de entrada ou manter um monitor residente opcional. No Deck, distingue dispositivo presente de perfil Steam/áudio errado e restaura apenas o perfil previamente confirmado, sem depender do PhaseZero. |
+| **Modo Auditor** | Acompanhar mudanças de pacotes, serviços e discos junto de métricas e incidentes do host, com teclado, atalhos e controle do Steam Deck disponíveis. |
 | **Opções e continuidade** | Iniciar com a sessão por padrão, desativar quando quiser, consultar operações pelo código e acompanhar temporários próprios preservados. |
 | **Economia da tela e agentes** | Ativar um temporizador reversível da tela interna, preservar jogos/dock e pedir alívio cooperativo aos agentes participantes. [Contrato e limites](docs/ENERGIA-E-AGENTES.md). |
+
+### Modo Auditor
+
+Ative em **Opções → Modo Auditor**. A escolha fica salva para as próximas
+aberturas. Na aba **Auditoria**, filtre a linha do tempo por fonte e selecione
+um evento para ver a evidência. Use **Recursos** para cruzar uma mudança
+observada com CPU, RAM, swap, pressão, temperatura, tensão da bateria e espaço
+em disco. O histórico existente do Fôlego continua com sua cadência e seus limites.
+
+No terminal, use `folego` no aplicativo instalado ou `./dev run` no repositório.
+
+```bash
+folego audit enable
+folego audit status
+folego audit history --changes
+folego audit history --source metrics --since 2026-11-22T08:00 --limit 120 --json
+folego audit disable
+```
+
+Com a janela fechada, `folego audit watch` coleta em primeiro plano. Encerre
+com Ctrl+C para liberar a abertura da interface. Se usar a interface, o comando
+`audit enable` também muda o perfil da janela que já estiver aberta.
+
+O modo começa desligado. Enquanto estiver ativo, o Fôlego suspende suas rotinas
+de desempenho, de energia, de áudio, de recuperação Web e de manutenção. Mantém
+o suporte de entrada conforme as permissões e opções já verificadas. Configurações
+já gravadas no Plasma ou no sistema continuam sob controle de seus responsáveis.
+
+As métricas de auditoria são amostradas a cada minuto. Serviços systemd,
+montagens, dispositivos de bloco e o journal disponível ao usuário têm consultas
+no mesmo intervalo. Pacotes e bibliotecas via pacman, dpkg, RPM e Flatpak são
+consultados a cada cinco minutos. A primeira leitura estabelece a referência.
+Para cada alteração posterior, o histórico guarda o valor anterior, o atual e
+a janela de observação. Mudanças revertidas entre leituras podem passar despercebidas.
+Incidentes do journal mantêm horário, boot e metadados disponíveis, sem guardar
+mensagens brutas, argumentos de processos ou conteúdo pessoal.
+[Campos e filtros do journal](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html).
+
+O banco fica em `${XDG_STATE_HOME:-~/.local/state}/folego/host-audit.sqlite3`.
+Quando o limite de 64 MiB é atingido, a gravação avisa e preserva o histórico.
+Use `--boot`, `--since`, `--until` e `--before-id` para consultar períodos
+anteriores e `--json` para exportar os resultados. A linha do tempo ajuda a
+correlacionar eventos. A presença de uma mudança na mesma janela de uma falha
+é evidência para investigar sua causa.
 
 Quando o sensor informa limites térmicos, a área Disco distingue aviso a 5 °C
 do limite passivo, urgência ao atingi-lo e limite crítico do equipamento. Com a

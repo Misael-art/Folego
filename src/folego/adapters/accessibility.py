@@ -21,7 +21,7 @@ class ProbeError(Exception):
     pass
 
 
-def bounded_command(argv, *, timeout, **kwargs):
+def bounded_command(argv, *, timeout, max_bytes=262144, **kwargs):
     """Bound both elapsed time and output, including a broken optional tool."""
     proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, env=kwargs.get("env"), start_new_session=True)
@@ -41,7 +41,7 @@ def bounded_command(argv, *, timeout, **kwargs):
                         selector.unregister(key.fileobj)
                     else:
                         buffers[key.data].extend(chunk)
-                        if sum(map(len, buffers.values())) > 262144:
+                        if sum(map(len, buffers.values())) > max_bytes:
                             raise subprocess.SubprocessError("saída excede orçamento")
         code = proc.wait(timeout=max(.001, deadline - observation_clock()))
         completed = True

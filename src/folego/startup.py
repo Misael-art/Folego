@@ -88,7 +88,14 @@ def configure(enabled=None, *, confirmed=False, manage_service=True):
     if enabled is not None and (not confirmed or type(enabled) is not bool):
         raise ValueError("alteração de início automático exige confirmação e booleano")
     with _startup_lock():
-        result = _configure_serialized(enabled, manage_service)
+        if enabled is None:
+            from .audit_profile import normal_effects
+            with normal_effects() as allowed:
+                if not allowed:
+                    return status()
+                result = _configure_serialized(enabled, manage_service)
+        else:
+            result = _configure_serialized(enabled, manage_service)
         if enabled is None and manage_service and 'KDE' in os.environ.get('XDG_CURRENT_DESKTOP', '').split(':'):
             from .basic_session import BasicSession
             try:

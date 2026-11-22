@@ -1,4 +1,43 @@
-# Passagem para o próximo agente — atualizada em 16/11/2026
+# Passagem para o próximo agente — atualizada em 22/11/2026
+
+## Modo Auditor — 22/11/2026
+
+- **Opções → Modo Auditor** e `audit enable|disable|status` compartilham a
+  preferência persistida, desligada por padrão. A aba **Auditoria** lê o
+  histórico mesmo com a coleta desativada. `audit watch` usa o mesmo coletor
+  com a interface fechada e tem trava de instância.
+- As amostras existentes continuam disponíveis. O banco de auditoria reúne
+  métricas por minuto, alterações de serviços e discos, estado do kernel e do
+  sistema, pacotes a cada cinco minutos, erros do journal e registros de
+  coredump. Fontes incompletas preservam a última referência válida. O banco é
+  privado, limitado a 64 MiB e mantém os registros quando chega ao limite.
+  Inventário marca janela de observação. Journal mantém horário e boot da fonte.
+- Automações de desempenho, energia, áudio, recuperação Web, Sessão básica,
+  orientação de agentes e retenção do monitor residente ficam suspensas no
+  perfil Auditor. A política vigente de KWin e do perfil de trackpad da Steam
+  continua aplicável. Atalhos, teclado virtual e controles de entrada mantêm
+  seus caminhos existentes.
+- O foco headless passou com **52 testes** em 5,45 s
+  (`run-znezn39y`). O lote Qt e regressões relacionadas passou com **209
+  testes** em 32,07 s (`run-qr8ih01l`). Ambos usaram Python 3.14.7,
+  HOME/XDG e temporários privados e execução sequencial. Os artefatos estão
+  em `.scratch/dev-tests/` ou na retenção revisada do projeto.
+- A GUI de desenvolvimento abriu pelo ponto de entrada real em KDE/Wayland
+  e exibiu **14 registros** na linha do tempo a partir de um estado isolado.
+  A primeira leitura confirmou as 12 fontes de inventário e journal.
+  Evidência local privada em `.scratch/audit-wayland-3KUNKYjw/`.
+  A prova verificou disponibilidade dos controles na interface. A abertura
+  física do teclado, os botões do Deck e um ciclo longo de coleta continuam
+  sem medição deste incremento.
+- Antes de uma suíte completa local, reavaliar swap e I/O. Em 22/11 o host
+  tinha 6,8 GiB de MemAvailable, cerca de 14 GiB livres no Btrfs, 60 °C no
+  sensor com limite passivo de 100 °C e atividade de restauração de outro
+  projeto. O progresso dessa tarefa foi preservado.
+- Quatro execuções encerradas foram movidas integralmente para
+  `.scratch/dev-tests-reviewed/` para respeitar o limite de QA. Foram
+  conferidos a ausência de uso observada, o filesystem, o inode e o hash
+  de cada recibo: `run-poop9bs8`, `run-cx2h17p9`, `run-z1mja7qi` e
+  `run-ixlh8o8t`. A instalação local b17 permanece com seu binário anterior.
 
 ## Widgets opcionais na Sessão básica e custo do monitor de entrada — 16/11/2026
 

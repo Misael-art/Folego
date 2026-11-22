@@ -37,7 +37,8 @@ class AIMonitor(QObject):
 
     def _collect_deliveries(self):
         rows = self.deliveries.collect()
-        if self.web_recovery is not None:
+        from ..audit_profile import normal
+        if self.web_recovery is not None and normal():
             self.web_recovery.handle(rows, since=self._started_at)
         return rows
 
