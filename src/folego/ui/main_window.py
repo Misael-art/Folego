@@ -222,6 +222,7 @@ class MainWindow(QMainWindow):
         self._power_controller.payload.connect(self._power_result)
         self._power_controller.failed.connect(self._power_error)
         self._power_key = self._power_pending = None
+        self._reset_power_observation = False
         self._power_asked_at = 0.0
         self._power_timer = QTimer(self)
         self._power_timer.setInterval(60_000)
@@ -380,9 +381,11 @@ class MainWindow(QMainWindow):
             if not previously_restricted:
                 self._pressure_request("clear")
         elif previously_restricted:
-            self.ai_monitor.start()
+            self.ai_monitor.start(from_now=True)
             self._screen_timer.start()
             self._screen_controller.request('reconcile')
+            self._power_key = None
+            self._reset_power_observation = True
             if self.tabs.currentWidget() is self.options:
                 self.options.start()
             if self._audit_poller is not None and self._last_snapshot is not None:
@@ -397,6 +400,12 @@ class MainWindow(QMainWindow):
 
     def _observe_power_profile(self, battery, external_power=None):
         """Hand sustained sag, or the return of external power, to the profile guard."""
+        if self._audit_restricted or self._power_controller.future is not None:
+            return
+        if self._reset_power_observation:
+            self._reset_power_observation = False
+            self._power_request('observe', None)
+            return
         key = None
         if battery is not None:
             level = voltage_level(battery)
@@ -408,7 +417,7 @@ class MainWindow(QMainWindow):
         # Sagging samples are re-sent at a slow pace; the charger only on its edge.
         due = (key != self._power_key if key == 'external' or key is None
                else key != self._power_key or now - self._power_asked_at >= 15)
-        if not due or self._power_controller.future is not None: return
+        if not due: return
         self._power_key, self._power_asked_at = key, now
         self._power_request('observe', key)
 

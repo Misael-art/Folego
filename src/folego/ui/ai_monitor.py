@@ -67,7 +67,9 @@ class AIMonitor(QObject):
         self.alerts.observe('deliveries', rows)
         self.deliveries_ready.emit(rows)
 
-    def start(self):
+    def start(self, *, from_now=False):
+        if from_now:
+            self._started_at = time.time()
         self.alerts.start()
         for poller in (self.poller, self.delivery_poller):
             poller.start(); poller.request()

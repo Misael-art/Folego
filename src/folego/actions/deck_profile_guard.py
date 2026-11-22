@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import stat
 import time
+from contextlib import nullcontext
 import uuid
 
 from .. import paths
@@ -330,32 +331,30 @@ class DeckProfileGuard:
         blocker = self.budget_blocker(policy, key)
         if blocker:
             return result(Outcome.REFUSED, blocker)
-        attempts = [a for a in policy["profile_attempts"] if 0 <= now - a["ts"] < 3600]
-        attempts.append({"key": key, "ts": now, "operation_id": plan.operation_id})
-        policy["profile_attempts"] = attempts
-        self.store.save(policy)  # The journal already contains the intent.
-        try:
-            if key == "microphone" and automatic:
-                from ..audit_profile import SUSPENDED, normal_effects
-                with normal_effects() as allowed:
-                    if not allowed:
-                        return result(Outcome.REFUSED, SUSPENDED)
-                    self.profiles.restore(key, before)
-            else:
+        from ..audit_profile import SUSPENDED, normal_effects
+        gate = normal_effects() if key == "microphone" and automatic else nullcontext(True)
+        with gate as allowed:
+            if not allowed:
+                return result(Outcome.REFUSED, SUSPENDED)
+            attempts = [a for a in policy["profile_attempts"] if 0 <= now - a["ts"] < 3600]
+            attempts.append({"key": key, "ts": now, "operation_id": plan.operation_id})
+            policy["profile_attempts"] = attempts
+            self.store.save(policy)  # The journal already contains the intent.
+            try:
                 self.profiles.restore(key, before)
-            deadline = time.monotonic() + (8 if before['identity'].get('recovery') else 4)
-            stable_since = None
-            while time.monotonic() < deadline:
-                after = self.profiles.steam() if key == "touchpad" else self.profiles.microphone()
-                if after.get("state") == "healthy" and self._matches(key, after, plan.params["baseline"]):
-                    stable_since = stable_since or time.monotonic()
-                    if time.monotonic() - stable_since >= (2 if key == "touchpad" else 1):
-                        return result(Outcome.OK, "perfil de desktop restaurado e confirmado; uso físico não testado")
-                else:
-                    stable_since = None
-                time.sleep(.3)
-        except (RuntimeError, OSError, ValueError, TimeoutError):
-            pass
+                deadline = time.monotonic() + (8 if before['identity'].get('recovery') else 4)
+                stable_since = None
+                while time.monotonic() < deadline:
+                    after = self.profiles.steam() if key == "touchpad" else self.profiles.microphone()
+                    if after.get("state") == "healthy" and self._matches(key, after, plan.params["baseline"]):
+                        stable_since = stable_since or time.monotonic()
+                        if time.monotonic() - stable_since >= (2 if key == "touchpad" else 1):
+                            return result(Outcome.OK, "perfil de desktop restaurado e confirmado; uso físico não testado")
+                    else:
+                        stable_since = None
+                    time.sleep(.3)
+            except (RuntimeError, OSError, ValueError, TimeoutError):
+                pass
         policy = self.store.read()
         policy["profile_circuit"][key] = "efeito incerto; verificar antes de repetir"
         self.store.save(policy)
