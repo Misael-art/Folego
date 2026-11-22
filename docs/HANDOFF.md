@@ -20,9 +20,12 @@
   o headless aprovou **9 testes** em 0,72 s (`run-72ctk54q`). Python
   3.14.7 e HOME/XDG privados. A retenção revisada recebeu `run-sgpz4o13`
   e `run-xaw9huz6` após conferência dos recibos, inodes e ausência de uso.
-- Revisão no [PR #15](https://github.com/Misael-art/Folego/pull/15).
-  O incremento está na fonte de desenvolvimento. A instalação ativa segue
-  com o binário anterior.
+- Código `65c9e7befa0d20d8b6e51ec549bb739f578b36a6` confirmado no
+  [PR #15](https://github.com/Misael-art/Folego/pull/15). Gates completos
+  de [Linux e CLI](https://github.com/Misael-art/Folego/actions/runs/45014797894)
+  e de [Windows](https://github.com/Misael-art/Folego/actions/runs/45014797886)
+  aprovados nesse SHA. O incremento está na fonte de desenvolvimento.
+  A instalação ativa segue com o binário anterior.
 
 ## Modo Auditor — 22/11/2026
 
