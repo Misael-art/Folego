@@ -253,7 +253,8 @@ def build_parser() -> argparse.ArgumentParser:
     history.add_argument("--json", action="store_true")
 
     ai = commands.add_parser("ai", help="cotas, diagnóstico e recuperação pelo responsável Web")
-    ai.add_argument("sub", choices=["status", "recover-web", "reset-note", "limit-note", "care-status", "care-enable", "care-disable",
+    ai.add_argument("sub", choices=["status", "recover-web", "reset-note", "limit-note",
+                                    "render-status", "render-software", "render-restore", "care-status", "care-enable", "care-disable",
                                     "care-sync", "care-reconcile"])
     ai.add_argument("--adopt-legacy", help="com care-enable: manifesto privado da orientação manual anterior")
     ai.add_argument("--account", help="com recover-web/reset-note: identidade da conta (account_id de status --json)")
@@ -2964,6 +2965,30 @@ def _dispatch(ns, argv) -> int:
                     pass
             print(json.dumps(result, ensure_ascii=False))
             return EXIT_BY_OUTCOME.get(result.get('outcome'), EXIT_OK if result.get('ok') else EXIT_REFUSED)
+        if ns.sub.startswith('render-'):
+            from .actions.codex_rendering import CodexRendering, RenderingUnconfirmed
+            if ns.sub != 'render-status' and not ns.confirmar:
+                return _emit_gate_refusal(ns, 'codex-rendering',
+                                         'Use --confirmar para configurar as próximas aberturas')
+            try:
+                profile = CodexRendering()
+                result = (profile.status() if ns.sub == 'render-status' else
+                          profile.apply(restore=ns.sub == 'render-restore'))
+            except RenderingUnconfirmed as exc:
+                if ns.json:
+                    print(json.dumps({'schema': 1, 'ok': False, 'outcome': 'desconhecido',
+                                      'operation_id': exc.operation_id,
+                                      'exit': EXIT_UNKNOWN, 'reason': str(exc)}, ensure_ascii=False))
+                else:
+                    print(str(exc))
+                return EXIT_UNKNOWN
+            except (OSError, ValueError, RuntimeError, CoordinatorBusy) as exc:
+                return _emit_gate_refusal(ns, 'codex-rendering', str(exc))
+            if ns.json:
+                print(json.dumps(result, ensure_ascii=False))
+            else:
+                print(result['message'] + '\n' + result['scope'])
+            return EXIT_REFUSED if result['state'] == 'conflict' else EXIT_OK
         if ns.sub == 'recover-web':
             if not ns.confirmar:
                 print('Use --confirmar para solicitar o ciclo ao responsável Web já habilitado')

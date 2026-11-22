@@ -27,13 +27,17 @@ ou altera sua configuração global silenciosamente.
 
 Repositório público, código sob licença MIT: https://github.com/Misael-art/Folego
 
-PR de continuidade: https://github.com/Misael-art/Folego/pull/1.
-Todos os pontos de recuperação estão em [handoff/REMOTE.md](handoff/REMOTE.md).
+Para retomar o desenvolvimento do Modo Auditor e das melhorias acumuladas
+até a prévia **v0.2.0b18**, use a branch `codex/audit-profile`. A tag
+`v0.2.0b18` fixa a fonte da release, enquanto a branch recebe a continuidade.
+Os PRs do port Windows preservam seus próprios pontos de revisão.
+[PR do Modo Auditor](https://github.com/Misael-art/Folego/pull/15) ·
+[Lista de pontos de recuperação](handoff/REMOTE.md).
 
 Enquanto o PR não for integrado, continue na branch de entrega:
 
 ```bash
-git clone --branch codex/portable-handoff-20261024 https://github.com/Misael-art/Folego.git
+git clone --branch codex/audit-profile https://github.com/Misael-art/Folego.git
 cd Folego
 ./dev setup --system-deps
 ./dev check
@@ -42,8 +46,9 @@ cd Folego
 
 O clone público não exige autenticação. Para enviar contribuições, autentique
 pelo helper oficial do GitHub. Não colocar token na URL, em scripts ou no histórico shell.
-Se ainda não houver Git, baixe a cópia fonte da Página de recuperação, extraia e
-execute `./dev setup --system-deps`; o instalador nativo inclui Git.
+Se ainda não houver Git, baixe `Folego-0.2.0b18-source.tar.gz` e
+`SHA256SUMS`, confira o hash, extraia e execute `./dev setup --system-deps`.
+O instalador nativo inclui Git. [Prévia v0.2.0b18](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b18).
 
 `./dev system-deps` mostra o plano. `./dev setup --system-deps` aplica pacotes
 nativos via apt/dnf/pacman, com sudo quando necessário, sem ativar serviços ou
@@ -52,7 +57,16 @@ pelo administrador; o wrapper não força atualização global. Sem privilégio,
 use `./dev setup --headless` e peça a instalação das bibliotecas nativas quando
 for trabalhar com GUI. O host usado na migração só executou o plano nativo.
 
-## Cópia independente do disco antigo
+## Resgate antes da reinstalação
+
+O pacote privado no GitHub guarda um bundle do repositório, os arquivos
+persistentes selecionados do Fôlego, os hashes e as instruções de inspeção.
+Autentique-se no GitHub com a conta proprietária e siga o guia do próprio
+resgate. Use uma pasta de inspeção para os dados do host anterior. Grants,
+PIDs, units, configurações de login e planos antigos exigem revisão no OS novo.
+As contas do Codex e dos outros provedores precisam ser reconectadas.
+
+## Cópia histórica da migração de 24/10
 
 A entrega guarda uma cópia na [Página privada de recuperação](https://chatgpt.com/space/page_c86741eb68348191a25318610e82b50d),
 com links/identificadores registrados no PR e no recibo final. Baixe os anexos e confira

@@ -163,6 +163,24 @@ quando é necessário renovar o login no ChatGPT dentro do launcher. A mensagem
 de capacidade também pode encobrir uma falha local do campo de mensagem;
 trocar o modelo não corrige essa situação. Sem responsável compatível, o
 Fôlego avisa e preserva o estado. [Escopo e limites](docs/COMPACTO.md#recuperação-do-codex-web).
+Se o Codex Desktop fica sem janela com `GPU access not allowed` após
+`--disable-gpu`, a opção **Opções → Abertura do Codex Desktop → Usar
+renderização por software** configura ANGLE/SwiftShader no arquivo do launcher
+comunitário Linux, para as próximas aberturas. A combinação consta da
+[documentação do Chromium](https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/swiftshader.md),
+e o [Electron registra falha compatível na consulta de GPU](https://github.com/electron/electron/issues/49530).
+O aceite de abertura neste host precisa de validação própria; isso não comprova
+a causa dos cortes. O launcher Web separado do PhaseZero, navegadores e perfis
+isolados têm configuração própria e não são alterados. A opção não reinicia
+tarefas nem resolve indisponibilidade do provedor. Pode aumentar o uso de CPU.
+
+Na CLI, `./dev run ai render-status --json` consulta; `./dev run ai
+render-software --confirmar` aplica e `./dev run ai render-restore --confirmar`
+restaura o arquivo anterior, se ninguém o alterou. A intenção e a cópia original
+são duráveis antes da escrita. Mudança externa ou recibo inválido bloqueia o
+efeito; não há escalada automática de sinais. Se uma instância anterior ficou
+presa, seu encerramento continua separado e precisa de confirmação própria.
+
 Ao lado das entregas, um **presente verde piscando** mostra as redefinições
 disponíveis confirmadas das contas do provedor. Clique para consultar a conta;
 o resgate continua no cliente de IA.
@@ -236,12 +254,12 @@ contas usam um fundo contínuo, com os elementos internos transparentes.
 O alvo é **Linux**, com KDE Plasma para a integração completa com o desktop.
 O wrapper gerencia Python **3.14.7**, uv e dependências fixadas em `uv.lock`.
 Não é necessário ativar um ambiente virtual ou instalar pacotes Python globalmente.
-A [prévia 0.2.0b14](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b14)
+A [prévia 0.2.0b18](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b18)
 oferece fonte completa, wheel, sdist e SHA256SUMS. A fonte completa inclui o wrapper
 e o lockfile; os pacotes Python exigem Python 3.14 e a dependência GUI opcional.
 
 ```bash
-git clone --branch v0.2.0b14 https://github.com/Misael-art/Folego.git
+git clone --branch v0.2.0b18 https://github.com/Misael-art/Folego.git
 cd Folego
 ./dev setup
 ./dev gui

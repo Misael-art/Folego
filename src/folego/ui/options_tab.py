@@ -15,6 +15,10 @@ def options_argv(action, target, confirm):
         argv = [sys.executable, '-m', 'folego', 'ai', action.removeprefix('agent-'), '--json']
         if confirm: argv.append('--confirmar')
         return argv
+    if action.startswith('codex-render-'):
+        argv = [sys.executable, '-m', 'folego', 'ai', action.removeprefix('codex-'), '--json']
+        if confirm: argv.append('--confirmar')
+        return argv
     if action.startswith("jobs-"):
         argv = [sys.executable, "-m", "folego", "jobs", action.removeprefix("jobs-"), "--json"]
         if action == "jobs-recover": argv.append(target)
@@ -76,6 +80,15 @@ class OptionsTab(QWidget):
                             'Widgets opcionais conhecidos mudam no próximo início do Plasma. '
                             'Desligar restaura a configuração anterior.')
         basic_text.setWordWrap(True)
+        self.render_status = QLabel('Verificando a configuração de abertura do Codex.')
+        self.render_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.render_status.setWordWrap(True)
+        self.render_software = QPushButton('Usar renderização por software nas próximas aberturas')
+        self.render_restore = QPushButton('Restaurar configuração anterior do Codex')
+        self.render_software.setEnabled(False)
+        self.render_restore.setEnabled(False)
+        self.render_software.clicked.connect(lambda: self.change_rendering('software'))
+        self.render_restore.clicked.connect(lambda: self.change_rendering('restore'))
         self.care_choice = QCheckBox('Orientar agentes a usar o host com cuidado')
         self.care_choice.setAccessibleName('Orientação de cuidado nos IDEs e CLIs dos agentes')
         self.care_choice.clicked.connect(self.change_agent_care)
@@ -154,6 +167,8 @@ class OptionsTab(QWidget):
             ("Início com a sessão", (self.choice, text, self.status, self.verify)),
             ('Sessão básica do Plasma', (self.basic_choice, basic_text,
                                          self.basic_status, self.basic_verify)),
+            ('Abertura do Codex Desktop', (self.render_status, self.render_software,
+                                                self.render_restore)),
             ('Cuidado do host pelos agentes', (self.care_choice, care_text,
                                                 self.care_status, self.care_verify)),
             ("Operações pendentes", (self.pending, self.operation_id, self.reconcile, self.cancel,
@@ -440,6 +455,12 @@ class OptionsTab(QWidget):
             self.jobs.run('startup-basic-status', '', done=self.show_basic_session)
         self.jobs.run("review-pending", "", done=self.show_pending)
         self.jobs.run("jobs-status", "", done=self.show_retention)
+        self.jobs.run('codex-render-status', '', done=self.show_rendering)
+
+    def change_rendering(self, mode):
+        self.render_software.setEnabled(False)
+        self.render_restore.setEnabled(False)
+        self.jobs.run('codex-render-' + mode, '', confirm=True, done=self.show_rendering)
 
     def change_basic_session(self, checked):
         self.basic_choice.setEnabled(False)
@@ -467,6 +488,24 @@ class OptionsTab(QWidget):
         if payload.get('operation_id'):
             text += '\nOperação: ' + payload['operation_id']
         self.basic_status.setText(text)
+
+    def show_rendering(self, payload):
+        if self._stopped: return
+        payload = payload or {}
+        state = payload.get('state')
+        self.render_status.setText(payload.get('message') or payload.get('reason')
+                                   or 'Configuração indisponível; arquivo preservado.')
+        self.render_status.setText(self.render_status.text() + '\n'
+                                  + 'Vale nas próximas aberturas pelo launcher do Codex Desktop; '
+                                    'o launcher Web separado não é alterado. Aplicativos e tarefas continuam abertos.')
+        if payload.get('operation_id'):
+            self.render_status.setText(self.render_status.text() + '\nOperação: '
+                                       + str(payload['operation_id']))
+        self.render_software.setEnabled(state in ('unchanged', 'software')
+                                       and payload.get('can_apply') is True)
+        self.render_restore.setEnabled(state in ('software', 'pending')
+                                      and payload.get('can_restore') is True
+                                      and bool(payload.get('operation_id')))
 
     def show_pending(self, payload):
         if self._stopped: return

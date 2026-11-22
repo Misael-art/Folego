@@ -6,6 +6,35 @@ from folego.ui.tune_jobs import TuneJobs
 from test_ui_tune_jobs import sandbox, pump
 
 
+def test_codex_rendering_uses_worker_and_changed_file_blocks_controls(qapp):
+    from folego.ui.options_tab import options_argv
+    class Jobs:
+        def __init__(self): self.calls = []
+        def run(self, action, target, **kwargs): self.calls.append((action, kwargs))
+        def shutdown(self): pass
+    jobs = Jobs()
+    tab = OptionsTab(jobs=jobs)
+    tab.show_rendering({'state': 'unchanged', 'message': 'Original', 'can_apply': True})
+    tab.render_software.click()
+    assert jobs.calls[-1][0] == 'codex-render-software'
+    assert jobs.calls[-1][1]['confirm']
+    assert not tab.render_software.isEnabled()
+    tab.show_rendering({'state': 'software', 'enabled': True, 'operation_id': 'receipt',
+                        'message': 'Configurado', 'can_apply': True, 'can_restore': True})
+    assert tab.render_restore.isEnabled()
+    assert options_argv('codex-render-restore', '', True)[-4:] == [
+        'ai', 'render-restore', '--json', '--confirmar']
+    tab.show_rendering({'state': 'conflict', 'operation_id': 'receipt', 'message': 'Arquivo mudou'})
+    assert not tab.render_restore.isEnabled() and not tab.render_software.isEnabled()
+    tab.show_rendering({'operation_id': 'receipt', 'outcome': 'desconhecido'})
+    assert not tab.render_restore.isEnabled() and not tab.render_software.isEnabled()
+    assert 'receipt' in tab.render_status.text()
+    tab.show_rendering({'state': 'unchanged', 'can_apply': 'yes', 'can_restore': True,
+                        'operation_id': 'receipt'})
+    assert not tab.render_restore.isEnabled() and not tab.render_software.isEnabled()
+    tab.close()
+
+
 def test_options_defaults_on_and_can_disable_without_changing_effect_policy(qapp):
     class Jobs:
         calls = []

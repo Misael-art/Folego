@@ -1,5 +1,22 @@
 # Entradas de recuperação remota
 
+## Continuidade da prévia v0.2.0b18
+
+- Branch de retomada Linux/CLI/Qt: `codex/audit-profile`.
+- [Prévia com fonte completa, wheel, sdist e checksums](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b18).
+- [PR de continuidade do Modo Auditor](https://github.com/Misael-art/Folego/pull/15), sobre o
+  [PR que preserva a linha de desenvolvimento b15–b17](https://github.com/Misael-art/Folego/pull/9).
+- O desenvolvimento Windows mantém seus pontos de revisão em
+  [PR #10](https://github.com/Misael-art/Folego/pull/10),
+  [#11](https://github.com/Misael-art/Folego/pull/11),
+  [#12](https://github.com/Misael-art/Folego/pull/12),
+  [#13](https://github.com/Misael-art/Folego/pull/13) e
+  [#14](https://github.com/Misael-art/Folego/pull/14).
+- Para reconstruir o ambiente, use o [guia do novo host](../NOVO-HOST.md).
+  Históricos e recibos do host ficam no resgate privado com instruções próprias.
+
+## Migração de 24/10
+
 - Repositório público, licença MIT: https://github.com/Misael-art/Folego
 - PR de continuidade, em draft: https://github.com/Misael-art/Folego/pull/1
 - Branch com a entrega: `codex/portable-handoff-20261024`
