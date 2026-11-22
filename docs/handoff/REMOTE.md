@@ -4,6 +4,7 @@
 
 - Branch de retomada Linux/CLI/Qt: `codex/audit-profile`.
 - [Prévia com fonte completa, wheel, sdist e checksums](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b18).
+- Commit da tag `v0.2.0b18`: `955adc8ff388d352d7e9c200aacd4647bcf82ee6`.
 - [PR de continuidade do Modo Auditor](https://github.com/Misael-art/Folego/pull/15), sobre o
   [PR que preserva a linha de desenvolvimento b15–b17](https://github.com/Misael-art/Folego/pull/9).
 - O desenvolvimento Windows mantém seus pontos de revisão em

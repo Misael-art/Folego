@@ -1,5 +1,44 @@
 # Passagem para o próximo agente — atualizada em 22/11/2026
 
+## Prévia 0.2.0b18 e resgate pré-formatação — 22/11/2026
+
+- [Prévia pública v0.2.0b18](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b18),
+  release `454389222`. Fonte `955adc8ff388d352d7e9c200aacd4647bcf82ee6`
+  e tag anotada `2de76b83080827bf1cb3e1eba36bdd325288f0eb` conferidas no
+  GitHub. A continuidade usa `codex/audit-profile` e o
+  [PR #15](https://github.com/Misael-art/Folego/pull/15).
+- A última mudança local, a preferência reversível de renderização do
+  Codex Desktop, entrou na prévia junto do Modo Auditor e do tempo de boot.
+  O teste de permissões agora parte de um modo explícito e simula uma
+  mudança real. O perfil Auditor também bloqueia esse efeito pela CLI.
+  KDE/Wayland confirmou aplicação e restauração em um arquivo descartável.
+  A abertura do Codex com essa preferência no perfil real continua pendente.
+- `./dev check` na candidata passou com **1.544 testes headless** em 54,43 s
+  (`run-ppkpb173`) e **1.987 testes Qt** em 190,49 s (`run-l4weaccf`), com
+  dois testes pulados por perfil. Escopo de um núcleo, 2 GiB e Python 3.14.7.
+  Os checks do [PR](https://github.com/Misael-art/Folego/actions/runs/45015330074),
+  da [tag Linux/CLI](https://github.com/Misael-art/Folego/actions/runs/45015855618)
+  e da [tag Windows](https://github.com/Misael-art/Folego/actions/runs/45015855609)
+  passaram no SHA da release.
+- A fonte completa contém **1.054 arquivos** comparados com o Git. Os
+  **199 arquivos de runtime** do wheel e sdist correspondem aos blobs do
+  mesmo commit. O wheel foi instalado em venv isolado, validou Auditoria
+  e a configuração reversível sem Qt e preservou o bloqueio do Modo Auditor.
+  Os quatro anexos públicos foram baixados sem autenticação e conferidos
+  por tamanho e SHA-256.
+- O resgate autenticado no GitHub foi verificado após a publicação. O bundle
+  tem histórico completo e reproduz as **16 branches públicas**, incluindo
+  as cinco linhas Windows. O ZIP privado guarda **127 arquivos** de estado,
+  histórico, recibos, referências do host e evidências de QA selecionadas.
+  Os sete anexos privados foram baixados, conferidos por SHA-256 e o ZIP
+  foi validado arquivo por arquivo. As contas devem ser reconectadas pelo
+  fluxo oficial no novo OS.
+- [Guia para retomar no novo sistema](NOVO-HOST.md). A comprovação local
+  está em `.scratch/release-v0.2.0b18-preformat/receipt/`. As execuções
+  anteriores `run-xqvr2shw` e `run-72ctk54q` foram mantidas na retenção
+  revisada após conferir encerramento, inode e recibo. A instalação ativa
+  permanece na versão anterior e os aceites físicos prolongados seguem em aberto.
+
 ## Tempo de boot na Auditoria — 22/11/2026
 
 - **Auditoria → Tempo de boot** e `audit history --source boot` mostram uma
