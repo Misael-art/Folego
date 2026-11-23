@@ -15,13 +15,15 @@ from ..core.ai_sessions import NAMES
 from ..core.ai_accounts import inventory, process_account, ROOT_KEYS
 
 CLASSES = {
-    'codex': r'^(codex-desktop|Codex)$',
+    # Community launcher (codex-desktop) or the official ChatGPT app that hosts Codex Desktop.
+    'codex': r'^(codex-desktop|Codex|ChatGPT|Chatgpt|chatgpt)$',
     'web': r'^(codex-web-gpt-launcher)$',
     'claude': r'^(claude-desktop|Claude)$',
     'grok': r'^(grok|grok-desktop)$',
 }
-LAUNCHERS = {'codex': 'codex-desktop', 'web': 'codex-web-gpt-launcher',
-             'claude': 'claude-desktop', 'grok': 'grok'}
+# First installed .desktop wins; chatgpt.desktop comes from OpenAI's chatgpt-bin package.
+LAUNCHERS = {'codex': ('codex-desktop', 'chatgpt'), 'web': ('codex-web-gpt-launcher',),
+             'claude': ('claude-desktop',), 'grok': ('grok',)}
 TERMINALS = r'^(org\.kde\.konsole|konsole|org\.gnome\.Terminal|gnome-terminal-server|org\.communitybig\.ashyterm|kitty|Alacritty|foot|xfce4-terminal|xterm|org\.wezfurlong\.wezterm)$'
 
 
@@ -136,13 +138,14 @@ class AgentApps:
                 canonical = str((home / ('.codex' if provider == 'codex' else '.' + provider)).resolve())
                 if not account['default'] or provider == 'web' or account['path'] != canonical:
                     raise RuntimeError('Nenhuma janela desta conta identificada; abra o perfil no cliente. Avisos preservados')
-            launcher = LAUNCHERS[provider]
             home = Path(self.env.get('HOME') or Path.home())
             data = Path(self.env.get('XDG_DATA_HOME') or home / '.local/share')
-            files = [data / 'applications' / (launcher + '.desktop'),
-                     Path('/usr/share/applications') / (launcher + '.desktop')]
+            launcher = next((name for name in LAUNCHERS[provider]
+                             if any(f.is_file() for f in (data / 'applications' / (name + '.desktop'),
+                                                          Path('/usr/share/applications') / (name + '.desktop')))),
+                            None)
             launch = shutil.which('gtk-launch')
-            if not launch or not any(f.is_file() for f in files):
+            if not launch or launcher is None:
                 raise RuntimeError('Nenhuma janela/atalho local identificado para ' + NAMES[provider] + '; avisos preservados')
             self._call([launch, launcher])
             # Observe the single launch; never repeat it after a timeout.

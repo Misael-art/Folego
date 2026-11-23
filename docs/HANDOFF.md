@@ -1,4 +1,28 @@
-# Passagem para o próximo agente — atualizada em 22/11/2026
+# Passagem para o próximo agente — atualizada em 23/11/2026
+
+## Codex Desktop oficial (ChatGPT `chatgpt-bin`) no BigLinux restaurado — 23/11/2026
+
+- O app oficial da OpenAI que hospeda o Codex Desktop foi instalado pelo
+  restaurador EmuAtlas (pacote `chatgpt-bin` 26.1117.41037, repositório
+  assinado `openai-chatgpt`). Ele roda em `/usr/lib/chatgpt/ChatGPT` (Electron,
+  scope `app-org.chromium.Chromium-*`, janela de classe `Chatgpt`, atalho
+  `chatgpt.desktop`) e inicia o `codex app-server` embutido em
+  `/usr/lib/chatgpt/resources/codex` com a `~/.codex` padrão.
+- `core/agents.py` passa a tratar `/lib/chatgpt/` como raiz de agente;
+  `core/perf_model.py` mostra o grupo como "ChatGPT (Codex Desktop)" só
+  quando esses processos têm a maior parte da RSS do grupo (um `crashpad`
+  solto dentro do scope do Claude Desktop não o renomeia; caso visto no host);
+  `adapters/agent_apps.py` encontra a janela `Chatgpt` e usa `chatgpt.desktop`
+  quando não há `codex-desktop.desktop`. Unidades, regras e proteção não mudam.
+- `./dev test-headless`: **1.547 passed, 2 skipped** em 38,49 s (três testes
+  novos; os dois primeiros falham sem a correção). Conferido no host com o app
+  aberto: `performance status --json` lista o scope do ChatGPT como `agent`,
+  e `kdotool search --class` encontra a janela pelo padrão novo. Qt/GUI não
+  foi reaberto nesta passagem; login no app e aviso de agente na janela do
+  Fôlego seguem sem aceite.
+- `ai render-*` continua valendo só para o launcher comunitário
+  (`~/.config/codex-desktop/electron-flags.conf`); o app oficial tem a ação
+  "Software Render" do próprio atalho.
 
 ## Prévia 0.2.0b18 e resgate pré-formatação — 22/11/2026
 

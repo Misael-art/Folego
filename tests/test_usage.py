@@ -69,6 +69,14 @@ def test_automation_flags_make_a_browser_an_agent():
     assert not agents.is_agent_root(helper)
 
 
+def test_official_chatgpt_app_tree_is_an_agent():
+    # OpenAI's chatgpt-bin hosts Codex Desktop; every Electron process lives under /usr/lib/chatgpt/.
+    for args in (("/usr/lib/chatgpt/ChatGPT",), ("/usr/lib/chatgpt/ChatGPT", "--type=renderer")):
+        assert agents.is_agent_root(ProcInfo(8, "ChatGPT", "S", 1, 8, 8, 0, 0, 8, 1, 0, 1000, args))
+    assert not agents.is_agent_root(ProcInfo(9, "brave", "S", 1, 9, 9, 0, 0, 9, 1, 0, 1000,
+                                             ("/opt/brave/brave", "https://chatgpt.com/")))
+
+
 def test_in_use_blocks_plan_and_revalidation():
     proc = ProcInfo(1, "msedge", "S", 1, 1, 1, 0, 0, 1, 1, 0, 1000, ("/opt/msedge",), cpu_frac=0.0)
     group = perf_model.AppGroup("app-microsoft-edge.service", "microsoft-edge", (1,), 1, 0.0,

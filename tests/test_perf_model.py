@@ -56,3 +56,25 @@ def test_unreadable_cwd_and_unmeasured_cpu_stay_protective(tmp_path):
     procs = [proc(1_0, "claude", cpu=None)]
     act = agents.detect(procs, cwd_fn=lambda pid: None)
     assert act.load == agents.INTERACTIVE and act.cpu_frac is None
+
+
+def test_official_chatgpt_app_is_named_and_kept_as_agent():
+    # chatgpt-bin registers its Electron scope as org.chromium.Chromium; the group keeps its unit.
+    procs = [proc(70, "ChatGPT", exe="/usr/lib/chatgpt/ChatGPT"),
+             proc(71, "ChatGPT", ppid=70, exe="/usr/lib/chatgpt/ChatGPT"),
+             proc(72, "codex", ppid=71, exe="/usr/lib/chatgpt/resources/codex"),
+             proc(80, "chromium", exe="/usr/lib/chromium/chromium")]
+    unit = "app-org.chromium.Chromium-70.scope"
+    units = {70: unit, 71: unit, 72: unit, 80: "app-org.chromium.Chromium-80.scope"}
+    snap = Snapshot(0.0, MemInfo(16_000_000, 6_000_000), 0, 0, None, None, None, None, (), 0,
+                    procs=tuple(procs))
+    view = perf_model.build(snap, agents.detect(procs, cwd_fn=lambda _: None),
+                            cgroup_fn=lambda pid: APP + units[pid])
+    by_unit = {g.unit: g for g in view.groups}
+    assert by_unit[unit].label == "ChatGPT (Codex Desktop)" and by_unit[unit].state == perf_model.AGENT
+    other = by_unit["app-org.chromium.Chromium-80.scope"]
+    assert other.label == "org.chromium.Chromium" and other.state == perf_model.OBSERVED
+    # A small ChatGPT helper inside another app's scope does not rename that app.
+    stray = [proc(90, "claude-desktop", rss=2_000_000, exe="/x/claude-desktop/app"),
+             proc(91, "browser_crashpa", rss=4_000, exe="/usr/lib/chatgpt/browser_crashpad_handler")]
+    assert perf_model.app_label(stray) is None

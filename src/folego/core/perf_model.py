@@ -89,6 +89,21 @@ def unit_label(unit: str) -> str:
     return _INSTANCE.sub("", name) or name
 
 
+# Electron apps often register their scope under Chromium's generic id; name the known agent app
+# by its executable instead (display only; units, rules and protection are unchanged).
+APP_LABELS = (("/lib/chatgpt/", "ChatGPT (Codex Desktop)"),)
+
+
+def app_label(members: list[ProcInfo]) -> str | None:
+    """Only when that app holds most of the group's memory: a stray helper never renames another app."""
+    total = sum(p.rss_kb for p in members)
+    for marker, label in APP_LABELS:
+        own = sum(p.rss_kb for p in members if p.cmdline and marker in p.cmdline[0])
+        if own and own * 2 > total:
+            return label
+    return None
+
+
 def _protection(unit: str | None, label: str) -> str | None:
     if unit is None:
         return "grupo não identificado"
@@ -114,6 +129,7 @@ def build(snapshot: Snapshot, activity: AgentActivity, *,
         agent = [p.pid for p in members if activity.protects(p.pid)]
         user = next((r for r in map(protected_fn, members) if r), None) if protected_fn else None
         reason = _protection(unit, label)
+        label = app_label(members) or label
         class_only = False
         if agent:
             state, reason = AGENT, "app ou árvore protegida de agente"

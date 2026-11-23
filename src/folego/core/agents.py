@@ -15,7 +15,9 @@ from .snapshot import ProcInfo
 
 # Agent roots by kernel comm; desktop clients by a stable fragment of their exe path.
 AGENT_COMMS = frozenset({"claude", "codex", "codex-web-gpt-l", "claude-desktop"})
-AGENT_PATH_MARKERS = ("/claude-desktop/", "/chatgpt-web/", "/claude-code/", "/codex/")
+# /lib/chatgpt/ is the official OpenAI desktop app (Arch package chatgpt-bin, /usr/lib/chatgpt/ChatGPT),
+# which hosts Codex Desktop; its Electron tree runs the bundled `codex app-server`.
+AGENT_PATH_MARKERS = ("/claude-desktop/", "/chatgpt-web/", "/claude-code/", "/codex/", "/lib/chatgpt/")
 # A browser opened for automation (CDP or Marionette) is driven by some agent.
 # Only real browsers count: apps such as Steam embed Chromium with CDP for themselves.
 AUTOMATION_FLAGS = ("--remote-debugging-port", "--remote-debugging-pipe", "--marionette")

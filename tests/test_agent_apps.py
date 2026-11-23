@@ -87,3 +87,31 @@ def test_account_specific_open_never_falls_back_to_another_profile(monkeypatch, 
         apps.perform('agent-open', ('codex', [], account_id('codex', root)))
     assert not any(c[0].endswith('gtk-launch') or 'windowactivate' in c for c in calls)
     assert not apps.monitor.seen
+
+
+def test_codex_opens_official_chatgpt_app_when_community_launcher_is_absent(monkeypatch, tmp_path):
+    # chatgpt-bin (OpenAI) hosts Codex Desktop: window class Chatgpt, launcher chatgpt.desktop.
+    import re
+    from folego.adapters.agent_apps import CLASSES
+    assert all(re.fullmatch(CLASSES['codex'], c) for c in ('ChatGPT', 'Chatgpt', 'chatgpt', 'Codex', 'codex-desktop'))
+    assert not re.fullmatch(CLASSES['codex'], 'chatgpt-web')
+    apps_dir = tmp_path / 'share/applications'
+    apps_dir.mkdir(parents=True)
+    (apps_dir / 'chatgpt.desktop').write_text('[Desktop Entry]\nExec=chatgpt %U\n')
+    launched = []
+    state = {'open': False}
+    def run(argv, **kwargs):
+        if argv[0].endswith('gtk-launch'):
+            launched.append(argv[1]); state['open'] = True
+            return subprocess.CompletedProcess(argv, 0, '', '')
+        if argv[1] == 'search':
+            return subprocess.CompletedProcess(argv, 0 if state['open'] else 1, WINDOW if state['open'] else '', '')
+        output = '123' if argv[1] == 'getwindowpid' else WINDOW if argv[1] == 'getactivewindow' else ''
+        return subprocess.CompletedProcess(argv, 0, output, '')
+    monkeypatch.setattr('folego.adapters.agent_apps.shutil.which', lambda name: '/bin/' + name)
+    monkeypatch.setattr('folego.adapters.agent_apps.identity', lambda pid: (pid, 1, 100))
+    monitor = Monitor()
+    apps = AgentApps(monitor, env=dict(HOME=str(tmp_path), XDG_DATA_HOME=str(tmp_path / 'share'),
+                                       XDG_SESSION_TYPE='wayland'), run=run, discover=lambda: [])
+    apps.perform('agent-open', ('codex', [{'event': 'snapshot'}]))
+    assert launched == ['chatgpt'] and monitor.seen == [{'event': 'snapshot'}]
