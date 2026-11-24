@@ -1,4 +1,43 @@
-# Passagem para o próximo agente — atualizada em 23/11/2026
+# Passagem para o próximo agente — atualizada em 24/11/2026
+
+## Coordenação de cargas do Codex e do Claude Code no Desktop — 24/11/2026
+
+- Código do incremento confirmado no GitHub em `78563d744e9d264e3d93bb0e9d2070759c9a1b1b`,
+  no [PR #15](https://github.com/Misael-art/Folego/pull/15). Os oito checks de push/PR estavam
+  em execução na consulta após o envio. O gate local e a prova física estão registrados abaixo.
+- A aba Auditoria e a CLI compartilham os marcadores de lentidão, a janela de cinco minutos
+  antes/depois no mesmo boot e as medições por agente. O histórico por minuto também inclui
+  custo do Fôlego, último atraso observado do timer Qt, contadores dos cgroups observados e
+  previsão local de espaço do arquivo detalhado. Os resumos horários usam as amostras existentes
+  e conservam a contagem por medida. Fontes ausentes ou legadas mantêm valores desconhecidos.
+- `session capacity` e `session run --ram-mib ... --disk-mib ...` integram estimativas de
+  primeiro plano ao registro protegido de sessões. Concorrência entre participantes é por
+  estado do usuário. Antes do exec, o launcher grava UUID, boot, namespace, líder e starttime,
+  sob trava. EOF na preparação impede o comando. Membros observados na mesma sessão após a
+  saída do líder retêm a reserva. Cargas externas e processos que se desassociam precisam de
+  observação própria. Nenhuma ação de fechamento foi acrescentada.
+- A orientação opcional para Codex e Claude Code pode atualizar o bloco original comprovado no
+  recibo, conservar edições externas ao bloco e restaurar o estado anterior. O launcher e a unit
+  de entrada deste host usam o checkout; a GUI residente carrega a nova versão na abertura normal.
+- QA no KDE/Wayland físico com HOME e XDG privados: janela mapeada, clique em **Ficou lento
+  agora**, marcador via worker e leitura de uma amostra do Codex no episódio. Dois comandos de
+  teste próprios verificaram admissão, recusa concorrente e liberação após saída. O teste não
+  usou processos de trabalho como alvos. O primeiro gate intermediário passou no headless e
+  encontrou um teste Qt que ainda referenciava um módulo substituído durante o gate. Recibos,
+  logs e payloads dessas duas execuções preservados integralmente na retenção revisada local.
+- Gate final `./dev check` em escopo de usuário, um núcleo, CPUQuota=80%, MemoryMax=2G,
+  Python 3.14.7 e perfis privados. Headless: **1.560 aprovados, 2 pulados em 49,71 s**
+  (`run-ewm2lfzg`). Qt offscreen: **2.006 aprovados, 2 pulados em 200,03 s** (`run-u7ngnyi9`).
+  Diff verificado. Preflight com ~9,7 GiB disponíveis, 681 GiB no Btrfs, sem swap-in/out,
+  sensor ACPI com trip passivo de 100 °C. A observação durante o gate preservou a reserva.
+- Amostra real de 304 processos, inventário íntegro, 11 comparações sobre o mesmo snapshot:
+  medianas de 0,884 ms na contagem da revisão anterior e 0,958 ms na atual; 0,836 ms para
+  a consulta de cgroups que a auditoria executa por minuto. Uma coleta do host levou 69,41 ms.
+  São medições curtas. A CLI consultou 434 amostras legadas sem inventar cobertura de I/O.
+  Sincronização real pelo owner confirmou dois perfis aplicados, Codex e Claude, sem conflitos.
+- Falta medir uma jornada prolongada com as duas aplicações, uso repetido das reservas por
+  clientes reais e ganho na duração de trabalhos comparáveis. A verificação nativa desta
+  integração cobre Linux/KDE no Jupiter. A latência de resposta do provedor permanece sem atribuição.
 
 ## Histórico contínuo, instâncias por agente e abas bloqueadas explicadas — 23/11/2026
 
