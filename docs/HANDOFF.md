@@ -1,5 +1,15 @@
 # Passagem para o próximo agente — atualizada em 24/11/2026
 
+## Diagnóstico de desligamento na tela de login — 24/11/2026
+
+O incremento `3cae41977d84a97ed3d09c66122cbba49d39b221` segue no [PR #15](https://github.com/Misael-art/Folego/pull/15). O SHA anterior `50c3d73` tinha os oito checks aprovados.
+
+- A consulta de boots em `disk health` e em **Saúde do host → Reinícios registrados** reconhece o pedido de desligamento da tela de login do SDDM. Requer três mensagens correlacionadas pelo boot, serviços, PID de origem, relógio monotônico e ordem. O observador usa seu orçamento existente e o cache por boot. A origem da interação física continua desconhecida.
+- O histórico compara as duas últimas tensões em descarga quando ambas têm fonte íntegra e intervalo curto, com concordância entre os relógios. As amostras novas também preservam os limites térmicos disponíveis do sensor identificado. O diagnóstico usa a cadência de gravação existente.
+- O primeiro gate pelo launcher expôs herança da raiz de temporários de trabalho pelo ambiente de QA. O wrapper agora exclui a raiz e o manifesto externos ao criar o ambiente privado. Gate final pelo mesmo launcher, com um núcleo, CPUQuota de 80%, memória limitada a 2 GiB e reserva de 4 GiB. Python 3.14.7, 1.563 aprovados e dois pulados no headless (50,22 s), 2.009 aprovados e dois pulados em Qt offscreen (201,65 s). Diff verificado.
+- A CLI leu o diário e a telemetria já existentes. Uma janela própria no KDE/Wayland exibiu a origem do desligamento e a variação de tensão de outro boot ao abrir a orientação. Uma amostra do sensor real foi escrita e relida em histórico privado de teste. A GUI residente carrega o código novo na próxima abertura normal.
+- A falha do bloqueador Wayland após a retomada merece investigação pelo responsável pelo componente. O incidente não demonstrou necessidade de reparo de filesystem, intervenção no login ou novo executor de energia. O aceite de desempenho conjunto do Codex e Claude continua pendente de uma jornada comparável.
+
 ## Coordenação de cargas do Codex e do Claude Code no Desktop — 24/11/2026
 
 - Código do incremento confirmado no GitHub em `78563d744e9d264e3d93bb0e9d2070759c9a1b1b`,
