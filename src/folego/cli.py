@@ -1049,7 +1049,7 @@ def _cmd_host_health(args) -> int:
               f"({report['boots'].get('reason', '')})")
         items = report['boots'].get('items', [])
         if len(items) >= 2:
-            from .core.host_guard import boot_end_text
+            from .core.host_guard import boot_end_text, last_discharge_text
             if end_text := boot_end_text(items[-2]):
                 print(f"Registro do boot anterior: {end_text}")
             evidence = items[-2].get('timeline', {})
@@ -1066,6 +1066,9 @@ def _cmd_host_health(args) -> int:
             else:
                 print(f"Amostras daquele boot: {evidence.get('quality', 'desconhecido')} "
                       f"({evidence.get('reason', 'sem evidência local')})")
+            for item in items[:-1]:
+                if change := last_discharge_text(item):
+                    print(f"{item['period']} · {change}")
         print(f"Custo desta observação: {report['observer_duration_ms']:.1f} ms")
         print("Orientações: folego disk guide storage|thermal|pressure|power|ntfs|btrfs|service|reboot")
     return EXIT_OK

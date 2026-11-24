@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (QFileDialog, QFrame, QHBoxLayout, QLabel, QMessag
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..actions.disk.planner import fmt_bytes
-from ..core.host_guard import GUIDES, boot_end_text, storage_lines
+from ..core.host_guard import GUIDES, boot_end_text, last_discharge_text, storage_lines
 
 PLAN_PENDING = "ainda não analisado — use Reconsultar o disco."
 PLAN_LOADING = "consultando o disco (dry-run, nada é escrito)…"
@@ -153,6 +153,8 @@ class HostHealthPanel(QWidget):
                        if row.get("timeline", {}).get("last") else
                        " · sem amostra local; estado anterior desconhecido"
                        if row.get("timeline", {}).get("quality") == "missing" else "")
+                    + (f" · {end}" if (end := boot_end_text(row)) else "")
+                    + (f" · {change}" if (change := last_discharge_text(row)) else "")
                     for row in boots["items"][:4])
         if issue == "thermal" and self._thermal:
             return (f"Observado: {self._thermal.get('sensor', 'sensor desconhecido')} "
