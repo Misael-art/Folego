@@ -60,12 +60,16 @@ def _sample(snapshot: Snapshot) -> dict:
     pressure_cpu = (snapshot.pressure_cpu
                     if snapshot.source("pressure_cpu").status == OK else None)
     top = None
+    agents = None
     if snapshot.source("processes").status == OK:
         candidates = [p for p in snapshot.procs if p.cpu_frac is not None]
         if candidates:
             process = max(candidates, key=lambda p: p.cpu_frac)
             top = {"pid": process.pid, "starttime": process.starttime,
                    "name": process.comm[:80], "cpu_core_percent": round(process.cpu_frac, 1)}
+        # Per-agent instances and footprint: correlates agent growth with host degradation.
+        from ..core.agents import footprint
+        agents = footprint(snapshot.procs)
     battery = snapshot.battery if snapshot.source("battery").status == OK else None
     issues = {}
     for name in _SOURCES:
@@ -101,7 +105,9 @@ def _sample(snapshot: Snapshot) -> dict:
             "battery_power_uw": battery.power_uw if battery else None,
             "external_power_online": (snapshot.external_power_online
                                       if snapshot.source("external_power").status == OK else None),
-            "top_cpu": top}
+            "top_cpu": top,
+            # None: process list not observed; {}: observed, no agent running.
+            "agents": agents}
 
 
 class HostTimelineRecorder:

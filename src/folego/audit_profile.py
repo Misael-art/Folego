@@ -25,6 +25,38 @@ def normal():
     return status()["enabled"] is False
 
 
+HISTORY_FILE = "host-history.json"
+
+
+def history_status():
+    """Continuous host history outside the Auditor: off by default, a separate explicit choice."""
+    try:
+        value = read_object(paths.config_dir() / HISTORY_FILE)
+        if value is not None and type(value.get("enabled")) is not bool:
+            raise ValueError("preferência de histórico inválida")
+    except (OSError, ValueError) as exc:
+        return {"ok": False, "enabled": None, "reason": str(exc)}
+    return {"ok": True, "enabled": value is not None and value["enabled"]}
+
+
+def configure_history(enabled):
+    if type(enabled) is not bool:
+        raise ValueError("histórico contínuo exige escolha booleana")
+    try:
+        if history_status()["enabled"] != enabled:
+            save_object(paths.config_dir() / HISTORY_FILE, {"schema": 1, "enabled": enabled})
+    except (OSError, ValueError) as exc:
+        return {**history_status(), "ok": False, "reason": str(exc)}
+    return history_status()
+
+
+def records():
+    """Host history is written in the Auditor, or in the normal profile when continuous history is on.
+
+    Recording only observes; effects stay governed by normal()/normal_effects()."""
+    return status()["enabled"] is True or history_status()["enabled"] is True
+
+
 @contextmanager
 def _lock(*, exclusive):
     path = paths.state_dir() / "audit-profile.lock"

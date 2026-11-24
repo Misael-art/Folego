@@ -142,8 +142,19 @@ class OptionsTab(QWidget):
         self.audit_status.setWordWrap(True)
         self.audit_history = QPushButton("Abrir linha do tempo")
         self.audit_history.clicked.connect(self.audit_history_requested.emit)
-        for control in (self.audit_choice, self.audit_status, self.audit_history):
+        # Recording only observes: it can continue in the normal profile, where the tabs act.
+        self.history_choice = QCheckBox("Manter o histórico do host também fora do Modo Auditor")
+        self.history_choice.setToolTip("Grava a cada minuto RAM, swap, pressão, temperatura, disco, "
+                                       "mudanças do sistema e as instâncias de cada agente (Codex, Claude). "
+                                       "Não executa nenhuma ação; limite de 64 MiB.")
+        self.history_choice.clicked.connect(self.change_history)
+        self.history_status = QLabel()
+        self.history_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.history_status.setWordWrap(True)
+        for control in (self.audit_choice, self.audit_status, self.history_choice, self.history_status,
+                        self.audit_history):
             audit_layout.addWidget(control)
+        self.show_history()
         outer.addWidget(audit_group)
         area = QScrollArea()
         area.setWidgetResizable(True)
@@ -186,6 +197,23 @@ class OptionsTab(QWidget):
         box.addStretch(1)
         area.setWidget(content)
         outer.addWidget(area)
+
+    def show_history(self):
+        from ..audit_profile import history_status
+        result = history_status()
+        self.history_choice.setChecked(result["enabled"] is True)
+        self.history_choice.setEnabled(result["ok"])
+        self.history_status.setText(
+            result.get("reason") or ("Histórico contínuo ligado: a linha do tempo segue gravando nos dois perfis."
+                                     if result["enabled"] else
+                                     "Desligado: o histórico por minuto só é gravado no Modo Auditor."))
+
+    def change_history(self, checked):
+        from ..audit_profile import configure_history
+        result = configure_history(bool(checked))
+        self.show_history()
+        if not result["ok"]:
+            self.history_status.setText(result.get("reason") or "Preferência não confirmada.")
 
     def change_audit_profile(self, checked):
         self._audit_pending = True

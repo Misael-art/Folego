@@ -754,7 +754,8 @@ class MainWindow(QMainWindow):
         signal = title_signal.compute(snapshot, self._thresholds,
                                       engine=self._health)
         self._last_snapshot = snapshot
-        if self._audit_poller is not None and self._profile["enabled"] is True and not self._paused:
+        if (self._audit_poller is not None and not self._paused
+                and (self._profile["enabled"] is True or audit_profile.history_status()["enabled"] is True)):
             self._audit_poller.request()
         self._show_power_status()
         thermal = self._thermal_tracker.observe(snapshot)

@@ -99,3 +99,18 @@ def test_blocked_tabs_explain_the_auditor_and_lead_to_options(qapp, tmp_path, mo
     window.jump_to("memoria")
     assert window.tabs.currentWidget() is window.performance
     window.close()
+
+
+def test_options_keep_host_history_outside_the_auditor(qapp, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    window = MainWindow()
+    choice = window.options.history_choice
+    assert not choice.isChecked() and "só é gravado no Modo Auditor" in window.options.history_status.text()
+    choice.click()
+    assert audit_profile.history_status()["enabled"] is True and audit_profile.records()
+    assert audit_profile.normal()  # the profile and its tabs are untouched
+    assert window.tabs.isTabEnabled(window.tabs.indexOf(window.performance))
+    choice.click()
+    assert audit_profile.history_status()["enabled"] is False and not audit_profile.records()
+    window.close()

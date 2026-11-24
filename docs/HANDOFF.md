@@ -1,5 +1,25 @@
 # Passagem para o próximo agente — atualizada em 23/11/2026
 
+## Histórico contínuo, instâncias por agente e abas bloqueadas explicadas — 23/11/2026
+
+- **Histórico contínuo** (`audit history-enable|history-disable|history-status`, caixa em
+  Opções → Modo Auditor): `HostAuditRecorder`, a janela e `audit watch` gravam quando
+  `audit_profile.records()` (Auditor **ou** histórico contínuo). Desligado por padrão, mantendo
+  a regra antiga; efeitos continuam governados só por `normal()`/`normal_effects()`.
+- **Instâncias por agente**: `core/agents.footprint()` entra em `_sample()` (linha do tempo de
+  15 s e métricas por minuto) como `agents.{codex,claude,automation}` com `procs`, `main`,
+  `top`, `app_server`, `exec_server`, `exec`, `mcp`, `rss_kb` e `cpu_pct`. O Electron junta o
+  argv numa só string (`argv()` separa); `comm` corta em 15 bytes (`browser_crashpa`); MCP é
+  detectado só pelo nome do programa/pacote. Medido no host com o app ChatGPT e o Claude
+  Desktop abertos: Codex `top=1, main=2 (app-server + exec-server), procs=21, ~3,1 GiB`;
+  Claude `top=1, main=1, procs=20, ~2,6 GiB`.
+- **Abas bloqueadas no Auditor** deixam de falhar em silêncio: dica na aba, aviso no cabeçalho
+  ao tocar/clicar ou ao usar "Ir para", e o aviso abre Opções (`SidebarTabBar.disabled_tab_clicked`).
+- Host: histórico contínuo ligado e Modo Auditor desligado a pedido do usuário; primeira amostra
+  com `agents` às 21:26:27. `./dev test-headless` **1.551 passed**, `./dev test` **1.996 passed**
+  (2 pulados cada). Pendentes: I/O por árvore, orçamento com alerta, sobras após o fim da sessão,
+  e o toque físico nas abas bloqueadas.
+
 ## Codex Desktop oficial (ChatGPT `chatgpt-bin`) no BigLinux restaurado — 23/11/2026
 
 - O app oficial da OpenAI que hospeda o Codex Desktop foi instalado pelo

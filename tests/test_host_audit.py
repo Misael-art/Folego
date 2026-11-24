@@ -196,3 +196,29 @@ def test_cli_watcher_refuses_a_second_writer(capsys):
         assert cli.main(["audit", "watch", "--json"]) != 0
     assert "instância do Fôlego" in capsys.readouterr().out
     assert audit.history()["quality"] == "missing"
+
+
+def test_continuous_history_records_outside_the_auditor_without_allowing_auditor_only_gaps(monkeypatch, capsys):
+    for name in ("_mounts", "_disks", "_disk_capacity", "_packages", "_flatpak", "_services"):
+        monkeypatch.setattr(audit, name, lambda *args, **kwargs: {})
+    monkeypatch.setattr(audit, "_journal", lambda *args, **kwargs: ([], ""))
+    monkeypatch.setattr(audit, "_boot_times", lambda boot: (1000, {
+        "total_s": 30, "system_s": 20, "firmware_s": 8, "loader_s": 2,
+    }))
+    assert audit_profile.history_status() == {"ok": True, "enabled": False}  # default keeps the old rule
+    recorder = audit.HostAuditRecorder()
+    recorder.record(_snapshot(100))
+    assert audit.history()["quality"] == "missing"
+    assert cli.main(["audit", "history-enable", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["enabled"] is True
+    assert audit_profile.normal() and audit_profile.records()  # effects stay allowed: only recording changed
+    recorder.record(_snapshot(200))
+    events = audit.history(source="metrics")["events"]
+    assert len(events) == 1 and events[0]["data"]["agents"] == {}
+    assert cli.main(["audit", "history-disable"]) == 0
+    assert not audit_profile.records()
+    recorder.record(_snapshot(400))
+    assert len(audit.history(source="metrics")["events"]) == 1
+    path = audit_profile.paths.config_dir() / audit_profile.HISTORY_FILE
+    path.write_text('{"schema":1,"enabled":"sim"}')
+    assert audit_profile.history_status()["ok"] is False and not audit_profile.records()

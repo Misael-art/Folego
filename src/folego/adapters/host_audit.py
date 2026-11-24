@@ -424,7 +424,7 @@ class HostAuditRecorder:
         self.error = ""
 
     def record(self, snapshot):
-        if audit_profile.status()["enabled"] is not True:
+        if not audit_profile.records():
             self._last = self._last_package = -float("inf")
             self._boot = None
             return
@@ -522,7 +522,7 @@ def watch():
         collector = MetricsCollector()
         timeline, audit = HostTimelineRecorder(), HostAuditRecorder()
         collector.collect()  # Prime the CPU deltas used in the first persisted sample.
-        while audit_profile.status()["enabled"] is True:
+        while audit_profile.records():
             started = time.monotonic()
             snapshot = collector.collect()
             timeline.record(snapshot)

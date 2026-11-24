@@ -238,7 +238,10 @@ def build_parser() -> argparse.ArgumentParser:
     audit_sub = audit.add_subparsers(dest="sub", required=True)
     for name, description in (
             ("enable", "ativar o perfil"), ("disable", "voltar ao perfil normal"),
-            ("status", "ver o perfil salvo"), ("watch", "coletar em primeiro plano sem a interface")):
+            ("status", "ver o perfil salvo"), ("watch", "coletar em primeiro plano sem a interface"),
+            ("history-enable", "manter o histórico do host também fora do Modo Auditor"),
+            ("history-disable", "gravar o histórico só no Modo Auditor (padrão)"),
+            ("history-status", "ver se o histórico contínuo está ligado")):
         command = audit_sub.add_parser(name, help=description)
         command.add_argument("--json", action="store_true")
     history = audit_sub.add_parser("history", help="consultar mudanças, falhas e amostras")
@@ -2886,8 +2889,9 @@ def _cmd_audit(args):
     from .core.instance import AlreadyRunning
 
     if args.sub == "watch":
-        if audit_profile.status()["enabled"] is not True:
-            return _emit_gate_refusal(args, "audit", "Ative primeiro com folego audit enable")
+        if not audit_profile.records():
+            return _emit_gate_refusal(args, "audit", "Ative primeiro com folego audit enable "
+                                      "ou folego audit history-enable")
         try:
             for cycle in host_audit.watch():
                 print(json.dumps(cycle, ensure_ascii=False) if args.json else
@@ -2924,6 +2928,16 @@ def _cmd_audit(args):
             if result.get("limited"):
                 print(f"Página anterior no tempo: --before-id {result['events'][0]['id']}")
         return EXIT_REFUSED if result["quality"] == "unknown" else EXIT_OK
+    if args.sub.startswith("history-"):
+        result = (audit_profile.history_status() if args.sub == "history-status" else
+                  audit_profile.configure_history(args.sub == "history-enable"))
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False))
+        elif not result["ok"]:
+            print(result["reason"], file=sys.stderr)
+        else:
+            print("Histórico contínuo do host " + ("ligado." if result["enabled"] else "desligado (só no Modo Auditor)."))
+        return EXIT_OK if result["ok"] else EXIT_REFUSED
     result = (audit_profile.status() if args.sub == "status" else
               audit_profile.configure(args.sub == "enable"))
     if args.json:
