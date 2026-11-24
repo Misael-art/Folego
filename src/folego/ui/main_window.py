@@ -14,9 +14,9 @@ import sys
 from concurrent.futures import Future
 
 from PySide6.QtGui import QGuiApplication, QKeySequence, QPainter, QPainterPath, QShortcut
-from PySide6.QtCore import QRectF, QSize, QTimer, Qt
+from PySide6.QtCore import QRectF, QSize, QTimer, Qt, Signal
 from PySide6.QtWidgets import (QMainWindow, QStyle, QStyleOptionTab, QStylePainter, QTabBar,
-                              QTabWidget, QFrame, QHBoxLayout, QLabel,
+                              QTabWidget, QFrame, QHBoxLayout, QLabel, QPushButton,
                               QToolButton, QMenu)
 
 from . import desktop_caps, title_signal
@@ -59,6 +59,9 @@ TABS = (("central", "dashboard"), ("ajustes", "tunings"),
         ("auditoria", "audit"), ("prompts", "custom_prompts"), ("opções", "options"))
 JUMPS = {"memoria": "performance", "ajustes": "tunings", "orfaos": "orphans",
          "disco": "disk", "tmpfs": "tmpfs", "accessibility": "accessibility"}
+AUDIT_TAB_TIP = ("Indisponível no Modo Auditor, que só observa o host. "
+                 "Para usar, desligue o Modo Auditor em Opções.")
+NOTICE_MS = 8000
 DISK_TIMEOUT_MS = 120_000  # the real cache walk took 54,7 s on this Deck (M3 log)
 RUNTIME_SIZE_TIMEOUT_MS = 180_000  # inclui a digitação da senha no diálogo do polkit
 TMPFS_TIMEOUT_MS = 45_000  # três volumes × o prazo de varredura de 10 s, com folga
@@ -66,6 +69,17 @@ TMPFS_TIMEOUT_MS = 45_000  # três volumes × o prazo de varredura de 10 s, com 
 
 class SidebarTabBar(QTabBar):
     """Tabs on the left with horizontal, readable labels (Qt rotates West tabs by default)."""
+
+    # QTabBar ignores presses on a disabled tab; report them so the window can explain why.
+    disabled_tab_clicked = Signal(int)
+
+    def mousePressEvent(self, event):
+        index = self.tabAt(event.position().toPoint())
+        if index >= 0 and not self.isTabEnabled(index):
+            self.disabled_tab_clicked.emit(index)
+            event.accept()
+            return
+        super().mousePressEvent(event)
 
     def tabSizeHint(self, index):
         size = super().tabSizeHint(index)
@@ -260,6 +274,8 @@ class MainWindow(QMainWindow):
 
         self.tabs = QTabWidget()
         self.tabs.setTabBar(SidebarTabBar())
+        self.tabs.tabBar().disabled_tab_clicked.connect(
+            lambda index: self._explain_unavailable(self.tabs.tabText(index)))
         # navegação lateral, como no padrão de painéis de manutenção; os títulos continuam os mesmos
         self.tabs.setObjectName("sidebar")
         self.tabs.setTabPosition(QTabWidget.TabPosition.West)
@@ -272,6 +288,18 @@ class MainWindow(QMainWindow):
         self.brand = QLabel('FÔLEGO')
         self.brand.setObjectName('section')
         header.addWidget(self.brand)
+        # Why a tab or "Ir para" did nothing; a click opens Options, where the profile is changed.
+        self.restriction_notice = QPushButton()
+        self.restriction_notice.setObjectName('restrictionNotice')
+        self.restriction_notice.setFlat(True)
+        self.restriction_notice.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.restriction_notice.hide()
+        self.restriction_notice.clicked.connect(self._open_options_from_notice)
+        self._notice_timer = QTimer(self)
+        self._notice_timer.setSingleShot(True)
+        self._notice_timer.setInterval(NOTICE_MS)
+        self._notice_timer.timeout.connect(self.restriction_notice.hide)
+        header.addWidget(self.restriction_notice)
         header.addStretch(1)
         self.control_button = QToolButton()
         self.control_button.setObjectName('windowControls')
@@ -371,6 +399,10 @@ class MainWindow(QMainWindow):
             self.tabs.setCurrentWidget(self.audit)
         for page in unavailable:
             self.tabs.setTabEnabled(self.tabs.indexOf(page), not self._audit_restricted)
+            self.tabs.setTabToolTip(self.tabs.indexOf(page), AUDIT_TAB_TIP if self._audit_restricted else "")
+        if not self._audit_restricted:
+            self._notice_timer.stop()
+            self.restriction_notice.hide()
         if not self._started:
             return
         if self._audit_restricted:
@@ -850,8 +882,29 @@ class MainWindow(QMainWindow):
 
     def jump_to(self, target: str):
         attribute = JUMPS.get(target)
-        if attribute is not None and self.tabs.isTabEnabled(self.tabs.indexOf(getattr(self, attribute))):
+        if attribute is None:
+            return
+        index = self.tabs.indexOf(getattr(self, attribute))
+        if self.tabs.isTabEnabled(index):
             self.tabs.setCurrentWidget(getattr(self, attribute))
+        else:
+            self._explain_unavailable(self.tabs.tabText(index))
+
+    def _explain_unavailable(self, title: str):
+        """A blocked tab never fails silently: say why and offer the way out."""
+        if self._audit_restricted:
+            text = f"{title}: indisponível no Modo Auditor · toque para abrir Opções e desligá-lo"
+        else:
+            text = f"{title}: indisponível agora · toque para abrir Opções"
+        self.restriction_notice.setText(text)
+        self.restriction_notice.setToolTip(AUDIT_TAB_TIP if self._audit_restricted else "")
+        self.restriction_notice.show()
+        self._notice_timer.start()
+
+    def _open_options_from_notice(self):
+        self._notice_timer.stop()
+        self.restriction_notice.hide()
+        self._open_options()
 
     def raise_to_user(self):
         if not self.isVisible():

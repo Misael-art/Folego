@@ -64,3 +64,38 @@ def test_boot_timing_is_readable_in_audit_timeline(qapp):
     detail = tab.details.toPlainText()
     assert "Do firmware ao fim da inicialização  1 min 5,500 s" in detail
     assert "Do kernel ao fim da inicialização  41,000 s" in detail
+
+
+def test_blocked_tabs_explain_the_auditor_and_lead_to_options(qapp, tmp_path, monkeypatch):
+    # Reported on the host: tabs and "Ir para" did nothing in Auditor mode, with no feedback.
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    assert audit_profile.configure(True)["ok"]
+    window = MainWindow()
+    window.show()
+    qapp.processEvents()
+    index = window.tabs.indexOf(window.performance)
+    assert not window.tabs.isTabEnabled(index)
+    assert "Modo Auditor" in window.tabs.tabToolTip(index)
+    bar = window.tabs.tabBar()
+    before = window.tabs.currentWidget()
+    QTest.mouseClick(bar, Qt.MouseButton.LeftButton, pos=bar.tabRect(index).center())
+    assert window.tabs.currentWidget() is before
+    assert window.restriction_notice.isVisible()
+    assert "Desempenho" in window.restriction_notice.text() and "Modo Auditor" in window.restriction_notice.text()
+    window.restriction_notice.hide()
+    window.jump_to("memoria")
+    assert window.tabs.currentWidget() is before and window.restriction_notice.isVisible()
+    window.restriction_notice.click()
+    assert window.tabs.currentWidget() is window.options and not window.restriction_notice.isVisible()
+    # An enabled tab still opens normally.
+    QTest.mouseClick(bar, Qt.MouseButton.LeftButton, pos=bar.tabRect(window.tabs.indexOf(window.audit)).center())
+    assert window.tabs.currentWidget() is window.audit
+    assert audit_profile.configure(False)["ok"]
+    window._refresh_profile()
+    assert window.tabs.tabToolTip(index) == "" and not window.restriction_notice.isVisible()
+    window.jump_to("memoria")
+    assert window.tabs.currentWidget() is window.performance
+    window.close()
