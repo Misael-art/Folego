@@ -225,7 +225,7 @@ def test_deck_profile_probe_requires_exact_wrong_steam_map(tmp_path):
         def controllers(self):
             return {"index": 15, "type": 4, "url": self.url, "title": "RetroFE Steam Deck Gamepad",
                     "gamepad": True, "mouse": False, "keyboard": False}
-    probe = DeckProfiles(steam_factory=Client, data_home=tmp_path, model_path=model)
+    probe = DeckProfiles(steam_factory=Client, data_home=tmp_path, model_path=model, hid_holder=lambda: None)
     assert probe.steam()["state"] == "fault"
     Client.url = "template://other.vdf"
     assert probe.steam()["state"] == "unknown"

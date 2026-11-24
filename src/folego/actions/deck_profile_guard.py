@@ -11,9 +11,11 @@ import uuid
 
 from .. import paths
 from ..adapters.deck_profiles import DESKTOP_URL, MIC_PROFILE, DeckProfiles
+from ..core.accessibility import uses_deck_pointer
 from ..orchestration.models import ActionPlan, ActionResult, Outcome, ResourceIdentity
 
 ACTION = "accessibility.restore-desktop-profile"
+
 KEYS = ("touchpad", "microphone")
 
 
@@ -30,8 +32,15 @@ class DeckProfileGuard:
     def annotate(self, report):
         observed = self.profiles.observe()
         report["desktop_profiles"] = observed
+        touchpad = observed.get("touchpad", {})
         for card in report.get("cards", []):
             row = observed.get(card.get("key"))
+            if touchpad.get("code") == "controller-access-unresolved" and (
+                    uses_deck_pointer(report.get("devices", []), card["key"])
+                    or card["key"] == "gamepad" and card["state"] == "not-observed"):
+                card["state"] = "unknown"
+                card["detail"] = touchpad["detail"]
+                continue
             if row is None:
                 continue
             card["state"] = {"healthy": "observed", "fault": "degraded",

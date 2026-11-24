@@ -370,3 +370,28 @@ timeout, orçamento, diário e estados da GUI. Não desligam entradas reais para
 produzir uma falha. Qt offscreen não certifica compositor; uma consulta KWin não
 certifica toque físico. Cold boot, login, suspend/resume, dock/USB, uso Steam e
 ensaio prolongado continuam sendo aceites específicos do alvo real.
+
+### O trackpad do Deck aparece, mas o cursor não se move
+
+O Deck pode expor o trackpad direito como mouse USB. O KWin consegue mostrar
+esse mouse como habilitado mesmo quando o controle deixa de produzir movimento.
+Abra **Acessibilidade → Verificar agora** e leia os cartões **Trackpads**, **Mouse /
+ponteiro** e **Controles**. Se o Wine tiver aberto o controle Valve pelo driver
+`hid-steam`, o diagnóstico mostra o PID observado. Salve o trabalho no
+aplicativo responsável e repita a verificação após a saída normal desse ambiente.
+Um teclado, mouse externo ou a tela de toque permitem operar o painel nesse meio-tempo.
+
+Em **Testar movimento do trackpad do Deck**, deslize o dedo no trackpad direito
+por até oito segundos. A leitura distingue movimento recebido pelo kernel,
+ausência de movimento no intervalo e teste indisponível. Com movimento recebido,
+confira visualmente o deslocamento do cursor. Se houve gesto e o teste ficou em
+silêncio, verifique novamente o responsável pelo controle e o perfil Desktop.
+O teste depende da permissão de leitura do dispositivo na sessão ativa.
+Também pode ser iniciado por `./dev run accessibility trackpad-test`.
+
+A consulta de clientes procura o serviço de dispositivos Wine do próprio usuário
+com descritor aberto para a interface Valve 28de:1205 ligada a `hid-steam`.
+Outros modelos e clientes podem produzir sintomas semelhantes. O teste de
+movimento é manual. Abre somente a saída relativa identificada e descarta os
+eventos assim que verifica se houve movimento. O recibo de habilitação e o
+resultado do teste físico permanecem independentes.

@@ -244,3 +244,16 @@ def test_settings_result_preserves_an_unrelated_pending_operation(qapp):
     assert 'sucesso' in view.status.text()
     assert view.cards['microphone'].isEnabled()
     view.stop()
+
+
+def test_trackpad_test_reports_worker_result_without_repair(qapp):
+    jobs = Jobs({"ok": True, "motion": False, "reason": "Nenhum movimento em 8 s"})
+    view = AccessibilityTab(jobs=jobs)
+    report = sample()
+    report["devices"] = [{"deck_controller": True}]
+    view.show_report(report)
+    assert not view.motion_button.isHidden()
+    view.motion_button.click()
+    assert jobs.calls == [("accessibility-trackpad-test", "", False)]
+    assert view.motion_result.text() == "Nenhum movimento em 8 s"
+    assert view.motion_button.isEnabled()

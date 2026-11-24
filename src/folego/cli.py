@@ -334,7 +334,7 @@ def build_parser() -> argparse.ArgumentParser:
     lease_run = access_sub.add_parser("lease-run", help="inicia aplicação cooperante sob propriedade durável de entrada")
     lease_run.add_argument("--provider", required=True)
     lease_run.add_argument("argv", nargs=argparse.REMAINDER)
-    for name in ("status", "plan", "transitions", "enable", "disable", "audio-reprobe-enable", "audio-reprobe-disable", "capture", "rearm", "install", "repair", "reconcile", "watch", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
+    for name in ("status", "plan", "trackpad-test", "transitions", "enable", "disable", "audio-reprobe-enable", "audio-reprobe-disable", "capture", "rearm", "install", "repair", "reconcile", "watch", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
         command = access_sub.add_parser(name)
         command.add_argument("--json", action="store_true")
         if name in ("enable", "disable", "audio-reprobe-enable", "audio-reprobe-disable", "capture", "rearm", "install", "repair", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
@@ -2834,6 +2834,13 @@ def _cmd_accessibility(args):
     from .actions.accessibility import Supervisor, publish_lease, reconcile_lease
     from .orchestration.models import ActionPlan
     from .orchestration.coordinator import CoordinatorBusy
+    if args.sub == "trackpad-test":
+        from .adapters.deck_hid import test_pointer_motion
+        if not args.json:
+            print("Deslize o dedo no trackpad direito nos próximos 8 segundos.", flush=True)
+        result = test_pointer_motion()
+        print(json.dumps(result, ensure_ascii=False) if args.json else result["reason"])
+        return EXIT_OK if result["ok"] else EXIT_UNKNOWN
     supervisor = Supervisor()
     try:
         if args.sub in ("activation-plan", "activate", "save-profile", "activation-reconcile"):

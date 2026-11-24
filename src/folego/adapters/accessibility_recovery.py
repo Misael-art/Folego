@@ -253,8 +253,10 @@ class DesktopRecovery:
                 matching = next((d for d in current["devices"] if d["key"] == device["key"]), None)
                 if (current["errors"] or current["blockers"] or current["boot_id"] != report["boot_id"]
                         or current["service_owner"] != report["service_owner"] or matching is None
-                        or any(matching[k] != device[k] for k in ("key", "event", "name", "stable"))):
+                        or any(matching[k] != device[k] for k in ("key", "event", "name", "stable", "kinds"))):
                     return False, "identidade/sessão/propriedade mudou antes do efeito; entrada preservada"
+                if matching["enabled"] is None:
+                    return False, "estado atual da entrada desconhecido; verifique novamente"
                 device = matching
                 if device["enabled"] is True:
                     continue
@@ -266,7 +268,10 @@ class DesktopRecovery:
         after = self.native.collect()
         found = {d["key"]: d for d in after["devices"]}
         ready = (not after["errors"] and after["service_owner"] == report["service_owner"]
-                 and after["boot_id"] == report["boot_id"] and all(found.get(d["key"], {}).get("enabled") is True for d in devices))
+                 and after["boot_id"] == report["boot_id"] and all(
+                     (current := found.get(d["key"])) and current["enabled"] is True
+                     and all(current[k] == d[k] for k in ("event", "name", "stable", "kinds"))
+                     for d in devices))
         return ready, "habilitado e verificado no compositor; teste físico pendente" if ready else "habilitação não confirmada pelo compositor"
 
     def repair_touch(self, peer):

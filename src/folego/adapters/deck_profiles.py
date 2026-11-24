@@ -21,6 +21,7 @@ import urllib.request
 import configparser
 
 from .accessibility import bounded_command, ProbeError
+from .deck_hid import wine_controller_holder
 from .. import paths
 from .audio_recovery import AudioRecoveryError, WirePlumberRecovery
 
@@ -208,13 +209,14 @@ class SteamClient:
 class DeckProfiles:
     def __init__(self, *, steam_factory=SteamClient, runner=bounded_command,
                  data_home=None, state_home=None, model_path=Path("/sys/class/dmi/id/product_name"),
-                 audio_recovery=None):
+                 audio_recovery=None, hid_holder=wine_controller_holder):
         self.steam_factory, self.runner = steam_factory, runner
         self.data_home = Path(data_home) if data_home else paths._env_dir(
             "XDG_DATA_HOME", Path.home() / ".local/share")
         self.state_home = Path(state_home) if state_home else paths._env_dir(
             "XDG_STATE_HOME", Path.home() / ".local/state")
         self.model_path = Path(model_path)
+        self.hid_holder = hid_holder
         self.audio_recovery = audio_recovery or WirePlumberRecovery(runner=runner, state_home=self.state_home)
 
     def supported(self):
@@ -233,8 +235,21 @@ class DeckProfiles:
         except OSError as exc:
             raise ProfileUnknown("template Desktop ausente ou ilegível") from exc
 
+    def controller_conflict(self):
+        try:
+            pid = self.hid_holder()
+        except (OSError, ValueError):
+            return "Leitura dos clientes HID incompleta; verifique de novo antes de reparar."
+        if pid is not None:
+            return (f"Wine (PID {pid}) mantém aberto o controle Valve. Salve o trabalho "
+                    "no aplicativo Wine e verifique o trackpad após a saída normal desse ambiente.")
+        return ""
+
     def steam(self):
         try:
+            if conflict := self.controller_conflict():
+                return {"state": "unknown", "code": "controller-access-unresolved",
+                        "identity": None, "detail": conflict}
             with self.steam_factory() as client:
                 row = client.controllers()
             digest = self.template_digest()
@@ -372,6 +387,8 @@ class DeckProfiles:
                 raise ProfileUnknown("outro perfil de microfone preservado")
             self._pactl("set-card-profile", before["identity"]["card"], MIC_PROFILE)
         elif key == "touchpad":
+            if conflict := self.controller_conflict():
+                raise ProfileUnknown(conflict)
             with self.steam_factory() as client:
                 client.select_desktop(before["identity"]["index"])
         else:

@@ -1,5 +1,31 @@
 # Passagem para o próximo agente — atualizada em 24/11/2026
 
+## Trackpad do Deck com cliente HID do Wine — 24/11/2026
+
+No Jupiter, a desconexão lógica do controle ocorreu no mesmo segundo em que
+iniciou o serviço Wine que mantinha aberta a interface de gamepad. O mouse
+emulado continuava habilitado no KWin. Os dois recibos individuais anteriores
+confirmavam habilitação do trackpad com base apenas nesse estado. O monitor de
+entrada, o compositor e os serviços de áudio estavam ativos. O usuário confirmou que o cursor ficou parado ao deslizar o dedo.
+A recuperação física após liberação do dispositivo ainda precisa de confirmação.
+
+A guarda do perfil e a recuperação manual agora verificam o cliente Wine da
+interface de gamepad do Deck. A operação conjunta mostra o resultado de cada
+capacidade e protege o controle quando o responsável está ativo. O teste sob
+demanda usa a saída relativa identificada. O procedimento está em
+[Diagnóstico do trackpad](ACESSIBILIDADE.md#o-trackpad-do-deck-aparece-mas-o-cursor-não-se-move).
+A janela residente e o monitor carregam a revisão na próxima abertura normal de
+cada processo. A CLI do checkout já executa a revisão.
+
+No PR #15, os oito checks da base `a1bedf5` estavam aprovados. O gate local
+`./dev check` usou o launcher participante, um núcleo e 2 GiB de limite.
+Headless com 1.569 aprovados, dois pulados (71,58 s) e Qt offscreen com 2.016
+aprovados, dois pulados (298,50 s), em Python 3.14.7. A suíte Qt incluiu o
+filtro final da interface USB. A janela própria em KDE/Wayland exibiu o motivo
+nos três cartões e completou o teste pelo botão. Com observações reais, diário
+privado e efeitos interceptados, a recuperação de trackpad e ponteiro retornou
+parcial antes de qualquer tentativa de escrita.
+
 ## Retomada Wayland no BigLinux — 24/11/2026
 
 O [procedimento do bloqueador](BASE-DO-HOST.md#bloqueador-wayland-e-tela-de-login-no-plasma-682) usa uma ferramenta manual de administração e o binário original do pacote 6.8.2-1 conferido pelo SHA-256 do manifesto. Sobre o SHA anterior `323187c`, os oito checks do PR #15 estavam aprovados. A verificação local desta mudança incluiu sintaxe Bash, diff, preflight real e aplicação, repetição, reversão e liberação do hook em filesystem descartável com paclock. A prova recusou lock concorrente, máscara alheia e original divergente.

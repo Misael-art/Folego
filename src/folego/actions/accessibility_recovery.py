@@ -7,7 +7,7 @@ import uuid
 from .accessibility import (fresh, lease_blockers, read_object, save_object, _alive, unresolved)
 from ..adapters.accessibility import ProbeError
 from ..adapters.accessibility_recovery import DesktopRecovery, UncertainEffect
-from ..core.accessibility import LABELS
+from ..core.accessibility import LABELS, uses_deck_pointer
 from ..core.sessions import read_boot_id
 from ..orchestration.models import ActionPlan, ActionResult, ResourceIdentity, Outcome
 
@@ -119,6 +119,12 @@ class Recovery:
                 input_block.extend(v for v in report["blockers"] if not (usable_peer and v == PEER_WAIT))
                 if any(self._pending(plan.operation_id, key) for key in plan.params['capabilities'] if key in INPUTS):
                     input_block.append('operação anterior de entrada incerta; consultar o código')
+            guard = self.supervisor.profile_guard
+            deck_input = any(d.get("deck_controller") for d in report["devices"])
+            # The external reconcile-input command can change the whole controller.
+            if usable_peer and deck_input and guard and not keyboard_only:
+                if conflict := guard.profiles.controller_conflict():
+                    input_block.append(conflict)
             if not input_block and usable_peer and any(k in INPUTS for k in plan.params["capabilities"]):
                 try:
                     self.backend.peer_idle(usable_peer)
@@ -155,6 +161,11 @@ class Recovery:
                         report = current
                         if input_block:
                             ready, reason = False, '; '.join(input_block)
+                        elif (guard and any(d.get("deck_controller") for d in current["devices"])
+                              and key in ("gamepad", "touchpad", "pointer")
+                              and (key == "gamepad" or uses_deck_pointer(current["devices"], key))
+                              and (conflict := guard.profiles.controller_conflict())):
+                            ready, reason = False, conflict
                         elif key == 'virtual-keyboard':
                             ready, reason = self.backend.open_keyboard(report)
                         elif key == 'gamepad':
@@ -164,6 +175,11 @@ class Recovery:
                             ready, reason = self.backend.repair_touch(usable_peer)
                         else:
                             ready, reason = self.backend.enable_devices(key, report, delegated=delegated)
+                            if ready and uses_deck_pointer(report["devices"], key):
+                                profile = guard.profiles.steam() if guard is not None else {}
+                                ready = profile.get("state") == "healthy"
+                                reason = "Ponteiro habilitado no KWin. " + (
+                                    profile.get("detail") or "Mapeamento do trackpad não verificado.")
                     elif key in INPUTS and input_block:
                         ready, reason = False, "; ".join(input_block)
                     elif key in ("audio", "microphone"):
