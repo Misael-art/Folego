@@ -23,7 +23,8 @@ from ..safely.atomicfile import fsync_dir
 from ..safely.mounts import destination_verdict
 from .accessibility import bounded_command
 from .host_storage import read_mountinfo
-from .host_timeline import HostTimelineRecorder, _BOOT_ID, _sample
+from .host_timeline import HostTimelineRecorder, _BOOT_ID, _PER_BOOT_LIMIT, _sample
+from .workload_scopes import WorkloadScopes
 
 MAX_BYTES = 64 * 1024 * 1024
 INTERVAL = 60
@@ -421,7 +422,23 @@ class HostAuditRecorder:
         self._last = -float("inf")
         self._last_package = -float("inf")
         self._boot = None
+        self._growth = None
+        self._scopes = WorkloadScopes()
         self.error = ""
+
+    def _timeline_capacity(self, snapshot):
+        try:
+            size = (paths.host_timeline_dir() / (snapshot.boot_id + ".jsonl")).stat().st_size
+        except OSError:
+            self._growth = None
+            return None
+        previous = self._growth
+        self._growth = snapshot.boot_id, snapshot.mono, size
+        remaining = max(0, _PER_BOOT_LIMIT - size)
+        seconds = None
+        if previous and previous[0] == snapshot.boot_id and 0 < snapshot.mono - previous[1] <= 150 and size > previous[2]:
+            seconds = round(remaining * (snapshot.mono - previous[1]) / (size - previous[2]))
+        return {"bytes": size, "remaining_bytes_this_boot": remaining, "estimated_seconds_this_boot": seconds}
 
     def record(self, snapshot):
         if not audit_profile.records():
@@ -451,7 +468,8 @@ class HostAuditRecorder:
                            "flatpak-user": lambda: _flatpak("user")})
             self._last_package = mono
         metrics = _sample(snapshot)
-        metrics.update(cpu_busy_frac=snapshot.cpu_busy_frac,
+        metrics.update(scopes=self._scopes.sample(snapshot), timeline_capacity=self._timeline_capacity(snapshot),
+                       gui_tick_delay_ms=snapshot.gui_tick_delay_ms, cpu_busy_frac=snapshot.cpu_busy_frac,
                        thermal_passive_c=snapshot.thermal_passive_c,
                        thermal_critical_c=snapshot.thermal_critical_c,
                        disk_capacity=_disk_capacity())
@@ -475,6 +493,57 @@ class HostAuditRecorder:
             self.error = ""
         except (OSError, ValueError, sqlite3.Error) as exc:
             self.error = f"histórico de auditoria indisponível: {exc}"
+
+
+def mark_slow():
+    boot = read_boot_id()
+    if not _BOOT_ID.fullmatch(boot or ""):
+        raise ValueError("Boot indisponível para registrar o episódio")
+    if not audit_profile.records():
+        raise ValueError("Ative o histórico contínuo ou o Modo Auditor para acompanhar o episódio")
+    with _connect(write=True) as db:
+        db.execute("BEGIN IMMEDIATE")
+        at = time.time()
+        # A double click or an uncertain retry refers to the same recent marker.
+        recent = db.execute("SELECT id FROM events WHERE boot=? AND source='metrics' AND kind='incident'"
+                            " AND at BETWEEN ? AND ? ORDER BY at DESC LIMIT 1", (boot, at - 10, at)).fetchone()
+        if recent:
+            return recent[0]
+        _event(db, at, boot, "metrics", "incident", "Lentidão percebida", {})
+        return db.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+
+def hourly(hours, *, now=None):
+    from ..core.workload_history import summarize
+    if not 1 <= hours <= 24:
+        raise ValueError("Informe entre 1 e 24 horas")
+    until = time.time() if now is None else now
+    report = history(source="metrics", since=until - hours * 3600, until=until, limit=2000)
+    groups = {}
+    for event in report.pop("events"):
+        if event["kind"] == "sample":
+            hour = int(datetime.fromisoformat(event["at"]).timestamp()) // 3600
+            groups.setdefault((event["boot_id"], hour), []).append(event["data"])
+    report["hours"] = [{"boot": boot, "from": _iso(hour * 3600), **summarize(rows)}
+                       for (boot, hour), rows in groups.items()]
+    return report
+
+
+def episode(marker):
+    with _connect(write=False) as db:
+        point = db.execute("SELECT at,boot FROM events WHERE id=? AND source='metrics' AND kind='incident'",
+                           (marker,)).fetchone()
+    if not point:
+        raise ValueError("Marcador de lentidão não encontrado")
+    at, boot = point
+    result = history(source="metrics", boot=boot, since=at - 300, until=at + 300, limit=32)
+    result["marker"] = marker
+    result["at"] = _iso(at)
+    from ..core.workload_history import summarize
+    for label, before in (("before", True), ("after", False)):
+        result[label] = summarize([event["data"] for event in result["events"] if event["kind"] == "sample"
+                                   and (datetime.fromisoformat(event["at"]) < datetime.fromisoformat(result["at"])) == before])
+    return result
 
 
 def history(*, source=None, boot=None, since=None, until=None, before_id=None, changes_only=False, limit=100):

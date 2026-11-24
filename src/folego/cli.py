@@ -244,6 +244,14 @@ def build_parser() -> argparse.ArgumentParser:
             ("history-status", "ver se o histórico contínuo está ligado")):
         command = audit_sub.add_parser(name, help=description)
         command.add_argument("--json", action="store_true")
+    summary = audit_sub.add_parser("summary", help="resumo por hora e boot das últimas 1–24 horas")
+    summary.add_argument("--hours", type=int, default=8)
+    summary.add_argument("--json", action="store_true")
+    mark = audit_sub.add_parser("mark", help="marcar lentidão percebida neste boot")
+    mark.add_argument("--json", action="store_true")
+    episode = audit_sub.add_parser("episode", help="comparar cinco minutos antes e depois de um marcador")
+    episode.add_argument("marker", type=int)
+    episode.add_argument("--json", action="store_true")
     history = audit_sub.add_parser("history", help="consultar mudanças, falhas e amostras")
     from .adapters.host_audit import LABELS as audit_sources
     history.add_argument("--source", choices=audit_sources)
@@ -458,6 +466,14 @@ def build_parser() -> argparse.ArgumentParser:
                      help="protege o comando de encerramento heurístico")
     run.add_argument("--heartbeat", type=float, default=None,
                      help="intervalo de sinal de vida em segundos (padrão: política)")
+    capacity = session_sub.add_parser("capacity", help="avaliar a margem para uma carga local")
+    capacity.add_argument("--json", action="store_true")
+    for target in (capacity, run):
+        target.add_argument("--ram-mib", type=int, required=target is capacity,
+                            help="pico adicional de RAM; em run ativa a reserva compartilhada")
+        target.add_argument("--disk-mib", type=int, required=target is capacity,
+                            help="saída total estimada, incluindo staging e temporários")
+        target.add_argument("--destination", default=".", help="diretório de saída da carga")
     run.add_argument("argv", nargs=argparse.REMAINDER,
                      help="comando e argumentos, após --")
     for name, help_text in (
@@ -1502,31 +1518,39 @@ def _session_run(args) -> int:
         return _session_error(
             args, "session.run",
             SessionError("informe o comando após --"), EXIT_NEEDS_CONFIRM)
-    try:
-        from .safely.jobtemp import prepare_job_environment
-        child = subprocess.Popen(argv, start_new_session=True,
-                                 env=prepare_job_environment())
-    except OSError as exc:
-        return _session_error(args, "session.run",
-                              SessionError(f"não foi possível iniciar: {exc}"),
-                              EXIT_FAILED)
     store = SessionRegistry()
-    try:
-        session = store.register_child(child, project=args.project,
-                                 label=args.label, keep_active=args.keep_active)
-    except SessionError as exc:
-        # O filho já existe; não deixamos um processo sem registro protetor.
-        # SIGTERM e espera curta, sem escalada automática.
+    manifest = None
+    if args.ram_mib is not None or args.disk_mib is not None:
+        from .actions import workload
         try:
-            child.terminate()
-        except ProcessLookupError:
-            pass
+            child, session, manifest = workload.launch(args, argv, store)
+        except (OSError, ValueError, KeyError, TypeError, SessionError, subprocess.SubprocessError) as exc:
+            return _session_error(args, "session.run", exc)
+    else:
         try:
-            child.wait(timeout=2.0)
-        except subprocess.TimeoutExpired:
-            sys.stderr.write(f"aviso: pid {child.pid} continua ativo; "
-                             f"escalada não é automática\n")
-        return _session_error(args, "session.run", exc)
+            from .safely.jobtemp import prepare_job_environment
+            child = subprocess.Popen(argv, start_new_session=True,
+                                     env=prepare_job_environment())
+        except OSError as exc:
+            return _session_error(args, "session.run",
+                                  SessionError(f"não foi possível iniciar: {exc}"),
+                                  EXIT_FAILED)
+        try:
+            session = store.register_child(child, project=args.project,
+                                     label=args.label, keep_active=args.keep_active)
+        except SessionError as exc:
+            # O filho já existe; não deixamos um processo sem registro protetor.
+            # SIGTERM e espera curta, sem escalada automática.
+            try:
+                child.terminate()
+            except ProcessLookupError:
+                pass
+            try:
+                child.wait(timeout=2.0)
+            except subprocess.TimeoutExpired:
+                sys.stderr.write(f"aviso: pid {child.pid} continua ativo; "
+                                 f"escalada não é automática\n")
+            return _session_error(args, "session.run", exc)
 
     protect = "sim" if session.keep_active else "não"
     sys.stderr.write(
@@ -1564,6 +1588,13 @@ def _session_run(args) -> int:
             f"como desconectada; pid {child.pid} continua ativo\n")
         return EXIT_UNKNOWN
 
+    if manifest is not None:
+        from .safely.jobtemp import finish_job
+        try:
+            if not finish_job(manifest, child.pid, certain=True):
+                sys.stderr.write("Encerramento do temporário sem confirmação; material preservado.\n")
+        except (ValueError, OSError) as exc:
+            sys.stderr.write(f"Temporários preservados: {exc}\n")
     reason = (f"processo filho saiu com código {code}" if code >= 0
               else f"processo filho terminou pelo sinal {-code}")
     try:
@@ -1576,6 +1607,15 @@ def _session_run(args) -> int:
 def _cmd_session(args) -> int:
     action = f"session.{args.sub}"
     try:
+        if args.sub == "capacity":
+            from .actions import workload
+            try:
+                result = workload.capacity(args.ram_mib, args.disk_mib, args.destination)
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                result = {"decision": "unknown", "reasons": [str(exc)], "retry_after_s": 20}
+            print(json.dumps(result, ensure_ascii=False) if args.json else
+                  " · ".join([result["decision"], *result["reasons"]]))
+            return EXIT_OK if result["decision"] == "ready" else EXIT_REFUSED
         if args.sub == "run":
             return _session_run(args)
         if args.sub == "start":
@@ -2888,6 +2928,44 @@ def _cmd_audit(args):
     from .adapters import host_audit
     from .core.instance import AlreadyRunning
 
+    if args.sub == "summary":
+        try:
+            result = host_audit.hourly(args.hours)
+        except ValueError as exc:
+            return _emit_gate_refusal(args, "audit", str(exc))
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False))
+        else:
+            from .core.workload_history import describe_summary
+            for hour in result["hours"]:
+                print(hour["from"], "· boot", hour["boot"], describe_summary(hour))
+            print(result["reason"] or "Fim da janela observada")
+        return EXIT_REFUSED if result["quality"] in ("unknown", "missing") else EXIT_OK
+    if args.sub in ("mark", "episode"):
+        import sqlite3
+        from .core.workload_history import describe
+        try:
+            if args.sub == "mark":
+                marker = host_audit.mark_slow()
+                result = {"ok": True, "marker": marker, "reason": f"Marcador {marker} registrado"}
+                print(json.dumps(result) if args.json else result["reason"])
+            else:
+                result = host_audit.episode(args.marker)
+                if args.json:
+                    print(json.dumps(result, ensure_ascii=False))
+                else:
+                    print(f"Marcador {args.marker} · {result['at']} · amostras antes/depois: "
+                          f"{result['before']['samples']}/{result['after']['samples']}")
+                    for entry in result["events"]:
+                        if entry["kind"] == "sample":
+                            print(entry["at"], describe(entry["data"]))
+                    if result["reason"]:
+                        print(result["reason"])
+                if result["quality"] in ("missing", "unknown"):
+                    return EXIT_REFUSED
+            return EXIT_OK
+        except (ValueError, OSError, sqlite3.Error) as exc:
+            return _emit_gate_refusal(args, "audit", str(exc))
     if args.sub == "watch":
         if not audit_profile.records():
             return _emit_gate_refusal(args, "audit", "Ative primeiro com folego audit enable "

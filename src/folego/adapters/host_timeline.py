@@ -70,6 +70,7 @@ def _sample(snapshot: Snapshot) -> dict:
         # Per-agent instances and footprint: correlates agent growth with host degradation.
         from ..core.agents import footprint
         agents = footprint(snapshot.procs)
+    monitor = next((p for p in snapshot.procs if p.pid == os.getpid()), None)
     battery = snapshot.battery if snapshot.source("battery").status == OK else None
     issues = {}
     for name in _SOURCES:
@@ -107,6 +108,9 @@ def _sample(snapshot: Snapshot) -> dict:
                                       if snapshot.source("external_power").status == OK else None),
             "top_cpu": top,
             # None: process list not observed; {}: observed, no agent running.
+            "monitor": {"rss_kb": snapshot.self_rss_kb if snapshot.source("self_rss").status == OK else None,
+                        "cpu_pct": monitor.cpu_frac if monitor else None,
+                        "io_write_bps": monitor.io_write_bps if monitor else None},
             "agents": agents}
 
 
@@ -386,7 +390,7 @@ def summarize_boot_timeline(directory: Path, boot_id: str) -> dict:
               "temperature_c", "temperature_sensor",
               "battery_percent", "battery_status", "battery_voltage_uv",
               "battery_voltage_min_design_uv", "battery_current_ua", "battery_power_uw",
-              "external_power_online", "power_events", "top_cpu")
+              "external_power_online", "power_events", "top_cpu", "agents", "monitor")
     power_event = next((row for row in reversed(rows)
                         if row.get("schema") == 2 and row.get("power_events")), None)
     return {"quality": quality, "reason": reason,

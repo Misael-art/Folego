@@ -219,3 +219,13 @@ def test_cgroup_is_stored_only_when_readable_and_in_the_user_slice(tmp_path,
 
     cgroup.write_text("0::/system.slice/sshd.service\n")
     assert read_cgroup(PID, proc_root) is None
+
+
+def test_incomplete_proc_or_foreign_view_keeps_session(tmp_path, proc_root, clock, monkeypatch):
+    store = registry(tmp_path, proc_root, clock)
+    monkeypatch.setattr(store, "_pid_namespace", lambda: 100)
+    item = store.register(PID, keep_active=True)
+    (proc_root / str(PID) / "cmdline").unlink()
+    assert store.keep_active_reason(PID, item.starttime)
+    monkeypatch.setattr(store, "_pid_namespace", lambda: 200)
+    assert store.snapshot()[0].state == ACTIVE

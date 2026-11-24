@@ -39,7 +39,9 @@ def test_footprint_counts_instances_servers_and_size_per_agent():
     assert codex["app_server"] == 1 and codex["exec_server"] == 1 and codex["mcp"] == 1
     assert codex["procs"] == 10 and codex["rss_kb"] == 500_000 + 400_000 + 8 * 1000
     assert claude == {"procs": 2, "main": 1, "top": 1, "app_server": 0, "exec_server": 0, "exec": 0,
-                      "mcp": 0, "rss_kb": 301_000, "cpu_pct": 2.0}
+                      "mcp": 0, "rss_kb": 301_000, "cpu_pct": 2.0, "cpu_measured": 2,
+                      "io_read_bps": None, "io_write_bps": None, "io_read_measured": 0,
+                      "io_write_measured": 0}
     assert "plasmashell" not in str(result) and set(result) == {"codex", "claude"}
 
 

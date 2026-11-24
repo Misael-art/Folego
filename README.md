@@ -112,6 +112,58 @@ anteriores e `--json` para exportar os resultados. A linha do tempo ajuda a
 correlacionar eventos. A presença de uma mudança na mesma janela de uma falha
 é evidência para investigar sua causa.
 
+### Lentidão durante o trabalho de agentes
+
+Com o histórico contínuo ou o Modo Auditor ativo, clique em **Auditoria → Ficou
+lento agora**. A aba abre os cinco minutos de cada lado do marcador no mesmo boot.
+Mantenha a coleta durante o trabalho para preencher o período posterior. Para
+reabrir o episódio, selecione o marcador e clique em **Ver cinco minutos antes e
+depois**. As amostras mostram espera por CPU, memória e disco, custo do coletor,
+RSS e processos do Codex e do Claude Code/Claude Desktop. A cobertura de I/O indica
+quantos processos tinham duas leituras comparáveis. O consumo do cgroup inclui
+todos os membros do grupo. RSS somada pode contar páginas compartilhadas mais
+de uma vez, e o atraso do timer da GUI mede despacho de eventos.
+
+```bash
+folego audit mark
+folego audit episode 17                    # substitua 17 pelo ID recebido
+folego audit summary --hours 8 --json
+```
+
+O resumo por hora é calculado sob demanda no banco da auditoria, agrupado por
+boot e acompanhado da quantidade de amostras. Para o histórico detalhado, a
+previsão de duração até o teto do arquivo usa o crescimento recente daquele
+boot. Arquivos antigos continuam consultáveis com campos sem medição.
+
+### Compartilhar a máquina entre trabalhos locais
+
+No Linux, os agentes que usam o mesmo estado de usuário podem reservar a vez de
+um comando pesado em primeiro plano. Na instalação de desenvolvimento, use
+`./dev run` no lugar de `folego`. Estime a RAM **adicional de pico** e o total
+de saída, staging e temporários. Os números abaixo são apenas um exemplo.
+
+```bash
+folego session capacity --ram-mib 2048 --disk-mib 512 --destination . --json
+folego session run --ram-mib 2048 --disk-mib 512 --destination . -- ./dev check
+```
+
+A consulta informa `ready`, `wait` ou `unknown`. O lançamento revalida a
+decisão sob trava e registra a sessão protegida antes de liberar o comando.
+O launcher verifica as fontes locais, a carga concorrente reconhecida, a
+atividade de swap, a folga após o pico e o espaço no destino e nos temporários.
+O Deck preserva ao menos 4 GiB ou 25% da RAM, o maior valor, e 10 GiB de disco
+além da estimativa. Fonte térmica sem limite passivo ou inventário incompleto
+suspende a admissão. A orientação opcional para agentes inclui a mesma CLI
+para o Codex e o Claude Code. Em ambientes remotos ou isolados, a decisão
+pertence ao host que realmente executa o comando.
+
+O JSON de `capacity` inclui a última reserva e os membros observados com o
+mesmo ID de sessão do Linux. Filhos que permanecem nessa sessão mantêm a
+reserva ocupada. A identidade inclui boot e namespace. Processos que criam
+outra sessão e aplicativos que iniciam trabalho por conta própria ficam fora
+da garantia de exclusividade. Use esse launcher para comandos de primeiro
+plano. Cada tarefa concluída também fica consultável em `session list --json`.
+
 Quando o sensor informa limites térmicos, a área Disco distingue aviso a 5 °C
 do limite passivo, urgência ao atingi-lo e limite crítico do equipamento. Com a
 bandeja disponível, o Fôlego avisa sem repetir a cada leitura. O alerta não

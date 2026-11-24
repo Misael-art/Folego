@@ -222,3 +222,20 @@ def test_continuous_history_records_outside_the_auditor_without_allowing_auditor
     path = audit_profile.paths.config_dir() / audit_profile.HISTORY_FILE
     path.write_text('{"schema":1,"enabled":"sim"}')
     assert audit_profile.history_status()["ok"] is False and not audit_profile.records()
+
+
+def test_marker_episode_and_hourly_keep_boot_and_window(monkeypatch):
+    assert audit_profile.configure_history(True)["ok"]
+    monkeypatch.setattr(audit, "read_boot_id", lambda: BOOT)
+    monkeypatch.setattr(audit.time, "time", lambda: 10000)
+    marker = audit.mark_slow()
+    assert audit.mark_slow() == marker
+    with audit._connect(write=True) as db:
+        for stamp in (9000, 9800, 10060, 10400):
+            audit._event(db, stamp, BOOT, "metrics", "sample", "", {"collector_read_ms": 10})
+        audit._event(db, 9999, "00000000-0000-0000-0000-000000000001",
+                     "metrics", "sample", "", {"collector_read_ms": 100})
+    result = audit.episode(marker)
+    assert result["before"]["samples"] == result["after"]["samples"] == 1
+    assert result["before"]["collector_read_ms"]["max"] == 10
+    assert sum(h["samples"] for h in audit.hourly(1, now=10500)["hours"]) == 5

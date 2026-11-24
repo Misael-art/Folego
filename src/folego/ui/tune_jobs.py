@@ -28,7 +28,7 @@ MUTATING = (*MUTATING, "accessibility-activate", "accessibility-save-profile")
 MUTATING = (*MUTATING, 'accessibility-audio-reprobe-enable', 'accessibility-audio-reprobe-disable')
 MUTATING = (*MUTATING, 'accessibility-profile-rearm')
 MUTATING = (*MUTATING, 'codex-render-software', 'codex-render-restore')
-MUTATING = (*MUTATING, "audit-enable", "audit-disable")
+MUTATING = (*MUTATING, "audit-enable", "audit-disable", "audit-mark")
 MUTATING = (*MUTATING, "agent-care-enable", "agent-care-disable", "agent-care-sync", "agent-care-reconcile")
 MUTATING = (*MUTATING, 'startup-basic-enable', 'startup-basic-disable',
             'startup-basic-sync', 'startup-basic-reconcile')

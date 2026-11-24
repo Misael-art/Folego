@@ -222,7 +222,7 @@ class MainWindow(QMainWindow):
             overview_fn=getattr(input_observer, "resident_overview", None), confirm_fn=confirm_fn)
         self.accessibility.report_ready.connect(self._show_accessibility)
         self.options = OptionsTab()
-        self.audit = AuditTab()
+        self.audit = AuditTab(jobs=self.options.jobs)
         self.options.audit_changed.connect(self._refresh_profile)
         self.options.audit_history_requested.connect(lambda: self.tabs.setCurrentWidget(self.audit))
         self.options.sound_preview.connect(self.ai_monitor.alerts.preview)
@@ -331,8 +331,10 @@ class MainWindow(QMainWindow):
         self._pause_shortcut = QShortcut(QKeySequence("Ctrl+Shift+P"), self)
         self._pause_shortcut.activated.connect(self.toggle_pause)
         self._freshness_timer = QTimer(self)
+        self._last_gui_tick = time.monotonic()
+        self._gui_tick_delay_ms = None
         self._freshness_timer.setInterval(1000)
-        self._freshness_timer.timeout.connect(self._refresh_freshness)
+        self._freshness_timer.timeout.connect(self._freshness_tick)
         self._freshness_timer.start()
         self._profile_timer = QTimer(self)
         self._profile_timer.setInterval(2000)
@@ -380,7 +382,9 @@ class MainWindow(QMainWindow):
         self._poller.start()
 
     def _record_audit(self):
-        self._audit_recorder.record(self._last_snapshot)
+        from dataclasses import replace
+        snapshot = self._last_snapshot
+        self._audit_recorder.record(replace(snapshot, gui_tick_delay_ms=self._gui_tick_delay_ms))
         return self._audit_recorder.error
 
     def _refresh_profile(self):
@@ -697,6 +701,13 @@ class MainWindow(QMainWindow):
         self.disk.show_thermal({"state": "unknown", "reason": f"falha de coleta: {message}"})
         self.dashboard.status.setText(f"⚠ última falha de coleta: {message}")
         self._refresh_freshness()
+
+    def _freshness_tick(self):
+        now = time.monotonic()
+        interval = self._freshness_timer.interval()
+        self._gui_tick_delay_ms = round(max(0, (now - self._last_gui_tick) * 1000 - interval), 1)
+        self._last_gui_tick = now
+        self._refresh_freshness(now)
 
     def _refresh_freshness(self, now_mono=None):
         """Invalidate old health without collecting or reading the journal.

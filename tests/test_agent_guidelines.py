@@ -277,3 +277,23 @@ def test_other_editor_extensions_do_not_invent_a_continue_installation(manager):
     (manager.home / '.continue').rmdir()
     (manager.home / '.vscode/extensions/other.extension-1').mkdir(parents=True)
     assert str(manager.home / '.continue/rules/host-care.md') not in manager._catalog()
+
+
+def test_upgrade_of_receipted_block_preserves_later_text_and_mode(manager):
+    target, original = personal(manager)
+    manager.configure(True)
+    state = json.loads(manager.state.read_text())
+    for entry in state["entries"]:
+        entry.pop("edition")
+        Path(entry["path"]).write_bytes(care._bytes(manager._added(entry)))
+    for change in state["changes"]:
+        entry = next(e for e in state["entries"] if e["path"] == change["path"])
+        change["after"] = manager._added(entry)
+    manager._save(state)
+    with target.open("ab") as stream:
+        stream.write(b"note after installation\n")
+    assert manager.configure()["ok"]
+    assert target.read_bytes().count(care.BLOCK) == 1
+    assert manager.configure(False)["ok"]
+    assert target.read_bytes() == original + b"note after installation\n"
+    assert target.stat().st_mode & 0o777 == 0o640

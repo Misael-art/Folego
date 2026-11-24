@@ -205,11 +205,19 @@ def footprint(procs: Iterable[ProcInfo]) -> dict[str, dict]:
             continue
         row = result.setdefault(provider, {"procs": 0, "main": 0, "top": 0, "app_server": 0,
                                            "exec_server": 0, "exec": 0, "mcp": 0, "rss_kb": 0,
-                                           "cpu_pct": None})
+                                           "cpu_pct": None, "cpu_measured": 0,
+                                           "io_read_bps": None, "io_write_bps": None,
+                                           "io_read_measured": 0, "io_write_measured": 0})
         row["procs"] += 1
         row["rss_kb"] += proc.rss_kb
         if proc.cpu_frac is not None:
+            row["cpu_measured"] += 1
             row["cpu_pct"] = round((row["cpu_pct"] or 0.0) + proc.cpu_frac, 1)
+        for direction, rate in (("read", proc.io_read_bps), ("write", proc.io_write_bps)):
+            if rate is not None:
+                field = f"io_{direction}_bps"
+                row[field] = (row[field] or 0) + rate
+                row[f"io_{direction}_measured"] += 1
         args = argv(proc)[1:]
         if proc.comm == MAIN_COMMS.get(provider):
             row["main"] += 1

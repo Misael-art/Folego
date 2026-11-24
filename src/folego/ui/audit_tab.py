@@ -7,7 +7,8 @@ from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QPlainTextEdit,
                                QPushButton, QTableWidget, QTableWidgetItem,
                                QHeaderView, QVBoxLayout, QWidget)
 
-from ..adapters.host_audit import BOOT_TIMINGS, LABELS, boot_seconds, history
+from ..adapters.host_audit import BOOT_TIMINGS, LABELS, boot_seconds, episode, history
+from ..core.workload_history import describe, describe_summary
 from .workers import Poller
 
 KINDS = {
@@ -18,9 +19,10 @@ KINDS = {
 
 
 class AuditTab(QWidget):
-    def __init__(self):
+    def __init__(self, jobs=None):
         super().__init__()
         self._before = None
+        self._marker = None
         self._selection = (None, None)
         self._events = []
         self._poller = None
@@ -41,6 +43,13 @@ class AuditTab(QWidget):
         self.latest_button = QPushButton("Mais recentes")
         self.latest_button.clicked.connect(self.latest)
         filters.addWidget(self.latest_button)
+        self.mark = QPushButton("Ficou lento agora")
+        self.mark.setEnabled(jobs is not None)
+        def mark_now():
+            self.mark.setEnabled(False)
+            jobs.run("audit-mark", "", done=self._marked)
+        self.mark.clicked.connect(mark_now)
+        filters.addWidget(self.mark)
         self.older = QPushButton("Anteriores")
         self.older.setEnabled(False)
         self.older.clicked.connect(self.previous)
@@ -60,7 +69,12 @@ class AuditTab(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.currentCellChanged.connect(self.show_detail)
+        self.table.cellDoubleClicked.connect(self.open_episode)
+        self.context_button = QPushButton("Ver cinco minutos antes e depois")
+        self.context_button.setEnabled(False)
+        self.context_button.clicked.connect(lambda: self.open_episode(self.table.currentRow()))
         layout.addWidget(self.table, 3)
+        layout.addWidget(self.context_button)
         self.details = QPlainTextEdit()
         self.details.setReadOnly(True)
         self.details.setAccessibleName("Detalhes do registro")
@@ -81,7 +95,23 @@ class AuditTab(QWidget):
         self._record_error = message
         self.coverage.setText(" · ".join(filter(None, (message, self._history_note))))
 
+    def _marked(self, result):
+        self.mark.setEnabled(True)
+        if result and result.get("ok") and result.get("marker"):
+            self._marker = result["marker"]
+            self.refresh()
+        else:
+            self.show_record_error((result or {}).get("reason") or "Registro do marcador não confirmado")
+
+    def open_episode(self, row, *_):
+        if 0 <= row < len(self._events):
+            event = self._events[row]
+            if event["source"] == "metrics" and event["kind"] == "incident":
+                self._marker = event["id"]
+                self.refresh()
+
     def latest(self, *_):
+        self._marker = None
         self._before = None
         self.refresh()
 
@@ -91,13 +121,15 @@ class AuditTab(QWidget):
             self.refresh()
 
     def refresh(self):
-        self._selection = self.source.currentData(), self._before
+        self._selection = ("episode", self._marker) if self._marker else (self.source.currentData(), self._before)
         self.older.setEnabled(False)
         if self._poller is not None:
             self._poller.request()
 
     def _read(self):
         selected, before = self._selection
+        if selected == "episode":
+            return (selected, before), episode(before)
         report = history(source=None if selected == "changes" else selected, changes_only=selected == "changes",
                          before_id=before, limit=100)
         return (selected, before), report
@@ -111,6 +143,14 @@ class AuditTab(QWidget):
         fresh = [state["checked"] for state in report["sources"].values()]
         count = len(report["events"])
         note = report.get("reason") or (f"{count} registros nesta página" if count else "Sem registros neste filtro.")
+        if "marker" in report:
+            note = (f"Marcador {report['marker']} · janela de 5 min de cada lado · "
+                    f"{report['before']['samples']} amostras antes e {report['after']['samples']} depois. "
+                    "Mais recentes volta ao histórico.")
+            note += "\nAntes · " + describe_summary(report["before"])
+            note += "\nDepois · " + describe_summary(report["after"])
+            if report.get("reason"):
+                note += " " + report["reason"]
         if gaps:
             note += " · Cobertura parcial: " + ", ".join(gaps)
         if fresh:
@@ -120,7 +160,7 @@ class AuditTab(QWidget):
         old_row = self.table.currentRow()
         selected_id = self._events[old_row]["id"] if 0 <= old_row < len(self._events) else None
         self._events = list(reversed(report["events"]))
-        self.older.setEnabled(report.get("limited", False))
+        self.older.setEnabled(self._marker is None and report.get("limited", False))
         self.table.setRowCount(len(self._events))
         new_row = -1
         for index, event in enumerate(self._events):
@@ -134,10 +174,16 @@ class AuditTab(QWidget):
         self.show_detail(new_row)
 
     def show_detail(self, row, *_):
+        self.context_button.setEnabled(False)
         if 0 <= row < len(self._events):
             event = self._events[row]
             data = event["data"]
-            if event["kind"] == "startup":
+            if event["source"] == "metrics" and event["kind"] == "sample":
+                evidence = describe(data) + "\n\n" + json.dumps(data, ensure_ascii=False, indent=2)
+            elif event["source"] == "metrics" and event["kind"] == "incident":
+                self.context_button.setEnabled(True)
+                evidence = event["subject"]
+            elif event["kind"] == "startup":
                 lines = [f"{label}  {boot_seconds(data[key])}" for key, label in BOOT_TIMINGS.items()
                          if data.get(key) is not None]
                 if data.get("reason"):

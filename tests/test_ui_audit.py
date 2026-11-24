@@ -114,3 +114,20 @@ def test_options_keep_host_history_outside_the_auditor(qapp, tmp_path, monkeypat
     choice.click()
     assert audit_profile.history_status()["enabled"] is False and not audit_profile.records()
     window.close()
+
+
+def test_marker_opens_episode_and_missing_measurements_stay_visible(qapp):
+    class Jobs:
+        def run(self, action, target, done):
+            assert action == "audit-mark"
+            done({"ok": True, "marker": 14})
+    tab = AuditTab(jobs=Jobs())
+    tab.mark.click()
+    assert tab._selection == ("episode", 14)
+    tab._show_history((tab._selection, {"marker": 14, "before": {"samples": 1, "agents": {}},
+        "after": {"samples": 0}, "sources": {}, "events": [{"kind": "sample", "source": "metrics",
+        "id": 1, "subject": "", "boot_id": "boot", "at": "2026-11-24T08:00:00+00:00", "data": {}}]}))
+    tab.table.selectRow(0)
+    assert "1 amostras antes" in tab.coverage.text() and "RAM disponível ?" in tab.details.toPlainText()
+    tab.latest_button.click()
+    assert tab._marker is None

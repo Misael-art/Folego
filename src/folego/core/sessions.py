@@ -96,6 +96,7 @@ class Session:
     ended_at: float | None = None
     ended_reason: str | None = None
     artifacts: tuple[Artifact, ...] = ()
+    observer_pid_namespace: int | None = None
 
     @property
     def ended(self) -> bool:
@@ -112,6 +113,7 @@ class Session:
             "disconnected_at": self.disconnected_at, "ended_at": self.ended_at,
             "ended_reason": self.ended_reason,
             "artifacts": [item.to_dict() for item in self.artifacts],
+            "observer_pid_namespace": self.observer_pid_namespace,
         }
 
     @classmethod
@@ -134,8 +136,11 @@ class Session:
         artifacts = data.get("artifacts", [])
         if not isinstance(artifacts, list):
             raise SessionError("artefatos não são uma lista")
+        namespace = data.get("observer_pid_namespace")
+        if namespace is not None and (type(namespace) is not int or namespace <= 0):
+            raise SessionError("namespace de PID do registro inválido")
         return cls(
-            session_id=session_id, pid=pid, starttime=starttime, boot_id=boot_id,
+            observer_pid_namespace=namespace, session_id=session_id, pid=pid, starttime=starttime, boot_id=boot_id,
             uid=uid, created_at=created_at, heartbeat_at=heartbeat_at,
             state=state, project=str(data.get("project", "")),
             label=str(data.get("label", "")),
@@ -246,13 +251,32 @@ class SessionRegistry:
             raise SessionError("boot_id indisponível: não é possível distinguir reboots")
         return boot
 
+    def _pid_namespace(self):
+        try:
+            return (self.proc_root / "self/ns/pid").stat().st_ino
+        except OSError:
+            return None
+
     def _refresh(self, session: Session, now: float, boot: str) -> Session:
         if session.state == ENDED:
             return session
         if boot and session.boot_id != boot:
             return replace(session, state=ENDED, ended_at=now,
                            ended_reason="boot mudou desde o registro")
+        if not boot or (session.observer_pid_namespace is not None
+                        and self._pid_namespace() != session.observer_pid_namespace):
+            return session
         live = procfs.read_proc(self.proc_root, session.pid)
+        if live is None:
+            # Missing fields or a restricted /proc must preserve keep_active.
+            try:
+                (self.proc_root / str(session.pid)).stat()
+            except FileNotFoundError:
+                pass
+            except OSError:
+                return session
+            else:
+                return session
         if live is None or live.state == "Z":
             return replace(session, state=ENDED, ended_at=now,
                            ended_reason="processo não existe mais (ou é zumbi)")
@@ -332,11 +356,12 @@ class SessionRegistry:
             raise SessionError(f"pid {pid} pertence a uid {live.uid}, não a {own_uid}")
         boot = self._boot()
         now = self._clock()
+        namespace = self._pid_namespace()
         with self._locked():
             sessions = self._load()
             for item in sessions:
                 if (not item.ended and item.boot_id == boot and item.pid == live.pid
-                        and item.starttime == live.starttime):
+                        and item.starttime == live.starttime and item.observer_pid_namespace in (None, namespace)):
                     updated = replace(
                         item, project=project or item.project,
                         label=label or item.label,
@@ -348,7 +373,7 @@ class SessionRegistry:
                     return updated
             cgroup = read_cgroup(live.pid, self.proc_root)
             session = Session(
-                session_id=str(uuid.uuid4()), pid=live.pid,
+                observer_pid_namespace=namespace, session_id=str(uuid.uuid4()), pid=live.pid,
                 starttime=live.starttime, boot_id=boot, uid=live.uid,
                 created_at=now, heartbeat_at=now, state=ACTIVE,
                 project=project, label=label, keep_active=keep_active,

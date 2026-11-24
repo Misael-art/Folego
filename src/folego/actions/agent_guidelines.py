@@ -33,7 +33,30 @@ BODY = '''## Uso cuidadoso dos recursos do host
 - Não crie folga encerrando agentes, daemons, apps, rede ou sessão, limpando caches compartilhados ou dados pessoais. Não use stress, enchimento de RAM/disco, descarga ou aquecimento como QA no host físico. Sem instalações globais por conveniência. Encerre somente filhos temporários próprios identificados e acompanhados; preserve evidência e recuperação do trabalho útil.
 - Execute os checks pertinentes em lotes proporcionais ao risco e registre ambiente, limites e resultados; não afrouxe gates para obter verde. Propague esta orientação ao criar novos perfis de agentes, conferindo o arquivo global realmente carregado. Esta orientação não amplia grants nem substitui contratos do projeto ou limites impostos pelo sistema.
 '''
-BLOCK = BEGIN + b'\n' + BODY.encode() + END + b'\n'
+ORIGINAL_BLOCK = BEGIN + b'\n' + BODY.encode() + END + b'\n'
+WORKLOAD_GUIDE = ('- Em sessões locais do Codex ou Claude Code, quando o Fôlego estiver disponível, '
+                  'use o launcher participante para uma carga pesada em primeiro plano. '
+                  'Consulte folego session capacity --ram-mib RAM --disk-mib DISCO --destination DESTINO '
+                  'e execute folego session run com as mesmas estimativas e -- COMANDO. '
+                  'Use o executável do ambiente gerenciado do Fôlego. A reserva é revalidada no início. '
+                  'Se a visão do host for parcial, preserve a sessão e adie a carga.\n')
+BLOCK = ORIGINAL_BLOCK[:-len(END + b'\n')] + WORKLOAD_GUIDE.encode() + END + b'\n'
+
+
+def _block(entry):
+    edition = entry.get('edition', 1)
+    if type(edition) is not int or edition not in (1, 2):
+        raise ValueError('Versão desconhecida da orientação; preservada')
+    return ORIGINAL_BLOCK if edition == 1 else BLOCK
+
+
+def _upgrade(before):
+    raw = _bytes(before)
+    if raw.count(ORIGINAL_BLOCK) != 1 or raw.count(BEGIN) != 1 or raw.count(END) != 1:
+        raise ValueError('Orientação anterior divergente; preservada')
+    return _file(raw.replace(ORIGINAL_BLOCK, BLOCK, 1), before['mode'])
+
+
 LEGACY_BEGIN = b'<!-- BEGIN HOST RESOURCE CHECK -->'
 LEGACY_END = b'<!-- END HOST RESOURCE CHECK -->'
 LEGACY_SHA = 'daec1f224f6b2112bd955d6e8a23494447e0f7819fd3384d9826ccaddc22dcf2'
@@ -158,6 +181,7 @@ class AgentGuidelines:
             if entry['path'] not in allowed or entry['path'] in seen:
                 raise ValueError('Alvo do recibo fora do catálogo; preservado')
             seen.add(entry['path'])
+            _block(entry)
             self._validate_snapshot(entry['before'])
             if entry['client'] != allowed[entry['path']]:
                 raise ValueError('Cliente do recibo divergente')
@@ -172,6 +196,10 @@ class AgentGuidelines:
                 self._validate_snapshot(change[key])
             entry = next(e for e in row['entries'] if e['path'] == change['path'])
             expected = self._added(entry) if row['enabled'] else self._removed(entry, change['before'])
+            if change.get('upgrade') is True:
+                if not row['enabled'] or entry.get('edition') != 2:
+                    raise ValueError('Atualização de orientação incompatível')
+                expected = _upgrade(change['before'])
             if expected != change['after']:
                 raise ValueError('Efeito não corresponde à orientação identificada')
         return row
@@ -203,7 +231,7 @@ class AgentGuidelines:
         before = entry['before']
         data = _bytes(before) if before['kind'] == 'file' else HEADERS.get(entry['client'], b'')
         data += b'' if not data or data.endswith(b'\n\n') else b'\n\n'
-        return _file(data + BLOCK, before.get('mode', 0o600))
+        return _file(data + _block(entry), before.get('mode', 0o600))
 
     @staticmethod
     def _removed(entry, current):
@@ -212,6 +240,10 @@ class AgentGuidelines:
         data = _bytes(current)
         if current == entry.get('legacy'):
             return entry['before']
+        if entry.get('edition') == 2 and ORIGINAL_BLOCK in data:
+            # Interruption before this v1 file was upgraded.
+            entry = {**entry, 'edition': 1}
+        block = _block(entry)
         added = AgentGuidelines._added(entry)
         if current == added:
             return entry['before']
@@ -219,13 +251,13 @@ class AgentGuidelines:
             if LEGACY_BEGIN in data or LEGACY_END in data:
                 raise ValueError('Bloco manual divergente durante recuperação; preservado')
             return current  # Already removed externally: preserve that edit.
-        if data.count(BEGIN) != 1 or data.count(END) != 1 or data.count(BLOCK) != 1:
+        if data.count(BEGIN) != 1 or data.count(END) != 1 or data.count(block) != 1:
             raise ValueError('Bloco do Fôlego editado ou ambíguo; preservado')
         before = entry['before']
         original = _bytes(before) if before['kind'] == 'file' else b''
         fragment = _bytes(added)[len(original):]
         # Remove the complete insertion when intact; otherwise only our marked body.
-        remove = fragment if data.count(fragment) == 1 else BLOCK
+        remove = fragment if data.count(fragment) == 1 else block
         return _file(data.replace(remove, b'', 1), current['mode'])
 
     def _legacy(self, manifest, catalog):
@@ -275,7 +307,7 @@ class AgentGuidelines:
             try:
                 snap = _snapshot(Path(entry['path']))
                 data = _bytes(snap) if snap['kind'] == 'file' else b''
-                if data.count(BLOCK) != 1 or data.count(BEGIN) != 1 or data.count(END) != 1:
+                if data.count(_block(entry)) != 1 or data.count(BEGIN) != 1 or data.count(END) != 1:
                     conflicts.append(entry['path'])
             except (OSError, ValueError):
                 conflicts.append(entry['path'])
@@ -338,8 +370,14 @@ class AgentGuidelines:
                 for entry in entries:
                     snap = _snapshot(Path(entry['path']))
                     raw = _bytes(snap) if snap['kind'] == 'file' else b''
-                    if raw.count(BLOCK) != 1 or raw.count(BEGIN) != 1 or raw.count(END) != 1:
+                    if raw.count(_block(entry)) != 1 or raw.count(BEGIN) != 1 or raw.count(END) != 1:
                         raise ValueError('Orientação gerenciada mudou; consulta necessária')
+                    if entry.get('edition', 1) == 1:
+                        desired = _upgrade(snap)
+                        if len(_bytes(desired)) > 65536:
+                            raise ValueError('Diretrizes excedem orçamento de 64 KiB')
+                        entry['edition'] = 2
+                        changes.append({'path': entry['path'], 'before': snap, 'after': desired, 'upgrade': True})
                 known = {e['path'] for e in entries}
                 for name, client in catalog.items():
                     if name in known:
@@ -350,7 +388,7 @@ class AgentGuidelines:
                     if BEGIN in raw or END in raw or LEGACY_BEGIN in raw or LEGACY_END in raw:
                         if name not in legacy:
                             raise ValueError('Orientação preexistente sem recibo; preservada')
-                    entry = {'path': name, 'client': client,
+                    entry = {'path': name, 'client': client, 'edition': 2,
                              'before': legacy[name][0] if name in legacy else current}
                     if name in legacy:
                         entry['legacy'] = legacy[name][1]
