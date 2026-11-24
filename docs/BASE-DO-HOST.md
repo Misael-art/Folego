@@ -6,6 +6,19 @@ preserva login, entrada, rede, áudio, energia, armazenamento e diagnóstico
 durante o desenvolvimento com agentes. Os nomes das units precisam ser
 reconsultados após atualização da distribuição ou mudança de host.
 
+## Bloqueador Wayland e tela de login no Plasma 6.8.2
+
+O KWin fornece uma conexão Wayland ao processo do bloqueador. O hook de compatibilidade BigLinux examinado substitui a entrada do pacote por um script que inicia o mesmo greeter duas vezes. Neste Jupiter, após a retomada, o compositor rejeitou um identificador de objeto e o greeter abortou. Há um relato independente da mesma falha em duas máquinas com a mesma versão do Plasma. [Código KDE](https://github.com/KDE/kscreenlocker/blob/v6.8.2/ksldapp.cpp#L382-L418) · [Relato BigLinux](https://github.com/biglinux/biglinux-improve-compatibility/issues/26)
+
+A ferramenta administrativa [biglinux-lockscreen.sh](../tools/biglinux-lockscreen.sh) oferece um reparo manual e específico desta revisão. O Fôlego não a executa em segundo plano.
+
+1. Execute `tools/biglinux-lockscreen.sh --check` para conferir o pacote, o hook e os hashes do script de entrada e do original.
+2. Em um terminal administrativo do host, execute `sudo /usr/bin/bash tools/biglinux-lockscreen.sh --apply` na raiz do projeto. A ferramenta usa a trava do pacman, preserva o script anterior, mascara somente o hook incompatível e substitui atomicamente a entrada pelo binário original. A próxima chamada do KDE usa a entrada restaurada.
+3. Execute novamente `--check`. O estado esperado é `Bloqueador nativo, hook mascarado.` O aceite físico depende da próxima retomada normal do usuário.
+4. Para restaurar a configuração anterior na revisão suportada, use `sudo /usr/bin/bash tools/biglinux-lockscreen.sh --undo`. A máscara persiste após atualizações. Quando houver uma correção oficial do hook, `--release-hook` com privilégio administrativo remove a máscara identificada e deixa a versão instalada do executável disponível para o gerenciador de pacotes.
+
+A tela de login do SDDM é independente do bloqueador. Em modo de teste, o tema BigLinux instalado recorreu ao tema embutido porque faltava o tipo QML `VirtualKeyboardLoader`. A revisão do fornecedor para Plasma 6.8 carregou no mesmo teste. A interface embutida encaminha a ativação do botão de desligar diretamente ao SDDM. O journal identifica o pedido do greeter e a aceitação pelo logind. A entrada física que o acionou permanece desconhecida. [Correção do tema](https://github.com/biglinux/sddm-theme-biglinux/commit/1617f81bb3472f4f7e967b65a5ba3eb674677c9a) · [Tema embutido do SDDM](https://github.com/sddm/sddm/blob/v0.21.0/src/greeter/theme/Main.qml#L274-L284)
+
 ## Estado observado e requisitos físicos
 
 - Kernel `6.18.49-1-MANJARO`, plataforma Jupiter e aproximadamente 14,5 GiB de

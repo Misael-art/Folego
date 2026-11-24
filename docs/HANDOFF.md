@@ -1,5 +1,11 @@
 # Passagem para o próximo agente — atualizada em 24/11/2026
 
+## Retomada Wayland no BigLinux — 24/11/2026
+
+O [procedimento do bloqueador](BASE-DO-HOST.md#bloqueador-wayland-e-tela-de-login-no-plasma-682) usa uma ferramenta manual de administração e o binário original do pacote 6.8.2-1 conferido pelo SHA-256 do manifesto. Sobre o SHA anterior `323187c`, os oito checks do PR #15 estavam aprovados. A verificação local desta mudança incluiu sintaxe Bash, diff, preflight real e aplicação, repetição, reversão e liberação do hook em filesystem descartável com paclock. A prova recusou lock concorrente, máscara alheia e original divergente.
+
+O teste isolado do SDDM confirmou o fallback do tema instalado. Os 23 arquivos da revisão oficial para Plasma 6.8 foram conferidos pelos identificadores dos blobs. O greeter carregou essa revisão no mesmo modo offscreen, com avisos de layout. O teste usou socket e barramentos desconectados do login. A causa da ativação de PowerOff, autenticação e retomada física continuam sem aceite. Aplicação no host exige um terminal administrativo e conferência pelo modo de consulta.
+
 ## Diagnóstico de desligamento na tela de login — 24/11/2026
 
 O incremento `3cae41977d84a97ed3d09c66122cbba49d39b221` segue no [PR #15](https://github.com/Misael-art/Folego/pull/15). O SHA anterior `50c3d73` tinha os oito checks aprovados.
