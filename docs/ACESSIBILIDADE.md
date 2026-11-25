@@ -395,3 +395,27 @@ Outros modelos e clientes podem produzir sintomas semelhantes. O teste de
 movimento é manual. Abre somente a saída relativa identificada e descarta os
 eventos assim que verifica se houve movimento. O recibo de habilitação e o
 resultado do teste físico permanecem independentes.
+
+### Do dock ao modo portátil
+
+No Steam Deck com KDE/Wayland, a supervisão de entrada acompanha os conectores
+de vídeo e identifica os canais de teclado e mouse internos pelo dispositivo
+USB e driver. A aba Acessibilidade mostra a topologia, e o histórico registra
+mudanças entre monitor externo e portátil. Um mouse do dock tem identidade
+própria. A saída dele não comprova que o trackpad interno parou.
+
+Se uma das duas entradas internas estiver desabilitada, duas observações
+consecutivas permitem solicitar sua habilitação pelo KWin, mesmo na primeira
+execução após reinstalação. O ponteiro tem prioridade. A sessão local precisa
+estar ativa e desbloqueada. Jogo identificado, emulador, frontend, proprietário
+externo ou foco desconhecido protegem o controle. Uma janela em tela cheia
+também adia a intervenção. O monitor reavalia ao retornar ao desktop.
+
+Com o driver nativo disponível, o painel indica o estado do ponteiro e do
+teclado do firmware. A confirmação do cursor e do clique exige um gesto.
+Combinações adicionais, como Steam+X, dependem do perfil Steam Input ou de um
+mapeador do desktop. A guarda do Steam restaura seu perfil conhecido segundo
+a referência salva. O ciclo de dispositivos do Wine autorizado em um incidente
+individual continua fora das rotinas automáticas do monitor.
+
+[Mapa visual dos botões e atalhos do Steam Input e do PhaseZero](assets/controles-desktop-deck.svg). O comparativo usa os arquivos desktop_neptune.vdf e chord_neptune.vdf do [pacote público da Valve](https://client-update.akamai.steamstatic.com/public_all.zip.f7b7316d122d96ff7f79b6eede24edd5b142d7bf) e o perfil PhaseZero-Desktop da versão 1.22.16.

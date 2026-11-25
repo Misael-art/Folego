@@ -238,7 +238,7 @@ class DesktopRecovery:
         visible = visible and current.get("visible") == "true"
         return visible, "teclado visível; abertura automática por toque preservada" if visible else "KWin não exibiu o teclado; confirme provedor e aplicativo com campo de texto"
 
-    def enable_devices(self, key, report, *, delegated=False):
+    def enable_devices(self, key, report, *, delegated=False, before_enable=None):
         kinds = {key}
         devices = [d for d in report["devices"] if kinds.intersection(d["kinds"])]
         if key == "touchpad" and not devices:
@@ -262,6 +262,8 @@ class DesktopRecovery:
                     continue
                 if not device["repairable"]:
                     return False, "compositor não autoriza reabilitar este dispositivo"
+                if before_enable and (reason := before_enable(current, matching)):
+                    return False, reason
                 self.native.deadline = self.native.clock() + 2
                 self.native.call([self.native.qdbus, report["service_owner"], DEVICE_ROOT + "/" + device["event"],
                     PROPERTIES + ".Set", DEVICE_IFACE, "enabled", "true"])

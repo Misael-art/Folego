@@ -54,3 +54,42 @@ def test_raw_holder_requires_wine_and_exact_valve_device(tmp_path, monkeypatch):
     (interface / "bInterfaceNumber").write_text("02")
     (service / "comm").write_text("other")
     assert deck_hid.wine_controller_holder() is None
+
+
+def test_internal_inputs_require_physical_driver_interfaces_and_logical_pad(tmp_path):
+    drm = tmp_path / "class/drm/card0-eDP-1"
+    external = drm.with_name("card0-DP-1")
+    for connector in (drm, external):
+        connector.mkdir(parents=True)
+        (connector / "status").write_text("connected")
+    setting = tmp_path / "module/hid_steam/parameters/lizard_mode"
+    setting.parent.mkdir(parents=True)
+    setting.write_text("Y")
+    driver = tmp_path / "drivers/hid-steam"
+    driver.mkdir(parents=True)
+    devices = []
+    for i, kind in enumerate(("keyboard", "pointer", "gamepad")):
+        iface = tmp_path / f"interface-{i}"
+        hid = iface / f"0003:28DE:1205.000{i}"
+        node = hid / f"input/input{i}"
+        node.mkdir(parents=True)
+        (hid / "driver").symlink_to(driver)
+        (iface / "bInterfaceNumber").write_text(f"{i:02}")
+        name = "Steam Deck" if i == 2 else "Valve Software Steam Deck Controller"
+        (node / "name").write_text(name)
+        event = tmp_path / f"class/input/event{i}"
+        event.mkdir(parents=True)
+        (event / "device").symlink_to(node)
+        devices.append(dict(key=kind, kinds=[kind], name=name, event=event.name,
+                            deck_controller=True, stable=True))
+    observe = lambda: deck_hid.desktop_inputs(tmp_path, devices)
+    assert observe() == {"display": "monitor externo", "native_available": True,
+                         "roles": {"keyboard": "keyboard", "pointer": "pointer"}}
+    (external / "status").write_text("disconnected")
+    assert observe()["display"] == "portátil"
+    (external / "status").write_text("unknown")
+    assert observe()["display"] == "desconhecida"
+    devices.pop()
+    assert not observe()["native_available"]
+    (tmp_path / "interface-1/bInterfaceNumber").write_text("02")
+    assert not observe()["roles"]

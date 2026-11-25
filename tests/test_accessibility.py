@@ -488,3 +488,41 @@ def test_headless_watch_runs_without_ui_or_peers_and_writes_observable_status(su
     value["overview"]["mono"] -= 30
     action.save_object(supervisor.store.root / "watch-status.json", value)
     assert supervisor.resident_overview() is None
+
+
+def test_undock_confirms_deck_inputs_then_recovers_without_first_healthy_sample(supervisor):
+    # Previously the new policy could never learn a device first seen disabled.
+    device = supervisor.native.report["devices"][0]
+    device.update(deck_controller=True, kinds=["pointer"])
+    layout = {"roles": {KEY: "pointer"}, "display": "monitor externo", "native_available": True}
+    supervisor.native.report["deck_desktop"] = layout
+    owner = ["emulador ativo"]
+    supervisor.profile_guard = SimpleNamespace(
+        tick=lambda report: None, annotate=lambda report: None, desktop_blocker=lambda report: owner[0])
+    supervisor.configure(enabled=True)
+    supervisor.tick()
+    layout["display"] = "portátil"
+    supervisor.tick()
+    assert not supervisor.native.calls
+    assert supervisor.tick()["state"] == "waiting"
+    assert not supervisor.native.calls and not supervisor.store.read()["attempts"]
+    owner[0] = ""
+    supervisor.tick()
+    assert not supervisor.native.calls
+    result = supervisor.tick()
+    assert result["outcome"] == "sucesso"
+    assert len(supervisor.native.calls) == 1
+    supervisor.tick()
+    assert len(supervisor.native.calls) == 1
+
+
+def test_game_entering_after_plan_blocks_deck_effect(supervisor):
+    device = supervisor.native.report["devices"][0]
+    device.update(deck_controller=True, kinds=["keyboard"])
+    supervisor.native.report["deck_desktop"] = {
+        "roles": {KEY: "keyboard"}, "display": "portátil", "native_available": True}
+    supervisor.configure(enabled=True)
+    plan = action.plans(supervisor.native.collect(), automatic=True)[0]
+    supervisor.profile_guard = SimpleNamespace(desktop_blocker=lambda report: "frontend ativo")
+    assert supervisor.repair(plan, confirm=True).outcome == Outcome.REFUSED
+    assert not supervisor.native.calls and not supervisor.store.read()["attempts"]

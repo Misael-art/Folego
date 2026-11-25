@@ -360,6 +360,9 @@ class AccessibilityTab(QWidget):
                              + ("habilitada" if enabled else "desabilitada")
                              + f" · {report.get('baseline_count', 0)} dispositivo(s) registrado(s) · monitor residente: "
                              + ("ciclo recente" if report.get("watcher", {}).get("state") == "observed" else "sem sinal recente"))
+        layout = report.get("deck_desktop")
+        if isinstance(layout, dict) and layout.get("display") in ("portátil", "monitor externo", "desconhecida"):
+            self.summary.setText(self.summary.text() + " · Tela do Deck: " + layout["display"])
         self.auto_button.setText("Desabilitar supervisão" if enabled else "Habilitar supervisão")
         self.install_button.setEnabled(not self._busy)
         blockers = report.get("blockers", [])

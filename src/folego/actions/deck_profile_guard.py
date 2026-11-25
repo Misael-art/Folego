@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import time
 from contextlib import nullcontext
@@ -33,6 +34,8 @@ class DeckProfileGuard:
         observed = self.profiles.observe()
         report["desktop_profiles"] = observed
         touchpad = observed.get("touchpad", {})
+        layout = report.get("deck_desktop", {})
+        roles = layout.get("roles", {})
         for card in report.get("cards", []):
             row = observed.get(card.get("key"))
             if touchpad.get("code") == "controller-access-unresolved" and (
@@ -40,6 +43,19 @@ class DeckProfileGuard:
                     or card["key"] == "gamepad" and card["state"] == "not-observed"):
                 card["state"] = "unknown"
                 card["detail"] = touchpad["detail"]
+                continue
+            if (card["key"] == "touchpad" and layout.get("native_available")
+                    and touchpad.get("state") == "unknown" and not touchpad.get("code")):
+                pair = [d for d in report["devices"] if d["key"] in roles]
+                enabled = [d["enabled"] for d in pair]
+                if len(enabled) == 2 and all(v is True for v in enabled):
+                    card.update(state="observed", detail="Ponteiro e teclado nativos habilitados no KWin. "
+                                "Teste o gesto e o clique. Atalhos personalizados dependem do mapeador.")
+                elif False in enabled:
+                    card.update(state="degraded", detail="Entrada interna desabilitada no compositor. "
+                                "A guarda verifica a sessão antes de reabilitar.")
+                else:
+                    card.update(state="unknown", detail="Estado das entradas internas no KWin incompleto.")
                 continue
             if row is None:
                 continue
@@ -54,7 +70,7 @@ class DeckProfileGuard:
         return [item for item in unresolved(self.coordinator.journal, capabilities=scope) if item != ignore]
 
     @staticmethod
-    def _game_blocker():
+    def _game_blocker(proc_root=Path("/proc")):
         """A missing/uncertain owner is not evidence that a game has ended."""
         state = paths._env_dir("XDG_STATE_HOME", Path.home() / ".local/state") / "retrofe/input-session"
         for name in ("steam-desktop-session.json", "kde-global-shortcut-guard.json"):
@@ -66,18 +82,21 @@ class DeckProfileGuard:
             except OSError:
                 return "sessão RetroFE não comprovada"
             return "RetroFE ainda possui uma sessão de perfil/atalhos"
-        known = {"RetroFE", "retroarch", "dolphin-emu", "pcsx2-qt", "flycast", "rpcs3",
-                 "gamescope", "ES-DE", "emulationstatio", "quiver-launcher"}
+        known = {"retroarch", "dolphin-emu", "pcsx2-qt", "flycast", "rpcs3",
+                 "gamescope", "es-de", "emulationstatio", "quiver-launcher", "duckstation-qt",
+                 "ppssppqt", "ppssppsdl", "cemu", "yuzu", "ryujinx", "azahar", "xemu", "mame",
+                 "eden", "shadps4", "suyu", "retrofe"}
         passive = {"systemd", "(sd-pam)", "ssh-agent", "portal-kde-veri", "kwin_wayland", "polkit-kde-auth"}
         try:
-            for proc in Path("/proc").iterdir():
+            for proc in proc_root.iterdir():
                 if not proc.name.isdigit():
                     continue
                 try:
                     if proc.stat().st_uid != os.getuid():
                         continue
                     name = (proc / "comm").read_text().strip()
-                    if name in known:
+                    program = name.lower().removesuffix(".exe")
+                    if program in known or program.startswith(("dolphin-emu", "pcsx2", "duckstation")):
                         return "jogo/frontend ativo; perfil de desktop preservado"
                     # Steam titles may not have a known process name. Inspect only
                     # this user's environment and never include its contents in logs.
@@ -99,6 +118,36 @@ class DeckProfileGuard:
         except OSError:
             return "processos de jogos não comprovados"
         return ""
+
+    def desktop_blocker(self, report):
+        """Recheck the foreground desktop before changing built-in inputs."""
+        if reason := self._game_blocker():
+            return reason
+        if "deck_desktop" not in report:
+            return ""
+        native = self._native
+        from ..adapters.accessibility import ProbeError
+        try:
+            expected = {"Active": "yes", "Remote": "no", "LockedHint": "no", "Type": "wayland",
+                        "User": str(os.getuid()), "Class": "user", "Seat": "seat0", "Desktop": "KDE"}
+            native.deadline = native.clock() + 3
+            raw = native.call(["loginctl", "show-session", "auto", *["--property=" + f for f in expected]])
+            values = dict(line.split("=", 1) for line in raw.splitlines())
+            if values != expected:
+                return "desktop local do Deck inativo, bloqueado ou desconhecido"
+            # A fullscreen title outside Steam may have no game identifier at all.
+            window = native.call(["kdotool", "getactivewindow"]).strip()
+            if not re.fullmatch(r"\{[0-9a-fA-F-]{36}\}", window):
+                return "janela em foco não comprovada"
+            info = native.call([native.qdbus, report["service_owner"], "/KWin",
+                                "org.kde.KWin.getWindowInfo", window])
+            if native.call(["kdotool", "getactivewindow"]).strip() != window:
+                return "foco mudou durante a verificação"
+            if [x.strip() for x in info.splitlines() if x.startswith("fullscreen:")] != ["fullscreen: false"]:
+                return "janela em tela cheia ou foco desconhecido; controle preservado"
+        except (OSError, ValueError, ProbeError):
+            return "sessão ou janela em foco não comprovada"
+        return self.profiles.controller_conflict()
 
     @staticmethod
     def _phasezero_audio_blocker(identity):
@@ -149,7 +198,7 @@ class DeckProfileGuard:
         if leases:
             return "recurso em uso ou reparo por outro responsável: " + leases[0]
         if key == "touchpad":
-            return self._game_blocker()
+            return "; ".join(report.get("blockers", [])) or self.desktop_blocker(report)
         return ''
 
     def manual_parameters(self, report):

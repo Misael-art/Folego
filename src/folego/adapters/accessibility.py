@@ -157,6 +157,9 @@ class NativeInput:
                 report["errors"].append(str(exc))
                 for device in report["devices"]:
                     device["repairable"] = False
+        if model in ("Jupiter", "Galileo"):
+            from .deck_hid import desktop_inputs
+            report["deck_desktop"] = desktop_inputs(self.sys_root, report["devices"])
         report["cards"] = device_cards(report["devices"], kernel_known=known,
                                         deck=model in ("Jupiter", "Galileo"))
         self._optional_cards(report)

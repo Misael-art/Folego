@@ -1,4 +1,29 @@
-# Passagem para o próximo agente — atualizada em 24/11/2026
+# Passagem para o próximo agente — atualizada em 25/11/2026
+
+## Retorno ao desktop após sair do dock — 25/11/2026
+
+O host registrou a desconexão USB às 05h18. O monitor externo saiu e o KWin
+manteve os canais internos de teclado e ponteiro habilitados. O serviço Wine
+anterior ainda detinha a interface do gamepad, apesar das opções salvas para
+sua próxima abertura. Após reaplicação manual autorizada no dispositivo
+virtual, a reenumeração retornou erro de pipe fechado. A associação original
+foi relida, o WineBus foi encontrado parado e iniciado isoladamente. O serviço
+voltou ao estado ativo com código zero, liberou a interface e o kernel registrou
+novamente o gamepad. O usuário confirmou cursor e clique no portátil, com a
+sessão e os processos do aplicativo e da ponte ainda ativos.
+
+O monitor existente passou a acompanhar a topologia e a identidade das duas
+entradas internas. O [guia de acessibilidade](ACESSIBILIDADE.md#do-dock-ao-modo-portátil)
+descreve o controle por jogo e o [mapa visual](assets/controles-desktop-deck.svg)
+compara os atalhos opcionais. A reenumeração manual do Wine fica fora da
+automação. A confirmação física cobre cursor e clique. O retorno após jogo e
+o comportamento de cada combinação de botões precisam de validação no perfil escolhido.
+
+Na base `8d8de34`, os oito checks do PR #15 estavam aprovados. No incremento,
+12 casos focados cobriram dock, mudança de foco/sessão, proteção de frontend,
+emuladores e identidade da interface. Uma janela própria no KDE/Wayland mostrou
+o modo portátil e o estado dos canais nativos com observações do host. A suíte
+completa usa o launcher participante quando houver margem.
 
 ## Trackpad do Deck com cliente HID do Wine — 24/11/2026
 

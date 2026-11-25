@@ -123,7 +123,9 @@ class Recovery:
             deck_input = any(d.get("deck_controller") for d in report["devices"])
             # The external reconcile-input command can change the whole controller.
             if usable_peer and deck_input and guard and not keyboard_only:
-                if conflict := guard.profiles.controller_conflict():
+                conflict = (guard.desktop_blocker(report) if "deck_desktop" in report
+                            else guard.profiles.controller_conflict())
+                if conflict:
                     input_block.append(conflict)
             if not input_block and usable_peer and any(k in INPUTS for k in plan.params["capabilities"]):
                 try:
@@ -174,11 +176,15 @@ class Recovery:
                             self._reserve_touch_attempt(plan)
                             ready, reason = self.backend.repair_touch(usable_peer)
                         else:
-                            ready, reason = self.backend.enable_devices(key, report, delegated=delegated)
+                            ready, reason = self.backend.enable_devices(key, report, delegated=delegated,
+                                before_enable=self.supervisor.deck_entry_blocker)
                             if ready and uses_deck_pointer(report["devices"], key):
                                 profile = guard.profiles.steam() if guard is not None else {}
-                                ready = profile.get("state") == "healthy"
+                                native = (report.get("deck_desktop", {}).get("native_available") is True
+                                          and profile.get("state") == "unknown" and not profile.get("code"))
+                                ready = profile.get("state") == "healthy" or native
                                 reason = "Ponteiro habilitado no KWin. " + (
+                                    "Entrada nativa identificada; teste o movimento e o clique." if native else
                                     profile.get("detail") or "Mapeamento do trackpad não verificado.")
                     elif key in INPUTS and input_block:
                         ready, reason = False, "; ".join(input_block)

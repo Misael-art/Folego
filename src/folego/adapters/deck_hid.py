@@ -133,3 +133,50 @@ def test_pointer_motion():
         "O kernel recebeu movimento do ponteiro Valve. Confira se o cursor acompanhou o gesto."
         if moved else "Nenhum movimento do ponteiro Valve em 8 s. Se você deslizou o dedo, "
                       "consulte o diagnóstico dos trackpads.")}
+
+
+def desktop_inputs(sys_root, devices):
+    """Identify the Deck's two firmware outputs and its logical pad at this sample."""
+    root = Path(sys_root)
+    roles = {}
+    native_pad = False
+    for device in devices:
+        if not device.get("deck_controller") or not device["stable"]:
+            continue
+        try:
+            node = (root / "class/input" / device["event"] / "device").resolve(strict=True)
+            hid = node.parent.parent
+            if (not re.fullmatch(r"0003:28DE:1205\.[0-9A-Fa-f]+", hid.name)
+                    or (hid / "driver").resolve(strict=True).name != "hid-steam"):
+                continue
+            interface = (hid.parent / "bInterfaceNumber").read_text().strip()
+            kind = {"00": "keyboard", "01": "pointer"}.get(interface)
+            if (kind in device["kinds"] and device["name"] == "Valve Software Steam Deck Controller"
+                    and (node / "name").read_text().strip() == device["name"]):
+                roles[device["key"]] = kind
+            elif interface == "02" and device["name"] == "Steam Deck" and "gamepad" in device["kinds"]:
+                native_pad = True
+        except (OSError, RuntimeError):
+            continue
+    mode = "desconhecida"
+    try:
+        statuses = {}
+        for connector in (root / "class/drm").glob("card*-*"):
+            name = connector.name.split("-", 1)[1]
+            if not name.startswith("Writeback-"):
+                statuses[connector.name] = (connector / "status").read_text().strip()
+        if any("-eDP-" in k and v == "connected" for k, v in statuses.items()):
+            external = [v for k, v in statuses.items() if "-eDP-" not in k]
+            if "connected" in external:
+                mode = "monitor externo"
+            elif all(v == "disconnected" for v in external):
+                mode = "portátil"
+    except OSError:
+        pass
+    try:
+        firmware = (root / "module/hid_steam/parameters/lizard_mode").read_text().strip() == "Y"
+    except OSError:
+        firmware = False
+    roles_unique = sorted(roles.values()) == ["keyboard", "pointer"]
+    return {"display": mode, "roles": roles if roles_unique else {},
+            "native_available": bool(roles_unique and firmware and native_pad)}
