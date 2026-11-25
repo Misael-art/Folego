@@ -312,10 +312,14 @@ def build_parser() -> argparse.ArgumentParser:
     startup = commands.add_parser("startup", help="início automático com a sessão, ligado por padrão")
     startup_sub = startup.add_subparsers(dest="sub", required=True)
     for name in ("status", "enable", "disable", "sync", "basic-status", "basic-enable",
-                 "basic-disable", "basic-sync", "basic-reconcile", "basic-widgets-prepare"):
+                 "basic-disable", "basic-sync", "basic-reconcile", "basic-widgets-prepare",
+                 "basic-keep", "basic-release"):
         command = startup_sub.add_parser(name)
         command.add_argument("--json", action="store_true")
         command.add_argument("--confirmar", action="store_true")
+        if name in ("basic-keep", "basic-release"):
+            command.add_argument("--item", required=True,
+                                 help="unit ou .desktop do catálogo que a sessão básica não deve adiar")
 
     access = commands.add_parser("accessibility", help="supervisão de entrada independente de projetos externos")
     access_sub = access.add_subparsers(dest="sub", required=True)
@@ -3071,6 +3075,7 @@ def _dispatch(ns, argv) -> int:
                     raise ValueError('Migração manual exige care-enable --confirmar')
                 result = (manager.status() if action == 'status' else
                           manager.configure(reconcile=True) if action == 'reconcile' else
+                          manager.keep(ns.item, action == 'keep') if action in ('keep', 'release') else
                           manager.configure(None if action == 'sync' else action == 'enable',
                                             adopt=ns.adopt_legacy))
             except (OSError, ValueError, KeyError, TypeError, RuntimeError, CoordinatorBusy) as exc:
@@ -3194,6 +3199,7 @@ def _dispatch(ns, argv) -> int:
                 manager = BasicSession()
                 result = (manager.status() if action == 'status' else
                           manager.configure(reconcile=True) if action == 'reconcile' else
+                          manager.keep(ns.item, action == 'keep') if action in ('keep', 'release') else
                           manager.configure(None if action == 'sync' else action == 'enable'))
             except (OSError, ValueError, KeyError, TypeError) as exc:
                 result = {'ok': False, 'state': 'unknown', 'outcome': 'recusa', 'message': str(exc)}

@@ -16,12 +16,16 @@ from .adapters.accessibility import bounded_command
 def preference():
     value = read_object(paths.config_dir() / "startup.json")
     if value is None:
-        return {"schema": 1, "enabled": True, "basic_session": True}
+        return {"schema": 1, "enabled": True, "basic_session": True, "basic_session_keep": []}
     if value.get('schema') != 1 or type(value.get("enabled")) is not bool:
         raise ValueError("preferência de inicialização desconhecida; preservada")
     value.setdefault('basic_session', True)
     if type(value['basic_session']) is not bool:
         raise ValueError('preferência de sessão básica desconhecida; preservada')
+    keep = value.setdefault('basic_session_keep', [])
+    if (type(keep) is not list or len(keep) > 64
+            or any(type(name) is not str or not name or len(name) > 255 for name in keep)):
+        raise ValueError('itens mantidos da sessão básica desconhecidos; preservados')
     return value
 
 

@@ -208,8 +208,27 @@ class BasicSession:
             save_object(paths.config_dir() / 'startup.json', row)
         return row['basic_session']
 
+    def _kept(self):
+        from .startup import preference
+        return frozenset(preference()['basic_session_keep'])
+
+    def _settle_kept(self, receipt):
+        """Drop entries the user chose to keep once their original is back.
+
+        Covers an interrupted keep(): the original was rewritten but the receipt
+        still listed the effect.
+        """
+        if not receipt or receipt['phase'] != 'applied':
+            return receipt
+        kept = self._kept()
+        entries = [e for e in receipt['entries'] if not (
+            Path(e['path']).name in kept
+            and _snapshot(Path(e['path']), link=Path(e['path']).name in UNITS) == e['before'])]
+        return receipt if len(entries) == len(receipt['entries']) else {**receipt, 'entries': entries}
+
     def _plan(self):
         entries, preserved = [], []
+        kept = self._kept()
         roots = (self.config, *self.system_config)
         effective = {}
         for root in roots:
@@ -221,7 +240,7 @@ class BasicSession:
             for path in sorted(listing):
                 if path.suffix == '.desktop': effective.setdefault(path.name, path)
         for name, source in effective.items():
-            if name in ESSENTIAL: continue
+            if name in ESSENTIAL or name in kept: continue
             raw = _snapshot(source, system=source.parent != self.config / 'autostart')
             cfg = _ini(_bytes(raw))['Desktop Entry']
             if (cfg.get('Hidden', 'false') == 'true' or
@@ -235,7 +254,7 @@ class BasicSession:
                                     'Desktop Entry', 'Hidden', 'true'), before.get('mode', 0o600))
             entries.append({'path': str(target), 'before': before, 'after': after,
                             'source': str(source), 'source_before': raw})
-        for name in sorted(UNITS):
+        for name in sorted(UNITS - kept):
             target = self.config / 'systemd/user' / name
             before = _snapshot(target, link=True)
             if before == MASK: continue  # An existing manual mask belongs to the user.
@@ -254,7 +273,7 @@ class BasicSession:
         from .plasma_widgets import widget_status
 
         enabled = self._policy()
-        receipt = self._receipt()
+        receipt = self._settle_kept(self._receipt())
         conflicts = []
         if receipt:
             for entry in receipt['entries']:
@@ -269,6 +288,7 @@ class BasicSession:
                 'operation_id': receipt['operation_id'] if receipt else None,
                 'targets': [Path(e['path']).name for e in receipt['entries']] if receipt else [],
                 'preserved': receipt.get('preserved', []) if receipt else [],
+                'kept': sorted(self._kept()),
                 'conflicts': conflicts, 'scope': SCOPE,
                 'widgets': widget_status(self.config, self.state.with_name('basic-widgets.json'), enabled),
                 'message': ('Configuração mudou; consulte o recibo antes de alterar.' if conflicts else
@@ -297,7 +317,7 @@ class BasicSession:
         with Coordinator().lock(wait=.2), normal_effects() as allowed:
             if not allowed:
                 return {**self.status(), "outcome": "recusa", "message": SUSPENDED}
-            receipt = self._receipt()
+            receipt = self._settle_kept(self._receipt())
             if reconcile:
                 if not receipt: return self.status()
                 desired = 'before' if receipt['phase'] == 'restoring' else 'after'
@@ -359,6 +379,43 @@ class BasicSession:
                 return {'ok': False, 'outcome': 'desconhecido', 'enabled': chosen,
                         'operation_id': row['operation_id'], 'state': row['phase'],
                         'message': str(exc) + '; consultar antes de repetir.', 'scope': SCOPE}
+
+    def keep(self, name, kept=True):
+        """Let one catalog item start normally while the basic session stays on.
+
+        The choice is durable before any effect. An item already deferred by the
+        current receipt gets its exact original back and leaves the receipt;
+        releasing it hands it back to the normal plan.
+        """
+        from .audit_profile import SUSPENDED, normal_effects
+        from .startup import preference
+        if name not in UNITS and name not in DESKTOPS:
+            raise BasicSessionError('Item fora do catálogo da sessão básica')
+        with Coordinator().lock(wait=.2), normal_effects() as allowed:
+            if not allowed:
+                return {**self.status(), 'outcome': 'recusa', 'message': SUSPENDED}
+            receipt = self._settle_kept(self._receipt())
+            if receipt and receipt['phase'] in ('intended', 'restoring'):
+                return {**self.status(), 'outcome': 'desconhecido'}
+            entry = current = None
+            if kept and receipt and receipt['phase'] == 'applied':
+                entry = next((e for e in receipt['entries'] if Path(e['path']).name == name), None)
+                if entry:
+                    current = _snapshot(Path(entry['path']), link=name in UNITS)
+                    if current not in (entry['before'], entry['after']):
+                        raise BasicSessionError('Mudança externa; original e configuração preservados')
+            row = preference()
+            names = set(row['basic_session_keep']) - {name}
+            row['basic_session_keep'] = sorted(names | {name} if kept else names)
+            save_object(paths.config_dir() / 'startup.json', row)  # Durable choice before effect.
+            if entry:
+                if current != entry['before']:
+                    self._write(Path(entry['path']), entry['before'], current)
+                self._save({**receipt, 'operation_id': str(uuid.uuid4()), 'parent_id': receipt['operation_id'],
+                            'entries': [e for e in receipt['entries'] if e is not entry]})
+        if not kept and self._policy():
+            return self.configure()  # The released item rejoins through the normal plan.
+        return {**self.status(), 'outcome': 'sucesso'}
 
     def _write(self, target, desired, expected):
         _parents(target)

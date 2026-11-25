@@ -508,6 +508,8 @@ class OptionsTab(QWidget):
             text += '\nItens adiados: ' + ', '.join(payload['targets'])
         if payload.get('preserved'):
             text += '\nItens sem classificação, preservados: ' + ', '.join(payload['preserved'])
+        if payload.get('kept'):
+            text += '\nMantidos ligados por escolha sua: ' + ', '.join(payload['kept'])
         widgets = payload.get('widgets') or {}
         if widgets.get('message'):
             text += '\n' + widgets['message']
