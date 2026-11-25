@@ -70,7 +70,7 @@ class DeckProfileGuard:
         return [item for item in unresolved(self.coordinator.journal, capabilities=scope) if item != ignore]
 
     @staticmethod
-    def _game_blocker(proc_root=Path("/proc")):
+    def _game_blocker(proc_root=Path("/proc"), *, mapper_pid=None):
         """A missing/uncertain owner is not evidence that a game has ended."""
         state = paths._env_dir("XDG_STATE_HOME", Path.home() / ".local/state") / "retrofe/input-session"
         for name in ("steam-desktop-session.json", "kde-global-shortcut-guard.json"):
@@ -82,11 +82,15 @@ class DeckProfileGuard:
             except OSError:
                 return "sessão RetroFE não comprovada"
             return "RetroFE ainda possui uma sessão de perfil/atalhos"
-        known = {"retroarch", "dolphin-emu", "pcsx2-qt", "flycast", "rpcs3",
-                 "gamescope", "es-de", "emulationstatio", "quiver-launcher", "duckstation-qt",
-                 "ppssppqt", "ppssppsdl", "cemu", "yuzu", "ryujinx", "azahar", "xemu", "mame",
-                 "eden", "shadps4", "suyu", "retrofe"}
-        passive = {"systemd", "(sd-pam)", "ssh-agent", "portal-kde-veri", "kwin_wayland", "polkit-kde-auth"}
+        from ..core.deck_games import SHORT, game_environment, game_program
+        from .deck_mapping import registered_games
+        try:
+            additional = frozenset(registered_games())
+        except (ValueError, OSError):
+            return "catálogo de jogos não comprovado"
+        short = SHORT | {n[:15] for n in additional if len(n) > 15}
+        passive = {"systemd", "(sd-pam)", "ssh-agent", "gpg-agent", "portal-kde-veri", "kwin_wayland", "polkit-kde-auth"}
+        deadline = time.monotonic() + .5
         try:
             for proc in proc_root.iterdir():
                 if not proc.name.isdigit():
@@ -95,9 +99,20 @@ class DeckProfileGuard:
                     if proc.stat().st_uid != os.getuid():
                         continue
                     name = (proc / "comm").read_text().strip()
-                    program = name.lower().removesuffix(".exe")
-                    if program in known or program.startswith(("dolphin-emu", "pcsx2", "duckstation")):
+                    if time.monotonic() > deadline:
+                        return "inventário de jogos excedeu o prazo"
+                    if mapper_pid is not None and int(proc.name) != mapper_pid and name.lower() in {
+                            "steam", "steamwebhelper", "scc-daemon", "inputplumber", "handheld-daemon", "hhd"}:
+                        return "controle reservado por " + name
+                    if game_program(name) or name.lower() in additional:
                         return "jogo/frontend ativo; perfil de desktop preservado"
+                    if name.lower() in short or name in ("AppRun", "python", "python3", "wine", "wine64"):
+                        with (proc / "cmdline").open("rb") as stream:
+                            args = stream.read(4096).split(b"\0")
+                        launch = args[:2] if name in ("python", "python3", "wine", "wine64") else args[:1]
+                        if any(game_program(arg.decode(errors="replace")) or
+                               Path(os.fsdecode(arg)).name.lower() in additional for arg in launch):
+                            return "jogo/frontend ativo; perfil de desktop preservado"
                     # Steam titles may not have a known process name. Inspect only
                     # this user's environment and never include its contents in logs.
                     try:
@@ -109,19 +124,17 @@ class DeckProfileGuard:
                         return "processo do usuário sem estado comprovado"
                     if len(data) > 65536:
                         return "ambiente de processo excede orçamento de leitura"
-                    if any(part.startswith((b"SteamGameId=", b"SteamAppId=")) and
-                           part.split(b"=", 1)[1] not in (b"", b"0", b"413080")
-                           for part in data.split(b"\0")):
-                        return "aplicativo Steam ativo; perfil de desktop preservado"
+                    if reason := game_environment(data, additional):
+                        return reason
                 except (FileNotFoundError, ProcessLookupError):
                     continue
         except OSError:
             return "processos de jogos não comprovados"
         return ""
 
-    def desktop_blocker(self, report):
+    def desktop_blocker(self, report, *, mapper_pid=None):
         """Recheck the foreground desktop before changing built-in inputs."""
-        if reason := self._game_blocker():
+        if reason := (self._game_blocker() if mapper_pid is None else self._game_blocker(mapper_pid=mapper_pid)):
             return reason
         if "deck_desktop" not in report:
             return ""
@@ -143,11 +156,27 @@ class DeckProfileGuard:
                                 "org.kde.KWin.getWindowInfo", window])
             if native.call(["kdotool", "getactivewindow"]).strip() != window:
                 return "foco mudou durante a verificação"
-            if [x.strip() for x in info.splitlines() if x.startswith("fullscreen:")] != ["fullscreen: false"]:
-                return "janela em tela cheia ou foco desconhecido; controle preservado"
+            props = dict(line.split(": ", 1) for line in info.splitlines() if ": " in line)
+            if props.get("fullscreen") != "false":
+                if props.get("fullscreen") != "true" or not self._desktop_application(props):
+                    return "janela em tela cheia ou foco desconhecido; controle preservado"
         except (OSError, ValueError, ProbeError):
             return "sessão ou janela em foco não comprovada"
         return self.profiles.controller_conflict()
+
+    @staticmethod
+    def _desktop_application(props):
+        # A fullscreen file manager or editor still needs desktop controls.
+        apps = {"org.kde.dolphin": {"dolphin"}, "org.kde.kate": {"kate"},
+                "org.kde.konsole": {"konsole"}, "chatgpt": {"chatgpt"}, "codex": {"codex", "chatgpt"},
+                "claude": {"claude", "claude-desktop"}, "code": {"code"},
+                "libreoffice-writer": {"soffice.bin"}, "libreoffice-calc": {"soffice.bin"}}
+        pid = props.get("pid", "")
+        names = apps.get(props.get("resourceClass", "").lower())
+        if not names or not pid.isdecimal():
+            return False
+        proc = Path("/proc") / pid
+        return proc.stat().st_uid == os.getuid() and (proc / "exe").readlink().name.lower() in names
 
     @staticmethod
     def _phasezero_audio_blocker(identity):

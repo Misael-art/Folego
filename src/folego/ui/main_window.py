@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (QMainWindow, QStyle, QStyleOptionTab, QStylePaint
                               QTabWidget, QFrame, QHBoxLayout, QLabel, QPushButton,
                               QToolButton, QMenu)
 
+from .deck_selector import DeckButton
 from . import desktop_caps, title_signal
 from .compact import CompactWindow
 from .desktop_preferences import WIDGET_VIEWS, startup_view
@@ -316,6 +317,8 @@ class MainWindow(QMainWindow):
             self.widget_position_menu.addAction(
                 label, lambda checked=False, target=mode: self._show_widget_position(target))
         self.control_button.setMenu(self.control_menu)
+        self.deck_button = DeckButton(self)
+        header.addWidget(self.deck_button)
         header.addWidget(self.control_button)
         self.setMenuWidget(self.navigation_header)
         self.accessibility.options_requested.connect(self._open_options)

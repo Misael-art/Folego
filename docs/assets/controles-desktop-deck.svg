@@ -50,11 +50,11 @@
 <rect x="30" y="684" width="1290" height="36" fill="#ffffff"/>
 <text x="44" y="708" font-size="18" fill="#243848" font-weight="400">L4 / R4 · traseiros superiores</text>
 <text x="460" y="708" font-size="18" fill="#243848" font-weight="400">Shift / Page Up</text>
-<text x="900" y="708" font-size="18" fill="#243848" font-weight="400">Campo anterior / próximo</text>
+<text x="900" y="708" font-size="18" fill="#243848" font-weight="400">Menu do KDE / visão geral</text>
 <rect x="30" y="720" width="1290" height="36" fill="#f2f5f3"/>
 <text x="44" y="744" font-size="18" fill="#243848" font-weight="400">L5 / R5 · traseiros inferiores</text>
 <text x="460" y="744" font-size="18" fill="#243848" font-weight="400">Meta / Page Down</text>
-<text x="900" y="744" font-size="18" fill="#243848" font-weight="400">Menu do KDE / visão geral</text>
+<text x="900" y="744" font-size="18" fill="#243848" font-weight="400">Campo anterior / próximo</text>
 <rect x="30" y="756" width="1290" height="36" fill="#ffffff"/>
 <text x="44" y="780" font-size="18" fill="#243848" font-weight="400">Menu ☰ · topo direito</text>
 <text x="460" y="780" font-size="18" fill="#243848" font-weight="400">Esc · segurar alterna Desktop/Gamepad</text>

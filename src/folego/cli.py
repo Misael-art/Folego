@@ -331,6 +331,14 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("operation_id")
         else:
             command.add_argument("--plan", required=True)
+    mapping = access_sub.add_parser("deck-map", help="consulta ou escolhe o perfil de desktop do Deck")
+    mapping.add_argument("choice", choices=("steam", "phasezero"), nargs="?")
+    mapping.add_argument("--json", action="store_true")
+    games = access_sub.add_parser("deck-games", help="catálogo de emuladores e front-ends")
+    edit = games.add_mutually_exclusive_group()
+    edit.add_argument("--add", metavar="EXECUTÁVEL_OU_ID")
+    edit.add_argument("--remove", metavar="EXECUTÁVEL_OU_ID")
+    games.add_argument("--json", action="store_true")
     lease_run = access_sub.add_parser("lease-run", help="inicia aplicação cooperante sob propriedade durável de entrada")
     lease_run.add_argument("--provider", required=True)
     lease_run.add_argument("argv", nargs=argparse.REMAINDER)
@@ -2883,7 +2891,14 @@ def _cmd_accessibility(args):
                 for reason in report["blockers"]:
                     print("aguardando: " + reason)
             return EXIT_OK if not report["errors"] else EXIT_REFUSED
-        if args.sub == "watch":
+        if args.sub == "deck-games":
+            from .actions.deck_mapping import DeckMapping
+            result = DeckMapping(supervisor.store, supervisor.coordinator).catalog(args.add, args.remove)
+        elif args.sub == "deck-map":
+            from .actions.deck_mapping import DeckMapping
+            mapping = DeckMapping(supervisor.store, supervisor.coordinator)
+            result = mapping.select(args.choice) if args.choice else mapping.status()
+        elif args.sub == "watch":
             from .actions.accessibility_service import watch
             if not 5 <= args.interval <= 120 or (args.cycles is not None and not 1 <= args.cycles <= 10000):
                 raise ValueError("intervalo 5–120 s; cycles precisa ser positivo e limitado")

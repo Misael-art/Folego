@@ -419,3 +419,27 @@ a referência salva. O ciclo de dispositivos do Wine autorizado em um incidente
 individual continua fora das rotinas automáticas do monitor.
 
 [Mapa visual dos botões e atalhos do Steam Input e do PhaseZero](assets/controles-desktop-deck.svg). O comparativo usa os arquivos desktop_neptune.vdf e chord_neptune.vdf do [pacote público da Valve](https://client-update.akamai.steamstatic.com/public_all.zip.f7b7316d122d96ff7f79b6eede24edd5b142d7bf) e o perfil PhaseZero-Desktop da versão 1.22.16.
+
+## Escolher os atalhos do controle
+
+Na janela principal, no widget flutuante, na minibarra e nas barras laterais e superior, passe sobre o ícone de controle ou abra-o com clique, toque ou teclado. As opções permanecem fixas enquanto o mapa ao lado rola. Em telas estreitas, o mapa fica abaixo delas. Percorra as opções e use **Usar Steam Input** ou **Usar PhaseZero** para salvar a escolha. **Jogos reconhecidos** mostra o catálogo da instalação.
+
+Steam Input é a preferência inicial. O cliente Steam mantém a escolha de layout e os perfis por jogo. Com o cliente fechado, o firmware pode fornecer o ponteiro e o clique. O seletor distingue a preferência salva da observação do monitor de entrada. A opção PhaseZero usa as ações do mapa revisado 1.22.16 e a ação de teclado da instalação local do PhaseZero. O leitor do Fôlego traduz o relatório de entrada do Deck em eventos de mouse e teclado no KDE. A sensibilidade da rolagem e do cursor é própria do leitor.
+
+O monitor espera duas observações de desktop e verifica novamente foco, sessão, leases e dispositivo antes da partida. Enquanto o Steam ou outro mapeador estiver com o controle, a preferência PhaseZero aguarda. No desktop elegível, uma unidade transitória acompanha o monitor de entrada. Ela lê somente o HID da interface 02 do Deck em modo de leitura. A captura temporária das interfaces 00 e 01 começa depois que o KWin reconhece as duas saídas virtuais e chega um relatório neutro. A saída do processo libera os descritores. **Steam + Menu** por 1,5 segundo também encerra o mapa alternativo e devolve o controle. Depois de uma falha, selecione o perfil novamente para rearmar.
+
+O padrão Steam dispensa uma unidade adicional. Durante o uso do mapa alternativo, o leitor bloqueia à espera de entrada. O monitor verifica jogos também entre as coletas, em intervalos de dois segundos. Um lançamento cooperativo espera a liberação da unidade antes de executar o jogo. Um jogo iniciado diretamente pode abrir durante o intervalo de detecção. O Steam e o emulador continuam responsáveis por suas configurações de jogo.
+
+O catálogo cobre front-ends e emuladores instalados e ainda não instalados. Inclui RetroFE, ES-DE, Quiver, Pegasus, RetroArch e seus núcleos, Dolphin, PrimeHack, PCSX2, RPCS3, Xenia, Eden-NX2, Vita3K, SharpEmu, Kyty e os demais nomes exibidos pelo seletor. A detecção usa processos, IDs Steam, IDs Flatpak e nomes AppImage. A instalação do EmuDeck ou um gerenciador de ROMs pode continuar operando como desktop. [Emuladores do EmuDeck](https://emudeck.github.io/emulators/steamos/supported-emulators/)
+
+```sh
+folego accessibility deck-map
+folego accessibility deck-map phasezero
+folego accessibility deck-map steam
+folego accessibility deck-games --json
+folego accessibility deck-games --add meu-emulador
+folego accessibility deck-games --remove meu-emulador
+folego accessibility lease-run --provider meu-frontend -- meu-frontend
+```
+
+Para uma integração futura do SteamForge ou de outro lançador, o último comando reserva a entrada inclusive para um executável novo. O catálogo é limitado a 128 identificadores adicionais. O monitor usa os processos da sessão e os leases registrados, sem indexar ROMs, discos ou projetos.

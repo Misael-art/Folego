@@ -57,6 +57,19 @@ def run(provider, argv):
         read_fd = None
         # Durable child identity precedes the gate that allows its first effect.
         publish_lease(provider, os.getpid(), "using", child_pids=[child.pid], completion_required=True)
+        from .deck_mapping import DeckMapping
+        mapping = DeckMapping()
+        try:
+            with mapping.coordinator.lock(wait=.5):
+                mapping.release_for_lease_locked(mapping.read())
+        except Exception:
+            # The gated child can only exit on EOF. Release the reservation
+            # after reaping that child and proving the application never ran.
+            os.close(write_fd)
+            write_fd = None
+            if child.wait(timeout=2) == 97:
+                publish_lease(provider, os.getpid(), "released", completion_required=True)
+            raise
         os.write(write_fd, b"1")
         opened = True
         os.close(write_fd)

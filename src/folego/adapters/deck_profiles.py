@@ -252,6 +252,11 @@ class DeckProfiles:
                         "identity": None, "detail": conflict}
             with self.steam_factory() as client:
                 row = client.controllers()
+            if row['url'] not in (DESKTOP_URL, GAMEPAD_URL):
+                outputs = row['mouse'] and row['keyboard']
+                return {'state': 'unknown', 'identity': None, 'desktop_output': outputs,
+                        'detail': ('Steam Input fornece mouse e teclado com o layout escolhido no cliente.'
+                                   if outputs else 'Perfil Steam diferente; escolha do cliente preservada.')}
             digest = self.template_digest()
             identity = {"index": row["index"], "type": row["type"], "url": row["url"],
                         "template_sha256": digest}

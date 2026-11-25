@@ -1,5 +1,23 @@
 # Passagem para o próximo agente — atualizada em 25/11/2026
 
+## Seletor de controle no KDE — 25/11/2026
+
+A janela principal, o widget, a minibarra e as três barras de borda usam o mesmo
+seletor. Steam Input é o padrão. A preferência PhaseZero é persistente e cede o
+Deck aos jogos e mapeadores. O catálogo inclui os dez emuladores Flatpak
+encontrados neste host, front-ends, AppImages da coleção e registro de futuros
+executáveis. O protocolo de lease aguarda a liberação antes do exec.
+[Escolha, cobertura e retorno](ACESSIBILIDADE.md#escolher-os-atalhos-do-controle).
+
+O pacote sc-controller desta distribuição usa libusb e pede reset no fechamento.
+O leitor do Fôlego usa os relatórios do hid-steam e o mapa conferido da instalação
+do PhaseZero. As duas saídas uinput descartáveis foram reconhecidas pelo KWin
+e removidas na prova sem emissão de teclas. Na tela real de 948 × 593 pontos,
+as seis apresentações abriram a prévia e mantiveram as opções ao lado da
+rolagem. O teste no portátil confirmou cursor e clique do firmware no incremento
+`6ebca65`. A validação física de combinações e a medição de FPS exigem uma
+jornada com o perfil e um jogo representativo.
+
 ## Retorno ao desktop após sair do dock — 25/11/2026
 
 O host registrou a desconexão USB às 05h18. O monitor externo saiu e o KWin
