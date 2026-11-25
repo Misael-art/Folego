@@ -18,6 +18,22 @@ rolagem. O teste no portátil confirmou cursor e clique do firmware no increment
 `6ebca65`. A validação física de combinações e a medição de FPS exigem uma
 jornada com o perfil e um jogo representativo.
 
+O código do seletor chegou ao [PR #15](https://github.com/Misael-art/Folego/pull/15)
+em `d5d043372dd0af1355bd702cdfac5f2823ee3f75`. O gate local `./dev check`
+usou Python 3.14.7, um núcleo, limite de 1.800 MiB e ambientes privados.
+Headless teve 1.595 aprovações e duas omissões. Qt teve 2.044 aprovações e
+duas omissões. No GitHub, as fontes do runner aumentaram a largura inicial da
+minibarra em até oito pontos. O ajuste de espaçamento preservou os alvos e a
+largura-base de 384 pontos. Os seis casos de regressão passaram no Deck.
+
+Na sessão de trabalho, os mesmos processos do Codex, Claude Desktop e MT5X
+continuaram ativos. Em 15 amostras de um minuto antes e 15 depois de recarregar
+o Fôlego, Codex e Claude estavam presentes em todas. O atraso mediano do timer
+da GUI foi de 0,0 a 0,3 ms e o máximo de 0,8 a 1,4 ms. As cargas concorrentes
+variaram. Esses números descrevem a interface do Fôlego; redução de lentidão dos
+agentes e efeito sobre FPS seguem sem comprovação. O usuário escolheu manter
+Steam Input e adiar o teste físico de PhaseZero.
+
 ## Retorno ao desktop após sair do dock — 25/11/2026
 
 O host registrou a desconexão USB às 05h18. O monitor externo saiu e o KWin

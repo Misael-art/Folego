@@ -419,7 +419,7 @@ class CompactWindow(QWidget):
         self.mini_bar.setAccessibleName('Faixa mínima do Fôlego')
         self.mini_layout = QHBoxLayout(self.mini_bar)
         self.mini_layout.setContentsMargins(2, 0, 2, 0)
-        self.mini_layout.setSpacing(6)
+        self.mini_layout.setSpacing(4)
         self.mini_drag = MiniDragHandle(self)
         self.mini_status = QLabel('● Aguardando')
         self.mini_cpu = QLabel('—')
