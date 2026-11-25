@@ -166,7 +166,8 @@ class Recovery:
                         elif (guard and any(d.get("deck_controller") for d in current["devices"])
                               and key in ("gamepad", "touchpad", "pointer")
                               and (key == "gamepad" or uses_deck_pointer(current["devices"], key))
-                              and (conflict := guard.profiles.controller_conflict())):
+                              and (conflict := (guard.desktop_blocker(current) if "deck_desktop" in current
+                                                else guard.profiles.controller_conflict()))):
                             ready, reason = False, conflict
                         elif key == 'virtual-keyboard':
                             ready, reason = self.backend.open_keyboard(report)

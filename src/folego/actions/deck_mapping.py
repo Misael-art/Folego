@@ -1,50 +1,22 @@
 """User-selected desktop mapping. Steam is passive. Only our transient mapper can be released."""
-import hashlib
 import os
 from pathlib import Path
-import re
-import stat
 import sys
 import subprocess
 import time
 import uuid
 
-from .. import paths
 from ..adapters.accessibility import bounded_command
 from .accessibility import Store, fresh, lease_blockers, read_object, save_object
 from ..orchestration import Coordinator
 
 PROFILES = {'steam': 'Steam Input', 'phasezero': 'PhaseZero'}
-MAP_DIGEST = '1a477543166e1796d8638c322be458708e041d54227e172ee6c85d85dc0f651a'
 SERVICE = 'folego-accessibility.service'
 
 
 def mapper_profile():
     if not os.access('/dev/uinput', os.W_OK):
         raise ValueError('A sessão precisa de acesso a /dev/uinput para o mapa PhaseZero.')
-    for base in (paths.data_dir().parent / 'phasezero/current', Path('/usr/lib/phasezero'), Path('/usr/lib64/phasezero')):
-        if not base.exists():
-            continue
-        root = base.resolve(strict=True)
-        if not re.fullmatch(r'/[a-zA-Z0-9_./-]+', str(root)):
-            raise ValueError('Caminho da instalação incompatível com a ação de teclado do perfil.')
-        profile = root / 'linux/steamdeck/profiles/PhaseZero-Desktop.sccprofile'
-        helper = root / 'linux/steamdeck/hotkey-actions.sh'
-        for p in (profile, helper):
-            for item in (p, *p.parents):
-                info = item.lstat()
-                if (stat.S_ISLNK(info.st_mode) or info.st_uid not in (0, os.getuid())
-                        or info.st_mode & 0o022):
-                    raise ValueError('Instalação PhaseZero sem identidade protegida.')
-            if not p.is_file() or p.stat().st_size > 65536:
-                raise ValueError('Arquivo do perfil PhaseZero desconhecido.')
-        data = profile.read_bytes()
-        if hashlib.sha256(data).hexdigest() != MAP_DIGEST:
-            raise ValueError('O mapa PhaseZero instalado diverge da prévia revisada.')
-        if hashlib.sha256(helper.read_bytes()).hexdigest() != '0999ed0053acb875882a5f1880bf71ebe1c921960a054196c5608cc38e8f69ba':
-            raise ValueError('A ação do teclado PhaseZero mudou e precisa de revisão.')
-        return helper
-    raise ValueError('Instale o perfil de desktop do PhaseZero para habilitar esta opção.')
 
 
 def native_enabled(report):
@@ -184,6 +156,11 @@ class DeckMapping:
     def close(self):
         pass
 
+    @staticmethod
+    def deferred_start(s):
+        # Written by the child only when it yields before grabbing either input.
+        return {'schema': 1, 'token': s['token'], 'boot': s['boot'], 'state': 'yielded-before-grab'}
+
     def _observe_unit(self, s):
         pid = self.unit.state(s['token'])
         if pid and s['stage'] == 'starting':
@@ -193,7 +170,12 @@ class DeckMapping:
             s.update(stage='idle', token='')
             save_object(self.receipt, s)
         elif not pid and s['stage'] in ('starting', 'running'):
-            s['stage'] = 'failed'
+            if (s['stage'] == 'starting' and
+                    read_object(self.store.root / 'deck-map-yield.json') == self.deferred_start(s)):
+                s.update(stage='idle', token='')
+                self.ready = None
+            else:
+                s['stage'] = 'failed'
             save_object(self.receipt, s)
         self.mapper_pid = pid
         return pid
@@ -220,12 +202,17 @@ class DeckMapping:
             if pid:
                 return self._release(s, 'Mapa PhaseZero liberado. Aguardando o controle do desktop.')
             self.ready = None
+            for provider in report.get('providers', []):
+                if provider.get('name') == 'EmuAtlas/RetroFE' and provider.get('state') == 'pending':
+                    return 'EmuAtlas/RetroFE está com a sessão de controle ou a restauração pendente.'
+            if report.get('deck_control_owner'):
+                return report['deck_control_owner']
             native = report.get('deck_desktop', {}).get('native_available')
             steam = report.get('desktop_profiles', {}).get('touchpad', {})
             if steam.get('desktop_output') or steam.get('state') == 'healthy':
                 return 'Steam Input em uso no desktop.'
             if native:
-                return 'Ponteiro nativo disponível. Os atalhos do Steam dependem do cliente.'
+                return 'Ponteiro nativo disponível. Com o Steam fechado, escolha PhaseZero para usar os atalhos do Fôlego.'
             return 'Steam Input selecionado. Mapeamento atual do controle sem confirmação.'
         if s['stage'] == 'failed':
             return 'O mapeador saiu ou a partida ficou incerta. Confira a sessão e reaplique a escolha.'
@@ -246,7 +233,7 @@ class DeckMapping:
             self.ready = None
             return self._release(s, reason) if pid else reason
         if pid:
-            return 'Mapeador PhaseZero em execução no desktop.'
+            return 'Fôlego está aplicando o mapa PhaseZero no desktop.'
         if not layout.get('native_available'):
             self.ready = None
             return 'Aguardando a interface livre e o ponteiro nativo de retorno.'
@@ -267,11 +254,11 @@ class DeckMapping:
                 or lease_blockers(self.store.root)):
             self.ready = None
             return 'Contexto do controle mudou durante a verificação.'
-        s.update(token=token, boot=report['boot_id'], stage='starting', starts=[*starts, time.time()])
+        s.update(token=token, boot=report['boot_id'], kwin=report['service_owner'], stage='starting', starts=[*starts, time.time()])
         save_object(self.receipt, s)
         self.unit.start(token, self.store.root)
         self.active = bool(self._observe_unit(s))
-        return 'Mapeador PhaseZero em execução.' if self.active else 'Partida sem confirmação.'
+        return 'Fôlego está aplicando o mapa PhaseZero.' if self.active else 'Partida sem confirmação.'
 
     def tick(self, report, guard):
         s = self.read()

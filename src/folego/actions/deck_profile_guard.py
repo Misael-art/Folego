@@ -12,6 +12,7 @@ import uuid
 
 from .. import paths
 from ..adapters.deck_profiles import DESKTOP_URL, MIC_PROFILE, DeckProfiles
+from ..adapters.deck_owners import controller_command, emuatlas_pending, phasezero_controller
 from ..core.accessibility import uses_deck_pointer
 from ..orchestration.models import ActionPlan, ActionResult, Outcome, ResourceIdentity
 
@@ -72,16 +73,8 @@ class DeckProfileGuard:
     @staticmethod
     def _game_blocker(proc_root=Path("/proc"), *, mapper_pid=None):
         """A missing/uncertain owner is not evidence that a game has ended."""
-        state = paths._env_dir("XDG_STATE_HOME", Path.home() / ".local/state") / "retrofe/input-session"
-        for name in ("steam-desktop-session.json", "kde-global-shortcut-guard.json"):
-            path = state / name
-            try:
-                path.lstat()
-            except FileNotFoundError:
-                continue
-            except OSError:
-                return "sessão RetroFE não comprovada"
-            return "RetroFE ainda possui uma sessão de perfil/atalhos"
+        if pending := emuatlas_pending():
+            return pending
         from ..core.deck_games import SHORT, game_environment, game_program
         from .deck_mapping import registered_games
         try:
@@ -106,10 +99,14 @@ class DeckProfileGuard:
                         return "controle reservado por " + name
                     if game_program(name) or name.lower() in additional:
                         return "jogo/frontend ativo; perfil de desktop preservado"
-                    if name.lower() in short or name in ("AppRun", "python", "python3", "wine", "wine64"):
+                    interpreter = re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", name) or name in {"bash", "sh"}
+                    if interpreter or name.lower() in short or name in {
+                            "AppRun", "wine", "wine64", "steam-input.py", "scc-daemon", "controller-desk"}:
                         with (proc / "cmdline").open("rb") as stream:
                             args = stream.read(4096).split(b"\0")
-                        launch = args[:2] if name in ("python", "python3", "wine", "wine64") else args[:1]
+                        if reason := controller_command(args):
+                            return reason
+                        launch = args[:2] if interpreter or name in ("wine", "wine64") else args[:1]
                         if any(game_program(arg.decode(errors="replace")) or
                                Path(os.fsdecode(arg)).name.lower() in additional for arg in launch):
                             return "jogo/frontend ativo; perfil de desktop preservado"
@@ -139,11 +136,13 @@ class DeckProfileGuard:
         if "deck_desktop" not in report:
             return ""
         native = self._native
+        native.deadline = native.clock() + 3
+        if reason := phasezero_controller(native):
+            return reason
         from ..adapters.accessibility import ProbeError
         try:
             expected = {"Active": "yes", "Remote": "no", "LockedHint": "no", "Type": "wayland",
                         "User": str(os.getuid()), "Class": "user", "Seat": "seat0", "Desktop": "KDE"}
-            native.deadline = native.clock() + 3
             raw = native.call(["loginctl", "show-session", "auto", *["--property=" + f for f in expected]])
             values = dict(line.split("=", 1) for line in raw.splitlines())
             if values != expected:

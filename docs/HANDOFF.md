@@ -1,5 +1,29 @@
 # Passagem para o próximo agente — atualizada em 25/11/2026
 
+## Controle compartilhado com PhaseZero e EmuAtlas — 25/11/2026
+
+O Fôlego incorpora o mapa alternativo e usa o teclado virtual do KWin. A opção
+Steam Input continua padrão. O EmuAtlas em `~/emulation` inicia sessões nativas
+por `steam-input.py session-run` e marca os descendentes roteados com
+`EMULATION_ROUTED_CONTROLS=1`. O supervisor de desktop do PhaseZero também pode
+reservar o Deck antes de iniciar o sc-controller. O seletor e as rotinas de
+entrada respeitam esses responsáveis e a restauração pendente do RetroFE.
+A presença de um dos projetos em disco permite continuar no desktop.
+
+O teste de leitura neste Jupiter encontrou KDE portátil, ponteiro nativo,
+teclado virtual disponível em modo automático e preferência Steam em repouso.
+O teste físico do mapa alternativo segue adiado por escolha do usuário.
+Lançadores integrados podem usar o protocolo de reserva para aguardar a liberação
+antes de iniciar o jogo. Lançamentos diretos dependem da detecção pelo monitor.
+[Operação do seletor e protocolo](ACESSIBILIDADE.md#escolher-os-atalhos-do-controle).
+
+O gate local `./dev check` passou em 1.610 casos headless e 2.060 com Qt,
+com duas omissões em cada ambiente. Após ampliar a cobertura das ações diretas
+de recuperação, os 33 casos de `tests/test_deck_mapping.py` passaram em 0,59 s.
+Os testes usaram HOME/XDG privados, um núcleo e reserva de 4 GiB para o host.
+O [PR #15](https://github.com/Misael-art/Folego/pull/15) reúne as verificações
+do commit publicado.
+
 ## Seletor de controle no KDE — 25/11/2026
 
 A janela principal, o widget, a minibarra e as três barras de borda usam o mesmo

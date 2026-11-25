@@ -255,17 +255,12 @@ class NativeInput:
                 report["providers"].append({"name": "PhaseZero", "state": text or "unknown"})
             except (ProbeError, OSError, ValueError):
                 report["blockers"].append("registro PhaseZero presente; propriedade desconhecida")
-        state = paths._env_dir("XDG_STATE_HOME", Path.home() / ".local/state") / "retrofe/input-session"
-        for name in ("steam-desktop-session.json", "kde-global-shortcut-guard.json"):
-            path = state / name
-            try:
-                pending = present(path)
-            except ProbeError:
-                report["blockers"].append("recuperação externa ilegível")
-                pending = False
-            if pending:
-                report["providers"].append({"name": "RetroFE", "state": "pending"})
-                report["blockers"].append("sessão/recuperação RetroFE pendente; aguardando o proprietário")
+        from .deck_owners import emuatlas_pending, phasezero_controller
+        if "deck_desktop" in report and (owner := phasezero_controller(self)):
+            report["deck_control_owner"] = owner
+        if pending := emuatlas_pending():
+            report["providers"].append({"name": "EmuAtlas/RetroFE", "state": "pending"})
+            report["blockers"].append(pending)
         for engine in ("docker", "podman"):
             binary = self.which(engine)
             if not binary:

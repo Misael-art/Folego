@@ -191,14 +191,64 @@ def _notify():
         sock.sendto(b'READY=1', ('\0'+endpoint[1:]) if endpoint.startswith('@') else endpoint)
 
 
-def run(token):
-    from ..actions.deck_mapping import DeckMapping, mapper_profile, unit_name
-    mapping = DeckMapping()
+def _session(mapping, token, stage):
+    from ..actions.deck_mapping import unit_name
+    from ..core.sessions import read_boot_id
     s = mapping.read()
-    if (s['token'] != token or s['stage'] != 'starting' or s['choice'] != 'phasezero'
+    if (s['token'] != token or s['stage'] != stage or s['choice'] != 'phasezero'
+            or s.get('boot') != read_boot_id() or not re.fullmatch(r':\d+\.\d+', s.get('kwin', ''))
             or not Path('/proc/self/cgroup').read_text().strip().endswith('/'+unit_name(token))):
-        raise ValueError('Ativação sem intenção da sessão.')
-    helper = mapper_profile()
+        raise ValueError('Intenção do mapeador não confirmada nesta sessão.')
+    return s
+
+
+def _desktop_blocker(mapping, s, native):
+    from ..actions.accessibility import lease_blockers
+    from ..actions.deck_profile_guard import DeckProfileGuard
+    native.deadline = native.clock() + 3
+    native.qdbus = native.which('qdbus6') or native.which('qdbus')
+    if not native.qdbus:
+        raise ValueError('Canal do compositor indisponível.')
+    owner = native.call([native.qdbus, 'org.freedesktop.DBus', '/org/freedesktop/DBus',
+                         'org.freedesktop.DBus.GetNameOwner', 'org.kde.KWin']).strip()
+    if owner != s['kwin']:
+        return 'A sessão do compositor mudou.'
+    guard = DeckProfileGuard(store=mapping.store, coordinator=mapping.coordinator)
+    guard.bind_native(native)
+    reason = guard.desktop_blocker({'deck_desktop': {}, 'service_owner': owner}, mapper_pid=os.getpid())
+    if reason or lease_blockers(mapping.store.root) or mapping.read() != s:
+        return reason or 'Controle reservado ou preferência alterada.'
+    return ''
+
+
+def _toggle_keyboard(native, owner):
+    from .accessibility import PROPERTIES
+    interface = 'org.kde.kwin.VirtualKeyboard'
+    path = '/VirtualKeyboard'
+    native.deadline = native.clock() + 2
+    props = native.props(owner, path, interface)
+    if (props.get('available') != 'true' or props.get('mode') not in ('1', '2')
+            or props.get('visible') not in ('false', 'true')):
+        raise ValueError('Habilite um teclado virtual no KDE para usar este atalho.')
+    if props['visible'] == 'true':
+        native.call([native.qdbus, owner, path, PROPERTIES + '.Set', interface, 'active', 'false'])
+    else:
+        native.call([native.qdbus, owner, path, interface + '.forceActivate'])
+
+
+def run(token, *, keyboard_only=False):
+    from ..actions.deck_mapping import DeckMapping, mapper_profile
+    from .accessibility import NativeInput
+    mapping = DeckMapping()
+    s = _session(mapping, token, 'running' if keyboard_only else 'starting')
+    native = NativeInput()
+    if keyboard_only:
+        if reason := _desktop_blocker(mapping, s, native):
+            raise ValueError(reason)
+        _toggle_keyboard(native, s['kwin'])
+        return 0
+    from ..actions.accessibility import save_object
+    mapper_profile()
     nodes = _device_nodes()
     with ExitStack() as stack:
         outputs = [_virtual(stack, NAMES[0], [k for k in KEYS if k < PRIMARY]),
@@ -209,7 +259,8 @@ def run(token):
             raise ValueError('Preferência alterada durante a partida.')
         from ..actions.deck_profile_guard import DeckProfileGuard
         if DeckProfileGuard._game_blocker(mapper_pid=os.getpid()):
-            raise ValueError('Controle ocupado na partida.')
+            save_object(mapping.store.root / 'deck-map-yield.json', mapping.deferred_start(s))
+            return 0
         handles = {}
         for key, (path, number) in nodes.items():
             fd = _fd(stack, path, os.O_RDONLY)
@@ -236,6 +287,9 @@ def run(token):
             raise ValueError('Aguardando relatório neutro do Deck.')
         if nodes != _device_nodes():
             raise ValueError('O controle foi reenumerado durante a partida.')
+        if _desktop_blocker(mapping, s, native):
+            save_object(mapping.store.root / 'deck-map-yield.json', mapping.deferred_start(s))
+            return 0
         for key in ('00', '01'):
             # EVIOCGRAB expires with this fd, including on crash. No HID feature
             # reports, USB reset, driver unbind, or persistent KWin changes.
@@ -274,11 +328,16 @@ def run(token):
             if events:
                 _emit(outputs, events)
             if toggle and now-last_osk >= .7 and (keyboard is None or keyboard.poll() is not None):
-                keyboard = subprocess.Popen(['/bin/bash', str(helper), 'keyboard'], stdin=subprocess.DEVNULL,
-                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                keyboard = subprocess.Popen(
+                    [sys.executable, '-m', 'folego.adapters.deck_mapper', token, 'keyboard'],
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
                 last_osk = now
     return 1  # A lost stream or physical escape requires a fresh explicit selection.
 
 
 if __name__ == '__main__':
-    sys.exit(run(sys.argv[1]))
+    from .accessibility import ProbeError
+    try:
+        sys.exit(run(sys.argv[1], keyboard_only=sys.argv[2:] == ['keyboard']))
+    except (ValueError, OSError, ProbeError) as exc:
+        sys.exit(str(exc))

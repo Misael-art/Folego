@@ -171,3 +171,119 @@ def test_cooperating_launcher_releases_unopened_gate_on_mapper_refusal(fake_home
         input_lease.run('test-mapper', [sys.executable, '-c', f'open({str(mark)!r}, "w").close()'])
     assert not mark.exists()
     assert [read_object(p)['state'] for p in (directory()/'leases').glob('*.json')] == ['released']
+
+
+def test_standalone_profile_only_requires_the_kernel_output_device(fake_home, monkeypatch):
+    monkeypatch.setattr(mapping.os, 'access', lambda path, mode: path == '/dev/uinput')
+    mapping.mapper_profile()
+    monkeypatch.setattr(mapping.os, 'access', lambda path, mode: False)
+    with pytest.raises(ValueError, match='uinput'):
+        mapping.mapper_profile()
+
+
+@pytest.mark.parametrize('name,command,expected', [
+    ('python3.14', ['python3.14', '/mnt/emu/Tools/launchers/retrofe/steam-input.py',
+                    '--root', '/mnt/emu', 'session-run', '--', '/tmp/future-title'], 'EmuAtlas'),
+    ('bash', ['/bin/bash', '/opt/phasezero/linux/steamdeck/controller-desktop.sh', 'supervise'], 'PhaseZero'),
+    ('python3', ['python3', '/opt/pz/linux/steamdeck/desktop_session.py', 'reconcile-input'], 'PhaseZero'),
+    ('python3', ['python3', '/opt/pz/linux/steamdeck/desktop_session.py', 'health'], ''),
+    ('python3', ['python3', '/emu/Tools/launchers/retrofe/input-session.py', 'guard', 'watch'], 'EmuAtlas'),
+    ('python3', ['python3', '/usr/bin/scc-daemon', '--foreground'], 'sc-controller'),
+    ('python3', ['python3', '/mnt/emu/Tools/launchers/retrofe/steam-input.py', 'session-recovery-loop'], ''),
+    ('bash', ['/bin/bash', '-c', 'echo', '/opt/phasezero/linux/steamdeck/controller-desktop.sh', 'supervise'], ''),
+])
+def test_live_input_manager_and_idle_observer(fake_home, tmp_path, name, command, expected):
+    proc = tmp_path / 'proc' / '54'
+    proc.mkdir(parents=True)
+    (proc / 'comm').write_text(name)
+    (proc / 'cmdline').write_bytes(b'\0'.join(arg.encode() for arg in command))
+    (proc / 'environ').write_bytes(b'')
+    reason = DeckProfileGuard._game_blocker(proc.parent)
+    if expected:
+        assert expected in reason
+    else:
+        assert not reason
+
+
+@pytest.mark.parametrize('env', [b'RETROFE_STEAM_SESSION_TOKEN=active', b'EMULATION_ROUTED_CONTROLS=1'])
+def test_emuatlas_snapshot_and_descendant_protect_until_both_finish(session, monkeypatch, tmp_path, env):
+    obj, report, guard, unit = session
+    monkeypatch.setenv('XDG_STATE_HOME', str(tmp_path/'state'))
+    directory = tmp_path/'state/retrofe/input-session'
+    directory.mkdir(parents=True)
+    (directory/'recovery-loop.lock').touch()
+    proc = tmp_path/'proc'
+    proc.mkdir()
+    guard._game_blocker = lambda **kw: DeckProfileGuard._game_blocker(proc, **kw)
+    guard.desktop_blocker = lambda report, **kw: guard._game_blocker(**kw)
+    start(obj, report, guard)
+    assert unit.effects == ['start']
+    snapshot = directory/'desktop-environment.json'
+    snapshot.write_text('partial')
+    obj.yield_to_game(guard)
+    assert unit.effects == ['start', 'stop'] and snapshot.read_text() == 'partial'
+    p = proc/'32'
+    p.mkdir()
+    (p/'comm').write_text('future-title')
+    (p/'environ').write_bytes(env)
+    snapshot.unlink()
+    assert 'EmuAtlas' in obj.tick(report, guard)['message']
+    (p/'environ').write_bytes(b'')
+    for _ in range(2):
+        report['mono'] = time.monotonic()
+        obj.tick(report, guard)
+    assert unit.effects == ['start', 'stop', 'start']
+
+
+@pytest.mark.parametrize('visible,mode,action', [
+    ('true', '1', 'false'), ('false', '2', 'org.kde.kwin.VirtualKeyboard.forceActivate'),
+    ('unknown', '1', None), ('false', '0', None),
+])
+def test_keyboard_uses_only_current_kwin_without_changing_mode(visible, mode, action):
+    from folego.adapters.deck_mapper import _toggle_keyboard
+    calls = []
+    native = SimpleNamespace(clock=time.monotonic, qdbus='qdbus6', call=calls.append,
+                             props=lambda *args: {'available': 'true', 'visible': visible, 'mode': mode})
+    if action:
+        _toggle_keyboard(native, ':1.42')
+        assert len(calls) == 1 and calls[0][1] == ':1.42' and calls[0][-1] == action
+    else:
+        with pytest.raises(ValueError):
+            _toggle_keyboard(native, ':1.42')
+        assert not calls
+
+
+def test_phasezero_service_reserves_control_only_while_active_or_uncertain(fake_home):
+    from folego.adapters.deck_owners import phasezero_controller
+    native = SimpleNamespace(which=lambda cmd: cmd)
+    assert not phasezero_controller(native)
+    unit = fake_home/'.config/systemd/user/phasezero-controller-desktop.service'
+    unit.parent.mkdir(parents=True)
+    unit.touch()
+    for active, sub, blocked in [('active', 'running', True), ('activating', 'auto-restart', True),
+                                 ('inactive', 'dead', False), ('', '', True)]:
+        native.call = lambda argv: f'LoadState=loaded\nActiveState={active}\nSubState={sub}'
+        assert bool(phasezero_controller(native)) is blocked
+
+
+@pytest.mark.parametrize('matching,expected', [(True, 'idle'), (False, 'failed')])
+def test_owner_arriving_during_startup_requires_matching_yield_receipt(session, matching, expected):
+    obj, report, guard, unit = session
+    start(obj, report, guard)
+    s = obj.read()
+    s['stage'] = 'starting'
+    ack = obj.deferred_start(s)
+    if not matching:
+        ack['token'] = str(uuid.uuid4())
+    mapping.save_object(obj.store.root/'deck-map-yield.json', ack)
+    unit.pid = 0
+    assert obj._observe_unit(s) == 0 and obj.read()['stage'] == expected
+
+
+def test_default_reports_peer_without_starting_a_mapper(session):
+    obj, report, guard, unit = session
+    report['deck_control_owner'] = 'PhaseZero está gerindo o controle de desktop.'
+    assert 'PhaseZero' in obj.tick(report, guard)['message']
+    report['providers'] = [{'name': 'EmuAtlas/RetroFE', 'state': 'pending'}]
+    assert 'EmuAtlas' in obj.tick(report, guard)['message']
+    assert not unit.effects and not obj.receipt.exists()

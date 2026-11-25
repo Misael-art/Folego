@@ -45,10 +45,15 @@ def game_program(name):
 
 
 def game_environment(data, additional=()):
-    if not any(tag in data for tag in (b'SteamGameId=', b'SteamAppId=', b'FLATPAK_ID=', b'APPIMAGE=')):
+    if not any(tag in data for tag in (b'SteamGameId=', b'SteamAppId=', b'FLATPAK_ID=', b'APPIMAGE=', b'RETROFE_STEAM_SESSION_TOKEN=',
+                                       b'EMULATION_ROUTED_CONTROLS=')):
         return ''
     for field in data.split(b'\0'):
         key, _, value = field.partition(b'=')
+        if key == b'EMULATION_ROUTED_CONTROLS' and value == b'1':
+            return 'EmuAtlas está roteando os controles do emulador.'
+        if key == b'RETROFE_STEAM_SESSION_TOKEN' and value:
+            return 'Sessão de controle EmuAtlas/RetroFE em andamento.'
         if key in (b'SteamGameId', b'SteamAppId') and value not in (b'', b'0', b'413080'):
             return 'aplicativo Steam ativo; perfil de desktop preservado'
         if key == b'FLATPAK_ID' and (value.decode(errors='replace') in FLATPAKS
