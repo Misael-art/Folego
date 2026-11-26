@@ -235,22 +235,30 @@ def test_emuatlas_snapshot_and_descendant_protect_until_both_finish(session, mon
     assert unit.effects == ['start', 'stop', 'start']
 
 
-@pytest.mark.parametrize('visible,mode,action', [
-    ('true', '1', 'false'), ('false', '2', 'org.kde.kwin.VirtualKeyboard.forceActivate'),
-    ('unknown', '1', None), ('false', '0', None),
+@pytest.mark.parametrize('visible,mode,actions', [
+    ('true', '1', ['false']), ('false', '2', ['activate']),
+    ('false', '1', ['2', 'activate', '1']), ('unknown', '1', []), ('false', '0', []),
 ])
-def test_keyboard_uses_only_current_kwin_without_changing_mode(visible, mode, action):
+def test_keyboard_preserves_kwin_mode_and_checks_visibility(visible, mode, actions):
     from folego.adapters.deck_mapper import _toggle_keyboard
     calls = []
-    native = SimpleNamespace(clock=time.monotonic, qdbus='qdbus6', call=calls.append,
-                             props=lambda *args: {'available': 'true', 'visible': visible, 'mode': mode})
-    if action:
+    state = {'available': 'true', 'visible': visible, 'mode': mode}
+    def command(argv):
+        assert argv[1] == ':1.42'
+        if argv[-1].endswith('.forceActivate'):
+            calls.append('activate')
+            assert state['mode'] == '2'
+            state['visible'] = 'true'
+        else:
+            calls.append(argv[-1])
+            state[argv[-2]] = argv[-1]
+    native = SimpleNamespace(clock=time.monotonic, qdbus='qdbus6', call=command, props=lambda *args: state.copy())
+    if actions:
         _toggle_keyboard(native, ':1.42')
-        assert len(calls) == 1 and calls[0][1] == ':1.42' and calls[0][-1] == action
     else:
         with pytest.raises(ValueError):
             _toggle_keyboard(native, ':1.42')
-        assert not calls
+    assert calls == actions and state['mode'] == mode
 
 
 def test_phasezero_service_reserves_control_only_while_active_or_uncertain(fake_home):
@@ -287,3 +295,19 @@ def test_default_reports_peer_without_starting_a_mapper(session):
     report['providers'] = [{'name': 'EmuAtlas/RetroFE', 'state': 'pending'}]
     assert 'EmuAtlas' in obj.tick(report, guard)['message']
     assert not unit.effects and not obj.receipt.exists()
+
+
+@pytest.mark.parametrize('name', ['gsettings', 'retroarch', 'steam'])
+@pytest.mark.parametrize('state,threads,blocked', [('Z', 1, False), ('Z', 2, True), ('S', 1, True)])
+def test_only_fully_exited_input_owner_is_ignored(tmp_path, monkeypatch, name, state, threads, blocked):
+    proc = tmp_path / '357'
+    proc.mkdir()
+    (proc / 'comm').write_text(name)
+    (proc / 'status').write_text(f'Pid:\t357\nState:\t{state}\nThreads:\t{threads}\n')
+    original = type(proc).open
+    def restricted(path, *args, **kwargs):
+        if path == proc / 'environ':
+            raise PermissionError
+        return original(path, *args, **kwargs)
+    monkeypatch.setattr(type(proc), 'open', restricted)
+    assert bool(DeckProfileGuard._game_blocker(tmp_path, mapper_pid=0)) is blocked

@@ -382,7 +382,10 @@ aplicativo responsável e repita a verificação após a saída normal desse amb
 Um teclado, mouse externo ou a tela de toque permitem operar o painel nesse meio-tempo.
 
 Em **Testar movimento do trackpad do Deck**, deslize o dedo no trackpad direito
-por até oito segundos. A leitura distingue movimento recebido pelo kernel,
+por até oito segundos. Com o mapa PhaseZero ativo, o teste acompanha o mouse virtual
+identificado pela operação atual. Com o mapa em repouso, acompanha o mouse USB
+do Deck. Se a rota mudar durante o gesto, repita quando o desktop estabilizar.
+A leitura distingue movimento recebido pelo kernel,
 ausência de movimento no intervalo e teste indisponível. Com movimento recebido,
 confira visualmente o deslocamento do cursor. Se houve gesto e o teste ficou em
 silêncio, verifique novamente o responsável pelo controle e o perfil Desktop.
@@ -424,7 +427,7 @@ individual continua fora das rotinas automáticas do monitor.
 
 Na janela principal, no widget flutuante, na minibarra e nas barras laterais e superior, passe sobre o ícone de controle ou abra-o com clique, toque ou teclado. As opções permanecem fixas enquanto o mapa ao lado rola. Em telas estreitas, o mapa fica abaixo delas. Percorra as opções e use **Usar Steam Input** ou **Usar PhaseZero** para salvar a escolha. **Jogos reconhecidos** mostra o catálogo da instalação.
 
-Steam Input é a preferência inicial. O cliente Steam mantém a escolha de layout e os perfis por jogo. Com o cliente fechado, o firmware pode fornecer o ponteiro e o clique. O seletor distingue a preferência salva da observação do monitor de entrada. A opção PhaseZero usa o mapa da versão 1.22.16 incorporado ao Fôlego. Funciona também em um Deck sem PhaseZero e sem EmuAtlas. Steam + X abre ou recolhe o teclado virtual habilitado no KDE. O leitor do Fôlego traduz o relatório de entrada do Deck em eventos de mouse e teclado no KDE. A sensibilidade da rolagem e do cursor é própria do leitor.
+Steam Input é a preferência inicial. O cliente Steam mantém a escolha de layout e os perfis por jogo. Com o cliente fechado, o firmware pode fornecer o ponteiro e o clique. O seletor distingue a preferência salva da observação do monitor de entrada. A opção PhaseZero usa o mapa da versão 1.22.16 incorporado ao Fôlego. Funciona também em um Deck sem PhaseZero e sem EmuAtlas. Steam + X abre ou recolhe o teclado virtual habilitado no KDE. No modo automático do Plasma, o Fôlego permite a abertura por botão durante a solicitação, confirma a visibilidade e devolve a preferência original. O leitor do Fôlego traduz o relatório de entrada do Deck em eventos de mouse e teclado no KDE. A sensibilidade da rolagem e do cursor é própria do leitor.
 
 O monitor espera duas observações de desktop e verifica novamente foco, sessão, leases e dispositivo antes da partida. Enquanto o Steam ou outro mapeador estiver com o controle, a preferência PhaseZero aguarda. No desktop elegível, uma unidade transitória acompanha o monitor de entrada. Ela lê somente o HID da interface 02 do Deck em modo de leitura. A captura temporária das interfaces 00 e 01 começa depois que o KWin reconhece as duas saídas virtuais e chega um relatório neutro. A saída do processo libera os descritores. **Steam + Menu** por 1,5 segundo também encerra o mapa alternativo e devolve o controle. Depois de uma falha, selecione o perfil novamente para rearmar.
 

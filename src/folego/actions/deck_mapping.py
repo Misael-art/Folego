@@ -115,6 +115,17 @@ class DeckMapping:
             save_object(self.receipt, s)
         return self.status()
 
+    def pointer_token(self):
+        s = self.read()
+        if s['stage'] == 'idle':
+            return None
+        pid = self.unit.state(s['token'])
+        if s['stage'] == 'running' and pid:
+            return s['token']
+        if s['stage'] == 'failed' and not pid:
+            return None
+        raise ValueError('O mapeador está em transição. Repita o teste após a estabilização.')
+
     def status(self):
         from .accessibility import _alive
         s = self.read()
@@ -212,7 +223,7 @@ class DeckMapping:
             if steam.get('desktop_output') or steam.get('state') == 'healthy':
                 return 'Steam Input em uso no desktop.'
             if native:
-                return 'Ponteiro nativo disponível. Com o Steam fechado, escolha PhaseZero para usar os atalhos do Fôlego.'
+                return 'Interfaces de mouse e teclado presentes. Teste o movimento. Com o Steam fechado, PhaseZero fornece os atalhos.'
             return 'Steam Input selecionado. Mapeamento atual do controle sem confirmação.'
         if s['stage'] == 'failed':
             return 'O mapeador saiu ou a partida ficou incerta. Confira a sessão e reaplique a escolha.'

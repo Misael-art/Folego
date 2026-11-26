@@ -21,6 +21,20 @@ ACTION = "accessibility.restore-desktop-profile"
 KEYS = ("touchpad", "microphone")
 
 
+def _exited_controller_process(proc):
+    # A zombie leader can still have live threads. Check all three fields in
+    # one kernel snapshot before disregarding a potential controller owner.
+    try:
+        with (proc / "status").open("rb") as stream:
+            status = stream.read(16385)
+    except OSError:
+        return False
+    fields = dict(line.split(b":", 1) for line in status.splitlines() if b":" in line)
+    return (len(status) <= 16384 and fields.get(b"Pid", b"").strip() == proc.name.encode()
+            and fields.get(b"Threads", b"").strip() == b"1"
+            and fields.get(b"State", b"").split()[:1] == [b"Z"])
+
+
 class DeckProfileGuard:
     def __init__(self, *, profiles=None, store, coordinator, now=time.time):
         self.profiles = profiles or DeckProfiles()
@@ -96,8 +110,12 @@ class DeckProfileGuard:
                         return "inventário de jogos excedeu o prazo"
                     if mapper_pid is not None and int(proc.name) != mapper_pid and name.lower() in {
                             "steam", "steamwebhelper", "scc-daemon", "inputplumber", "handheld-daemon", "hhd"}:
+                        if _exited_controller_process(proc):
+                            continue
                         return "controle reservado por " + name
                     if game_program(name) or name.lower() in additional:
+                        if _exited_controller_process(proc):
+                            continue
                         return "jogo/frontend ativo; perfil de desktop preservado"
                     interpreter = re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", name) or name in {"bash", "sh"}
                     if interpreter or name.lower() in short or name in {
@@ -116,7 +134,7 @@ class DeckProfileGuard:
                         with (proc / "environ").open("rb") as source:
                             data = source.read(65537)
                     except PermissionError:
-                        if name in passive:
+                        if name in passive or _exited_controller_process(proc):
                             continue
                         return "processo do usuário sem estado comprovado"
                     if len(data) > 65536:
