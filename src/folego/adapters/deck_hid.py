@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import subprocess
 import sys
 import time
 
@@ -65,23 +66,29 @@ def wine_controller_holder() -> int | None:
     return None
 
 
-def _deck_pointer_node():
-    """Resolve the Valve USB relative pointer. Event numbers may change on resume."""
+def _deck_pointer_node(token=None):
+    """Resolve the firmware output or the transient mapper output for this operation."""
     matches = []
+    label = "Folego Deck Pointer" if token else "Valve Software Steam Deck Controller"
+    expected_ids = ("0006", "0000", "0000") if token else ("0003", "28de", "1205")
     for event in (Path(paths.sys_root()) / "class/input").glob("event[0-9]*"):
         if not re.fullmatch(r"event[0-9]+", event.name):
             continue
         device = event / "device"
-        if (device / "name").read_text().strip() != "Valve Software Steam Deck Controller":
+        if (device / "name").read_text().strip() != label:
             continue
         ids = tuple((device / "id" / k).read_text().strip() for k in ("bustype", "vendor", "product"))
-        if ids != ("0003", "28de", "1205"):
+        if ids != expected_ids:
+            continue
+        if token and (device / "phys").read_text().strip() != "folego/deck-map/" + token:
             continue
         rel = (device / "capabilities/rel").read_text().split()
         if rel and int(rel[-1], 16) & 3 == 3:
             major, minor = map(int, (event / "dev").read_text().strip().split(":"))
             matches.append((event.name, os.makedev(major, minor)))
     if len(matches) != 1:
+        if token:
+            raise ValueError("O mapa está ativo, mas esta saída não tem identidade verificável. Teste o cursor na tela.")
         raise ValueError("saída de ponteiro Valve ausente ou ambígua")
     return matches[0]
 
@@ -106,13 +113,15 @@ def _has_relative_motion(fd, seconds):
     return False
 
 
-def test_pointer_motion():
+def test_pointer_motion(active_token=lambda: None):
     """Explicit eight-second evdev observation, no grabs, coordinates or events retained."""
     import fcntl
     import struct
 
     try:
-        name, number = _deck_pointer_node()
+        token = active_token()
+        name, number = _deck_pointer_node(token)
+        expected_ids = (6, 0, 0) if token else (3, 0x28de, 0x1205)
         fd = os.open("/dev/input/" + name, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC | os.O_NOFOLLOW)
         try:
             info = os.fstat(fd)
@@ -120,15 +129,19 @@ def test_pointer_motion():
             ids = struct.unpack("=HHHH", fcntl.ioctl(fd, 0x80084502, bytes(8)))
             axes = int.from_bytes(fcntl.ioctl(fd, 0x80084522, bytes(8)), sys.byteorder)
             if (not stat.S_ISCHR(info.st_mode) or info.st_rdev != number
-                    or ids[:3] != (3, 0x28de, 0x1205) or axes & 3 != 3):
+                    or ids[:3] != expected_ids or axes & 3 != 3):
                 raise ValueError("identidade do ponteiro mudou")
             moved = _has_relative_motion(fd, 8)
-            if _deck_pointer_node() != (name, number):
+            if active_token() != token or _deck_pointer_node(token) != (name, number):
                 raise ValueError("enumeração do controle mudou durante o teste")
         finally:
             os.close(fd)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
         return {"ok": False, "motion": None, "reason": f"Teste de movimento indisponível: {exc}"}
+    if token:
+        return {"ok": True, "motion": moved, "reason": (
+            "O ponteiro do mapa PhaseZero enviou movimento. Confira o cursor na tela." if moved else
+            "Nenhum movimento na saída PhaseZero em 8 s. Confira se o mapa continua ativo.")}
     return {"ok": True, "motion": moved, "reason": (
         "O kernel recebeu movimento do ponteiro Valve. Confira se o cursor acompanhou o gesto."
         if moved else "Nenhum movimento do ponteiro Valve em 8 s. Se você deslizou o dedo, "

@@ -204,7 +204,7 @@ class DesktopRecovery:
                  and default.stdout.strip() == name and any(v.get("value", 0) > 0 for v in after["volume"].values()))
         return ready, "padrão habilitado, sem mute e com volume; teste físico pendente" if ready else "áudio não confirmado"
 
-    def open_keyboard(self, report):
+    def open_keyboard(self, report, *, allow_enable=True):
         if report["backend"] != "kwin":
             return False, "abertura direta exige backend do compositor; nenhum teclado foi instalado"
         native = self.native
@@ -213,6 +213,8 @@ class DesktopRecovery:
         mode = props.get("mode")
         if props.get("available") != "true" or mode not in ("0", "1", "2"):
             return False, "provedor de teclado indisponível; configuração atual preservada"
+        if mode == "0" and not allow_enable:
+            return False, "teclado virtual desabilitado no KDE"
         changed = mode != "2"
         restore_mode = "1" if mode == "0" else mode
         try:
@@ -230,8 +232,10 @@ class DesktopRecovery:
         finally:
             if changed:
                 native.deadline = native.clock() + 2
-                native.call([native.qdbus, report["service_owner"], "/VirtualKeyboard", PROPERTIES + ".Set",
-                             "org.kde.kwin.VirtualKeyboard", "mode", restore_mode])
+                current = native.props(report["service_owner"], "/VirtualKeyboard", "org.kde.kwin.VirtualKeyboard")
+                if current.get("mode") == "2":
+                    native.call([native.qdbus, report["service_owner"], "/VirtualKeyboard", PROPERTIES + ".Set",
+                                 "org.kde.kwin.VirtualKeyboard", "mode", restore_mode])
         current = native.props(report["service_owner"], "/VirtualKeyboard", "org.kde.kwin.VirtualKeyboard")
         if current.get("mode") != restore_mode:
             raise UncertainEffect("modo anterior do teclado não confirmado; não repetir")

@@ -132,8 +132,12 @@ def _device_nodes(sysroot=Path('/sys')):
     return result
 
 
-def _virtual(stack, name, keys, rel=()):
+def _virtual(stack, name, keys, rel=(), *, pointer_token=None):
     fd = _fd(stack, '/dev/uinput', os.O_WRONLY)
+    if pointer_token is not None:
+        # UI_SET_PHYS tags only our temporary pointer, before UI_DEV_CREATE.
+        fcntl.ioctl(fd, 0x4000556c | (struct.calcsize('P') << 16),
+                    ('folego/deck-map/' + pointer_token).encode() + b'\0')
     for event in ((1, 2) if rel else (1,)):
         fcntl.ioctl(fd, 0x40045564, event)
     for key in keys:
@@ -233,7 +237,11 @@ def _toggle_keyboard(native, owner):
     if props['visible'] == 'true':
         native.call([native.qdbus, owner, path, PROPERTIES + '.Set', interface, 'active', 'false'])
     else:
-        native.call([native.qdbus, owner, path, interface + '.forceActivate'])
+        from .accessibility_recovery import DesktopRecovery
+        shown, reason = DesktopRecovery(native).open_keyboard(
+            {'backend': 'kwin', 'service_owner': owner}, allow_enable=False)
+        if not shown:
+            raise ValueError(reason)
 
 
 def run(token, *, keyboard_only=False):
@@ -245,14 +253,20 @@ def run(token, *, keyboard_only=False):
     if keyboard_only:
         if reason := _desktop_blocker(mapping, s, native):
             raise ValueError(reason)
-        _toggle_keyboard(native, s['kwin'])
+        # Finish restoring the original KWin mode if the map yields mid-chord.
+        import signal
+        previous = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM})
+        try:
+            _toggle_keyboard(native, s['kwin'])
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous)
         return 0
     from ..actions.accessibility import save_object
     mapper_profile()
     nodes = _device_nodes()
     with ExitStack() as stack:
         outputs = [_virtual(stack, NAMES[0], [k for k in KEYS if k < PRIMARY]),
-                   _virtual(stack, NAMES[1], [PRIMARY, SECONDARY], (0, 1, 6, 8))]
+                   _virtual(stack, NAMES[1], [PRIMARY, SECONDARY], (0, 1, 6, 8), pointer_token=token)]
         if not _ready_outputs(outputs):
             raise ValueError('KWin não confirmou as duas saídas do perfil.')
         if mapping.read() != s:

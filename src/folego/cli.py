@@ -2850,7 +2850,8 @@ def _cmd_accessibility(args):
         from .adapters.deck_hid import test_pointer_motion
         if not args.json:
             print("Deslize o dedo no trackpad direito nos próximos 8 segundos.", flush=True)
-        result = test_pointer_motion()
+        from .actions.deck_mapping import DeckMapping
+        result = test_pointer_motion(DeckMapping().pointer_token)
         print(json.dumps(result, ensure_ascii=False) if args.json else result["reason"])
         return EXIT_OK if result["ok"] else EXIT_UNKNOWN
     supervisor = Supervisor()

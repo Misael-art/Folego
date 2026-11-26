@@ -1,4 +1,28 @@
-# Passagem para o próximo agente — atualizada em 25/11/2026
+# Passagem para o próximo agente — atualizada em 26/11/2026
+
+## Retorno do RetroArch ao desktop portátil — 26/11/2026
+
+Na sessão de Master System das 06h56, o EmuAtlas registrou o Deck em P1,
+oito portas virtuais e a captura temporária do teclado e do mouse do firmware.
+A sessão encerrou às 07h44. O manifesto registrou a associação, mas não
+comprovou entrega de botões ao RetroArch. No desktop, os canais internos estavam
+habilitados, o Wine não mantinha a interface de jogo aberta e a instalação do
+Steam continha apenas o inicializador. O Fôlego bloqueava o mapa alternativo
+porque a leitura do ambiente de um processo `gsettings` zumbi era recusada.
+
+A guarda confere PID, estado e número de threads antes de descartar um possível
+responsável já encerrado. O usuário escolheu PhaseZero e confirmou cursor e
+clique. O KWin confirmou o teclado visível após a abertura pelo painel e o
+retorno ao modo automático 1. Steam + X agora usa a mesma operação do painel
+de acessibilidade, com verificação de visibilidade e restauração do modo do KWin.
+O teste de movimento da CLI e do painel identifica a saída do mapeador por
+operação e revalida a rota após a amostra. A partida de RetroArch com entrega
+física de botões continua exigindo uma jornada própria do EmuAtlas.
+
+O lote focado através de `./dev test-headless` passou em 16 casos de regressão,
+com 60 desmarcados, 160 MiB de limite e 30% de um núcleo. As suítes completas
+do [PR #15](https://github.com/Misael-art/Folego/pull/15) rodam no GitHub
+enquanto o MT5X ocupa a vez de carga local.
 
 ## Controle compartilhado com PhaseZero e EmuAtlas — 25/11/2026
 
