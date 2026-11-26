@@ -1,5 +1,22 @@
 # Passagem para o próximo agente — atualizada em 26/11/2026
 
+## Master System fora do dock e retorno do mapeador — 26/11/2026
+
+O EmuAtlas reconheceu em P1 o controle interno do Deck. A tradução do evdev
+descartava os eixos analógicos dos gatilhos, deixando a proteção de soltura
+sempre acionada. A correção do roteador está no
+[PR #3 do EmuAtlas](https://github.com/Misael-art/EmuAtlas/pull/3).
+Na jornada com Genesis Plus GX, o direcional e o botão chegaram ao controle
+físico e à porta virtual P1. O usuário confirmou jogo, saída e uso do trackpad,
+clique e Steam + X no KDE. A sessão das 10h00 registrou saída por P1 e
+descarregamento normal do core após 1 min 28 s.
+
+Na partida posterior do mapeador do desktop, um nó event do kernel desapareceu
+durante a enumeração. O Fôlego agora descarta essa leitura parcial e refaz o
+inventário até duas vezes em caso de ENOENT. A validação das três interfaces,
+o limite de partidas e o disjuntor permanecem ativos. O lote focado
+`./dev test-headless tests/test_deck_mapping.py` passou em 47 casos.
+
 ## Retorno do RetroArch ao desktop portátil — 26/11/2026
 
 Na sessão de Master System das 06h56, o EmuAtlas registrou o Deck em P1,
