@@ -10,6 +10,28 @@ from folego.actions.deck_profile_guard import DeckProfileGuard
 from folego.core.deck_games import game_program
 
 
+@pytest.mark.parametrize(('errors', 'expected_calls'), [
+    ([FileNotFoundError()], 2),
+    ([FileNotFoundError()] * 3, 3),
+    ([PermissionError()], 1),
+    ([ValueError('ambiguous')], 1),
+])
+def test_deck_sysfs_hotplug_restarts_only_incomplete_read(monkeypatch, tmp_path, errors, expected_calls):
+    from unittest.mock import Mock
+    from folego.adapters import deck_mapper
+
+    snapshot = {'00': 'keyboard', '01': 'pointer', '02': 'hid'}
+    read = Mock(side_effect=[*errors, snapshot])
+    monkeypatch.setattr(deck_mapper, '_read_device_nodes', read)
+    monkeypatch.setattr(deck_mapper.time, 'sleep', lambda _: None)
+    if len(errors) < expected_calls:
+        assert deck_mapper._device_nodes(tmp_path) == snapshot
+    else:
+        with pytest.raises(type(errors[-1])):
+            deck_mapper._device_nodes(tmp_path)
+    assert read.call_count == expected_calls
+
+
 class Unit:
     def __init__(self):
         self.pid = 0

@@ -107,6 +107,18 @@ def _fd(stack, path, flags):
 
 
 def _device_nodes(sysroot=Path('/sys')):
+    # Opening the Deck HID can remove a gamepad that was still in the sysfs
+    # directory listing. Discard the entire partial inventory before retrying.
+    for attempt in range(3):
+        try:
+            return _read_device_nodes(sysroot)
+        except FileNotFoundError:
+            if attempt == 2:
+                raise
+            time.sleep(.05)
+
+
+def _read_device_nodes(sysroot):
     result = {}
     parents = set()
     for folder, pattern in (('input', 'event*'), ('hidraw', 'hidraw*')):
