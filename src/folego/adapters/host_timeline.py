@@ -60,18 +60,29 @@ def _sample(snapshot: Snapshot) -> dict:
     pressure_cpu = (snapshot.pressure_cpu
                     if snapshot.source("pressure_cpu").status == OK else None)
     top = None
+    agents = None
     if snapshot.source("processes").status == OK:
         candidates = [p for p in snapshot.procs if p.cpu_frac is not None]
         if candidates:
             process = max(candidates, key=lambda p: p.cpu_frac)
             top = {"pid": process.pid, "starttime": process.starttime,
                    "name": process.comm[:80], "cpu_core_percent": round(process.cpu_frac, 1)}
+        # Per-agent instances and footprint: correlates agent growth with host degradation.
+        from ..core.agents import footprint
+        agents = footprint(snapshot.procs)
+    monitor = next((p for p in snapshot.procs if p.pid == os.getpid()), None)
     battery = snapshot.battery if snapshot.source("battery").status == OK else None
     issues = {}
     for name in _SOURCES:
         status = snapshot.source(name).status
         if status != OK:
             issues[name] = status
+    thermal_limits = {}
+    if snapshot.source("temperature").status == OK and snapshot.temperature_sensor:
+        for key in ("thermal_passive_c", "thermal_critical_c"):
+            value = getattr(snapshot, key)
+            if value is not None and math.isfinite(value):
+                thermal_limits[key] = value
     return {"schema": 2, "boot_id": snapshot.boot_id,
             "at": datetime.fromtimestamp(snapshot.ts).astimezone().isoformat(timespec="milliseconds"),
             "mono_ns": (round(snapshot.mono * 1_000_000_000)
@@ -93,6 +104,7 @@ def _sample(snapshot: Snapshot) -> dict:
                               if snapshot.source("temperature").status == OK else None),
             "temperature_sensor": ((snapshot.temperature_sensor or None)
                                    if snapshot.source("temperature").status == OK else None),
+            **thermal_limits,
             "battery_percent": battery.percent if battery else None,
             "battery_status": battery.status if battery else None,
             "battery_voltage_uv": battery.voltage_uv if battery else None,
@@ -101,7 +113,12 @@ def _sample(snapshot: Snapshot) -> dict:
             "battery_power_uw": battery.power_uw if battery else None,
             "external_power_online": (snapshot.external_power_online
                                       if snapshot.source("external_power").status == OK else None),
-            "top_cpu": top}
+            "top_cpu": top,
+            # None: process list not observed; {}: observed, no agent running.
+            "monitor": {"rss_kb": snapshot.self_rss_kb if snapshot.source("self_rss").status == OK else None,
+                        "cpu_pct": monitor.cpu_frac if monitor else None,
+                        "io_write_bps": monitor.io_write_bps if monitor else None},
+            "agents": agents}
 
 
 class HostTimelineRecorder:
@@ -241,6 +258,11 @@ def _valid_sample(row: object) -> bool:
             ("battery_percent", "battery_status", "battery_voltage_uv",
              "battery_voltage_min_design_uv", "battery_current_ua", "battery_power_uw")):
         return False
+    for name in ("thermal_passive_c", "thermal_critical_c"):
+        if name in row and (statuses.get("temperature", OK) != OK or not row.get("temperature_sensor")
+                            or type(row[name]) not in (int, float)
+                            or type(row[name]) is float and not math.isfinite(row[name])):
+            return False
     events = row.get("power_events", [])
     if (not isinstance(events, list)
             or any(not isinstance(event, str) or event not in POWER_EVENT_LABELS for event in events)
@@ -356,6 +378,29 @@ def read_timeline(directory: Path | None = None, *, limit: int = 80,
                 "capacity": None}
 
 
+def _last_discharge_change(rows: list[dict]) -> dict | None:
+    """Compare the final adjacent readings only, within two normal write intervals."""
+    if len(rows) < 2:
+        return None
+    before, after = rows[-2:]
+    for row in (before, after):
+        if (row.get("schema") != 2 or row.get("battery_status") != "Discharging"
+                or row.get("external_power_online") is not False
+                or "external_power" in row["source_issues"] or "battery" in row["source_issues"]
+                or not row.get("battery_voltage_uv") or not row.get("mono_ns")):
+            return None
+    if "external-power-disconnected" in after.get("power_events", []):
+        return None
+    seconds = (after["mono_ns"] - before["mono_ns"]) / 1_000_000_000
+    wall_seconds = (datetime.fromisoformat(after["at"]).timestamp()
+                    - datetime.fromisoformat(before["at"]).timestamp())
+    # CLOCK_MONOTONIC excludes suspend. Reject a discontinuity on either clock.
+    if not 0 < seconds <= 30 or not 0 < wall_seconds <= 30 or abs(wall_seconds - seconds) > 1:
+        return None
+    return {"from_uv": before["battery_voltage_uv"], "to_uv": after["battery_voltage_uv"],
+            "interval_s": round(seconds, 3), "from_at": before["at"], "to_at": after["at"]}
+
+
 def summarize_boot_timeline(directory: Path, boot_id: str) -> dict:
     """A 64 KiB tail only: evidence near a boot end, never a full-boot claim."""
     report = read_timeline(directory, boot_id=boot_id, limit=80, tail_bytes=65536)
@@ -377,16 +422,17 @@ def summarize_boot_timeline(directory: Path, boot_id: str) -> dict:
     fields = ("at", "mono_ns", "collector_read_ms", "source_issues",
               "mem_available_kb", "swap_used_kb", "psi_mem_avg10", "psi_mem_avg60",
               "psi_io_avg10", "psi_io_avg60", "psi_cpu_avg10", "psi_cpu_avg60",
-              "temperature_c", "temperature_sensor",
+              "temperature_c", "temperature_sensor", "thermal_passive_c", "thermal_critical_c",
               "battery_percent", "battery_status", "battery_voltage_uv",
               "battery_voltage_min_design_uv", "battery_current_ua", "battery_power_uw",
-              "external_power_online", "power_events", "top_cpu")
+              "external_power_online", "power_events", "top_cpu", "agents", "monitor")
     power_event = next((row for row in reversed(rows)
                         if row.get("schema") == 2 and row.get("power_events")), None)
     return {"quality": quality, "reason": reason,
             "last": {key: last.get(key) for key in fields} if last else None,
             "last_power_event": ({key: power_event.get(key) for key in fields}
                                  if power_event else None),
+            "last_discharge_change": _last_discharge_change(rows) if quality == "ok" else None,
             "recent_samples": len(rows), "recent_max_interval_s": max(gaps, default=None),
             "last_interval_s": gaps[-1] if gaps else None,
             "window_limited": report.get("window_limited", False),

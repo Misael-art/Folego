@@ -7,7 +7,7 @@ import uuid
 from .accessibility import (fresh, lease_blockers, read_object, save_object, _alive, unresolved)
 from ..adapters.accessibility import ProbeError
 from ..adapters.accessibility_recovery import DesktopRecovery, UncertainEffect
-from ..core.accessibility import LABELS
+from ..core.accessibility import LABELS, uses_deck_pointer
 from ..core.sessions import read_boot_id
 from ..orchestration.models import ActionPlan, ActionResult, ResourceIdentity, Outcome
 
@@ -24,8 +24,11 @@ class Recovery:
         self.backend = backend or DesktopRecovery(supervisor.native)
 
     def prepare(self, capability, *, save=False):
+        from ..audit_profile import SUSPENDED, normal
         if capability not in (*LABELS, "all"):
             raise ValueError("capacidade desconhecida")
+        if (save or capability in ("all", "audio", "microphone")) and not normal():
+            raise ValueError(SUSPENDED + " Selecione uma capacidade de entrada.")
         if save and capability != "all":
             raise ValueError("perfil persistente exige revisão de todas as capacidades")
         scope = list(ORDER) if capability == "all" else [capability]
@@ -79,7 +82,7 @@ class Recovery:
                 or list(plan.params["capabilities"]) != (list(ORDER) if plan.target.key == "all" else [plan.target.key])):
             return ActionResult(plan.action, Outcome.REFUSED, plan.operation_id, target_key=plan.target.key,
                                 reason="plano manual/confirmacão inválido")
-        def run(_):
+        def act():
             report = self.supervisor.native.collect()
             if (not fresh(report) or not report["boot_id"] or report["boot_id"] != plan.params["boot_id"]
                     or report["service_owner"] != plan.params["service_owner"]
@@ -116,6 +119,14 @@ class Recovery:
                 input_block.extend(v for v in report["blockers"] if not (usable_peer and v == PEER_WAIT))
                 if any(self._pending(plan.operation_id, key) for key in plan.params['capabilities'] if key in INPUTS):
                     input_block.append('operação anterior de entrada incerta; consultar o código')
+            guard = self.supervisor.profile_guard
+            deck_input = any(d.get("deck_controller") for d in report["devices"])
+            # The external reconcile-input command can change the whole controller.
+            if usable_peer and deck_input and guard and not keyboard_only:
+                conflict = (guard.desktop_blocker(report) if "deck_desktop" in report
+                            else guard.profiles.controller_conflict())
+                if conflict:
+                    input_block.append(conflict)
             if not input_block and usable_peer and any(k in INPUTS for k in plan.params["capabilities"]):
                 try:
                     self.backend.peer_idle(usable_peer)
@@ -152,6 +163,12 @@ class Recovery:
                         report = current
                         if input_block:
                             ready, reason = False, '; '.join(input_block)
+                        elif (guard and any(d.get("deck_controller") for d in current["devices"])
+                              and key in ("gamepad", "touchpad", "pointer")
+                              and (key == "gamepad" or uses_deck_pointer(current["devices"], key))
+                              and (conflict := (guard.desktop_blocker(current) if "deck_desktop" in current
+                                                else guard.profiles.controller_conflict()))):
+                            ready, reason = False, conflict
                         elif key == 'virtual-keyboard':
                             ready, reason = self.backend.open_keyboard(report)
                         elif key == 'gamepad':
@@ -160,7 +177,16 @@ class Recovery:
                             self._reserve_touch_attempt(plan)
                             ready, reason = self.backend.repair_touch(usable_peer)
                         else:
-                            ready, reason = self.backend.enable_devices(key, report, delegated=delegated)
+                            ready, reason = self.backend.enable_devices(key, report, delegated=delegated,
+                                before_enable=self.supervisor.deck_entry_blocker)
+                            if ready and uses_deck_pointer(report["devices"], key):
+                                profile = guard.profiles.steam() if guard is not None else {}
+                                native = (report.get("deck_desktop", {}).get("native_available") is True
+                                          and profile.get("state") == "unknown" and not profile.get("code"))
+                                ready = profile.get("state") == "healthy" or native
+                                reason = "Ponteiro habilitado no KWin. " + (
+                                    "Entrada nativa identificada; teste o movimento e o clique." if native else
+                                    profile.get("detail") or "Mapeamento do trackpad não verificado.")
                     elif key in INPUTS and input_block:
                         ready, reason = False, "; ".join(input_block)
                     elif key in ("audio", "microphone"):
@@ -192,6 +218,15 @@ class Recovery:
             receipt.update(complete=outcome != Outcome.UNKNOWN, result=result.to_dict())
             save_object(self._receipt(plan.operation_id), receipt)
             return result
+        def run(_):
+            if plan.action == SAVE_ACTION or set(plan.params["capabilities"]) - INPUTS:
+                from ..audit_profile import SUSPENDED, normal_effects
+                with normal_effects() as allowed:
+                    if not allowed:
+                        return self._result(plan, [], Outcome.REFUSED, SUSPENDED)
+                    return act()
+            return act()
+
         return self.supervisor.coordinator.run(plan, run, wait=.2)
 
     def _reserve_touch_attempt(self, plan):

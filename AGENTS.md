@@ -67,6 +67,17 @@ Este projeto não depende do HOME, disco, venv, serviços ou skills do host ante
   Nunca encher runtime real, sinalizar agentes/daemons de trabalho ou recriar
   serviços UUID para produzir evidência.
 
+### Perfis de controle de desktop solicitados em 25/11
+
+A escolha persistente do usuário no seletor ou na CLI autoriza o mapa alternativo
+PhaseZero no desktop KDE do Deck. Steam Input é o padrão. O monitor de entrada
+só pode iniciar a unidade transitória própria no desktop verificado, com recibo,
+orçamento e conferência das saídas virtuais. O leitor usa HID em modo de leitura
+e captura temporariamente os dois canais internos do mesmo Deck. Jogos,
+front-ends, leases e outros mapeadores têm prioridade. Ao sair, o kernel libera
+os descritores. Preservar controles externos, drivers, sessões e perfis do Steam.
+O escopo e o retorno físico estão em `docs/ACESSIBILIDADE.md`.
+
 ### Recuperação manual autorizada em 30/10
 
 O incidente de entrada autoriza cards acionáveis e **Habilitar tudo**: solicitação

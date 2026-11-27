@@ -113,6 +113,11 @@ class NotificationAudio:
         receipt['status'] = 'user-changed' if changed else 'restored'; self._save(receipt)
 
     def perform(self, action, value=None):
+        from ..audit_profile import normal_effects
+        with normal_effects() as allowed:
+            return self._perform(action, value) if allowed else ""
+
+    def _perform(self, action, value):
         if action not in ('alert-play', 'alert-recover'): raise ValueError('Ação sonora desconhecida')
         if action == 'alert-recover' and not self.path.exists() and not self.path.is_symlink(): return ''
         tone = pcm(value['tone']) if action == 'alert-play' else None

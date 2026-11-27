@@ -225,7 +225,7 @@ def test_deck_profile_probe_requires_exact_wrong_steam_map(tmp_path):
         def controllers(self):
             return {"index": 15, "type": 4, "url": self.url, "title": "RetroFE Steam Deck Gamepad",
                     "gamepad": True, "mouse": False, "keyboard": False}
-    probe = DeckProfiles(steam_factory=Client, data_home=tmp_path, model_path=model)
+    probe = DeckProfiles(steam_factory=Client, data_home=tmp_path, model_path=model, hid_holder=lambda: None)
     assert probe.steam()["state"] == "fault"
     Client.url = "template://other.vdf"
     assert probe.steam()["state"] == "unknown"
@@ -383,3 +383,28 @@ def test_unknown_manual_reprobe_can_be_queried_then_rearmed_without_retry(tmp_pa
     assert 'reparo suspenso' in card['detail']
     assert supervisor.profile_guard.rearm('microphone', confirmed=True)['ok']
     assert profiles.effects == ['microphone']
+
+@pytest.mark.parametrize("program", ["RetroFE", "ES-DE", "retroarch", "DuckStation-Qt", "Ryujinx.exe", "gamescope"])
+def test_desktop_guard_recognizes_game_and_frontend_processes(tmp_path, program):
+    proc = tmp_path / "123"
+    proc.mkdir()
+    (proc / "comm").write_text(program)
+    assert "jogo/frontend" in DeckProfileGuard._game_blocker(tmp_path)
+
+
+@pytest.mark.parametrize("locked,fullscreen,expected", [("yes", "false", "bloqueado"),
+    ("no", "true", "tela cheia"), ("no", "false", "")])
+def test_deck_desktop_guard_checks_session_and_foreground(tmp_path, monkeypatch, locked, fullscreen, expected):
+    supervisor, profiles = guard(tmp_path, monkeypatch)
+    profiles.controller_conflict = lambda: ""
+    window = "{bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb}"
+    import os
+    def call(argv):
+        if argv[0] == "loginctl":
+            return f"Active=yes\nRemote=no\nLockedHint={locked}\nType=wayland\nUser={os.getuid()}\nClass=user\nSeat=seat0\nDesktop=KDE"
+        if argv[0] == "kdotool":
+            return window
+        return "fullscreen: " + fullscreen
+    supervisor.native.call = call
+    reason = supervisor.profile_guard.desktop_blocker({"deck_desktop": {}, "service_owner": ":1.23"})
+    assert expected in reason if expected else not reason

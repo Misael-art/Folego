@@ -55,8 +55,114 @@ regras de adaptação e evidências de cada superfície.
 | **Widget e bandeja** | Consultar o estado em uma janela compacta e retornar à central. No Plasma/Wayland, a regra opcional do KWin exige confirmação. |
 | **CLI independente de Qt** | Investigar o ambiente e consultar operações diretamente pelo terminal. |
 | **Entrada e acessibilidade** | Observar teclado, ponteiro, trackpads, toque, controles e áudio; solicitar reparo de entrada ou manter um monitor residente opcional. No Deck, distingue dispositivo presente de perfil Steam/áudio errado e restaura apenas o perfil previamente confirmado, sem depender do PhaseZero. |
+| **Modo Auditor** | Acompanhar mudanças de pacotes, serviços e discos junto de métricas e incidentes do host, com teclado, atalhos e controle do Steam Deck disponíveis. |
 | **Opções e continuidade** | Iniciar com a sessão por padrão, desativar quando quiser, consultar operações pelo código e acompanhar temporários próprios preservados. |
 | **Economia da tela e agentes** | Ativar um temporizador reversível da tela interna, preservar jogos/dock e pedir alívio cooperativo aos agentes participantes. [Contrato e limites](docs/ENERGIA-E-AGENTES.md). |
+
+### Modo Auditor
+
+Ative em **Opções → Modo Auditor**. A escolha fica salva para as próximas
+aberturas. Na aba **Auditoria**, filtre a linha do tempo por fonte e selecione
+um evento para ver a evidência. Use **Recursos** para cruzar uma mudança
+observada com CPU, RAM, swap, pressão, temperatura, tensão da bateria e espaço
+em disco. O histórico existente do Fôlego continua com sua cadência e seus limites.
+
+No terminal, use `folego` no aplicativo instalado ou `./dev run` no repositório.
+
+```bash
+folego audit enable
+folego audit status
+folego audit history --changes
+folego audit history --source metrics --since 2026-11-22T08:00 --limit 120 --json
+folego audit disable
+```
+
+Com a janela fechada, `folego audit watch` coleta em primeiro plano. Encerre
+com Ctrl+C para liberar a abertura da interface. Se usar a interface, o comando
+`audit enable` também muda o perfil da janela que já estiver aberta.
+
+O modo começa desligado. Enquanto estiver ativo, o Fôlego suspende suas rotinas
+de desempenho, de energia, de áudio, de recuperação Web e de manutenção. Mantém
+o suporte de entrada conforme as permissões e opções já verificadas. Configurações
+já gravadas no Plasma ou no sistema continuam sob controle de seus responsáveis.
+
+As métricas de auditoria são amostradas a cada minuto. Serviços systemd,
+montagens, dispositivos de bloco e o journal disponível ao usuário têm consultas
+no mesmo intervalo. Pacotes e bibliotecas via pacman, dpkg, RPM e Flatpak são
+consultados a cada cinco minutos. A primeira leitura estabelece a referência.
+Para cada alteração posterior, o histórico guarda o valor anterior, o atual e
+a janela de observação. Mudanças revertidas entre leituras podem passar despercebidas.
+Incidentes do journal mantêm horário, boot e metadados disponíveis, sem guardar
+mensagens brutas, argumentos de processos ou conteúdo pessoal.
+[Campos e filtros do journal](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html).
+
+O filtro **Tempo de boot**, também disponível por `folego audit history --source boot`,
+guarda uma medição por inicialização observada. Mostra a duração do kernel até
+o término da inicialização pelo systemd, o total desde o firmware e as fases
+comprovadas pelo sistema. Quando disponível, mostra também o tempo até o alvo
+gráfico. O total fica indisponível quando falta o horário de início do
+firmware. A medição usa os marcos do boot atual, inclusive quando a coleta
+começa mais tarde, e o histórico preserva os boots já medidos.
+[Marcos de inicialização do systemd](https://www.freedesktop.org/software/systemd/man/latest/org.freedesktop.systemd1.html).
+
+O banco fica em `${XDG_STATE_HOME:-~/.local/state}/folego/host-audit.sqlite3`.
+Quando o limite de 64 MiB é atingido, a gravação avisa e preserva o histórico.
+Use `--boot`, `--since`, `--until` e `--before-id` para consultar períodos
+anteriores e `--json` para exportar os resultados. A linha do tempo ajuda a
+correlacionar eventos. A presença de uma mudança na mesma janela de uma falha
+é evidência para investigar sua causa.
+
+### Lentidão durante o trabalho de agentes
+
+Com o histórico contínuo ou o Modo Auditor ativo, clique em **Auditoria → Ficou
+lento agora**. A aba abre os cinco minutos de cada lado do marcador no mesmo boot.
+Mantenha a coleta durante o trabalho para preencher o período posterior. Para
+reabrir o episódio, selecione o marcador e clique em **Ver cinco minutos antes e
+depois**. As amostras mostram espera por CPU, memória e disco, custo do coletor,
+RSS e processos do Codex e do Claude Code/Claude Desktop. A cobertura de I/O indica
+quantos processos tinham duas leituras comparáveis. O consumo do cgroup inclui
+todos os membros do grupo. RSS somada pode contar páginas compartilhadas mais
+de uma vez, e o atraso do timer da GUI mede despacho de eventos.
+
+```bash
+folego audit mark
+folego audit episode 17                    # substitua 17 pelo ID recebido
+folego audit summary --hours 8 --json
+```
+
+O resumo por hora é calculado sob demanda no banco da auditoria, agrupado por
+boot e acompanhado da quantidade de amostras. Para o histórico detalhado, a
+previsão de duração até o teto do arquivo usa o crescimento recente daquele
+boot. Arquivos antigos continuam consultáveis com campos sem medição.
+
+### Compartilhar a máquina entre trabalhos locais
+
+No Linux, os agentes que usam o mesmo estado de usuário podem reservar a vez de
+um comando pesado em primeiro plano. Na instalação de desenvolvimento, use
+`./dev run` no lugar de `folego`. Estime a RAM **adicional de pico** e o total
+de saída, staging e temporários. Os números abaixo são apenas um exemplo.
+
+```bash
+folego session capacity --ram-mib 2048 --disk-mib 512 --destination . --json
+folego session run --ram-mib 2048 --disk-mib 512 --destination . -- ./dev check
+```
+
+A consulta informa `ready`, `wait` ou `unknown`. O lançamento revalida a
+decisão sob trava e registra a sessão protegida antes de liberar o comando.
+O launcher verifica as fontes locais, a carga concorrente reconhecida, a
+atividade de swap, a folga após o pico e o espaço no destino e nos temporários.
+O Deck preserva ao menos 4 GiB ou 25% da RAM, o maior valor, e 10 GiB de disco
+além da estimativa. Fonte térmica sem limite passivo ou inventário incompleto
+suspende a admissão. A orientação opcional para agentes inclui a mesma CLI
+para o Codex e o Claude Code. Em ambientes remotos ou isolados, a decisão
+pertence ao host que realmente executa o comando.
+
+O JSON de `capacity` inclui a última reserva e os membros observados com o
+mesmo ID de sessão do Linux. Filhos que permanecem nessa sessão mantêm a
+reserva ocupada. A identidade inclui boot e namespace. Processos que criam
+outra sessão e aplicativos que iniciam trabalho por conta própria ficam fora
+da garantia de exclusividade. Use esse launcher para comandos de primeiro
+plano. Cada tarefa concluída também fica consultável em `session list --json`.
 
 Quando o sensor informa limites térmicos, a área Disco distingue aviso a 5 °C
 do limite passivo, urgência ao atingi-lo e limite crítico do equipamento. Com a
@@ -109,6 +215,24 @@ quando é necessário renovar o login no ChatGPT dentro do launcher. A mensagem
 de capacidade também pode encobrir uma falha local do campo de mensagem;
 trocar o modelo não corrige essa situação. Sem responsável compatível, o
 Fôlego avisa e preserva o estado. [Escopo e limites](docs/COMPACTO.md#recuperação-do-codex-web).
+Se o Codex Desktop fica sem janela com `GPU access not allowed` após
+`--disable-gpu`, a opção **Opções → Abertura do Codex Desktop → Usar
+renderização por software** configura ANGLE/SwiftShader no arquivo do launcher
+comunitário Linux, para as próximas aberturas. A combinação consta da
+[documentação do Chromium](https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/swiftshader.md),
+e o [Electron registra falha compatível na consulta de GPU](https://github.com/electron/electron/issues/49530).
+O aceite de abertura neste host precisa de validação própria; isso não comprova
+a causa dos cortes. O launcher Web separado do PhaseZero, navegadores e perfis
+isolados têm configuração própria e não são alterados. A opção não reinicia
+tarefas nem resolve indisponibilidade do provedor. Pode aumentar o uso de CPU.
+
+Na CLI, `./dev run ai render-status --json` consulta; `./dev run ai
+render-software --confirmar` aplica e `./dev run ai render-restore --confirmar`
+restaura o arquivo anterior, se ninguém o alterou. A intenção e a cópia original
+são duráveis antes da escrita. Mudança externa ou recibo inválido bloqueia o
+efeito; não há escalada automática de sinais. Se uma instância anterior ficou
+presa, seu encerramento continua separado e precisa de confirmação própria.
+
 Ao lado das entregas, um **presente verde piscando** mostra as redefinições
 disponíveis confirmadas das contas do provedor. Clique para consultar a conta;
 o resgate continua no cliente de IA.
@@ -182,12 +306,12 @@ contas usam um fundo contínuo, com os elementos internos transparentes.
 O alvo é **Linux**, com KDE Plasma para a integração completa com o desktop.
 O wrapper gerencia Python **3.14.7**, uv e dependências fixadas em `uv.lock`.
 Não é necessário ativar um ambiente virtual ou instalar pacotes Python globalmente.
-A [prévia 0.2.0b14](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b14)
+A [prévia 0.2.0b18](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b18)
 oferece fonte completa, wheel, sdist e SHA256SUMS. A fonte completa inclui o wrapper
 e o lockfile; os pacotes Python exigem Python 3.14 e a dependência GUI opcional.
 
 ```bash
-git clone --branch v0.2.0b14 https://github.com/Misael-art/Folego.git
+git clone --branch v0.2.0b18 https://github.com/Misael-art/Folego.git
 cd Folego
 ./dev setup
 ./dev gui

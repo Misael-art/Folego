@@ -147,7 +147,8 @@ def window(qapp):
 
 def test_the_window_offers_resource_tabs_and_accessibility_in_order(window):
     assert [window.tabs.tabText(i) for i in range(window.tabs.count())] == \
-        ["Central", "Ajustes", "Desempenho", "Órfãos", "Disco", "Temporários", "Acessibilidade", "Prompts", "Opções"]
+        ["Central", "Ajustes", "Desempenho", "Órfãos", "Disco", "Temporários", "Acessibilidade",
+         "Auditoria", "Prompts", "Opções"]
     assert window.tabs.widget(0) is window.dashboard
     assert window.tabs.widget(2) is window.performance
     assert window.tabs.widget(5) is window.tmpfs

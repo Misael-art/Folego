@@ -76,6 +76,7 @@ def record_transition(store, report):
               "mono": report["mono"], "clock": report.get("clock", "monotonic"),
               "backend": report["backend"], "states": {row["key"]: row["state"] for row in report["cards"]},
               "reason": "; ".join(report["blockers"])[:512]}
+    sample["display"] = report.get("deck_desktop", {}).get("display")
     sample["devices"] = hashlib.sha256(json.dumps([
         (d["key"], d["enabled"]) for d in report["devices"]], sort_keys=True).encode()).hexdigest()
     previous = history["last"]
@@ -84,6 +85,8 @@ def record_transition(store, report):
     else:
         if sample["boot_id"] != previous.get("boot_id"): kinds.append("boot")
         if sample["owner"] != previous.get("owner"): kinds.append("compositor")
+        if sample["display"] != previous.get("display") and previous.get("display") is not None:
+            kinds.append("display-change")
         if sample["devices"] != previous.get("devices"): kinds.append("device-change")
         if sample["states"] != previous.get("states") or sample["reason"] != previous.get("reason"):
             kinds.append("state-change")
@@ -92,7 +95,7 @@ def record_transition(store, report):
             kinds.append("observation-gap")
     if kinds:
         history["events"] = [*history["events"], {"kinds": kinds, "ts": time.time(),
-            "states": sample["states"], "reason": sample["reason"], "physical_verified": False}][-32:]
+            "states": sample["states"], "reason": sample["reason"], "display": sample["display"], "physical_verified": False}][-32:]
     history["last"] = sample
     save_object(store.root / "transitions.json", history)
     return history["events"][-1] if history["events"] else None
@@ -379,11 +382,18 @@ def plans(report, *, automatic=False, baseline=None):
     result = []
     for device in report["devices"]:
         if (device["enabled"] is not False or not device["repairable"] or
-                (automatic and device["key"] not in (baseline or {}))):
+                (automatic and device["key"] not in (baseline or {})
+                 and device["key"] not in report.get("deck_desktop", {}).get("roles", {}))):
             continue
-        result.append(ActionPlan(ACTION, ResourceIdentity.entry(device["key"]),
-            {"event": device["event"], "name": device["name"], "service_owner": report["service_owner"],
-             "boot_id": report["boot_id"], "automatic": automatic},
+        params = {"event": device["event"], "name": device["name"], "service_owner": report["service_owner"],
+                  "boot_id": report["boot_id"], "automatic": automatic}
+        if device.get("deck_controller"):
+            layout = report.get("deck_desktop", {})
+            role = layout.get("roles", {}).get(device["key"])
+            if not role or layout.get("display") not in ("portátil", "monitor externo"):
+                continue
+            params.update(deck_role=role, deck_display=layout["display"])
+        result.append(ActionPlan(ACTION, ResourceIdentity.entry(device["key"]), params,
             notes=("Reabilitar somente este dispositivo no KWin; teste físico permanece necessário.",)))
     return result
 
@@ -419,6 +429,20 @@ class Supervisor:
         from ..orchestration.history import PendingReader
         self._pending_reader = PendingReader(self.coordinator.journal)
         self._wait_since = None
+        self._deck_sample = None
+
+    def deck_entry_blocker(self, report, device):
+        layout = report.get("deck_desktop")
+        if not device.get("deck_controller"):
+            return ""
+        if (not layout or layout["display"] not in ("portátil", "monitor externo")
+                or device["key"] not in layout["roles"] or self.profile_guard is None):
+            return "identidade das entradas internas do Deck incompleta"
+        if reason := self.profile_guard.desktop_blocker(report):
+            return reason
+        if not layout["native_available"] and self.profile_guard.profiles.steam().get("state") != "healthy":
+            return "responsável pelo mapeamento do controle não comprovado"
+        return ""
 
     def _recent_watcher(self):
         status = read_object(self.store.root / "watch-status.json")
@@ -473,6 +497,10 @@ class Supervisor:
                 for card in report["cards"]:
                     key = card.get("key")
                     if key not in report.get("desktop_profiles", {}):
+                        continue
+                    if (key == "touchpad" and report.get("deck_desktop", {}).get("native_available")
+                            and report["desktop_profiles"][key].get("state") == "unknown"
+                            and not report["desktop_profiles"][key].get("code")):
                         continue
                     if policy['profile_circuit'].get(key):
                         suffix = 'reparo suspenso: ' + policy['profile_circuit'][key]
@@ -575,8 +603,9 @@ class Supervisor:
         def verdict(outcome, reason, **effects):
             return ActionResult(ACTION, outcome, plan.operation_id, reason=reason,
                                 target_key=plan.target.key, effects=effects)
+        expected = {"event", "name", "service_owner", "boot_id", "automatic"}
         if (not confirm or plan.action != ACTION or plan.target.kind != "entry" or
-                set(plan.params) != {"event", "name", "service_owner", "boot_id", "automatic"} or
+                set(plan.params) not in (expected, expected | {"deck_role", "deck_display"}) or
                 type(plan.params["automatic"]) is not bool):
             return verdict(Outcome.REFUSED, "plano/confirmacão inválido")
         def execute(_):
@@ -588,12 +617,15 @@ class Supervisor:
             policy = self.store.read()
             if policy["circuit"]:
                 return verdict(Outcome.REFUSED, "disjuntor aberto: " + policy["circuit"])
-            if plan.params["automatic"] and (not policy["enabled"] or plan.target.key not in policy["baseline"]):
+            if plan.params["automatic"] and not policy["enabled"]:
                 return verdict(Outcome.REFUSED, "automação desabilitada ou baseline não cobre dispositivo")
             matching = next((p for p in plans(report, automatic=plan.params["automatic"], baseline=policy["baseline"])
                              if p.target == plan.target and dict(p.params) == dict(plan.params)), None)
             if matching is None:
                 return verdict(Outcome.REFUSED, "dispositivo/sessão mudou; revisar o mesmo alvo")
+            target = next(d for d in report["devices"] if d["key"] == plan.target.key)
+            if reason := self.deck_entry_blocker(report, target):
+                return verdict(Outcome.REFUSED, reason)
             now = self.now()
             attempts = [row for row in policy["attempts"] if 0 <= now - row["ts"] < 3600]
             if len(attempts) != len(policy["attempts"]) and any(row["ts"] > now for row in policy["attempts"]):
@@ -611,7 +643,10 @@ class Supervisor:
                 device = next((d for d in after["devices"] if d["key"] == plan.target.key), None)
                 if (not fresh(after) or after["errors"] or device is None or device["enabled"] is not True
                         or after["boot_id"] != plan.params["boot_id"] or
-                        after["service_owner"] != plan.params["service_owner"]):
+                        after["service_owner"] != plan.params["service_owner"] or
+                        ("deck_role" in plan.params and
+                         (device["event"] != plan.params["event"] or
+                          after.get("deck_desktop", {}).get("roles", {}).get(device["key"]) != plan.params["deck_role"]))):
                     policy["circuit"] = "efeito não verificado; reconciliação necessária"
                     self.store.save(policy)
                     return verdict(Outcome.UNKNOWN, policy["circuit"])
@@ -641,6 +676,11 @@ class Supervisor:
             report = self.native.collect()
             device = next((d for d in report["devices"] if d["key"] == state.intent.target.key), None)
             ok = fresh(report) and not report["errors"] and device is not None and device["enabled"] is True
+            if ok and "deck_role" in state.intent.params:
+                expected = state.intent.params
+                ok = (report["boot_id"] == expected["boot_id"] and device["event"] == expected["event"]
+                      and report["service_owner"] == expected["service_owner"]
+                      and report.get("deck_desktop", {}).get("roles", {}).get(device["key"]) == expected["deck_role"])
             result = ActionResult(ACTION, Outcome.OK if ok else Outcome.UNKNOWN, operation_id,
                 target_key=state.intent.target.key,
                 reason="estado atual habilitado; nenhuma ação reaplicada" if ok else "resultado ainda não comprovado")
@@ -659,6 +699,7 @@ class Supervisor:
                 return profile_result
         policy = self.store.read()
         if not policy["enabled"] or policy["circuit"] or report["blockers"]:
+            self._deck_sample = None
             return {"ok": True, "state": "waiting" if report["blockers"] else "paused",
                     "waiting_seconds": report["waiting_seconds"],
                     "reason": "; ".join(report["blockers"]) or policy["circuit"] or "automação desabilitada"}
@@ -667,9 +708,35 @@ class Supervisor:
         if new and all(device["enabled"] is True for device in eligible):
             self.configure(capture=True)
             return {"ok": True, "state": "observing", "reason": "dispositivos habilitados registrados; anteriores preservados"}
-        if not policy["baseline"]:
-            return {"ok": True, "state": "observing", "reason": "sem baseline saudável ou backend de reparo; somente observação"}
         candidates = plans(report, automatic=True, baseline=policy["baseline"])
+        if candidates and "deck_desktop" in report:
+            roles = report["deck_desktop"]["roles"]
+            candidates.sort(key=lambda plan: roles.get(plan.target.key) != "pointer")
+            deck_targets = tuple((p.target.key, p.params["event"]) for p in candidates if p.target.key in roles)
+            identity = (report["boot_id"], report["service_owner"], report["deck_desktop"]["display"], deck_targets)
+            previous = self._deck_sample
+            self._deck_sample = (identity, report["mono"])
+            if deck_targets and (not previous or previous[0] != identity
+                                 or not 0 < report["mono"] - previous[1] <= 30):
+                candidates = [p for p in candidates if p.target.key not in roles]
+                if not candidates:
+                    return {"ok": True, "state": "observing", "reason": "confirmando entradas internas após mudança"}
+            if candidates and deck_targets:
+                devices = {device["key"]: device for device in report["devices"]}
+                usable = []
+                reason = ""
+                for candidate in candidates:
+                    blocker = self.deck_entry_blocker(report, devices[candidate.target.key])
+                    if blocker:
+                        reason = blocker
+                    else:
+                        usable.append(candidate)
+                candidates = usable
+                if not candidates:
+                    self._deck_sample = None
+                    return {"ok": True, "state": "waiting", "reason": reason}
+        else:
+            self._deck_sample = None
         if not candidates:
             return {"ok": True, "state": "observing", "reason": "nenhum reparo nativo autorizado necessário"}
         now = self.now()

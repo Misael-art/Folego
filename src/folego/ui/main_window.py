@@ -14,11 +14,12 @@ import sys
 from concurrent.futures import Future
 
 from PySide6.QtGui import QGuiApplication, QKeySequence, QPainter, QPainterPath, QShortcut
-from PySide6.QtCore import QRectF, QSize, QTimer, Qt
+from PySide6.QtCore import QRectF, QSize, QTimer, Qt, Signal
 from PySide6.QtWidgets import (QMainWindow, QStyle, QStyleOptionTab, QStylePainter, QTabBar,
-                              QTabWidget, QFrame, QHBoxLayout, QLabel,
+                              QTabWidget, QFrame, QHBoxLayout, QLabel, QPushButton,
                               QToolButton, QMenu)
 
+from .deck_selector import DeckButton
 from . import desktop_caps, title_signal
 from .compact import CompactWindow
 from .desktop_preferences import WIDGET_VIEWS, startup_view
@@ -31,12 +32,14 @@ from .tray import Tray
 from .tune_jobs import TuneJobs
 from .tunings_tab import TuningsTab
 from .accessibility_tab import AccessibilityTab
+from .audit_tab import AuditTab
 from .options_tab import OptionsTab
 from .custom_prompts_tab import CustomPromptsTab
 from .ai_monitor import AIMonitor
 from .desktop_shortcuts import DesktopController
 from .screen_energy import ScreenEnergy
 from ..actions.power_profile_guard import PowerProfileGuard
+from .. import audit_profile
 from .theme import TOKENS, _background_color, set_control_icon, prepare_surface
 from ..core import health
 from ..core.battery_alerts import (BatteryAlertTracker, ExternalPowerTracker,
@@ -54,9 +57,12 @@ from ..orchestration.history import HistoryReader
 # tab title -> the attribute the dashboard's "Ir para …" jumps to
 TABS = (("central", "dashboard"), ("ajustes", "tunings"),
         ("desempenho", "performance"), ("órfãos", "orphans"), ("disco", "disk"), ("temporários", "tmpfs"), ("acessibilidade", "accessibility"),
-        ("prompts", "custom_prompts"), ("opções", "options"))
+        ("auditoria", "audit"), ("prompts", "custom_prompts"), ("opções", "options"))
 JUMPS = {"memoria": "performance", "ajustes": "tunings", "orfaos": "orphans",
          "disco": "disk", "tmpfs": "tmpfs", "accessibility": "accessibility"}
+AUDIT_TAB_TIP = ("Indisponível no Modo Auditor, que só observa o host. "
+                 "Para usar, desligue o Modo Auditor em Opções.")
+NOTICE_MS = 8000
 DISK_TIMEOUT_MS = 120_000  # the real cache walk took 54,7 s on this Deck (M3 log)
 RUNTIME_SIZE_TIMEOUT_MS = 180_000  # inclui a digitação da senha no diálogo do polkit
 TMPFS_TIMEOUT_MS = 45_000  # três volumes × o prazo de varredura de 10 s, com folga
@@ -64,6 +70,17 @@ TMPFS_TIMEOUT_MS = 45_000  # três volumes × o prazo de varredura de 10 s, com 
 
 class SidebarTabBar(QTabBar):
     """Tabs on the left with horizontal, readable labels (Qt rotates West tabs by default)."""
+
+    # QTabBar ignores presses on a disabled tab; report them so the window can explain why.
+    disabled_tab_clicked = Signal(int)
+
+    def mousePressEvent(self, event):
+        index = self.tabAt(event.position().toPoint())
+        if index >= 0 and not self.isTabEnabled(index):
+            self.disabled_tab_clicked.emit(index)
+            event.accept()
+            return
+        super().mousePressEvent(event)
 
     def tabSizeHint(self, index):
         size = super().tabSizeHint(index)
@@ -114,7 +131,7 @@ class MainWindow(QMainWindow):
                  exclusions: ExclusionList | None = None, journal=None,
                  config_store=None, grant_store=None, compact_factory=None, process_jobs=None,
                  accessibility_factory=None, startup_defaults=False,
-                 host_guard_factory=None, power_guard=None):
+                 host_guard_factory=None, power_guard=None, audit_recorder=None):
         super().__init__()
         self.setObjectName('mainWindow')
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
@@ -160,6 +177,10 @@ class MainWindow(QMainWindow):
         self._caps = None
         self._paused = False
         self._last_snapshot = None
+        self._profile = None
+        self._audit_poller = None
+        self._audit_recorder = audit_recorder
+        self._started = False
         self._last_signal = None
         self._collection_error = ""
         self.ai_monitor = AIMonitor(self)
@@ -202,6 +223,9 @@ class MainWindow(QMainWindow):
             overview_fn=getattr(input_observer, "resident_overview", None), confirm_fn=confirm_fn)
         self.accessibility.report_ready.connect(self._show_accessibility)
         self.options = OptionsTab()
+        self.audit = AuditTab(jobs=self.options.jobs)
+        self.options.audit_changed.connect(self._refresh_profile)
+        self.options.audit_history_requested.connect(lambda: self.tabs.setCurrentWidget(self.audit))
         self.options.sound_preview.connect(self.ai_monitor.alerts.preview)
         self.ai_monitor.alerts.feedback.connect(self.options.sound_feedback)
         self._screen_controller = DesktopController(self, backend=ScreenEnergy())
@@ -213,6 +237,7 @@ class MainWindow(QMainWindow):
         self._power_controller.payload.connect(self._power_result)
         self._power_controller.failed.connect(self._power_error)
         self._power_key = self._power_pending = None
+        self._reset_power_observation = False
         self._power_asked_at = 0.0
         self._power_timer = QTimer(self)
         self._power_timer.setInterval(60_000)
@@ -250,6 +275,8 @@ class MainWindow(QMainWindow):
 
         self.tabs = QTabWidget()
         self.tabs.setTabBar(SidebarTabBar())
+        self.tabs.tabBar().disabled_tab_clicked.connect(
+            lambda index: self._explain_unavailable(self.tabs.tabText(index)))
         # navegação lateral, como no padrão de painéis de manutenção; os títulos continuam os mesmos
         self.tabs.setObjectName("sidebar")
         self.tabs.setTabPosition(QTabWidget.TabPosition.West)
@@ -262,6 +289,18 @@ class MainWindow(QMainWindow):
         self.brand = QLabel('FÔLEGO')
         self.brand.setObjectName('section')
         header.addWidget(self.brand)
+        # Why a tab or "Ir para" did nothing; a click opens Options, where the profile is changed.
+        self.restriction_notice = QPushButton()
+        self.restriction_notice.setObjectName('restrictionNotice')
+        self.restriction_notice.setFlat(True)
+        self.restriction_notice.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.restriction_notice.hide()
+        self.restriction_notice.clicked.connect(self._open_options_from_notice)
+        self._notice_timer = QTimer(self)
+        self._notice_timer.setSingleShot(True)
+        self._notice_timer.setInterval(NOTICE_MS)
+        self._notice_timer.timeout.connect(self.restriction_notice.hide)
+        header.addWidget(self.restriction_notice)
         header.addStretch(1)
         self.control_button = QToolButton()
         self.control_button.setObjectName('windowControls')
@@ -278,6 +317,8 @@ class MainWindow(QMainWindow):
             self.widget_position_menu.addAction(
                 label, lambda checked=False, target=mode: self._show_widget_position(target))
         self.control_button.setMenu(self.control_menu)
+        self.deck_button = DeckButton(self)
+        header.addWidget(self.deck_button)
         header.addWidget(self.control_button)
         self.setMenuWidget(self.navigation_header)
         self.accessibility.options_requested.connect(self._open_options)
@@ -293,16 +334,30 @@ class MainWindow(QMainWindow):
         self._pause_shortcut = QShortcut(QKeySequence("Ctrl+Shift+P"), self)
         self._pause_shortcut.activated.connect(self.toggle_pause)
         self._freshness_timer = QTimer(self)
+        self._last_gui_tick = time.monotonic()
+        self._gui_tick_delay_ms = None
         self._freshness_timer.setInterval(1000)
-        self._freshness_timer.timeout.connect(self._refresh_freshness)
+        self._freshness_timer.timeout.connect(self._freshness_tick)
         self._freshness_timer.start()
+        self._profile_timer = QTimer(self)
+        self._profile_timer.setInterval(2000)
+        self._profile_timer.timeout.connect(self._refresh_profile)
+        self._refresh_profile()
+        self._profile_timer.start()
 
     # -------------------------------------------------------------------- polling
 
     def start(self):
-        self.ai_monitor.start()
-        self._screen_controller.request('reconcile')
-        self._screen_timer.start()
+        self._started = True
+        if not self._audit_restricted:
+            self.ai_monitor.start()
+            self._screen_controller.request('reconcile')
+            self._screen_timer.start()
+        if self._audit_recorder is not None and self._audit_poller is None:
+            from .workers import Poller
+            self._audit_poller = Poller(self._record_audit, parent=self, offload=True)
+            self._audit_poller.snapshot_ready.connect(self.audit.show_record_error)
+            self._audit_poller.error.connect(self.audit.show_record_error)
         if self._startup_defaults:
             self.options.start(sync=True)
             self._startup_defaults = False
@@ -329,8 +384,54 @@ class MainWindow(QMainWindow):
         self._poller.error.connect(self.show_error)
         self._poller.start()
 
+    def _record_audit(self):
+        from dataclasses import replace
+        snapshot = self._last_snapshot
+        self._audit_recorder.record(replace(snapshot, gui_tick_delay_ms=self._gui_tick_delay_ms))
+        return self._audit_recorder.error
+
+    def _refresh_profile(self):
+        result = audit_profile.status()
+        if self._profile == result:
+            return
+        previously_restricted = self._profile is not None and self._audit_restricted
+        self._profile = result
+        self._audit_restricted = result["enabled"] is not False
+        self.brand.setText("FÔLEGO · AUDITOR" if result["enabled"] is True else "FÔLEGO")
+        self.options.show_audit_profile(result)
+        self.audit.show_profile(result)
+        self.accessibility.set_audit_restricted(self._audit_restricted)
+        unavailable = (self.tunings, self.performance, self.orphans, self.disk, self.tmpfs)
+        if self._audit_restricted and self.tabs.currentWidget() in unavailable:
+            self.tabs.setCurrentWidget(self.audit)
+        for page in unavailable:
+            self.tabs.setTabEnabled(self.tabs.indexOf(page), not self._audit_restricted)
+            self.tabs.setTabToolTip(self.tabs.indexOf(page), AUDIT_TAB_TIP if self._audit_restricted else "")
+        if not self._audit_restricted:
+            self._notice_timer.stop()
+            self.restriction_notice.hide()
+        if not self._started:
+            return
+        if self._audit_restricted:
+            self.ai_monitor.pause()
+            self._screen_timer.stop()
+            self._power_pending = None
+            self._pressure_next = None
+            if not previously_restricted:
+                self._pressure_request("clear")
+        elif previously_restricted:
+            self.ai_monitor.start(from_now=True)
+            self._screen_timer.start()
+            self._screen_controller.request('reconcile')
+            self._power_key = None
+            self._reset_power_observation = True
+            if self.tabs.currentWidget() is self.options:
+                self.options.start()
+            if self._audit_poller is not None and self._last_snapshot is not None:
+                self._audit_poller.request()  # Reset persisted-sample cadence after a profile switch.
+
     def _power_request(self, action, value=None):
-        if self._quitting: return
+        if self._quitting or self._audit_restricted and action != 'status': return
         if self._power_controller.future is None:
             self._power_controller.request(action, value)
         elif action != 'observe' and (action != 'status' or self._power_pending is None):
@@ -338,6 +439,12 @@ class MainWindow(QMainWindow):
 
     def _observe_power_profile(self, battery, external_power=None):
         """Hand sustained sag, or the return of external power, to the profile guard."""
+        if self._audit_restricted or self._power_controller.future is not None:
+            return
+        if self._reset_power_observation:
+            self._reset_power_observation = False
+            self._power_request('observe', None)
+            return
         key = None
         if battery is not None:
             level = voltage_level(battery)
@@ -349,7 +456,7 @@ class MainWindow(QMainWindow):
         # Sagging samples are re-sent at a slow pace; the charger only on its edge.
         due = (key != self._power_key if key == 'external' or key is None
                else key != self._power_key or now - self._power_asked_at >= 15)
-        if not due or self._power_controller.future is not None: return
+        if not due: return
         self._power_key, self._power_asked_at = key, now
         self._power_request('observe', key)
 
@@ -419,7 +526,7 @@ class MainWindow(QMainWindow):
         self._screen_controller.request('reconcile' if self._screen_tick_count % 6 == 0 else 'attention')
 
     def _screen_change(self, *_):
-        if self._quitting or not self.options._screen_energy_state.get('enabled'): return
+        if self._quitting or self._audit_restricted or not self.options._screen_energy_state.get('enabled'): return
         if self._screen_controller.future is None:
             self._screen_controller.request('reconcile')
         else:
@@ -439,14 +546,14 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, lambda: self._screen_controller.request('status'))
 
     def _wake_screen(self):
-        if not self.options._screen_energy_state.get('enabled'): return
+        if self._audit_restricted or not self.options._screen_energy_state.get('enabled'): return
         if self._screen_controller.future is None:
             self._screen_controller.request('wake')
         else:
             self._screen_wake_pending = True
 
     def _screen_after_busy(self, busy):
-        if busy: return
+        if busy or self._audit_restricted: return
         if self._screen_reconcile_pending:
             self._screen_reconcile_pending = False
             self._screen_controller.request('reconcile')
@@ -598,6 +705,13 @@ class MainWindow(QMainWindow):
         self.dashboard.status.setText(f"⚠ última falha de coleta: {message}")
         self._refresh_freshness()
 
+    def _freshness_tick(self):
+        now = time.monotonic()
+        interval = self._freshness_timer.interval()
+        self._gui_tick_delay_ms = round(max(0, (now - self._last_gui_tick) * 1000 - interval), 1)
+        self._last_gui_tick = now
+        self._refresh_freshness(now)
+
     def _refresh_freshness(self, now_mono=None):
         """Invalidate old health without collecting or reading the journal.
 
@@ -641,7 +755,7 @@ class MainWindow(QMainWindow):
         battery = (snapshot.battery if not snapshot.is_stale(self._thresholds.stale_after_s)
                    and snapshot.source('battery').status == 'ok' else None)
         cue = self._battery_alerts.observe(battery)
-        if cue:
+        if cue and not self._audit_restricted:
             self.ai_monitor.alerts.battery_cue(cue)
         if self._voltage_notice.observe(battery):
             self.tray.show_battery_voltage(battery)
@@ -654,6 +768,9 @@ class MainWindow(QMainWindow):
         signal = title_signal.compute(snapshot, self._thresholds,
                                       engine=self._health)
         self._last_snapshot = snapshot
+        if (self._audit_poller is not None and not self._paused
+                and (self._profile["enabled"] is True or audit_profile.history_status()["enabled"] is True)):
+            self._audit_poller.request()
         self._show_power_status()
         thermal = self._thermal_tracker.observe(snapshot)
         self.disk.show_thermal(thermal)
@@ -663,23 +780,25 @@ class MainWindow(QMainWindow):
             if pressure_alert:
                 self.tray.show_pressure_alert(pressure_alert)
         level = {'danger': 1, 'critical': 2}.get(thermal.get('state'), 0)
-        self._observe_cooperative_pressure(level)
+        if not self._audit_restricted:
+            self._observe_cooperative_pressure(level)
         if level > self._screen_thermal_level:
             self._wake_screen()
         self._screen_thermal_level = level
         self._last_signal = signal
         self.setWindowTitle(signal.text)
-        # Uma leitura só das sessões/exclusões por amostra: os predicados são
-        # chamados para cada processo e não podem reler o JSON a cada linha.
-        self._build_protection()
-        candidates = self._tracker.observe(snapshot)
-        self.orphans.show_candidates(candidates)
-        self.orphans.show_groups(group_targets(
-            snapshot.procs, protected_fn=self._protection_reason))
-        self.orphans.show_investigation(active_investigation(
-            snapshot, protected_fn=self._protection_reason))
-        self.orphans.show_protections(self._sessions_view, self._exclusions_view,
-                                      error=self._protect_default or "")
+        candidates = ()
+        if not self._audit_restricted:
+            # Os predicados usam uma leitura por amostra, compartilhada pelos processos.
+            self._build_protection()
+            candidates = self._tracker.observe(snapshot)
+            self.orphans.show_candidates(candidates)
+            self.orphans.show_groups(group_targets(
+                snapshot.procs, protected_fn=self._protection_reason))
+            self.orphans.show_investigation(active_investigation(
+                snapshot, protected_fn=self._protection_reason))
+            self.orphans.show_protections(self._sessions_view, self._exclusions_view,
+                                          error=self._protect_default or "")
         notes = tuple(note for note in (self._tray_note, self._web_mcp_note) if note)
         self.dashboard.show_snapshot(
             snapshot, orphan_count=len(candidates),
@@ -778,8 +897,29 @@ class MainWindow(QMainWindow):
 
     def jump_to(self, target: str):
         attribute = JUMPS.get(target)
-        if attribute is not None:
+        if attribute is None:
+            return
+        index = self.tabs.indexOf(getattr(self, attribute))
+        if self.tabs.isTabEnabled(index):
             self.tabs.setCurrentWidget(getattr(self, attribute))
+        else:
+            self._explain_unavailable(self.tabs.tabText(index))
+
+    def _explain_unavailable(self, title: str):
+        """A blocked tab never fails silently: say why and offer the way out."""
+        if self._audit_restricted:
+            text = f"{title}: indisponível no Modo Auditor · toque para abrir Opções e desligá-lo"
+        else:
+            text = f"{title}: indisponível agora · toque para abrir Opções"
+        self.restriction_notice.setText(text)
+        self.restriction_notice.setToolTip(AUDIT_TAB_TIP if self._audit_restricted else "")
+        self.restriction_notice.show()
+        self._notice_timer.start()
+
+    def _open_options_from_notice(self):
+        self._notice_timer.stop()
+        self.restriction_notice.hide()
+        self._open_options()
 
     def raise_to_user(self):
         if not self.isVisible():
@@ -823,7 +963,8 @@ class MainWindow(QMainWindow):
     def enter_widget_mode(self) -> bool:
         """Modo widget: abre o widget flutuante e recolhe a janela central para a bandeja."""
         self.show_compact(mode='compact')
-        self._offer_kwin_rule()
+        if not self._audit_restricted:
+            self._offer_kwin_rule()
         return self.hide_window()
 
     def _offer_kwin_rule(self) -> None:
@@ -891,6 +1032,8 @@ class MainWindow(QMainWindow):
         if self._paused:
             return
         self._paused = True
+        if self._profile["enabled"] is True:
+            self.audit.show_record_error("Monitoramento pausado.")
         if self._poller is not None:
             self._poller.pause()
         if self._host_guard_poller is not None:
@@ -906,6 +1049,7 @@ class MainWindow(QMainWindow):
         if not self._paused:
             return
         self._paused = False
+        self.audit.show_record_error("")
         if self._poller is not None:
             self._poller.resume()
         if self._host_guard_poller is not None:
@@ -1005,6 +1149,7 @@ class MainWindow(QMainWindow):
         if self._quitting or self.tray.tray is None:
             self._desktop_notices.close()
             self._freshness_timer.stop()
+            self._profile_timer.stop()
             self._screen_timer.stop()
             self._power_timer.stop()
             self._screen_controller.close()
@@ -1014,6 +1159,9 @@ class MainWindow(QMainWindow):
                 self._poller.stop()
             if self._history_poller is not None:
                 self._history_poller.stop()
+            if self._audit_poller is not None:
+                self._audit_poller.stop()
+            self.audit.stop()
             if self._host_guard_poller is not None:
                 self._host_guard_poller.stop()
             self.performance.shutdown()

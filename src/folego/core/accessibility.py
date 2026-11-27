@@ -88,6 +88,18 @@ def parse_devices(text):
     return devices
 
 
+def uses_deck_pointer(devices, key):
+    """Whether this manual verification relies on the Deck's emulated pointer."""
+    if key not in ("pointer", "touchpad"):
+        return False
+    if key == "touchpad" and any("touchpad" in d["kinds"] for d in devices):
+        return False
+    pointers = [d for d in devices if "pointer" in d["kinds"]]
+    if key == "touchpad":
+        return any(d.get("deck_controller") for d in pointers)
+    return bool(pointers) and all(d.get("deck_controller") for d in pointers)
+
+
 def device_cards(devices, *, kernel_known, deck=False):
     cards = []
     for kind in ("keyboard", "pointer", "touchpad", "touch", "gamepad"):

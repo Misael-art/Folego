@@ -7,6 +7,14 @@ from ..safely.jobtemp import begin_job
 
 def main():
     args = sys.argv[1:]
+    if args[:1] == ["--admission-fd"]:
+        fd = int(args[1])
+        try:
+            if os.read(fd, 1) != b"1":
+                return 1
+        finally:
+            os.close(fd)
+        args = args[2:]
     if len(args) < 3 or args[1] != "--":
         raise ValueError("manifesto e comando são obrigatórios")
     try:

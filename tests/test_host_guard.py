@@ -388,3 +388,31 @@ def test_health_cli_reports_power_and_protection_without_writing_receipts(
     assert 'reinício registrado pelo logind' in output
     assert 'conclusão não comprovada' in output
     assert state.read_bytes() == before
+
+
+def test_poweroff_origin_requires_matching_trusted_services_pid_boot_and_time():
+    from folego.adapters.host_guard import _sddm_poweroff
+    from folego.core.host_guard import boot_end_text
+
+    boot = BOOT.replace("-", "")
+    first = {"_BOOT_ID": boot, "_UID": "0", "_COMM": "sddm", "_PID": "1232",
+             "_SYSTEMD_UNIT": "sddm.service", "__MONOTONIC_TIMESTAMP": "1234500",
+             "MESSAGE": "Message received from greeter: PowerOff"}
+    request = first | {"_COMM": "systemd-logind", "_SYSTEMD_UNIT": "systemd-logind.service",
+                       "_PID": "1001", "__MONOTONIC_TIMESTAMP": "1234600",
+                       "MESSAGE": "poweroff requested from client PID 1232 ('sddm') (unit sddm.service)..."}
+    end = request | {"MESSAGE": "System is powering down.", "__MONOTONIC_TIMESTAMP": "1234700"}
+
+    def observed(rows):
+        return _sddm_poweroff(lambda *_: (0, "\n".join(map(json.dumps, rows)), ""), boot)
+
+    assert observed([end, request, first])
+    for key, wrong in (("_UID", "1000"), ("_PID", "321"), ("_BOOT_ID", "b" * 32),
+                       ("_SYSTEMD_UNIT", "other.service"), ("MESSAGE", "PowerOff")):
+        assert not observed([first | {key: wrong}, request, end])
+    assert not observed([first, end])
+    assert not observed([first, request, end | {"__MONOTONIC_TIMESTAMP": "4000000"}])
+    assert not observed([first, request, end | {"__MONOTONIC_TIMESTAMP": "1234550"}])
+    assert "tela de login" in boot_end_text({"end_kind": "poweroff", "end": "shutdown_recorded",
+                                            "end_source": "systemd-logind.service",
+                                            "request_origin": "sddm-greeter"})

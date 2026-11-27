@@ -8,6 +8,7 @@ import sys
 import time
 
 from .. import paths
+from ..orchestration.coordinator import CoordinatorBusy
 from ..core.sessions import read_boot_id
 from .accessibility import Supervisor, fresh, private_path, save_object
 
@@ -59,6 +60,8 @@ def watch(*, supervisor=None, interval=10, cycles=None):
     fd = os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        from .deck_mapping import DeckMapping
+        mapping = DeckMapping(supervisor.store, supervisor.coordinator) if isinstance(supervisor, Supervisor) else None
         count = 0
         while cycles is None or count < cycles:
             started = time.monotonic()
@@ -73,6 +76,8 @@ def watch(*, supervisor=None, interval=10, cycles=None):
                 from .accessibility import record_transition
                 report = getattr(supervisor, "last_report", None)
                 if report is not None and report is not previous_report:
+                    if mapping is not None and supervisor.profile_guard is not None:
+                        result["mapping"] = mapping.tick(report, supervisor.profile_guard)
                     if fresh(report):
                         overview = {key: report[key]
                                     for key in ("schema", "state", "mono", "boot_id")}
@@ -80,11 +85,14 @@ def watch(*, supervisor=None, interval=10, cycles=None):
                         for key in ("blockers", "alerts"):
                             overview[key] = [value[:240] for value in report[key][:8]]
                     result["last_transition"] = record_transition(supervisor.store, report)
-            except (OSError, ValueError) as exc:
+            except (OSError, ValueError, CoordinatorBusy, subprocess.SubprocessError) as exc:
                 result["transition_error"] = str(exc)
             try:
+                from ..audit_profile import normal_effects
                 from ..safely.jobtemp import maintain_registered
-                result["temporary_retention"] = maintain_registered(cursor=count)
+                with normal_effects() as allowed:
+                    if allowed:
+                        result["temporary_retention"] = maintain_registered(cursor=count)
             except (OSError, ValueError) as exc:
                 result["temporary_retention"] = {"archived": 0, "reason": str(exc)}
             save_object(supervisor.store.root / "watch-status.json",
@@ -95,7 +103,16 @@ def watch(*, supervisor=None, interval=10, cycles=None):
                          "effects_scope": "enable-baseline-input-and-deck-profiles"})
             count += 1
             if cycles is None or count < cycles:
-                time.sleep(max(1, interval - (time.monotonic() - started)))
+                remaining = max(1, interval - (time.monotonic() - started))
+                until = time.monotonic() + remaining
+                while mapping is not None and mapping.active and remaining > 2:
+                    time.sleep(2)
+                    try:
+                        mapping.yield_to_game(supervisor.profile_guard)
+                    except (OSError, ValueError, subprocess.SubprocessError, CoordinatorBusy):
+                        pass  # The next resident cycle verifies the same unit and receipt.
+                    remaining = max(0, until - time.monotonic())
+                time.sleep(remaining)
         return {"ok": True, "cycles": count}
     finally:
         os.close(fd)

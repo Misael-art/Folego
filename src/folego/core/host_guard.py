@@ -22,7 +22,17 @@ def boot_end_text(boot: dict) -> str | None:
     if (label is None or boot.get("end") != "shutdown_recorded"
             or boot.get("end_source") != "systemd-logind.service"):
         return None
+    if boot.get("end_kind") == "poweroff" and boot.get("request_origin") == "sddm-greeter":
+        return "a tela de login do SDDM solicitou o desligamento e o logind iniciou o encerramento"
     return f"{label} registrado pelo logind; conclusão não comprovada"
+
+
+def last_discharge_text(boot: dict) -> str:
+    change = boot.get("timeline", {}).get("last_discharge_change")
+    if not change:
+        return ""
+    return (f"Últimas leituras na bateria: {change['from_uv'] / 1_000_000:.3f} → "
+            f"{change['to_uv'] / 1_000_000:.3f} V em {change['interval_s']:g} s")
 
 
 def storage_lines(report: dict) -> list[str]:

@@ -9,8 +9,14 @@ from .theme import TOKENS, THEMES, choose_theme, on_theme_change, choose_transpa
 
 
 def options_argv(action, target, confirm):
+    if action.startswith("audit-"):
+        return [sys.executable, "-m", "folego", "audit", action.removeprefix("audit-"), "--json"]
     if action.startswith('agent-care-'):
         argv = [sys.executable, '-m', 'folego', 'ai', action.removeprefix('agent-'), '--json']
+        if confirm: argv.append('--confirmar')
+        return argv
+    if action.startswith('codex-render-'):
+        argv = [sys.executable, '-m', 'folego', 'ai', action.removeprefix('codex-'), '--json']
         if confirm: argv.append('--confirmar')
         return argv
     if action.startswith("jobs-"):
@@ -29,9 +35,14 @@ class OptionsTab(QWidget):
     sound_preview = Signal(str)
     screen_energy_requested = Signal(str)
     power_guard_requested = Signal(str)
+    audit_changed = Signal()
+    audit_history_requested = Signal()
     def __init__(self, *, jobs=None):
         super().__init__()
         self._stopped = False
+        self._audit_restricted = False
+        self._audit_pending = False
+        self._audit_groups = []
         self._care_sync_on_start = False
         self._care_generation = 0
         self._care_poller = None
@@ -69,6 +80,15 @@ class OptionsTab(QWidget):
                             'Widgets opcionais conhecidos mudam no próximo início do Plasma. '
                             'Desligar restaura a configuração anterior.')
         basic_text.setWordWrap(True)
+        self.render_status = QLabel('Verificando a configuração de abertura do Codex.')
+        self.render_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.render_status.setWordWrap(True)
+        self.render_software = QPushButton('Usar renderização por software nas próximas aberturas')
+        self.render_restore = QPushButton('Restaurar configuração anterior do Codex')
+        self.render_software.setEnabled(False)
+        self.render_restore.setEnabled(False)
+        self.render_software.clicked.connect(lambda: self.change_rendering('software'))
+        self.render_restore.clicked.connect(lambda: self.change_rendering('restore'))
         self.care_choice = QCheckBox('Orientar agentes a usar o host com cuidado')
         self.care_choice.setAccessibleName('Orientação de cuidado nos IDEs e CLIs dos agentes')
         self.care_choice.clicked.connect(self.change_agent_care)
@@ -113,6 +133,29 @@ class OptionsTab(QWidget):
                       "e para a unit própria do monitor de entrada; o Fôlego aberto continua na tela.")
         text.setWordWrap(True)
         outer = QVBoxLayout(self)
+        audit_group = QGroupBox("Modo Auditor")
+        audit_layout = QVBoxLayout(audit_group)
+        self.audit_choice = QCheckBox("Ativar o Modo Auditor")
+        self.audit_choice.clicked.connect(self.change_audit_profile)
+        self.audit_status = QLabel("Guarda métricas, mudanças e falhas do host. Mantém teclado, atalhos e controle.")
+        self.audit_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.audit_status.setWordWrap(True)
+        self.audit_history = QPushButton("Abrir linha do tempo")
+        self.audit_history.clicked.connect(self.audit_history_requested.emit)
+        # Recording only observes: it can continue in the normal profile, where the tabs act.
+        self.history_choice = QCheckBox("Manter o histórico do host também fora do Modo Auditor")
+        self.history_choice.setToolTip("Grava a cada minuto RAM, swap, pressão, temperatura, disco, "
+                                       "mudanças do sistema e as instâncias de cada agente (Codex, Claude). "
+                                       "Não executa nenhuma ação; limite de 64 MiB.")
+        self.history_choice.clicked.connect(self.change_history)
+        self.history_status = QLabel()
+        self.history_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.history_status.setWordWrap(True)
+        for control in (self.audit_choice, self.audit_status, self.history_choice, self.history_status,
+                        self.audit_history):
+            audit_layout.addWidget(control)
+        self.show_history()
+        outer.addWidget(audit_group)
         area = QScrollArea()
         area.setWidgetResizable(True)
         content = QWidget()
@@ -135,6 +178,8 @@ class OptionsTab(QWidget):
             ("Início com a sessão", (self.choice, text, self.status, self.verify)),
             ('Sessão básica do Plasma', (self.basic_choice, basic_text,
                                          self.basic_status, self.basic_verify)),
+            ('Abertura do Codex Desktop', (self.render_status, self.render_software,
+                                                self.render_restore)),
             ('Cuidado do host pelos agentes', (self.care_choice, care_text,
                                                 self.care_status, self.care_verify)),
             ("Operações pendentes", (self.pending, self.operation_id, self.reconcile, self.cancel,
@@ -147,9 +192,62 @@ class OptionsTab(QWidget):
             for widget in controls:
                 group_layout.addWidget(widget)
             box.addWidget(group)
+            if controls[0] not in (self.startup_view_choice, self.choice):
+                self._audit_groups.append(group)
         box.addStretch(1)
         area.setWidget(content)
         outer.addWidget(area)
+
+    def show_history(self):
+        from ..audit_profile import history_status
+        result = history_status()
+        self.history_choice.setChecked(result["enabled"] is True)
+        self.history_choice.setEnabled(result["ok"])
+        self.history_status.setText(
+            result.get("reason") or ("Histórico contínuo ligado: a linha do tempo segue gravando nos dois perfis."
+                                     if result["enabled"] else
+                                     "Desligado: o histórico por minuto só é gravado no Modo Auditor."))
+
+    def change_history(self, checked):
+        from ..audit_profile import configure_history
+        result = configure_history(bool(checked))
+        self.show_history()
+        if not result["ok"]:
+            self.history_status.setText(result.get("reason") or "Preferência não confirmada.")
+
+    def change_audit_profile(self, checked):
+        self._audit_pending = True
+        self.audit_choice.setEnabled(False)
+        self.jobs.run("audit-enable" if checked else "audit-disable", "", done=self._audit_saved)
+
+    def _audit_saved(self, result):
+        from ..audit_profile import status
+        self._audit_pending = False
+        self.show_audit_profile(status())
+        if not (result or {}).get("ok"):
+            self.audit_status.setText((result or {}).get("reason") or "Alteração sem confirmação. Confira a opção salva.")
+        self.audit_changed.emit()
+
+    def show_audit_profile(self, result):
+        enabled = result["enabled"]
+        self._audit_restricted = enabled is not False
+        if not self._audit_pending:
+            self.audit_choice.setTristate(enabled is None)
+            self.audit_choice.setCheckState(Qt.CheckState.PartiallyChecked if enabled is None else
+                                            Qt.CheckState.Checked if enabled else Qt.CheckState.Unchecked)
+            self.audit_choice.setEnabled(enabled is not None)
+            if result.get("reason"):
+                self.audit_status.setText(result["reason"])
+            if enabled is True:
+                self.audit_status.setText("Perfil ativo. Teclado, atalhos e controle continuam disponíveis.")
+            elif enabled is False:
+                self.audit_status.setText("Guarda métricas, mudanças e falhas do host. Mantém teclado, atalhos e controle.")
+        for group in self._audit_groups:
+            group.setEnabled(not self._audit_restricted)
+        if self._audit_restricted:
+            self._care_timer.stop()
+        elif self.care_choice.isChecked() and self.care_choice.isEnabled():
+            self._care_timer.start()
 
     def _save_startup_view(self):
         mode = self.startup_view_choice.currentData()
@@ -322,6 +420,9 @@ class OptionsTab(QWidget):
         for widget in (self.power_guard_choice, self.power_guard_status, power_hint):
             power_layout.addWidget(widget)
         self.settings_box.insertWidget(1, power_group)
+        for effect_group in (screen_group, power_group, group):
+            self._audit_groups.append(effect_group)
+            effect_group.setEnabled(not self._audit_restricted)
         self.show_power_guard(self._power_guard_state)
         self.show_screen_energy(self._screen_energy_state)
         self.cooperative_status = QLabel(self._cooperative_message)
@@ -368,6 +469,10 @@ class OptionsTab(QWidget):
 
     def start(self, *, sync=False):
         if self._stopped: return
+        if self._audit_restricted:
+            self.choice.setEnabled(False)
+            self.jobs.run("startup-status", "", done=self.done)
+            return
         self._care_sync_on_start = sync
         self.jobs.run('agent-care-status', '', done=self.show_agent_care)
         self.choice.setEnabled(False)
@@ -378,6 +483,12 @@ class OptionsTab(QWidget):
             self.jobs.run('startup-basic-status', '', done=self.show_basic_session)
         self.jobs.run("review-pending", "", done=self.show_pending)
         self.jobs.run("jobs-status", "", done=self.show_retention)
+        self.jobs.run('codex-render-status', '', done=self.show_rendering)
+
+    def change_rendering(self, mode):
+        self.render_software.setEnabled(False)
+        self.render_restore.setEnabled(False)
+        self.jobs.run('codex-render-' + mode, '', confirm=True, done=self.show_rendering)
 
     def change_basic_session(self, checked):
         self.basic_choice.setEnabled(False)
@@ -397,6 +508,8 @@ class OptionsTab(QWidget):
             text += '\nItens adiados: ' + ', '.join(payload['targets'])
         if payload.get('preserved'):
             text += '\nItens sem classificação, preservados: ' + ', '.join(payload['preserved'])
+        if payload.get('kept'):
+            text += '\nMantidos ligados por escolha sua: ' + ', '.join(payload['kept'])
         widgets = payload.get('widgets') or {}
         if widgets.get('message'):
             text += '\n' + widgets['message']
@@ -405,6 +518,24 @@ class OptionsTab(QWidget):
         if payload.get('operation_id'):
             text += '\nOperação: ' + payload['operation_id']
         self.basic_status.setText(text)
+
+    def show_rendering(self, payload):
+        if self._stopped: return
+        payload = payload or {}
+        state = payload.get('state')
+        self.render_status.setText(payload.get('message') or payload.get('reason')
+                                   or 'Configuração indisponível; arquivo preservado.')
+        self.render_status.setText(self.render_status.text() + '\n'
+                                  + 'Vale nas próximas aberturas pelo launcher do Codex Desktop; '
+                                    'o launcher Web separado não é alterado. Aplicativos e tarefas continuam abertos.')
+        if payload.get('operation_id'):
+            self.render_status.setText(self.render_status.text() + '\nOperação: '
+                                       + str(payload['operation_id']))
+        self.render_software.setEnabled(state in ('unchanged', 'software')
+                                       and payload.get('can_apply') is True)
+        self.render_restore.setEnabled(state in ('software', 'pending')
+                                      and payload.get('can_restore') is True
+                                      and bool(payload.get('operation_id')))
 
     def show_pending(self, payload):
         if self._stopped: return
@@ -516,7 +647,7 @@ class OptionsTab(QWidget):
                                  'Resultado desconhecido; diretrizes preservadas.')
         if payload.get('operation_id'):
             self.care_status.setText(self.care_status.text() + '\nOperação: ' + str(payload['operation_id']))
-        if enabled is True and payload.get('state') not in ('pending', 'conflict'):
+        if enabled is True and not self._audit_restricted and payload.get('state') not in ('pending', 'conflict'):
             self._care_timer.start()
         else:
             self._care_timer.stop()

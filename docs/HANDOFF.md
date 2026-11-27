@@ -1,4 +1,376 @@
-# Passagem para o próximo agente — atualizada em 16/11/2026
+# Passagem para o próximo agente — atualizada em 26/11/2026
+
+## Master System fora do dock e retorno do mapeador — 26/11/2026
+
+O EmuAtlas reconheceu em P1 o controle interno do Deck. A tradução do evdev
+descartava os eixos analógicos dos gatilhos, deixando a proteção de soltura
+sempre acionada. A correção do roteador está no
+[PR #3 do EmuAtlas](https://github.com/Misael-art/EmuAtlas/pull/3).
+Na jornada com Genesis Plus GX, o direcional e o botão chegaram ao controle
+físico e à porta virtual P1. O usuário confirmou jogo, saída e uso do trackpad,
+clique e Steam + X no KDE. A sessão das 10h00 registrou saída por P1 e
+descarregamento normal do core após 1 min 28 s.
+
+Na partida posterior do mapeador do desktop, um nó event do kernel desapareceu
+durante a enumeração. O Fôlego agora descarta essa leitura parcial e refaz o
+inventário até duas vezes em caso de ENOENT. A validação das três interfaces,
+o limite de partidas e o disjuntor permanecem ativos. O lote focado
+`./dev test-headless tests/test_deck_mapping.py` passou em 47 casos.
+
+## Retorno do RetroArch ao desktop portátil — 26/11/2026
+
+Na sessão de Master System das 06h56, o EmuAtlas registrou o Deck em P1,
+oito portas virtuais e a captura temporária do teclado e do mouse do firmware.
+A sessão encerrou às 07h44. O manifesto registrou a associação, mas não
+comprovou entrega de botões ao RetroArch. No desktop, os canais internos estavam
+habilitados, o Wine não mantinha a interface de jogo aberta e a instalação do
+Steam continha apenas o inicializador. O Fôlego bloqueava o mapa alternativo
+porque a leitura do ambiente de um processo `gsettings` zumbi era recusada.
+
+A guarda confere PID, estado e número de threads antes de descartar um possível
+responsável já encerrado. O usuário escolheu PhaseZero e confirmou cursor e
+clique. O KWin confirmou o teclado visível após a abertura pelo painel e o
+retorno ao modo automático 1. Steam + X agora usa a mesma operação do painel
+de acessibilidade, com verificação de visibilidade e restauração do modo do KWin.
+O teste de movimento da CLI e do painel identifica a saída do mapeador por
+operação e revalida a rota após a amostra. A partida de RetroArch com entrega
+física de botões continua exigindo uma jornada própria do EmuAtlas.
+
+O lote focado através de `./dev test-headless` passou em 16 casos de regressão,
+com 60 desmarcados, 160 MiB de limite e 30% de um núcleo. As suítes completas
+do [PR #15](https://github.com/Misael-art/Folego/pull/15) rodam no GitHub
+enquanto o MT5X ocupa a vez de carga local.
+
+## Controle compartilhado com PhaseZero e EmuAtlas — 25/11/2026
+
+O Fôlego incorpora o mapa alternativo e usa o teclado virtual do KWin. A opção
+Steam Input continua padrão. O EmuAtlas em `~/emulation` inicia sessões nativas
+por `steam-input.py session-run` e marca os descendentes roteados com
+`EMULATION_ROUTED_CONTROLS=1`. O supervisor de desktop do PhaseZero também pode
+reservar o Deck antes de iniciar o sc-controller. O seletor e as rotinas de
+entrada respeitam esses responsáveis e a restauração pendente do RetroFE.
+A presença de um dos projetos em disco permite continuar no desktop.
+
+O teste de leitura neste Jupiter encontrou KDE portátil, ponteiro nativo,
+teclado virtual disponível em modo automático e preferência Steam em repouso.
+O teste físico do mapa alternativo segue adiado por escolha do usuário.
+Lançadores integrados podem usar o protocolo de reserva para aguardar a liberação
+antes de iniciar o jogo. Lançamentos diretos dependem da detecção pelo monitor.
+[Operação do seletor e protocolo](ACESSIBILIDADE.md#escolher-os-atalhos-do-controle).
+
+O gate local `./dev check` passou em 1.610 casos headless e 2.060 com Qt,
+com duas omissões em cada ambiente. Após ampliar a cobertura das ações diretas
+de recuperação, os 33 casos de `tests/test_deck_mapping.py` passaram em 0,59 s.
+Os testes usaram HOME/XDG privados, um núcleo e reserva de 4 GiB para o host.
+O [PR #15](https://github.com/Misael-art/Folego/pull/15) reúne as verificações
+do commit publicado.
+
+## Seletor de controle no KDE — 25/11/2026
+
+A janela principal, o widget, a minibarra e as três barras de borda usam o mesmo
+seletor. Steam Input é o padrão. A preferência PhaseZero é persistente e cede o
+Deck aos jogos e mapeadores. O catálogo inclui os dez emuladores Flatpak
+encontrados neste host, front-ends, AppImages da coleção e registro de futuros
+executáveis. O protocolo de lease aguarda a liberação antes do exec.
+[Escolha, cobertura e retorno](ACESSIBILIDADE.md#escolher-os-atalhos-do-controle).
+
+O pacote sc-controller desta distribuição usa libusb e pede reset no fechamento.
+O leitor do Fôlego usa os relatórios do hid-steam e o mapa conferido da instalação
+do PhaseZero. As duas saídas uinput descartáveis foram reconhecidas pelo KWin
+e removidas na prova sem emissão de teclas. Na tela real de 948 × 593 pontos,
+as seis apresentações abriram a prévia e mantiveram as opções ao lado da
+rolagem. O teste no portátil confirmou cursor e clique do firmware no incremento
+`6ebca65`. A validação física de combinações e a medição de FPS exigem uma
+jornada com o perfil e um jogo representativo.
+
+O código do seletor chegou ao [PR #15](https://github.com/Misael-art/Folego/pull/15)
+em `d5d043372dd0af1355bd702cdfac5f2823ee3f75`. O gate local `./dev check`
+usou Python 3.14.7, um núcleo, limite de 1.800 MiB e ambientes privados.
+Headless teve 1.595 aprovações e duas omissões. Qt teve 2.044 aprovações e
+duas omissões. No GitHub, as fontes do runner aumentaram a largura inicial da
+minibarra em até oito pontos. O ajuste de espaçamento preservou os alvos e a
+largura-base de 384 pontos. Os seis casos de regressão passaram no Deck.
+
+Na sessão de trabalho, os mesmos processos do Codex, Claude Desktop e MT5X
+continuaram ativos. Em 15 amostras de um minuto antes e 15 depois de recarregar
+o Fôlego, Codex e Claude estavam presentes em todas. O atraso mediano do timer
+da GUI foi de 0,0 a 0,3 ms e o máximo de 0,8 a 1,4 ms. As cargas concorrentes
+variaram. Esses números descrevem a interface do Fôlego; redução de lentidão dos
+agentes e efeito sobre FPS seguem sem comprovação. O usuário escolheu manter
+Steam Input e adiar o teste físico de PhaseZero.
+
+## Retorno ao desktop após sair do dock — 25/11/2026
+
+O host registrou a desconexão USB às 05h18. O monitor externo saiu e o KWin
+manteve os canais internos de teclado e ponteiro habilitados. O serviço Wine
+anterior ainda detinha a interface do gamepad, apesar das opções salvas para
+sua próxima abertura. Após reaplicação manual autorizada no dispositivo
+virtual, a reenumeração retornou erro de pipe fechado. A associação original
+foi relida, o WineBus foi encontrado parado e iniciado isoladamente. O serviço
+voltou ao estado ativo com código zero, liberou a interface e o kernel registrou
+novamente o gamepad. O usuário confirmou cursor e clique no portátil, com a
+sessão e os processos do aplicativo e da ponte ainda ativos.
+
+O monitor existente passou a acompanhar a topologia e a identidade das duas
+entradas internas. O [guia de acessibilidade](ACESSIBILIDADE.md#do-dock-ao-modo-portátil)
+descreve o controle por jogo e o [mapa visual](assets/controles-desktop-deck.svg)
+compara os atalhos opcionais. A reenumeração manual do Wine fica fora da
+automação. A confirmação física cobre cursor e clique. O retorno após jogo e
+o comportamento de cada combinação de botões precisam de validação no perfil escolhido.
+
+Na base `8d8de34`, os oito checks do PR #15 estavam aprovados. No incremento,
+12 casos focados cobriram dock, mudança de foco/sessão, proteção de frontend,
+emuladores e identidade da interface. Uma janela própria no KDE/Wayland mostrou
+o modo portátil e o estado dos canais nativos com observações do host. A suíte
+completa usa o launcher participante quando houver margem.
+
+## Trackpad do Deck com cliente HID do Wine — 24/11/2026
+
+No Jupiter, a desconexão lógica do controle ocorreu no mesmo segundo em que
+iniciou o serviço Wine que mantinha aberta a interface de gamepad. O mouse
+emulado continuava habilitado no KWin. Os dois recibos individuais anteriores
+confirmavam habilitação do trackpad com base apenas nesse estado. O monitor de
+entrada, o compositor e os serviços de áudio estavam ativos. O usuário confirmou que o cursor ficou parado ao deslizar o dedo.
+A recuperação física após liberação do dispositivo ainda precisa de confirmação.
+
+A guarda do perfil e a recuperação manual agora verificam o cliente Wine da
+interface de gamepad do Deck. A operação conjunta mostra o resultado de cada
+capacidade e protege o controle quando o responsável está ativo. O teste sob
+demanda usa a saída relativa identificada. O procedimento está em
+[Diagnóstico do trackpad](ACESSIBILIDADE.md#o-trackpad-do-deck-aparece-mas-o-cursor-não-se-move).
+A janela residente e o monitor carregam a revisão na próxima abertura normal de
+cada processo. A CLI do checkout já executa a revisão.
+
+No PR #15, os oito checks da base `a1bedf5` estavam aprovados. O gate local
+`./dev check` usou o launcher participante, um núcleo e 2 GiB de limite.
+Headless com 1.569 aprovados, dois pulados (71,58 s) e Qt offscreen com 2.016
+aprovados, dois pulados (298,50 s), em Python 3.14.7. A suíte Qt incluiu o
+filtro final da interface USB. A janela própria em KDE/Wayland exibiu o motivo
+nos três cartões e completou o teste pelo botão. Com observações reais, diário
+privado e efeitos interceptados, a recuperação de trackpad e ponteiro retornou
+parcial antes de qualquer tentativa de escrita.
+
+## Retomada Wayland no BigLinux — 24/11/2026
+
+O [procedimento do bloqueador](BASE-DO-HOST.md#bloqueador-wayland-e-tela-de-login-no-plasma-682) usa uma ferramenta manual de administração e o binário original do pacote 6.8.2-1 conferido pelo SHA-256 do manifesto. Sobre o SHA anterior `323187c`, os oito checks do PR #15 estavam aprovados. A verificação local desta mudança incluiu sintaxe Bash, diff, preflight real e aplicação, repetição, reversão e liberação do hook em filesystem descartável com paclock. A prova recusou lock concorrente, máscara alheia e original divergente.
+
+O teste isolado do SDDM confirmou o fallback do tema instalado. Os 23 arquivos da revisão oficial para Plasma 6.8 foram conferidos pelos identificadores dos blobs. O greeter carregou essa revisão no mesmo modo offscreen, com avisos de layout. O teste usou socket e barramentos desconectados do login. A causa da ativação de PowerOff, autenticação e retomada física continuam sem aceite. Aplicação no host exige um terminal administrativo e conferência pelo modo de consulta.
+
+## Diagnóstico de desligamento na tela de login — 24/11/2026
+
+O incremento `3cae41977d84a97ed3d09c66122cbba49d39b221` segue no [PR #15](https://github.com/Misael-art/Folego/pull/15). O SHA anterior `50c3d73` tinha os oito checks aprovados.
+
+- A consulta de boots em `disk health` e em **Saúde do host → Reinícios registrados** reconhece o pedido de desligamento da tela de login do SDDM. Requer três mensagens correlacionadas pelo boot, serviços, PID de origem, relógio monotônico e ordem. O observador usa seu orçamento existente e o cache por boot. A origem da interação física continua desconhecida.
+- O histórico compara as duas últimas tensões em descarga quando ambas têm fonte íntegra e intervalo curto, com concordância entre os relógios. As amostras novas também preservam os limites térmicos disponíveis do sensor identificado. O diagnóstico usa a cadência de gravação existente.
+- O primeiro gate pelo launcher expôs herança da raiz de temporários de trabalho pelo ambiente de QA. O wrapper agora exclui a raiz e o manifesto externos ao criar o ambiente privado. Gate final pelo mesmo launcher, com um núcleo, CPUQuota de 80%, memória limitada a 2 GiB e reserva de 4 GiB. Python 3.14.7, 1.563 aprovados e dois pulados no headless (50,22 s), 2.009 aprovados e dois pulados em Qt offscreen (201,65 s). Diff verificado.
+- A CLI leu o diário e a telemetria já existentes. Uma janela própria no KDE/Wayland exibiu a origem do desligamento e a variação de tensão de outro boot ao abrir a orientação. Uma amostra do sensor real foi escrita e relida em histórico privado de teste. A GUI residente carrega o código novo na próxima abertura normal.
+- A falha do bloqueador Wayland após a retomada merece investigação pelo responsável pelo componente. O incidente não demonstrou necessidade de reparo de filesystem, intervenção no login ou novo executor de energia. O aceite de desempenho conjunto do Codex e Claude continua pendente de uma jornada comparável.
+
+## Coordenação de cargas do Codex e do Claude Code no Desktop — 24/11/2026
+
+- Código do incremento confirmado no GitHub em `78563d744e9d264e3d93bb0e9d2070759c9a1b1b`,
+  no [PR #15](https://github.com/Misael-art/Folego/pull/15). Os oito checks de push/PR estavam
+  em execução na consulta após o envio. O gate local e a prova física estão registrados abaixo.
+- A aba Auditoria e a CLI compartilham os marcadores de lentidão, a janela de cinco minutos
+  antes/depois no mesmo boot e as medições por agente. O histórico por minuto também inclui
+  custo do Fôlego, último atraso observado do timer Qt, contadores dos cgroups observados e
+  previsão local de espaço do arquivo detalhado. Os resumos horários usam as amostras existentes
+  e conservam a contagem por medida. Fontes ausentes ou legadas mantêm valores desconhecidos.
+- `session capacity` e `session run --ram-mib ... --disk-mib ...` integram estimativas de
+  primeiro plano ao registro protegido de sessões. Concorrência entre participantes é por
+  estado do usuário. Antes do exec, o launcher grava UUID, boot, namespace, líder e starttime,
+  sob trava. EOF na preparação impede o comando. Membros observados na mesma sessão após a
+  saída do líder retêm a reserva. Cargas externas e processos que se desassociam precisam de
+  observação própria. Nenhuma ação de fechamento foi acrescentada.
+- A orientação opcional para Codex e Claude Code pode atualizar o bloco original comprovado no
+  recibo, conservar edições externas ao bloco e restaurar o estado anterior. O launcher e a unit
+  de entrada deste host usam o checkout; a GUI residente carrega a nova versão na abertura normal.
+- QA no KDE/Wayland físico com HOME e XDG privados: janela mapeada, clique em **Ficou lento
+  agora**, marcador via worker e leitura de uma amostra do Codex no episódio. Dois comandos de
+  teste próprios verificaram admissão, recusa concorrente e liberação após saída. O teste não
+  usou processos de trabalho como alvos. O primeiro gate intermediário passou no headless e
+  encontrou um teste Qt que ainda referenciava um módulo substituído durante o gate. Recibos,
+  logs e payloads dessas duas execuções preservados integralmente na retenção revisada local.
+- Gate final `./dev check` em escopo de usuário, um núcleo, CPUQuota=80%, MemoryMax=2G,
+  Python 3.14.7 e perfis privados. Headless: **1.560 aprovados, 2 pulados em 49,71 s**
+  (`run-ewm2lfzg`). Qt offscreen: **2.006 aprovados, 2 pulados em 200,03 s** (`run-u7ngnyi9`).
+  Diff verificado. Preflight com ~9,7 GiB disponíveis, 681 GiB no Btrfs, sem swap-in/out,
+  sensor ACPI com trip passivo de 100 °C. A observação durante o gate preservou a reserva.
+- Amostra real de 304 processos, inventário íntegro, 11 comparações sobre o mesmo snapshot:
+  medianas de 0,884 ms na contagem da revisão anterior e 0,958 ms na atual; 0,836 ms para
+  a consulta de cgroups que a auditoria executa por minuto. Uma coleta do host levou 69,41 ms.
+  São medições curtas. A CLI consultou 434 amostras legadas sem inventar cobertura de I/O.
+  Sincronização real pelo owner confirmou dois perfis aplicados, Codex e Claude, sem conflitos.
+- Falta medir uma jornada prolongada com as duas aplicações, uso repetido das reservas por
+  clientes reais e ganho na duração de trabalhos comparáveis. A verificação nativa desta
+  integração cobre Linux/KDE no Jupiter. A latência de resposta do provedor permanece sem atribuição.
+
+## Histórico contínuo, instâncias por agente e abas bloqueadas explicadas — 23/11/2026
+
+- **Histórico contínuo** (`audit history-enable|history-disable|history-status`, caixa em
+  Opções → Modo Auditor): `HostAuditRecorder`, a janela e `audit watch` gravam quando
+  `audit_profile.records()` (Auditor **ou** histórico contínuo). Desligado por padrão, mantendo
+  a regra antiga; efeitos continuam governados só por `normal()`/`normal_effects()`.
+- **Instâncias por agente**: `core/agents.footprint()` entra em `_sample()` (linha do tempo de
+  15 s e métricas por minuto) como `agents.{codex,claude,automation}` com `procs`, `main`,
+  `top`, `app_server`, `exec_server`, `exec`, `mcp`, `rss_kb` e `cpu_pct`. O Electron junta o
+  argv numa só string (`argv()` separa); `comm` corta em 15 bytes (`browser_crashpa`); MCP é
+  detectado só pelo nome do programa/pacote. Medido no host com o app ChatGPT e o Claude
+  Desktop abertos: Codex `top=1, main=2 (app-server + exec-server), procs=21, ~3,1 GiB`;
+  Claude `top=1, main=1, procs=20, ~2,6 GiB`.
+- **Abas bloqueadas no Auditor** deixam de falhar em silêncio: dica na aba, aviso no cabeçalho
+  ao tocar/clicar ou ao usar "Ir para", e o aviso abre Opções (`SidebarTabBar.disabled_tab_clicked`).
+- Host: histórico contínuo ligado e Modo Auditor desligado a pedido do usuário; primeira amostra
+  com `agents` às 21:26:27. `./dev test-headless` **1.551 passed**, `./dev test` **1.996 passed**
+  (2 pulados cada). Pendentes: I/O por árvore, orçamento com alerta, sobras após o fim da sessão,
+  e o toque físico nas abas bloqueadas.
+
+## Codex Desktop oficial (ChatGPT `chatgpt-bin`) no BigLinux restaurado — 23/11/2026
+
+- O app oficial da OpenAI que hospeda o Codex Desktop foi instalado pelo
+  restaurador EmuAtlas (pacote `chatgpt-bin` 26.1117.41037, repositório
+  assinado `openai-chatgpt`). Ele roda em `/usr/lib/chatgpt/ChatGPT` (Electron,
+  scope `app-org.chromium.Chromium-*`, janela de classe `Chatgpt`, atalho
+  `chatgpt.desktop`) e inicia o `codex app-server` embutido em
+  `/usr/lib/chatgpt/resources/codex` com a `~/.codex` padrão.
+- `core/agents.py` passa a tratar `/lib/chatgpt/` como raiz de agente;
+  `core/perf_model.py` mostra o grupo como "ChatGPT (Codex Desktop)" só
+  quando esses processos têm a maior parte da RSS do grupo (um `crashpad`
+  solto dentro do scope do Claude Desktop não o renomeia; caso visto no host);
+  `adapters/agent_apps.py` encontra a janela `Chatgpt` e usa `chatgpt.desktop`
+  quando não há `codex-desktop.desktop`. Unidades, regras e proteção não mudam.
+- `./dev test-headless`: **1.547 passed, 2 skipped** em 38,49 s (três testes
+  novos; os dois primeiros falham sem a correção). Conferido no host com o app
+  aberto: `performance status --json` lista o scope do ChatGPT como `agent`,
+  e `kdotool search --class` encontra a janela pelo padrão novo. Qt/GUI não
+  foi reaberto nesta passagem; login no app e aviso de agente na janela do
+  Fôlego seguem sem aceite.
+- `ai render-*` continua valendo só para o launcher comunitário
+  (`~/.config/codex-desktop/electron-flags.conf`); o app oficial tem a ação
+  "Software Render" do próprio atalho.
+
+## Prévia 0.2.0b18 e resgate pré-formatação — 22/11/2026
+
+- [Prévia pública v0.2.0b18](https://github.com/Misael-art/Folego/releases/tag/v0.2.0b18),
+  release `454389222`. Fonte `955adc8ff388d352d7e9c200aacd4647bcf82ee6`
+  e tag anotada `2de76b83080827bf1cb3e1eba36bdd325288f0eb` conferidas no
+  GitHub. A continuidade usa `codex/audit-profile` e o
+  [PR #15](https://github.com/Misael-art/Folego/pull/15).
+- A última mudança local, a preferência reversível de renderização do
+  Codex Desktop, entrou na prévia junto do Modo Auditor e do tempo de boot.
+  O teste de permissões agora parte de um modo explícito e simula uma
+  mudança real. O perfil Auditor também bloqueia esse efeito pela CLI.
+  KDE/Wayland confirmou aplicação e restauração em um arquivo descartável.
+  A abertura do Codex com essa preferência no perfil real continua pendente.
+- `./dev check` na candidata passou com **1.544 testes headless** em 54,43 s
+  (`run-ppkpb173`) e **1.987 testes Qt** em 190,49 s (`run-l4weaccf`), com
+  dois testes pulados por perfil. Escopo de um núcleo, 2 GiB e Python 3.14.7.
+  Os checks do [PR](https://github.com/Misael-art/Folego/actions/runs/45015330074),
+  da [tag Linux/CLI](https://github.com/Misael-art/Folego/actions/runs/45015855618)
+  e da [tag Windows](https://github.com/Misael-art/Folego/actions/runs/45015855609)
+  passaram no SHA da release.
+- A fonte completa contém **1.054 arquivos** comparados com o Git. Os
+  **199 arquivos de runtime** do wheel e sdist correspondem aos blobs do
+  mesmo commit. O wheel foi instalado em venv isolado, validou Auditoria
+  e a configuração reversível sem Qt e preservou o bloqueio do Modo Auditor.
+  Os quatro anexos públicos foram baixados sem autenticação e conferidos
+  por tamanho e SHA-256.
+- O resgate autenticado no GitHub foi verificado após a publicação. O bundle
+  tem histórico completo e reproduz as **16 branches públicas**, incluindo
+  as cinco linhas Windows. O ZIP privado guarda **127 arquivos** de estado,
+  histórico, recibos, referências do host e evidências de QA selecionadas.
+  Os sete anexos privados foram baixados, conferidos por SHA-256 e o ZIP
+  foi validado arquivo por arquivo. As contas devem ser reconectadas pelo
+  fluxo oficial no novo OS.
+- [Guia para retomar no novo sistema](NOVO-HOST.md). A comprovação local
+  está em `.scratch/release-v0.2.0b18-preformat/receipt/`. As execuções
+  anteriores `run-xqvr2shw` e `run-72ctk54q` foram mantidas na retenção
+  revisada após conferir encerramento, inode e recibo. A instalação ativa
+  permanece na versão anterior e os aceites físicos prolongados seguem em aberto.
+
+## Tempo de boot na Auditoria — 22/11/2026
+
+- **Auditoria → Tempo de boot** e `audit history --source boot` mostram uma
+  medição por boot observado. O histórico guarda os marcos do systemd,
+  incluindo o intervalo comparável do kernel até o fim da inicialização e o
+  intervalo completo quando o firmware fornece o início. O alvo gráfico é
+  registrado quando seu marco pertence à inicialização. A ausência de um
+  marco fica explícita. O coletor tenta novamente se o systemd ainda iniciar.
+- No boot atual do Jupiter, o coletor registrou **683,974992 s** desde o
+  firmware, **123,051041 s** a partir do kernel e **119,806029 s** até o alvo
+  gráfico. O firmware respondeu por **471,600661 s**. Os valores conferem com
+  `systemd-analyze time`. O alvo gráfico é um marco do systemd e a
+  disponibilidade prática do Plasma depende da sessão. Nenhum reboot foi
+  necessário para a leitura.
+- A GUI real em KDE/Wayland e a CLI leram o mesmo registro a partir de
+  estado isolado, em `.scratch/audit-boot-wayland-DBOrB3ID/`. O lote
+  Qt com regressões aprovou **25 testes** em 2,35 s (`run-xqvr2shw`), e
+  o headless aprovou **9 testes** em 0,72 s (`run-72ctk54q`). Python
+  3.14.7 e HOME/XDG privados. A retenção revisada recebeu `run-sgpz4o13`
+  e `run-xaw9huz6` após conferência dos recibos, inodes e ausência de uso.
+- Código `65c9e7befa0d20d8b6e51ec549bb739f578b36a6` confirmado no
+  [PR #15](https://github.com/Misael-art/Folego/pull/15). Gates completos
+  de [Linux e CLI](https://github.com/Misael-art/Folego/actions/runs/45014797894)
+  e de [Windows](https://github.com/Misael-art/Folego/actions/runs/45014797886)
+  aprovados nesse SHA. O incremento está na fonte de desenvolvimento.
+  A instalação ativa segue com o binário anterior.
+
+## Modo Auditor — 22/11/2026
+
+- **Opções → Modo Auditor** e `audit enable|disable|status` compartilham a
+  preferência persistida, desligada por padrão. A aba **Auditoria** lê o
+  histórico mesmo com a coleta desativada. `audit watch` usa o mesmo coletor
+  com a interface fechada e tem trava de instância.
+- As amostras existentes continuam disponíveis. O banco de auditoria reúne
+  métricas por minuto, alterações de serviços e discos, estado do kernel e do
+  sistema, pacotes a cada cinco minutos, erros do journal e registros de
+  coredump. Fontes incompletas preservam a última referência válida. O banco é
+  privado, limitado a 64 MiB e mantém os registros quando chega ao limite.
+  Inventário marca janela de observação. Journal mantém horário e boot da fonte.
+- Automações de desempenho, energia, áudio, recuperação Web, Sessão básica,
+  orientação de agentes e retenção do monitor residente ficam suspensas no
+  perfil Auditor. A política vigente de KWin e do perfil de trackpad da Steam
+  continua aplicável. Atalhos, teclado virtual e controles de entrada mantêm
+  seus caminhos existentes.
+- O foco headless passou com **52 testes** em 5,45 s
+  (`run-znezn39y`). O lote Qt e regressões relacionadas passou com **209
+  testes** em 32,07 s (`run-qr8ih01l`). Ambos usaram Python 3.14.7,
+  HOME/XDG e temporários privados e execução sequencial. Os artefatos estão
+  em `.scratch/dev-tests/` ou na retenção revisada do projeto.
+- A GUI de desenvolvimento abriu pelo ponto de entrada real em KDE/Wayland
+  e exibiu **14 registros** na linha do tempo a partir de um estado isolado.
+  A primeira leitura confirmou as 12 fontes de inventário e journal.
+  Evidência local privada em `.scratch/audit-wayland-3KUNKYjw/`.
+  A prova verificou disponibilidade dos controles na interface. A abertura
+  física do teclado, os botões do Deck e um ciclo longo de coleta continuam
+  sem medição deste incremento.
+- O modo de primeiro plano registrou **uma amostra e 12 fontes** com a janela
+  fechada e encerrou após `audit disable`. Evidência privada em
+  `.scratch/audit-headless-ou5tykzw/`. A retomada das automações após desativar
+  passou com **59 testes focados** em 13,86 s (`run-sgpz4o13`).
+- Código da revisão confirmada em
+  `9668805e4444ee1ff23f2e4c11fb32d48fe1e31d`, no
+  [PR #15](https://github.com/Misael-art/Folego/pull/15), com base na
+  continuidade da b17. No [CI da revisão](https://github.com/Misael-art/Folego/actions/runs/45013634730),
+  headless **1.517 aprovados, 2 pulados** e Qt **1.958 aprovados, 2 pulados**.
+  Os contratos de CLI em HOME descartável e a prévia nativa Windows também passaram.
+- As suítes locais completas rodaram em sequência depois da carga de outro
+  projeto, em escopos de um núcleo e 2 GiB com 13 GiB livres no Btrfs. O sensor
+  ACPI variou de 55 a 71 °C com limite passivo de 100 °C. `./dev check`
+  terminou na etapa headless com **1.539 aprovados, 2 pulados e 1 falha**
+  (`run-xaw9huz6`). `./dev test` terminou com **1.981 aprovados, 2 pulados
+  e 1 falha** (`run-3hqhjw9p`). Ambos encontraram a mesma falha de permissões
+  em `tests/test_codex_rendering.py`, pré-existente no checkout e fora do PR.
+  Sob umask `077`, a fixture já nasce com modo `0600` e o teste aplica o
+  mesmo modo antes de esperar um conflito.
+- Quatro execuções encerradas foram movidas integralmente para
+  `.scratch/dev-tests-reviewed/` para respeitar o limite de QA. Foram
+  conferidos a ausência de uso observada, o filesystem, o inode e o hash
+  de cada recibo: `run-poop9bs8`, `run-cx2h17p9`, `run-z1mja7qi` e
+  `run-ixlh8o8t`. Os três primeiros lotes desta tarefa
+  (`run-c54frnxy`, `run-mvk6g9ff` e `run-znezn39y`) foram preservados no
+  mesmo destino com as mesmas verificações. A instalação local b17 permanece
+  com seu binário anterior.
 
 ## Widgets opcionais na Sessão básica e custo do monitor de entrada — 16/11/2026
 

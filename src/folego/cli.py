@@ -234,9 +234,38 @@ def build_parser() -> argparse.ArgumentParser:
         prog="folego",
         description="Bem-estar do Steam Deck: diagnóstico e higiene com confirmação.")
     commands = parser.add_subparsers(dest="command")
+    audit = commands.add_parser("audit", help="Modo Auditor: coleta do host e histórico local")
+    audit_sub = audit.add_subparsers(dest="sub", required=True)
+    for name, description in (
+            ("enable", "ativar o perfil"), ("disable", "voltar ao perfil normal"),
+            ("status", "ver o perfil salvo"), ("watch", "coletar em primeiro plano sem a interface"),
+            ("history-enable", "manter o histórico do host também fora do Modo Auditor"),
+            ("history-disable", "gravar o histórico só no Modo Auditor (padrão)"),
+            ("history-status", "ver se o histórico contínuo está ligado")):
+        command = audit_sub.add_parser(name, help=description)
+        command.add_argument("--json", action="store_true")
+    summary = audit_sub.add_parser("summary", help="resumo por hora e boot das últimas 1–24 horas")
+    summary.add_argument("--hours", type=int, default=8)
+    summary.add_argument("--json", action="store_true")
+    mark = audit_sub.add_parser("mark", help="marcar lentidão percebida neste boot")
+    mark.add_argument("--json", action="store_true")
+    episode = audit_sub.add_parser("episode", help="comparar cinco minutos antes e depois de um marcador")
+    episode.add_argument("marker", type=int)
+    episode.add_argument("--json", action="store_true")
+    history = audit_sub.add_parser("history", help="consultar mudanças, falhas e amostras")
+    from .adapters.host_audit import LABELS as audit_sources
+    history.add_argument("--source", choices=audit_sources)
+    history.add_argument("--boot")
+    history.add_argument("--since", help="início inclusivo em ISO 8601")
+    history.add_argument("--until", help="fim exclusivo em ISO 8601")
+    history.add_argument("--before-id", type=int, help="paginar a partir do primeiro ID da página anterior")
+    history.add_argument("--limit", type=int, default=100)
+    history.add_argument("--changes", action="store_true", help="focar mudanças e incidentes")
+    history.add_argument("--json", action="store_true")
 
     ai = commands.add_parser("ai", help="cotas, diagnóstico e recuperação pelo responsável Web")
-    ai.add_argument("sub", choices=["status", "recover-web", "reset-note", "limit-note", "care-status", "care-enable", "care-disable",
+    ai.add_argument("sub", choices=["status", "recover-web", "reset-note", "limit-note",
+                                    "render-status", "render-software", "render-restore", "care-status", "care-enable", "care-disable",
                                     "care-sync", "care-reconcile"])
     ai.add_argument("--adopt-legacy", help="com care-enable: manifesto privado da orientação manual anterior")
     ai.add_argument("--account", help="com recover-web/reset-note: identidade da conta (account_id de status --json)")
@@ -283,10 +312,14 @@ def build_parser() -> argparse.ArgumentParser:
     startup = commands.add_parser("startup", help="início automático com a sessão, ligado por padrão")
     startup_sub = startup.add_subparsers(dest="sub", required=True)
     for name in ("status", "enable", "disable", "sync", "basic-status", "basic-enable",
-                 "basic-disable", "basic-sync", "basic-reconcile", "basic-widgets-prepare"):
+                 "basic-disable", "basic-sync", "basic-reconcile", "basic-widgets-prepare",
+                 "basic-keep", "basic-release"):
         command = startup_sub.add_parser(name)
         command.add_argument("--json", action="store_true")
         command.add_argument("--confirmar", action="store_true")
+        if name in ("basic-keep", "basic-release"):
+            command.add_argument("--item", required=True,
+                                 help="unit ou .desktop do catálogo que a sessão básica não deve adiar")
 
     access = commands.add_parser("accessibility", help="supervisão de entrada independente de projetos externos")
     access_sub = access.add_subparsers(dest="sub", required=True)
@@ -302,10 +335,18 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("operation_id")
         else:
             command.add_argument("--plan", required=True)
+    mapping = access_sub.add_parser("deck-map", help="consulta ou escolhe o perfil de desktop do Deck")
+    mapping.add_argument("choice", choices=("steam", "phasezero"), nargs="?")
+    mapping.add_argument("--json", action="store_true")
+    games = access_sub.add_parser("deck-games", help="catálogo de emuladores e front-ends")
+    edit = games.add_mutually_exclusive_group()
+    edit.add_argument("--add", metavar="EXECUTÁVEL_OU_ID")
+    edit.add_argument("--remove", metavar="EXECUTÁVEL_OU_ID")
+    games.add_argument("--json", action="store_true")
     lease_run = access_sub.add_parser("lease-run", help="inicia aplicação cooperante sob propriedade durável de entrada")
     lease_run.add_argument("--provider", required=True)
     lease_run.add_argument("argv", nargs=argparse.REMAINDER)
-    for name in ("status", "plan", "transitions", "enable", "disable", "audio-reprobe-enable", "audio-reprobe-disable", "capture", "rearm", "install", "repair", "reconcile", "watch", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
+    for name in ("status", "plan", "trackpad-test", "transitions", "enable", "disable", "audio-reprobe-enable", "audio-reprobe-disable", "capture", "rearm", "install", "repair", "reconcile", "watch", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
         command = access_sub.add_parser(name)
         command.add_argument("--json", action="store_true")
         if name in ("enable", "disable", "audio-reprobe-enable", "audio-reprobe-disable", "capture", "rearm", "install", "repair", "lease", "lease-reconcile", "profile-reconcile", "profile-rearm", "profile-capture"):
@@ -437,6 +478,14 @@ def build_parser() -> argparse.ArgumentParser:
                      help="protege o comando de encerramento heurístico")
     run.add_argument("--heartbeat", type=float, default=None,
                      help="intervalo de sinal de vida em segundos (padrão: política)")
+    capacity = session_sub.add_parser("capacity", help="avaliar a margem para uma carga local")
+    capacity.add_argument("--json", action="store_true")
+    for target in (capacity, run):
+        target.add_argument("--ram-mib", type=int, required=target is capacity,
+                            help="pico adicional de RAM; em run ativa a reserva compartilhada")
+        target.add_argument("--disk-mib", type=int, required=target is capacity,
+                            help="saída total estimada, incluindo staging e temporários")
+        target.add_argument("--destination", default=".", help="diretório de saída da carga")
     run.add_argument("argv", nargs=argparse.REMAINDER,
                      help="comando e argumentos, após --")
     for name, help_text in (
@@ -1012,7 +1061,7 @@ def _cmd_host_health(args) -> int:
               f"({report['boots'].get('reason', '')})")
         items = report['boots'].get('items', [])
         if len(items) >= 2:
-            from .core.host_guard import boot_end_text
+            from .core.host_guard import boot_end_text, last_discharge_text
             if end_text := boot_end_text(items[-2]):
                 print(f"Registro do boot anterior: {end_text}")
             evidence = items[-2].get('timeline', {})
@@ -1029,6 +1078,9 @@ def _cmd_host_health(args) -> int:
             else:
                 print(f"Amostras daquele boot: {evidence.get('quality', 'desconhecido')} "
                       f"({evidence.get('reason', 'sem evidência local')})")
+            for item in items[:-1]:
+                if change := last_discharge_text(item):
+                    print(f"{item['period']} · {change}")
         print(f"Custo desta observação: {report['observer_duration_ms']:.1f} ms")
         print("Orientações: folego disk guide storage|thermal|pressure|power|ntfs|btrfs|service|reboot")
     return EXIT_OK
@@ -1481,31 +1533,39 @@ def _session_run(args) -> int:
         return _session_error(
             args, "session.run",
             SessionError("informe o comando após --"), EXIT_NEEDS_CONFIRM)
-    try:
-        from .safely.jobtemp import prepare_job_environment
-        child = subprocess.Popen(argv, start_new_session=True,
-                                 env=prepare_job_environment())
-    except OSError as exc:
-        return _session_error(args, "session.run",
-                              SessionError(f"não foi possível iniciar: {exc}"),
-                              EXIT_FAILED)
     store = SessionRegistry()
-    try:
-        session = store.register_child(child, project=args.project,
-                                 label=args.label, keep_active=args.keep_active)
-    except SessionError as exc:
-        # O filho já existe; não deixamos um processo sem registro protetor.
-        # SIGTERM e espera curta, sem escalada automática.
+    manifest = None
+    if args.ram_mib is not None or args.disk_mib is not None:
+        from .actions import workload
         try:
-            child.terminate()
-        except ProcessLookupError:
-            pass
+            child, session, manifest = workload.launch(args, argv, store)
+        except (OSError, ValueError, KeyError, TypeError, SessionError, subprocess.SubprocessError) as exc:
+            return _session_error(args, "session.run", exc)
+    else:
         try:
-            child.wait(timeout=2.0)
-        except subprocess.TimeoutExpired:
-            sys.stderr.write(f"aviso: pid {child.pid} continua ativo; "
-                             f"escalada não é automática\n")
-        return _session_error(args, "session.run", exc)
+            from .safely.jobtemp import prepare_job_environment
+            child = subprocess.Popen(argv, start_new_session=True,
+                                     env=prepare_job_environment())
+        except OSError as exc:
+            return _session_error(args, "session.run",
+                                  SessionError(f"não foi possível iniciar: {exc}"),
+                                  EXIT_FAILED)
+        try:
+            session = store.register_child(child, project=args.project,
+                                     label=args.label, keep_active=args.keep_active)
+        except SessionError as exc:
+            # O filho já existe; não deixamos um processo sem registro protetor.
+            # SIGTERM e espera curta, sem escalada automática.
+            try:
+                child.terminate()
+            except ProcessLookupError:
+                pass
+            try:
+                child.wait(timeout=2.0)
+            except subprocess.TimeoutExpired:
+                sys.stderr.write(f"aviso: pid {child.pid} continua ativo; "
+                                 f"escalada não é automática\n")
+            return _session_error(args, "session.run", exc)
 
     protect = "sim" if session.keep_active else "não"
     sys.stderr.write(
@@ -1543,6 +1603,13 @@ def _session_run(args) -> int:
             f"como desconectada; pid {child.pid} continua ativo\n")
         return EXIT_UNKNOWN
 
+    if manifest is not None:
+        from .safely.jobtemp import finish_job
+        try:
+            if not finish_job(manifest, child.pid, certain=True):
+                sys.stderr.write("Encerramento do temporário sem confirmação; material preservado.\n")
+        except (ValueError, OSError) as exc:
+            sys.stderr.write(f"Temporários preservados: {exc}\n")
     reason = (f"processo filho saiu com código {code}" if code >= 0
               else f"processo filho terminou pelo sinal {-code}")
     try:
@@ -1555,6 +1622,15 @@ def _session_run(args) -> int:
 def _cmd_session(args) -> int:
     action = f"session.{args.sub}"
     try:
+        if args.sub == "capacity":
+            from .actions import workload
+            try:
+                result = workload.capacity(args.ram_mib, args.disk_mib, args.destination)
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                result = {"decision": "unknown", "reasons": [str(exc)], "retry_after_s": 20}
+            print(json.dumps(result, ensure_ascii=False) if args.json else
+                  " · ".join([result["decision"], *result["reasons"]]))
+            return EXIT_OK if result["decision"] == "ready" else EXIT_REFUSED
         if args.sub == "run":
             return _session_run(args)
         if args.sub == "start":
@@ -2770,6 +2846,14 @@ def _cmd_accessibility(args):
     from .actions.accessibility import Supervisor, publish_lease, reconcile_lease
     from .orchestration.models import ActionPlan
     from .orchestration.coordinator import CoordinatorBusy
+    if args.sub == "trackpad-test":
+        from .adapters.deck_hid import test_pointer_motion
+        if not args.json:
+            print("Deslize o dedo no trackpad direito nos próximos 8 segundos.", flush=True)
+        from .actions.deck_mapping import DeckMapping
+        result = test_pointer_motion(DeckMapping().pointer_token)
+        print(json.dumps(result, ensure_ascii=False) if args.json else result["reason"])
+        return EXIT_OK if result["ok"] else EXIT_UNKNOWN
     supervisor = Supervisor()
     try:
         if args.sub in ("activation-plan", "activate", "save-profile", "activation-reconcile"):
@@ -2812,7 +2896,14 @@ def _cmd_accessibility(args):
                 for reason in report["blockers"]:
                     print("aguardando: " + reason)
             return EXIT_OK if not report["errors"] else EXIT_REFUSED
-        if args.sub == "watch":
+        if args.sub == "deck-games":
+            from .actions.deck_mapping import DeckMapping
+            result = DeckMapping(supervisor.store, supervisor.coordinator).catalog(args.add, args.remove)
+        elif args.sub == "deck-map":
+            from .actions.deck_mapping import DeckMapping
+            mapping = DeckMapping(supervisor.store, supervisor.coordinator)
+            result = mapping.select(args.choice) if args.choice else mapping.status()
+        elif args.sub == "watch":
             from .actions.accessibility_service import watch
             if not 5 <= args.interval <= 120 or (args.cycles is not None and not 1 <= args.cycles <= 10000):
                 raise ValueError("intervalo 5–120 s; cycles precisa ser positivo e limitado")
@@ -2861,8 +2952,115 @@ def _cmd_accessibility(args):
         return _emit_gate_refusal(args, "accessibility", str(exc))
 
 
+def _cmd_audit(args):
+    from datetime import datetime
+    from . import audit_profile
+    from .adapters import host_audit
+    from .core.instance import AlreadyRunning
+
+    if args.sub == "summary":
+        try:
+            result = host_audit.hourly(args.hours)
+        except ValueError as exc:
+            return _emit_gate_refusal(args, "audit", str(exc))
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False))
+        else:
+            from .core.workload_history import describe_summary
+            for hour in result["hours"]:
+                print(hour["from"], "· boot", hour["boot"], describe_summary(hour))
+            print(result["reason"] or "Fim da janela observada")
+        return EXIT_REFUSED if result["quality"] in ("unknown", "missing") else EXIT_OK
+    if args.sub in ("mark", "episode"):
+        import sqlite3
+        from .core.workload_history import describe
+        try:
+            if args.sub == "mark":
+                marker = host_audit.mark_slow()
+                result = {"ok": True, "marker": marker, "reason": f"Marcador {marker} registrado"}
+                print(json.dumps(result) if args.json else result["reason"])
+            else:
+                result = host_audit.episode(args.marker)
+                if args.json:
+                    print(json.dumps(result, ensure_ascii=False))
+                else:
+                    print(f"Marcador {args.marker} · {result['at']} · amostras antes/depois: "
+                          f"{result['before']['samples']}/{result['after']['samples']}")
+                    for entry in result["events"]:
+                        if entry["kind"] == "sample":
+                            print(entry["at"], describe(entry["data"]))
+                    if result["reason"]:
+                        print(result["reason"])
+                if result["quality"] in ("missing", "unknown"):
+                    return EXIT_REFUSED
+            return EXIT_OK
+        except (ValueError, OSError, sqlite3.Error) as exc:
+            return _emit_gate_refusal(args, "audit", str(exc))
+    if args.sub == "watch":
+        if not audit_profile.records():
+            return _emit_gate_refusal(args, "audit", "Ative primeiro com folego audit enable "
+                                      "ou folego audit history-enable")
+        try:
+            for cycle in host_audit.watch():
+                print(json.dumps(cycle, ensure_ascii=False) if args.json else
+                      f"{cycle['at']} · {cycle['reason'] or 'amostragem ativa'}"
+                      + (f" · histórico de recursos: {cycle['timeline_issue']}" if cycle["timeline_issue"] else ""),
+                      flush=True)
+        except KeyboardInterrupt:
+            return EXIT_OK
+        except (AlreadyRunning, OSError) as exc:
+            return _emit_gate_refusal(args, "audit", str(exc))
+        return EXIT_OK
+    if args.sub == "history":
+        try:
+            since, until = (datetime.fromisoformat(value).timestamp() if value else None
+                            for value in (args.since, args.until))
+            if since is not None and until is not None and since >= until:
+                raise ValueError("O início precisa anteceder o fim")
+            result = host_audit.history(source=args.source, boot=args.boot, since=since,
+                                        until=until, before_id=args.before_id, limit=args.limit,
+                                        changes_only=args.changes)
+        except (ValueError, OSError, OverflowError) as exc:
+            return _emit_gate_refusal(args, "audit", str(exc))
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False))
+        else:
+            for event in result["events"]:
+                print(event["at"], f'#{event["id"]}', host_audit.LABELS[event["source"]],
+                      event["kind"], repr(event["subject"]), json.dumps(event["data"], ensure_ascii=False))
+            if result["reason"]:
+                print(result["reason"])
+            for name, source in result["sources"].items():
+                if source["quality"] != "ok":
+                    print(f"{host_audit.LABELS[name]} · {source['quality']} · {source['reason']}")
+            if result.get("limited"):
+                print(f"Página anterior no tempo: --before-id {result['events'][0]['id']}")
+        return EXIT_REFUSED if result["quality"] == "unknown" else EXIT_OK
+    if args.sub.startswith("history-"):
+        result = (audit_profile.history_status() if args.sub == "history-status" else
+                  audit_profile.configure_history(args.sub == "history-enable"))
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False))
+        elif not result["ok"]:
+            print(result["reason"], file=sys.stderr)
+        else:
+            print("Histórico contínuo do host " + ("ligado." if result["enabled"] else "desligado (só no Modo Auditor)."))
+        return EXIT_OK if result["ok"] else EXIT_REFUSED
+    result = (audit_profile.status() if args.sub == "status" else
+              audit_profile.configure(args.sub == "enable"))
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False))
+    elif not result["ok"]:
+        print(result["reason"], file=sys.stderr)
+    else:
+        print("Modo Auditor " + ("ligado." if result["enabled"] else "desligado."))
+    return EXIT_OK if result["ok"] else EXIT_REFUSED
+
+
 def _dispatch(ns, argv) -> int:
     """Dispatch without importing Qt in CLI invocations."""
+    if ns.command == "audit":
+        return _cmd_audit(ns)
     if ns.command == "performance":
         return _cmd_performance(ns)
     if ns.command == "ai":
@@ -2878,6 +3076,7 @@ def _dispatch(ns, argv) -> int:
                     raise ValueError('Migração manual exige care-enable --confirmar')
                 result = (manager.status() if action == 'status' else
                           manager.configure(reconcile=True) if action == 'reconcile' else
+                          manager.keep(ns.item, action == 'keep') if action in ('keep', 'release') else
                           manager.configure(None if action == 'sync' else action == 'enable',
                                             adopt=ns.adopt_legacy))
             except (OSError, ValueError, KeyError, TypeError, RuntimeError, CoordinatorBusy) as exc:
@@ -2889,6 +3088,30 @@ def _dispatch(ns, argv) -> int:
                     pass
             print(json.dumps(result, ensure_ascii=False))
             return EXIT_BY_OUTCOME.get(result.get('outcome'), EXIT_OK if result.get('ok') else EXIT_REFUSED)
+        if ns.sub.startswith('render-'):
+            from .actions.codex_rendering import CodexRendering, RenderingUnconfirmed
+            if ns.sub != 'render-status' and not ns.confirmar:
+                return _emit_gate_refusal(ns, 'codex-rendering',
+                                         'Use --confirmar para configurar as próximas aberturas')
+            try:
+                profile = CodexRendering()
+                result = (profile.status() if ns.sub == 'render-status' else
+                          profile.apply(restore=ns.sub == 'render-restore'))
+            except RenderingUnconfirmed as exc:
+                if ns.json:
+                    print(json.dumps({'schema': 1, 'ok': False, 'outcome': 'desconhecido',
+                                      'operation_id': exc.operation_id,
+                                      'exit': EXIT_UNKNOWN, 'reason': str(exc)}, ensure_ascii=False))
+                else:
+                    print(str(exc))
+                return EXIT_UNKNOWN
+            except (OSError, ValueError, RuntimeError, CoordinatorBusy) as exc:
+                return _emit_gate_refusal(ns, 'codex-rendering', str(exc))
+            if ns.json:
+                print(json.dumps(result, ensure_ascii=False))
+            else:
+                print(result['message'] + '\n' + result['scope'])
+            return EXIT_REFUSED if result['state'] == 'conflict' else EXIT_OK
         if ns.sub == 'recover-web':
             if not ns.confirmar:
                 print('Use --confirmar para solicitar o ciclo ao responsável Web já habilitado')
@@ -2977,6 +3200,7 @@ def _dispatch(ns, argv) -> int:
                 manager = BasicSession()
                 result = (manager.status() if action == 'status' else
                           manager.configure(reconcile=True) if action == 'reconcile' else
+                          manager.keep(ns.item, action == 'keep') if action in ('keep', 'release') else
                           manager.configure(None if action == 'sync' else action == 'enable'))
             except (OSError, ValueError, KeyError, TypeError) as exc:
                 result = {'ok': False, 'state': 'unknown', 'outcome': 'recusa', 'message': str(exc)}

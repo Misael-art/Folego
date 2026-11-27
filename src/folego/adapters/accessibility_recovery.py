@@ -204,7 +204,7 @@ class DesktopRecovery:
                  and default.stdout.strip() == name and any(v.get("value", 0) > 0 for v in after["volume"].values()))
         return ready, "padrão habilitado, sem mute e com volume; teste físico pendente" if ready else "áudio não confirmado"
 
-    def open_keyboard(self, report):
+    def open_keyboard(self, report, *, allow_enable=True):
         if report["backend"] != "kwin":
             return False, "abertura direta exige backend do compositor; nenhum teclado foi instalado"
         native = self.native
@@ -213,6 +213,8 @@ class DesktopRecovery:
         mode = props.get("mode")
         if props.get("available") != "true" or mode not in ("0", "1", "2"):
             return False, "provedor de teclado indisponível; configuração atual preservada"
+        if mode == "0" and not allow_enable:
+            return False, "teclado virtual desabilitado no KDE"
         changed = mode != "2"
         restore_mode = "1" if mode == "0" else mode
         try:
@@ -230,15 +232,17 @@ class DesktopRecovery:
         finally:
             if changed:
                 native.deadline = native.clock() + 2
-                native.call([native.qdbus, report["service_owner"], "/VirtualKeyboard", PROPERTIES + ".Set",
-                             "org.kde.kwin.VirtualKeyboard", "mode", restore_mode])
+                current = native.props(report["service_owner"], "/VirtualKeyboard", "org.kde.kwin.VirtualKeyboard")
+                if current.get("mode") == "2":
+                    native.call([native.qdbus, report["service_owner"], "/VirtualKeyboard", PROPERTIES + ".Set",
+                                 "org.kde.kwin.VirtualKeyboard", "mode", restore_mode])
         current = native.props(report["service_owner"], "/VirtualKeyboard", "org.kde.kwin.VirtualKeyboard")
         if current.get("mode") != restore_mode:
             raise UncertainEffect("modo anterior do teclado não confirmado; não repetir")
         visible = visible and current.get("visible") == "true"
         return visible, "teclado visível; abertura automática por toque preservada" if visible else "KWin não exibiu o teclado; confirme provedor e aplicativo com campo de texto"
 
-    def enable_devices(self, key, report, *, delegated=False):
+    def enable_devices(self, key, report, *, delegated=False, before_enable=None):
         kinds = {key}
         devices = [d for d in report["devices"] if kinds.intersection(d["kinds"])]
         if key == "touchpad" and not devices:
@@ -253,20 +257,27 @@ class DesktopRecovery:
                 matching = next((d for d in current["devices"] if d["key"] == device["key"]), None)
                 if (current["errors"] or current["blockers"] or current["boot_id"] != report["boot_id"]
                         or current["service_owner"] != report["service_owner"] or matching is None
-                        or any(matching[k] != device[k] for k in ("key", "event", "name", "stable"))):
+                        or any(matching[k] != device[k] for k in ("key", "event", "name", "stable", "kinds"))):
                     return False, "identidade/sessão/propriedade mudou antes do efeito; entrada preservada"
+                if matching["enabled"] is None:
+                    return False, "estado atual da entrada desconhecido; verifique novamente"
                 device = matching
                 if device["enabled"] is True:
                     continue
                 if not device["repairable"]:
                     return False, "compositor não autoriza reabilitar este dispositivo"
+                if before_enable and (reason := before_enable(current, matching)):
+                    return False, reason
                 self.native.deadline = self.native.clock() + 2
                 self.native.call([self.native.qdbus, report["service_owner"], DEVICE_ROOT + "/" + device["event"],
                     PROPERTIES + ".Set", DEVICE_IFACE, "enabled", "true"])
         after = self.native.collect()
         found = {d["key"]: d for d in after["devices"]}
         ready = (not after["errors"] and after["service_owner"] == report["service_owner"]
-                 and after["boot_id"] == report["boot_id"] and all(found.get(d["key"], {}).get("enabled") is True for d in devices))
+                 and after["boot_id"] == report["boot_id"] and all(
+                     (current := found.get(d["key"])) and current["enabled"] is True
+                     and all(current[k] == d[k] for k in ("event", "name", "stable", "kinds"))
+                     for d in devices))
         return ready, "habilitado e verificado no compositor; teste físico pendente" if ready else "habilitação não confirmada pelo compositor"
 
     def repair_touch(self, peer):

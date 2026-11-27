@@ -218,9 +218,9 @@ class MetricsCollector:
             previous_io = self._prev_io.get(key)
             read_bps = write_bps = None
             if previous_io is not None and elapsed is not None and elapsed > 0:
-                if proc.io_read_bytes is not None and previous_io[0] is not None:
+                if proc.io_read_bytes is not None and previous_io[0] is not None and proc.io_read_bytes >= previous_io[0]:
                     read_bps = max(0.0, (proc.io_read_bytes - previous_io[0]) / elapsed)
-                if proc.io_write_bytes is not None and previous_io[1] is not None:
+                if proc.io_write_bytes is not None and previous_io[1] is not None and proc.io_write_bytes >= previous_io[1]:
                     write_bps = max(0.0, (proc.io_write_bytes - previous_io[1]) / elapsed)
             if proc.io_read_bytes is not None or proc.io_write_bytes is not None:
                 io_seen += 1

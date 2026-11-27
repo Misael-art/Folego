@@ -14,6 +14,7 @@ import time
 from typing import Callable
 
 from ...core import perf_rules
+from ... import audit_profile
 from ...core.sessions import read_boot_id
 from ...orchestration import ActionPlan, ActionResult, Coordinator, Outcome, ResourceIdentity, perform
 from . import closers as closer_registry
@@ -91,7 +92,10 @@ def execute(plan: ActionPlan, *, observe: Callable, read_proc: Callable, confirm
         if not ok:
             return _refuse(plan, f"condição não vale mais: {why}")
         reviewed = [m for m in members if m["pid"] in group.pids]
-        request = closers[plan.params["channel"]](group.pids if rule.channel == "tray" else group.unit)
+        with audit_profile.normal_effects() as allowed_to_close:
+            if not allowed_to_close:
+                return _refuse(plan, audit_profile.SUSPENDED)
+            request = closers[plan.params["channel"]](group.pids if rule.channel == "tray" else group.unit)
         if not request.sent:
             return _refuse(plan, request.detail)
         deadline = clock() + follow_s

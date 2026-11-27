@@ -366,6 +366,36 @@ def _boots(run) -> dict:
             "previous_end": previous.get("end", "unknown"), "reason": reason}
 
 
+def _sddm_poweroff(run, boot_id: str) -> bool:
+    """Attribute only the correlated greeter → SDDM → logind chain, never its operator."""
+    pattern = (r"^(Message received from greeter: PowerOff|poweroff requested from client PID .*"
+               r"|System is powering down\.?)$")
+    code, out, _ = run(["journalctl", "-b", boot_id, "-n", "3", "-o", "json",
+                        "--output-fields=MESSAGE,_PID,_UID,_COMM,_SYSTEMD_UNIT", "-g", pattern,
+                        "--no-pager", "_UID=0", "_COMM=sddm", "_SYSTEMD_UNIT=sddm.service", "+",
+                        "_UID=0", "_COMM=systemd-logind", "_SYSTEMD_UNIT=systemd-logind.service"], 2.0)
+    if code != 0:
+        return False
+    try:
+        rows = [json.loads(line) for line in out.splitlines()]
+        if len(rows) != 3 or not all(isinstance(r, dict) and r.get("_BOOT_ID") == boot_id
+                                     and r.get("_UID") == "0" for r in rows):
+            return False
+        first, request, end = sorted(rows, key=lambda r: int(r["__MONOTONIC_TIMESTAMP"]))
+        start, middle, stop = (int(r["__MONOTONIC_TIMESTAMP"]) for r in (first, request, end))
+        pid = first["_PID"]
+        return (0 <= start < middle < stop <= start + 2_000_000
+                and first["_COMM"] == "sddm" and first["_SYSTEMD_UNIT"] == "sddm.service"
+                and isinstance(pid, str) and re.fullmatch(r"[1-9][0-9]{0,9}", pid) is not None
+                and first["MESSAGE"] == "Message received from greeter: PowerOff"
+                and all(r["_COMM"] == "systemd-logind" and r["_SYSTEMD_UNIT"] == "systemd-logind.service"
+                        for r in (request, end)) and request["_PID"] == end["_PID"]
+                and request["MESSAGE"] == f"poweroff requested from client PID {pid} ('sddm') (unit sddm.service)..."
+                and end["MESSAGE"] in ("System is powering down", "System is powering down."))
+    except (ValueError, KeyError, TypeError, OverflowError):
+        return False
+
+
 def _last_journal_entry(run, boot_id: str) -> dict:
     """Last retained event only; a silent tail of a failed boot remains unknown."""
     code, out, err = run(["journalctl", "-b", boot_id, "-n", "1", "-o", "json",
@@ -469,6 +499,9 @@ class HostObserver:
                         item["sample_to_journal_s"] = round(difference, 1)
                     else:
                         item["gap_clock"] = None
+            for item in reversed(boots["items"][:-1]):
+                if item.get("end_kind") == "poweroff" and _sddm_poweroff(run, item["boot_id"]):
+                    item["request_origin"] = "sddm-greeter"
             self._boot_cache = (boot_id, boots)
         return {"observed_at": datetime.fromtimestamp(now).astimezone().isoformat(timespec="seconds"),
                 "boot_id": boot_id, "mounts_quality": "unknown" if mounts_problem else "ok",

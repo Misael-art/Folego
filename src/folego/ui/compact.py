@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (QBoxLayout, QFrame, QGridLayout, QHBoxLayout, QLa
                                QScrollArea, QVBoxLayout, QWidget, QSizePolicy, QApplication,
                                QGraphicsOpacityEffect)
 
+from .deck_selector import DeckButton
 from . import title_signal
 from .desktop_caps import detect
 from .theme import (_background_color, background, themed_style, TOKENS, THEMES, choose_theme,
@@ -389,8 +390,9 @@ class CompactWindow(QWidget):
         keyboard_button = self.shortcut_tabs.buttons['keyboard']
         keyboard_button.setFixedSize(30, 28)
         self.shortcut_tabs.top_button.setFixedSize(20, 28)
+        self.deck_button = DeckButton(self)
         for name, controls in (('keyboardGroup', (keyboard_button, self.shortcut_tabs.top_button)),
-                               ('navigationGroup', (self.open_button, self.control_button))):
+                               ('navigationGroup', (self.deck_button, self.open_button, self.control_button))):
             group = QFrame(self)
             group.setObjectName(name)
             row = QHBoxLayout(group)
@@ -417,7 +419,7 @@ class CompactWindow(QWidget):
         self.mini_bar.setAccessibleName('Faixa mínima do Fôlego')
         self.mini_layout = QHBoxLayout(self.mini_bar)
         self.mini_layout.setContentsMargins(2, 0, 2, 0)
-        self.mini_layout.setSpacing(6)
+        self.mini_layout.setSpacing(4)
         self.mini_drag = MiniDragHandle(self)
         self.mini_status = QLabel('● Aguardando')
         self.mini_cpu = QLabel('—')
@@ -665,6 +667,7 @@ class CompactWindow(QWidget):
                               (self.shortcut_tabs.top_button, 16 if side else 20),
                               (self.open_button, 32 if mode == 'mini' else 24 if side else 30)):
             button.setFixedSize(width, 32 if mode == 'mini' else 25 if side else 28)
+        self.deck_button.setFixedSize(24 if mode == 'mini' else 28, 32 if mode == 'mini' else 26)
         if mode == 'mini':
             self.control_button.setFixedSize(58, 24)
         else:

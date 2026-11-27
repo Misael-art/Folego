@@ -370,3 +370,81 @@ timeout, orçamento, diário e estados da GUI. Não desligam entradas reais para
 produzir uma falha. Qt offscreen não certifica compositor; uma consulta KWin não
 certifica toque físico. Cold boot, login, suspend/resume, dock/USB, uso Steam e
 ensaio prolongado continuam sendo aceites específicos do alvo real.
+
+### O trackpad do Deck aparece, mas o cursor não se move
+
+O Deck pode expor o trackpad direito como mouse USB. O KWin consegue mostrar
+esse mouse como habilitado mesmo quando o controle deixa de produzir movimento.
+Abra **Acessibilidade → Verificar agora** e leia os cartões **Trackpads**, **Mouse /
+ponteiro** e **Controles**. Se o Wine tiver aberto o controle Valve pelo driver
+`hid-steam`, o diagnóstico mostra o PID observado. Salve o trabalho no
+aplicativo responsável e repita a verificação após a saída normal desse ambiente.
+Um teclado, mouse externo ou a tela de toque permitem operar o painel nesse meio-tempo.
+
+Em **Testar movimento do trackpad do Deck**, deslize o dedo no trackpad direito
+por até oito segundos. Com o mapa PhaseZero ativo, o teste acompanha o mouse virtual
+identificado pela operação atual. Com o mapa em repouso, acompanha o mouse USB
+do Deck. Se a rota mudar durante o gesto, repita quando o desktop estabilizar.
+A leitura distingue movimento recebido pelo kernel,
+ausência de movimento no intervalo e teste indisponível. Com movimento recebido,
+confira visualmente o deslocamento do cursor. Se houve gesto e o teste ficou em
+silêncio, verifique novamente o responsável pelo controle e o perfil Desktop.
+O teste depende da permissão de leitura do dispositivo na sessão ativa.
+Também pode ser iniciado por `./dev run accessibility trackpad-test`.
+
+A consulta de clientes procura o serviço de dispositivos Wine do próprio usuário
+com descritor aberto para a interface Valve 28de:1205 ligada a `hid-steam`.
+Outros modelos e clientes podem produzir sintomas semelhantes. O teste de
+movimento é manual. Abre somente a saída relativa identificada e descarta os
+eventos assim que verifica se houve movimento. O recibo de habilitação e o
+resultado do teste físico permanecem independentes.
+
+### Do dock ao modo portátil
+
+No Steam Deck com KDE/Wayland, a supervisão de entrada acompanha os conectores
+de vídeo e identifica os canais de teclado e mouse internos pelo dispositivo
+USB e driver. A aba Acessibilidade mostra a topologia, e o histórico registra
+mudanças entre monitor externo e portátil. Um mouse do dock tem identidade
+própria. A saída dele não comprova que o trackpad interno parou.
+
+Se uma das duas entradas internas estiver desabilitada, duas observações
+consecutivas permitem solicitar sua habilitação pelo KWin, mesmo na primeira
+execução após reinstalação. O ponteiro tem prioridade. A sessão local precisa
+estar ativa e desbloqueada. Jogo identificado, emulador, frontend, proprietário
+externo ou foco desconhecido protegem o controle. Uma janela em tela cheia
+também adia a intervenção. O monitor reavalia ao retornar ao desktop.
+
+Com o driver nativo disponível, o painel indica o estado do ponteiro e do
+teclado do firmware. A confirmação do cursor e do clique exige um gesto.
+Combinações adicionais, como Steam+X, dependem do perfil Steam Input ou de um
+mapeador do desktop. A guarda do Steam restaura seu perfil conhecido segundo
+a referência salva. O ciclo de dispositivos do Wine autorizado em um incidente
+individual continua fora das rotinas automáticas do monitor.
+
+[Mapa visual dos botões e atalhos do Steam Input e do PhaseZero](assets/controles-desktop-deck.svg). O comparativo usa os arquivos desktop_neptune.vdf e chord_neptune.vdf do [pacote público da Valve](https://client-update.akamai.steamstatic.com/public_all.zip.f7b7316d122d96ff7f79b6eede24edd5b142d7bf) e o perfil PhaseZero-Desktop da versão 1.22.16.
+
+## Escolher os atalhos do controle
+
+Na janela principal, no widget flutuante, na minibarra e nas barras laterais e superior, passe sobre o ícone de controle ou abra-o com clique, toque ou teclado. As opções permanecem fixas enquanto o mapa ao lado rola. Em telas estreitas, o mapa fica abaixo delas. Percorra as opções e use **Usar Steam Input** ou **Usar PhaseZero** para salvar a escolha. **Jogos reconhecidos** mostra o catálogo da instalação.
+
+Steam Input é a preferência inicial. O cliente Steam mantém a escolha de layout e os perfis por jogo. Com o cliente fechado, o firmware pode fornecer o ponteiro e o clique. O seletor distingue a preferência salva da observação do monitor de entrada. A opção PhaseZero usa o mapa da versão 1.22.16 incorporado ao Fôlego. Funciona também em um Deck sem PhaseZero e sem EmuAtlas. Steam + X abre ou recolhe o teclado virtual habilitado no KDE. No modo automático do Plasma, o Fôlego permite a abertura por botão durante a solicitação, confirma a visibilidade e devolve a preferência original. O leitor do Fôlego traduz o relatório de entrada do Deck em eventos de mouse e teclado no KDE. A sensibilidade da rolagem e do cursor é própria do leitor.
+
+O monitor espera duas observações de desktop e verifica novamente foco, sessão, leases e dispositivo antes da partida. Enquanto o Steam ou outro mapeador estiver com o controle, a preferência PhaseZero aguarda. No desktop elegível, uma unidade transitória acompanha o monitor de entrada. Ela lê somente o HID da interface 02 do Deck em modo de leitura. A captura temporária das interfaces 00 e 01 começa depois que o KWin reconhece as duas saídas virtuais e chega um relatório neutro. A saída do processo libera os descritores. **Steam + Menu** por 1,5 segundo também encerra o mapa alternativo e devolve o controle. Depois de uma falha, selecione o perfil novamente para rearmar.
+
+O supervisor de controle do PhaseZero tem prioridade quando ativo ou em transição. O Fôlego reconhece o lançamento nativo do EmuAtlas mesmo antes de o emulador aparecer e aguarda os registros de restauração do RetroFE, inclusive o do ambiente de desktop. O serviço de recuperação ocioso pode continuar instalado. Quando o último responsável libera o controle, o monitor verifica novamente o desktop e a preferência salva. Se outro gestor aparecer durante a partida, o leitor registra a desistência antes de capturar as entradas.
+
+O padrão Steam dispensa uma unidade adicional. Durante o uso do mapa alternativo, o leitor bloqueia à espera de entrada. O monitor verifica jogos também entre as coletas, em intervalos de dois segundos. Um lançamento cooperativo espera a liberação da unidade antes de executar o jogo. Um jogo iniciado diretamente pode abrir durante o intervalo de detecção. O Steam e o emulador continuam responsáveis por suas configurações de jogo.
+
+O catálogo cobre front-ends e emuladores instalados e ainda não instalados. Inclui RetroFE, ES-DE, Quiver, Pegasus, RetroArch e seus núcleos, Dolphin, PrimeHack, PCSX2, RPCS3, Xenia, Eden-NX2, Vita3K, SharpEmu, Kyty e os demais nomes exibidos pelo seletor. A detecção usa processos, IDs Steam, IDs Flatpak e nomes AppImage. A instalação do EmuDeck ou um gerenciador de ROMs pode continuar operando como desktop. [Emuladores do EmuDeck](https://emudeck.github.io/emulators/steamos/supported-emulators/)
+
+```sh
+folego accessibility deck-map
+folego accessibility deck-map phasezero
+folego accessibility deck-map steam
+folego accessibility deck-games --json
+folego accessibility deck-games --add meu-emulador
+folego accessibility deck-games --remove meu-emulador
+folego accessibility lease-run --provider meu-frontend -- meu-frontend
+```
+
+Para uma integração futura do SteamForge ou de outro lançador, o último comando reserva a entrada inclusive para um executável novo. O catálogo é limitado a 128 identificadores adicionais. O monitor usa os processos da sessão e os leases registrados, sem indexar ROMs, discos ou projetos.

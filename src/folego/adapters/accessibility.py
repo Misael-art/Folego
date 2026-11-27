@@ -21,7 +21,7 @@ class ProbeError(Exception):
     pass
 
 
-def bounded_command(argv, *, timeout, **kwargs):
+def bounded_command(argv, *, timeout, max_bytes=262144, **kwargs):
     """Bound both elapsed time and output, including a broken optional tool."""
     proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, env=kwargs.get("env"), start_new_session=True)
@@ -41,7 +41,7 @@ def bounded_command(argv, *, timeout, **kwargs):
                         selector.unregister(key.fileobj)
                     else:
                         buffers[key.data].extend(chunk)
-                        if sum(map(len, buffers.values())) > 262144:
+                        if sum(map(len, buffers.values())) > max_bytes:
                             raise subprocess.SubprocessError("saída excede orçamento")
         code = proc.wait(timeout=max(.001, deadline - observation_clock()))
         completed = True
@@ -157,6 +157,9 @@ class NativeInput:
                 report["errors"].append(str(exc))
                 for device in report["devices"]:
                     device["repairable"] = False
+        if model in ("Jupiter", "Galileo"):
+            from .deck_hid import desktop_inputs
+            report["deck_desktop"] = desktop_inputs(self.sys_root, report["devices"])
         report["cards"] = device_cards(report["devices"], kernel_known=known,
                                         deck=model in ("Jupiter", "Galileo"))
         self._optional_cards(report)
@@ -252,17 +255,12 @@ class NativeInput:
                 report["providers"].append({"name": "PhaseZero", "state": text or "unknown"})
             except (ProbeError, OSError, ValueError):
                 report["blockers"].append("registro PhaseZero presente; propriedade desconhecida")
-        state = paths._env_dir("XDG_STATE_HOME", Path.home() / ".local/state") / "retrofe/input-session"
-        for name in ("steam-desktop-session.json", "kde-global-shortcut-guard.json"):
-            path = state / name
-            try:
-                pending = present(path)
-            except ProbeError:
-                report["blockers"].append("recuperação externa ilegível")
-                pending = False
-            if pending:
-                report["providers"].append({"name": "RetroFE", "state": "pending"})
-                report["blockers"].append("sessão/recuperação RetroFE pendente; aguardando o proprietário")
+        from .deck_owners import emuatlas_pending, phasezero_controller
+        if "deck_desktop" in report and (owner := phasezero_controller(self)):
+            report["deck_control_owner"] = owner
+        if pending := emuatlas_pending():
+            report["providers"].append({"name": "EmuAtlas/RetroFE", "state": "pending"})
+            report["blockers"].append(pending)
         for engine in ("docker", "podman"):
             binary = self.which(engine)
             if not binary:

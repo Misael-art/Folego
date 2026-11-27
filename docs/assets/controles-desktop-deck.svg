@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1350 1443" width="1350" height="1443" role="img" aria-labelledby="titulo"><title id="titulo">Comparação dos controles no desktop do Steam Deck</title><rect width="1350" height="1443" fill="white"/><g font-family="DejaVu Sans,sans-serif"><text x="40" y="67" font-size="44" fill="#132e45" font-weight="700">Steam Deck no KDE</text>
+<text x="42" y="105" font-size="23" fill="#243848" font-weight="400">Compare o mesmo botão nos dois perfis de desktop.</text>
+<text x="42" y="142" font-size="19" fill="#243848" font-weight="400">Steam fica abaixo do trackpad esquerdo. O botão de três pontos (…) fica abaixo do direito.</text>
+<rect x="30" y="178" width="1290" height="45" fill="#e1ebed"/>
+<text x="44" y="208" font-size="23" fill="#173c48" font-weight="700">Ponteiro e teclado</text>
+<text x="44" y="250" font-size="20" fill="#294e5b" font-weight="700">Controle</text>
+<text x="460" y="250" font-size="20" fill="#294e5b" font-weight="700">Steam Input · Valve</text>
+<text x="900" y="250" font-size="20" fill="#294e5b" font-weight="700">PhaseZero · KDE</text>
+<rect x="30" y="261" width="1290" height="36" fill="#f2f5f3"/>
+<text x="44" y="285" font-size="18" fill="#243848" font-weight="400">Trackpad direito</text>
+<text x="460" y="285" font-size="18" fill="#243848" font-weight="400">Mover o cursor · pressionar para clicar</text>
+<text x="900" y="285" font-size="18" fill="#243848" font-weight="400">Mover o cursor · pressionar para clicar</text>
+<rect x="30" y="297" width="1290" height="36" fill="#ffffff"/>
+<text x="44" y="321" font-size="18" fill="#243848" font-weight="400">Trackpad esquerdo</text>
+<text x="460" y="321" font-size="18" fill="#243848" font-weight="400">Rolar · pressionar para clique do meio</text>
+<text x="900" y="321" font-size="18" fill="#243848" font-weight="400">Rolar na vertical e na horizontal</text>
+<rect x="30" y="333" width="1290" height="36" fill="#f2f5f3"/>
+<text x="44" y="357" font-size="18" fill="#243848" font-weight="400">Analógico direito</text>
+<text x="460" y="357" font-size="18" fill="#243848" font-weight="400">Mover o cursor · pressionar para clicar</text>
+<text x="900" y="357" font-size="18" fill="#243848" font-weight="400">Mover o cursor</text>
+<rect x="30" y="369" width="1290" height="36" fill="#ffffff"/>
+<text x="44" y="393" font-size="18" fill="#243848" font-weight="400">R2 / L2</text>
+<text x="460" y="393" font-size="18" fill="#243848" font-weight="400">Clique esquerdo / direito</text>
+<text x="900" y="393" font-size="18" fill="#243848" font-weight="400">Clique esquerdo / direito</text>
+<rect x="30" y="405" width="1290" height="36" fill="#f2f5f3"/>
+<text x="44" y="429" font-size="18" fill="#243848" font-weight="400">Direcional / analógico esquerdo</text>
+<text x="460" y="429" font-size="18" fill="#243848" font-weight="400">Setas do teclado</text>
+<text x="900" y="429" font-size="18" fill="#243848" font-weight="400">Setas do teclado</text>
+<rect x="30" y="441" width="1290" height="36" fill="#ffffff"/>
+<text x="44" y="465" font-size="18" fill="#243848" font-weight="400">A / B</text>
+<text x="460" y="465" font-size="18" fill="#243848" font-weight="400">Enter / Esc</text>
+<text x="900" y="465" font-size="18" fill="#243848" font-weight="400">Enter / Esc</text>
+<rect x="30" y="477" width="1290" height="36" fill="#f2f5f3"/>
+<text x="44" y="501" font-size="18" fill="#243848" font-weight="400">X / Y</text>
+<text x="460" y="501" font-size="18" fill="#243848" font-weight="400">Teclado do Steam / espaço</text>
+<text x="900" y="501" font-size="18" fill="#243848" font-weight="400">Apagar para trás / espaço</text>
+<rect x="30" y="513" width="1290" height="36" fill="#ffffff"/>
+<text x="44" y="537" font-size="18" fill="#243848" font-weight="400">…</text>
+<text x="460" y="537" font-size="18" fill="#243848" font-weight="400">Ação de sistema conforme o cliente</text>
+<text x="900" y="537" font-size="18" fill="#243848" font-weight="400">Abrir o teclado do KDE</text>
+<rect x="30" y="565" width="1290" height="45" fill="#e1ebed"/>
+<text x="44" y="595" font-size="23" fill="#173c48" font-weight="700">Ombros, botões de trás e janelas</text>
+<text x="44" y="637" font-size="20" fill="#294e5b" font-weight="700">Controle</text>
+<text x="460" y="637" font-size="20" fill="#294e5b" font-weight="700">Steam Input · Valve</text>
+<text x="900" y="637" font-size="20" fill="#294e5b" font-weight="700">PhaseZero · KDE</text>
+<rect x="30" y="648" width="1290" height="36" fill="#f2f5f3"/>
+<text x="44" y="672" font-size="18" fill="#243848" font-weight="400">L1 / R1</text>
+<text x="460" y="672" font-size="18" fill="#243848" font-weight="400">Ctrl / Alt</text>
+<text x="900" y="672" font-size="18" fill="#243848" font-weight="400">Aba anterior / próxima</text>
+<rect x="30" y="684" width="1290" height="36" fill="#ffffff"/>
+<text x="44" y="708" font-size="18" fill="#243848" font-weight="400">L4 / R4 · traseiros superiores</text>
+<text x="460" y="708" font-size="18" fill="#243848" font-weight="400">Shift / Page Up</text>
+<text x="900" y="708" font-size="18" fill="#243848" font-weight="400">Menu do KDE / visão geral</text>
+<rect x="30" y="720" width="1290" height="36" fill="#f2f5f3"/>
+<text x="44" y="744" font-size="18" fill="#243848" font-weight="400">L5 / R5 · traseiros inferiores</text>
+<text x="460" y="744" font-size="18" fill="#243848" font-weight="400">Meta / Page Down</text>
+<text x="900" y="744" font-size="18" fill="#243848" font-weight="400">Campo anterior / próximo</text>
+<rect x="30" y="756" width="1290" height="36" fill="#ffffff"/>
+<text x="44" y="780" font-size="18" fill="#243848" font-weight="400">Menu ☰ · topo direito</text>
+<text x="460" y="780" font-size="18" fill="#243848" font-weight="400">Esc · segurar alterna Desktop/Gamepad</text>
+<text x="900" y="780" font-size="18" fill="#243848" font-weight="400">Visão geral do KDE</text>
+<rect x="30" y="792" width="1290" height="36" fill="#f2f5f3"/>
+<text x="44" y="816" font-size="18" fill="#243848" font-weight="400">View ▣ · topo esquerdo</text>
+<text x="460" y="816" font-size="18" fill="#243848" font-weight="400">Tab</text>
+<text x="900" y="816" font-size="18" fill="#243848" font-weight="400">Alternar janela (Alt+Tab)</text>
+<rect x="30" y="844" width="1290" height="45" fill="#e1ebed"/>
+<text x="44" y="874" font-size="23" fill="#173c48" font-weight="700">Combinações com o botão Steam</text>
+<text x="44" y="916" font-size="20" fill="#294e5b" font-weight="700">Controle</text>
+<text x="460" y="916" font-size="20" fill="#294e5b" font-weight="700">Steam Input · Valve</text>
+<text x="900" y="916" font-size="20" fill="#294e5b" font-weight="700">PhaseZero · KDE</text>
+<rect x="30" y="927" width="1290" height="36" fill="#f2f5f3"/>
+<text x="44" y="951" font-size="18" fill="#243848" font-weight="400">Steam + X</text>
+<text x="460" y="951" font-size="18" fill="#243848" font-weight="400">Teclado do Steam</text>
+<text x="900" y="951" font-size="18" fill="#243848" font-weight="400">Teclado do KDE</text>
+<rect x="30" y="963" width="1290" height="36" fill="#ffffff"/>
+<text x="44" y="987" font-size="18" fill="#243848" font-weight="400">Steam + A / Y</text>
+<text x="460" y="987" font-size="18" fill="#243848" font-weight="400">Alternar gravação / marcar momento¹</text>
+<text x="900" y="987" font-size="18" fill="#243848" font-weight="400">Colar / capturar tela</text>
+<rect x="30" y="999" width="1290" height="36" fill="#f2f5f3"/>
+<text x="44" y="1023" font-size="18" fill="#243848" font-weight="400">Steam + B</text>
+<text x="460" y="1023" font-size="18" fill="#243848" font-weight="400">Segurar para encerrar o aplicativo</text>
+<text x="900" y="1023" font-size="18" fill="#243848" font-weight="400">Copiar</text>
+<rect x="30" y="1035" width="1290" height="36" fill="#ffffff"/>
+<text x="44" y="1059" font-size="18" fill="#243848" font-weight="400">Steam + L1 / R1</text>
+<text x="460" y="1059" font-size="18" fill="#243848" font-weight="400">Lupa / capturar tela</text>
+<text x="900" y="1059" font-size="18" fill="#243848" font-weight="400">—</text>
+<rect x="30" y="1071" width="1290" height="36" fill="#f2f5f3"/>
+<text x="44" y="1095" font-size="18" fill="#243848" font-weight="400">Steam + direcional ↑ / ↓</text>
+<text x="460" y="1095" font-size="18" fill="#243848" font-weight="400">Salvar clipe¹ / Tab</text>
+<text x="900" y="1095" font-size="18" fill="#243848" font-weight="400">—</text>
+<rect x="30" y="1107" width="1290" height="36" fill="#ffffff"/>
+<text x="44" y="1131" font-size="18" fill="#243848" font-weight="400">Steam + direcional ← / →</text>
+<text x="460" y="1131" font-size="18" fill="#243848" font-weight="400">Esc / Enter</text>
+<text x="900" y="1131" font-size="18" fill="#243848" font-weight="400">—</text>
+<rect x="30" y="1143" width="1290" height="36" fill="#f2f5f3"/>
+<text x="44" y="1167" font-size="18" fill="#243848" font-weight="400">Steam + analógico esquerdo ↑ / ↓</text>
+<text x="460" y="1167" font-size="18" fill="#243848" font-weight="400">Aumentar / diminuir brilho¹</text>
+<text x="900" y="1167" font-size="18" fill="#243848" font-weight="400">—</text>
+<rect x="30" y="1179" width="1290" height="36" fill="#ffffff"/>
+<text x="44" y="1203" font-size="18" fill="#243848" font-weight="400">Steam + trackpad ou analógico direito</text>
+<text x="460" y="1203" font-size="18" fill="#243848" font-weight="400">Mover cursor · clique pelo trackpad</text>
+<text x="900" y="1203" font-size="18" fill="#243848" font-weight="400">—</text>
+<rect x="30" y="1215" width="1290" height="36" fill="#f2f5f3"/>
+<text x="44" y="1239" font-size="18" fill="#243848" font-weight="400">Steam + R2 / L2</text>
+<text x="460" y="1239" font-size="18" fill="#243848" font-weight="400">Clique esquerdo / direito</text>
+<text x="900" y="1239" font-size="18" fill="#243848" font-weight="400">—</text>
+<rect x="30" y="1251" width="1290" height="36" fill="#ffffff"/>
+<text x="44" y="1275" font-size="18" fill="#243848" font-weight="400">Steam + View</text>
+<text x="460" y="1275" font-size="18" fill="#243848" font-weight="400">Leitor de tela em sistemas compatíveis¹</text>
+<text x="900" y="1275" font-size="18" fill="#243848" font-weight="400">—</text>
+<rect x="30" y="1287" width="1290" height="36" fill="#f2f5f3"/>
+<text x="44" y="1311" font-size="18" fill="#243848" font-weight="400">Segurar Steam</text>
+<text x="460" y="1311" font-size="18" fill="#243848" font-weight="400">Mostrar lista de atalhos disponíveis¹</text>
+<text x="900" y="1311" font-size="18" fill="#243848" font-weight="400">—</text>
+<text x="42" y="1360" font-size="18" fill="#243848" font-weight="400">¹ Disponibilidade depende do sistema, do cliente e da gravação. O SteamOS e o BigLinux podem diferir.</text>
+<text x="42" y="1389" font-size="18" fill="#243848" font-weight="400">— indica combinação sem ação específica no perfil PhaseZero. Perfis por jogo ou aplicativo podem mudar os atalhos.</text>
+<text x="42" y="1418" font-size="17" fill="#243848" font-weight="400">Fontes: mapas desktop_neptune e chord_neptune da Valve · perfil PhaseZero-Desktop 1.22.16 · 25/11/2026.</text></g></svg>

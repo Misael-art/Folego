@@ -114,6 +114,7 @@ class AccessibilityTab(QWidget):
         self._pending = ""
         self._emergency_previous = ""
         self._stopped = False
+        self._audit_restricted = False
         self._verifying = False
         self._active_scope = []
         self._verified = {}
@@ -195,6 +196,14 @@ class AccessibilityTab(QWidget):
         content = QWidget()
         box = QVBoxLayout(content)
         box.addLayout(grid)
+        self.motion_button = QPushButton("Testar movimento do trackpad do Deck")
+        self.motion_button.setVisible(False)
+        self.motion_button.clicked.connect(self.test_trackpad)
+        self.motion_result = QLabel()
+        self.motion_result.setWordWrap(True)
+        self.motion_result.setTextFormat(Qt.TextFormat.PlainText)
+        box.addWidget(self.motion_button)
+        box.addWidget(self.motion_result)
         box.addWidget(self.providers)
         self.operation_details = QLabel("")
         self.operation_details.setWordWrap(True)
@@ -284,6 +293,7 @@ class AccessibilityTab(QWidget):
             return
         self._report = None
         self._verified.clear()
+        self.motion_button.hide()
         for card in self.cards.values():
             card.setText("Desconhecido · coleta indisponível")
             card.set_state("attention")
@@ -300,6 +310,8 @@ class AccessibilityTab(QWidget):
                 or not isinstance(report.get("cards"), list) or len(report["cards"]) > 32
                 or any(not isinstance(row, dict) or not all(isinstance(row.get(key), str)
                            for key in ("key", "state", "detail")) for row in report["cards"])
+                or not isinstance(report.get("devices", []), list)
+                or not isinstance(report.get("desktop_profiles", {}), dict)
                 or not isinstance(report.get("plans", []), list)
                 or not isinstance(report.get("policy", {}), dict)
                 or not isinstance(report.get("watcher", {}), dict)
@@ -318,6 +330,9 @@ class AccessibilityTab(QWidget):
         except (ValueError, TypeError):
             self.show_error("plano ilegível; nenhuma ação autorizada")
             return
+        self.motion_button.setVisible("touchpad" in report.get("desktop_profiles", {})
+                                      or any(isinstance(d, dict) and d.get("deck_controller")
+                                             for d in (report.get("devices") or [])))
         self._report = report
         for card in self.cards.values():
             card.setText("Desconhecido · fonte não declarada")
@@ -331,7 +346,8 @@ class AccessibilityTab(QWidget):
                 if row["state"] == "observed" and proof and proof["ready"] and proof.get("context") == context:
                     card.setText("Habilitado no sistema · teste físico pendente")
                     card.set_state("ready")
-                elif row["key"] in report.get("desktop_profiles", {}):
+                elif row["key"] in report.get("desktop_profiles", {}) or (
+                        row["key"] in ("pointer", "gamepad") and row["state"] == "unknown"):
                     card.setText(row["detail"])
                     card.set_state("attention" if row["state"] != "observed" else "neutral")
                 elif proof or row["state"] in ("degraded", "unknown", "unavailable", "unsupported", "not-observed"):
@@ -344,12 +360,15 @@ class AccessibilityTab(QWidget):
                              + ("habilitada" if enabled else "desabilitada")
                              + f" · {report.get('baseline_count', 0)} dispositivo(s) registrado(s) · monitor residente: "
                              + ("ciclo recente" if report.get("watcher", {}).get("state") == "observed" else "sem sinal recente"))
+        layout = report.get("deck_desktop")
+        if isinstance(layout, dict) and layout.get("display") in ("portátil", "monitor externo", "desconhecida"):
+            self.summary.setText(self.summary.text() + " · Tela do Deck: " + layout["display"])
         self.auto_button.setText("Desabilitar supervisão" if enabled else "Habilitar supervisão")
         self.install_button.setEnabled(not self._busy)
         blockers = report.get("blockers", [])
         self.providers.setText("Entrada KWin aguardando: " + "; ".join(blockers) +
                                "\nSteam/microfone têm guarda independente, indicada nos cartões." if blockers else
-                               "Backend nativo disponível conforme capacidades; sem responsável externo bloqueando.")
+                               "Consulte em cada cartão o estado da entrada e do responsável.")
         alerts = report.get("alerts", [])
         if isinstance(alerts, list) and all(isinstance(value, str) for value in alerts):
             self.providers.setText(self.providers.text() + ("\n" + "\n".join(alerts) if alerts else ""))
@@ -399,16 +418,31 @@ class AccessibilityTab(QWidget):
         if self._report is not None:
             self.report_ready.emit(report)
 
+    def set_audit_restricted(self, restricted):
+        self._audit_restricted = restricted
+        self._update_actions()
+
+    def test_trackpad(self):
+        self.motion_button.setEnabled(False)
+        self.motion_result.setText("Deslize o dedo no trackpad direito nos próximos 8 segundos.")
+        def finished(payload):
+            if not self._stopped:
+                self.motion_result.setText((payload or {}).get("reason") or "Teste indisponível.")
+                self.motion_button.setEnabled(True)
+        self._jobs.run("accessibility-trackpad-test", "", done=finished)
+
     def _update_actions(self):
         allowed = not self._busy and not self._stopped
-        self.enable_all_button.setEnabled(allowed)
-        self.capture_button.setEnabled(allowed and not self._pending)
-        self.audio_reprobe_choice.setEnabled(allowed)
+        self.enable_all_button.setEnabled(allowed and not self._audit_restricted)
+        self.capture_button.setEnabled(allowed and not self._pending and not self._audit_restricted)
+        self.audio_reprobe_choice.setEnabled(allowed and not self._audit_restricted)
         self.pending_choice.setEnabled(allowed)
         for key, button in self.profile_rearm_buttons.items():
-            button.setEnabled(allowed and not self._capability_pending(key))
+            button.setEnabled(allowed and not self._capability_pending(key)
+                              and (not self._audit_restricted or key != "microphone"))
         for key, card in self.cards.items():
-            card.setEnabled(allowed and not self._capability_pending(key))
+            card.setEnabled(allowed and not self._capability_pending(key)
+                            and (not self._audit_restricted or key not in ("audio", "microphone")))
 
     def _capability_pending(self, key):
         if key in ('virtual-keyboard', 'all'):
@@ -575,7 +609,7 @@ class AccessibilityTab(QWidget):
                 context = (payload.get("effects", {}).get("boot_id"), payload.get("effects", {}).get("service_owner"))
                 self._verified[key] = {**row, "ready": ready, "context": context}
                 self.cards[key].set_state("ready" if ready else "attention")
-                self.cards[key].setText("Habilitado no sistema · teste físico pendente" if ready else "Precisa de atenção · detalhes no resultado")
+                self.cards[key].setText("Habilitado no sistema · teste físico pendente" if ready else row["reason"])
                 details.append(NAMES[key] + ": " + row["reason"])
             self.operation_details.setText("\n".join(details))
         if payload.get("operation_id") == self._pending or payload.get("outcome") == "recusa":

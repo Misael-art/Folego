@@ -337,3 +337,39 @@ def test_gamepad_requests_public_mode_without_stopping_steam(monkeypatch):
     ready, detail = backend.gamepad({"devices":[{"kinds":["gamepad"]}]})
     assert ready is False and "não confirmado" in detail
     assert calls == [["steam", "steam://open/bigpicture"]]
+
+
+@pytest.mark.parametrize("capability", ["touchpad", "pointer"])
+def test_deck_emulated_pointer_does_not_certify_recovery_from_kwin_alone(supervisor, capability):
+    device = supervisor.native.report["devices"][0]
+    device.update(kinds=["pointer"], deck_controller=True, enabled=True)
+    recovery = controller(supervisor)
+    profile = {"state": "unknown", "detail": "Wine mantém aberto o controle Valve"}
+    supervisor.profile_guard = SimpleNamespace(profiles=SimpleNamespace(
+        steam=lambda: profile, controller_conflict=lambda: ""))
+    plan = recovery.prepare(capability)
+    result = recovery.execute(plan, confirmed=True)
+    assert result.outcome == Outcome.PARTIAL
+    row = result.effects["capabilities"][0]
+    assert not row["ready"] and not row["physical_verified"] and "Wine" in row["reason"]
+    assert not supervisor.native.calls
+    profile.update(state="healthy", detail="perfil Desktop confirmado")
+    assert recovery.execute(recovery.prepare(capability), confirmed=True).outcome == Outcome.OK
+
+@pytest.mark.parametrize("with_peer", [True, False])
+def test_all_preserves_wine_controller_and_verifies_independent_audio(supervisor, with_peer):
+    recovery = controller(supervisor)
+    if with_peer:
+        recovery.backend.owner = {"name": "PhaseZero", "files": {"registered": "digest"}}
+    supervisor.native.report["devices"][0].update(kinds=["pointer"], deck_controller=True)
+    supervisor.profile_guard = SimpleNamespace(
+        annotate=lambda report: None, manual_parameters=lambda report: None,
+        profiles=SimpleNamespace(controller_conflict=lambda: "Wine (PID 123) mantém aberto o controle Valve",
+                                 microphone=lambda: {"state": "healthy"}))
+    result = recovery.execute(recovery.prepare("all"), confirmed=True)
+    rows = {r["key"]: r for r in result.effects["capabilities"]}
+    assert result.outcome == Outcome.PARTIAL
+    for key in ("touchpad", "pointer", "gamepad"):
+        assert not rows[key]["ready"] and "Wine" in rows[key]["reason"]
+    assert rows["audio"]["ready"] and rows["microphone"]["ready"]
+    assert not supervisor.native.calls and "delegate" not in recovery.backend.effects

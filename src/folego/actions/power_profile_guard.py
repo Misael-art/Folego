@@ -213,6 +213,10 @@ class PowerProfileGuard:
     @_serialized
     def observe(self, level):
         """``level`` is 'attention', 'critical', 'external' or None (no opinion)."""
+        from ..audit_profile import normal
+        if not normal():
+            self._streak = 0
+            return {"guard": True, "idle": True}
         if level not in TARGETS:
             self._streak = 0
         if level not in TARGETS and level != "external":
@@ -244,6 +248,14 @@ class PowerProfileGuard:
                                     "original": original, "target": target, "level": level}, current=current)
 
     def _switch(self, state, receipt, *, current):
+        from ..audit_profile import normal_effects
+        with normal_effects() as allowed:
+            if not allowed:
+                self._streak = 0
+                return {"guard": True, "idle": True}
+            return self._apply_switch(state, receipt, current=current)
+
+    def _apply_switch(self, state, receipt, *, current):
         target = receipt["target"]
         if not receipt['boot_id']:
             raise PowerProfileError('Boot desconhecido; nenhuma troca de perfil autorizada')

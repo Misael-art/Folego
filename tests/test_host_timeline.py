@@ -317,3 +317,44 @@ def test_boot_summary_never_calls_an_incomplete_tail_empty(tmp_path):
     assert summary['quality'] == 'unknown'
     assert summary['last'] is None
     assert 'sem linha completa' in summary['reason']
+
+
+def test_boot_summary_compares_only_adjacent_final_discharge_readings(tmp_path):
+    folder = tmp_path / "timeline"
+    recorder = HostTimelineRecorder(folder)
+    for mono, voltage in [(100, 8_056_000), (119.542, 7_736_000)]:
+        s = _snapshot(mono)
+        recorder.record(replace(s, external_power_online=False,
+                                sources=s.sources + (SourceQuality("external_power", OK),
+                                                     SourceQuality("battery", OK)),
+                                battery=BatteryInfo(94, "Discharging", voltage_uv=voltage)))
+    path = folder / f"{BOOT}.jsonl"
+    first, last = map(json.loads, path.read_text().splitlines())
+
+    def change():
+        return summarize_boot_timeline(folder, BOOT)["last_discharge_change"]
+
+    assert change() == {"from_uv": 8_056_000, "to_uv": 7_736_000, "interval_s": 19.542,
+                        "from_at": first["at"], "to_at": last["at"]}
+    for patch in ({"external_power_online": None}, {"external_power_online": True},
+                  {"source_issues": {"external_power": "partial"}},
+                  {"battery_status": "Charging"}, {"battery_voltage_uv": None},
+                  {"power_events": ["external-power-disconnected"]},
+                  {"mono_ns": first["mono_ns"]}, {"mono_ns": first["mono_ns"] + 31 * 10**9},
+                  {"at": first["at"]}, {"schema": 1}):
+        path.write_text(json.dumps(first) + "\n" + json.dumps(last | patch) + "\n")
+        assert change() is None
+    path.write_text(json.dumps(first) + "\n{incompleta\n" + json.dumps(last) + "\n")
+    assert change() is None
+
+
+def test_temperature_trips_in_boot_summary_require_an_identified_healthy_sensor(tmp_path):
+    folder = tmp_path / "timeline"
+    recorder = HostTimelineRecorder(folder)
+    sample = replace(_snapshot(100), thermal_passive_c=100, thermal_critical_c=105)
+    recorder.record(sample)
+    last = summarize_boot_timeline(folder, BOOT)["last"]
+    assert (last["temperature_sensor"], last["thermal_passive_c"], last["thermal_critical_c"]) == (
+        "acpitz", 100, 105)
+    recorder.record(replace(sample, mono=115, temperature_sensor=None))
+    assert summarize_boot_timeline(folder, BOOT)["last"]["thermal_passive_c"] is None

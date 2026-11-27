@@ -193,3 +193,80 @@ def test_cli_requires_confirmation_and_returns_native_status(manager, monkeypatc
     assert json.loads(capsys.readouterr().out)['default_enabled'] is True
     assert cli.main(['startup', 'basic-enable', '--confirmar', '--json']) == 0
     assert json.loads(capsys.readouterr().out)['configured']
+
+
+def add_user_unit(manager, name='ai-memory.service'):
+    unit = manager.config / 'systemd/user' / name
+    unit.parent.mkdir(parents=True, exist_ok=True)
+    original = b'[Service]\nExecStart=/bin/true\n'
+    unit.write_bytes(original)
+    unit.chmod(0o644)
+    return unit, original
+
+
+def test_kept_unit_gets_exact_original_back_and_survives_login_sync(manager):
+    unit, original = add_user_unit(manager)
+    manager.configure()
+    assert os.readlink(unit) == '/dev/null'
+    kept = manager.keep('ai-memory.service')
+    assert kept['outcome'] == 'sucesso' and kept['kept'] == ['ai-memory.service']
+    assert unit.read_bytes() == original and unit.stat().st_mode & 0o777 == 0o644
+    assert kept['configured'] and 'ai-memory.service' not in kept['targets']
+    synced = manager.configure()  # What every login runs.
+    assert synced['configured'] and not unit.is_symlink() and unit.read_bytes() == original
+    assert os.readlink(manager.config / 'systemd/user/hermes-gateway.service') == '/dev/null'
+    restored = manager.configure(False)
+    assert restored['state'] == 'restored' and unit.read_bytes() == original
+    assert not (manager.config / 'systemd/user/hermes-gateway.service').is_symlink()
+
+
+def test_item_kept_before_first_plan_is_never_deferred(manager):
+    unit, original = add_user_unit(manager)
+    path, personal = add_personal(manager)
+    manager.keep('ai-memory.service')
+    manager.keep('steam-input.desktop')
+    applied = manager.configure()
+    assert applied['configured'] and unit.read_bytes() == original and path.read_bytes() == personal
+    assert {'ai-memory.service', 'steam-input.desktop'}.isdisjoint(applied['targets'])
+    assert 'steam-input.desktop' not in applied['preserved']
+
+
+def test_released_item_rejoins_the_plan(manager):
+    unit, original = add_user_unit(manager)
+    manager.configure()
+    manager.keep('ai-memory.service')
+    released = manager.keep('ai-memory.service', False)
+    assert released['kept'] == [] and os.readlink(unit) == '/dev/null'
+    manager.configure(False)
+    assert unit.read_bytes() == original
+
+
+def test_interrupted_keep_settles_without_conflict(manager):
+    unit, original = add_user_unit(manager)
+    manager.configure()
+    row = startup.preference(); row['basic_session_keep'] = ['ai-memory.service']
+    startup.save_object(startup.paths.config_dir() / 'startup.json', row)
+    unit.unlink(); unit.write_bytes(original); unit.chmod(0o644)  # Original back, receipt not yet saved.
+    status = manager.status()
+    assert status['configured'] and not status['conflicts']
+    assert manager.configure()['configured'] and unit.read_bytes() == original
+
+
+def test_keep_refuses_items_outside_catalog_and_external_edits(manager):
+    with pytest.raises(BasicSessionError, match='catálogo'): manager.keep('pipewire.service')
+    unit, _ = add_user_unit(manager)
+    manager.configure()
+    unit.unlink(); unit.write_bytes(b'[Service]\nExecStart=/bin/false\n')
+    with pytest.raises(BasicSessionError, match='externa'): manager.keep('ai-memory.service')
+    assert 'ai-memory.service' not in startup.preference()['basic_session_keep']
+
+
+def test_cli_keep_requires_confirmation(manager, monkeypatch, capsys):
+    monkeypatch.setattr(basic_session, 'BasicSession', lambda: manager)
+    add_user_unit(manager)
+    manager.configure()
+    assert cli.main(['startup', 'basic-keep', '--item', 'ai-memory.service', '--json']) != 0
+    assert startup.preference()['basic_session_keep'] == []
+    capsys.readouterr()
+    assert cli.main(['startup', 'basic-keep', '--item', 'ai-memory.service', '--confirmar', '--json']) == 0
+    assert json.loads(capsys.readouterr().out)['kept'] == ['ai-memory.service']

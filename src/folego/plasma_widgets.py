@@ -211,7 +211,7 @@ def ensure_hook(config, unit_dirs, *, coordinator=None, reload=None):
     plan = ActionPlan('startup.plasma-widgets-hook', ResourceIdentity.path(target),
                       {'before': before, 'executable': sys.executable})
 
-    def install(committed):
+    def install():
         if _snapshot(target) != before:
             return ActionResult(plan.action, Outcome.REFUSED, plan.operation_id,
                                 target_key=str(target), reason='drop-in mudou após revisão')
@@ -232,7 +232,15 @@ def ensure_hook(config, unit_dirs, *, coordinator=None, reload=None):
         return ActionResult(plan.action, Outcome.OK, plan.operation_id, target_key=str(target),
                             reason='política programada no início do Plasma')
 
-    outcome = coordinator.run(plan, install, wait=.5)
+    def apply_hook(_):
+        from .audit_profile import SUSPENDED, normal_effects
+        with normal_effects() as allowed:
+            if not allowed:
+                return ActionResult(plan.action, Outcome.REFUSED, plan.operation_id,
+                                    target_key=str(target), reason=SUSPENDED)
+            return install()
+
+    outcome = coordinator.run(plan, apply_hook, wait=.5)
     if outcome.outcome != Outcome.OK:
         raise ValueError(f'{outcome.reason} · operação {outcome.operation_id}')
     return 'scheduled'
@@ -308,6 +316,7 @@ def widget_status(config, state, enabled):
 
 def prepare(*, config=None, state=None, enabled=None, before_plasma=_before_plasma):
     from .basic_session import _snapshot, _bytes, _file, LIMIT
+    from .audit_profile import SUSPENDED, normal_effects
     from .startup import preference
 
     folder = Path(config) if config else paths.xdg_config_home()
@@ -315,7 +324,9 @@ def prepare(*, config=None, state=None, enabled=None, before_plasma=_before_plas
     target = folder / LAYOUT
     if not before_plasma():
         raise ValueError('preparo de widgets exige Plasma fora de execução na unit de início')
-    with Coordinator().lock(wait=.5):
+    with Coordinator().lock(wait=.5), normal_effects() as allowed:
+        if not allowed:
+            return {"state": "suspended", "reason": SUSPENDED}
         enabled = preference()['basic_session'] if enabled is None else enabled
         old, original = _receipt(state)
         current = _snapshot(target)

@@ -50,13 +50,7 @@ def prevention_status(env=None) -> dict:
                         "novos filhos usam temporários privados verificados; ambiente de outros processos desconhecido")}
 
 
-def prepare_job_environment(env=None, *, root=None, mounts=None,
-                            min_free_bytes=64 * 1024 * 1024, max_runs=256) -> dict:
-    result = dict(os.environ if env is None else env)
-    if mounts is None:
-        mounts, error = read_mounts_checked()
-        if error:
-            raise OSError(f"temporários: montagens desconhecidas: {error}")
+def job_root_for(result, mounts, *, root=None):
     # Respect an existing PhaseZero root when its effective TMPDIR is already
     # persistent. Never read/source shell profiles or change XDG_RUNTIME_DIR.
     inherited = Path(result.get("TMPDIR", "/tmp"))
@@ -72,7 +66,17 @@ def prepare_job_environment(env=None, *, root=None, mounts=None,
         data = Path(result.get("XDG_DATA_HOME", str(home / ".local/share")))
         root = (inherited / "folego-jobs" if persistent
                 else data / "folego/job-tmp")
-    root = Path(root)
+    return Path(root)
+
+
+def prepare_job_environment(env=None, *, root=None, mounts=None,
+                            min_free_bytes=64 * 1024 * 1024, max_runs=256) -> dict:
+    result = dict(os.environ if env is None else env)
+    if mounts is None:
+        mounts, error = read_mounts_checked()
+        if error:
+            raise OSError(f"temporários: montagens desconhecidas: {error}")
+    root = job_root_for(result, mounts, root=root)
     if not root.is_absolute() or ".." in root.parts:
         raise OSError("temporários: raiz precisa ser absoluta")
     for ancestor in (root, *root.parents):

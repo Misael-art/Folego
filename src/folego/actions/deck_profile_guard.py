@@ -4,16 +4,35 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import time
+from contextlib import nullcontext
 import uuid
 
 from .. import paths
 from ..adapters.deck_profiles import DESKTOP_URL, MIC_PROFILE, DeckProfiles
+from ..adapters.deck_owners import controller_command, emuatlas_pending, phasezero_controller
+from ..core.accessibility import uses_deck_pointer
 from ..orchestration.models import ActionPlan, ActionResult, Outcome, ResourceIdentity
 
 ACTION = "accessibility.restore-desktop-profile"
+
 KEYS = ("touchpad", "microphone")
+
+
+def _exited_controller_process(proc):
+    # A zombie leader can still have live threads. Check all three fields in
+    # one kernel snapshot before disregarding a potential controller owner.
+    try:
+        with (proc / "status").open("rb") as stream:
+            status = stream.read(16385)
+    except OSError:
+        return False
+    fields = dict(line.split(b":", 1) for line in status.splitlines() if b":" in line)
+    return (len(status) <= 16384 and fields.get(b"Pid", b"").strip() == proc.name.encode()
+            and fields.get(b"Threads", b"").strip() == b"1"
+            and fields.get(b"State", b"").split()[:1] == [b"Z"])
 
 
 class DeckProfileGuard:
@@ -29,8 +48,30 @@ class DeckProfileGuard:
     def annotate(self, report):
         observed = self.profiles.observe()
         report["desktop_profiles"] = observed
+        touchpad = observed.get("touchpad", {})
+        layout = report.get("deck_desktop", {})
+        roles = layout.get("roles", {})
         for card in report.get("cards", []):
             row = observed.get(card.get("key"))
+            if touchpad.get("code") == "controller-access-unresolved" and (
+                    uses_deck_pointer(report.get("devices", []), card["key"])
+                    or card["key"] == "gamepad" and card["state"] == "not-observed"):
+                card["state"] = "unknown"
+                card["detail"] = touchpad["detail"]
+                continue
+            if (card["key"] == "touchpad" and layout.get("native_available")
+                    and touchpad.get("state") == "unknown" and not touchpad.get("code")):
+                pair = [d for d in report["devices"] if d["key"] in roles]
+                enabled = [d["enabled"] for d in pair]
+                if len(enabled) == 2 and all(v is True for v in enabled):
+                    card.update(state="observed", detail="Ponteiro e teclado nativos habilitados no KWin. "
+                                "Teste o gesto e o clique. Atalhos personalizados dependem do mapeador.")
+                elif False in enabled:
+                    card.update(state="degraded", detail="Entrada interna desabilitada no compositor. "
+                                "A guarda verifica a sessão antes de reabilitar.")
+                else:
+                    card.update(state="unknown", detail="Estado das entradas internas no KWin incompleto.")
+                continue
             if row is None:
                 continue
             card["state"] = {"healthy": "observed", "fault": "degraded",
@@ -44,51 +85,115 @@ class DeckProfileGuard:
         return [item for item in unresolved(self.coordinator.journal, capabilities=scope) if item != ignore]
 
     @staticmethod
-    def _game_blocker():
+    def _game_blocker(proc_root=Path("/proc"), *, mapper_pid=None):
         """A missing/uncertain owner is not evidence that a game has ended."""
-        state = paths._env_dir("XDG_STATE_HOME", Path.home() / ".local/state") / "retrofe/input-session"
-        for name in ("steam-desktop-session.json", "kde-global-shortcut-guard.json"):
-            path = state / name
-            try:
-                path.lstat()
-            except FileNotFoundError:
-                continue
-            except OSError:
-                return "sessão RetroFE não comprovada"
-            return "RetroFE ainda possui uma sessão de perfil/atalhos"
-        known = {"RetroFE", "retroarch", "dolphin-emu", "pcsx2-qt", "flycast", "rpcs3",
-                 "gamescope", "ES-DE", "emulationstatio", "quiver-launcher"}
-        passive = {"systemd", "(sd-pam)", "ssh-agent", "portal-kde-veri", "kwin_wayland", "polkit-kde-auth"}
+        if pending := emuatlas_pending():
+            return pending
+        from ..core.deck_games import SHORT, game_environment, game_program
+        from .deck_mapping import registered_games
         try:
-            for proc in Path("/proc").iterdir():
+            additional = frozenset(registered_games())
+        except (ValueError, OSError):
+            return "catálogo de jogos não comprovado"
+        short = SHORT | {n[:15] for n in additional if len(n) > 15}
+        passive = {"systemd", "(sd-pam)", "ssh-agent", "gpg-agent", "portal-kde-veri", "kwin_wayland", "polkit-kde-auth"}
+        deadline = time.monotonic() + .5
+        try:
+            for proc in proc_root.iterdir():
                 if not proc.name.isdigit():
                     continue
                 try:
                     if proc.stat().st_uid != os.getuid():
                         continue
                     name = (proc / "comm").read_text().strip()
-                    if name in known:
+                    if time.monotonic() > deadline:
+                        return "inventário de jogos excedeu o prazo"
+                    if mapper_pid is not None and int(proc.name) != mapper_pid and name.lower() in {
+                            "steam", "steamwebhelper", "scc-daemon", "inputplumber", "handheld-daemon", "hhd"}:
+                        if _exited_controller_process(proc):
+                            continue
+                        return "controle reservado por " + name
+                    if game_program(name) or name.lower() in additional:
+                        if _exited_controller_process(proc):
+                            continue
                         return "jogo/frontend ativo; perfil de desktop preservado"
+                    interpreter = re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", name) or name in {"bash", "sh"}
+                    if interpreter or name.lower() in short or name in {
+                            "AppRun", "wine", "wine64", "steam-input.py", "scc-daemon", "controller-desk"}:
+                        with (proc / "cmdline").open("rb") as stream:
+                            args = stream.read(4096).split(b"\0")
+                        if reason := controller_command(args):
+                            return reason
+                        launch = args[:2] if interpreter or name in ("wine", "wine64") else args[:1]
+                        if any(game_program(arg.decode(errors="replace")) or
+                               Path(os.fsdecode(arg)).name.lower() in additional for arg in launch):
+                            return "jogo/frontend ativo; perfil de desktop preservado"
                     # Steam titles may not have a known process name. Inspect only
                     # this user's environment and never include its contents in logs.
                     try:
                         with (proc / "environ").open("rb") as source:
                             data = source.read(65537)
                     except PermissionError:
-                        if name in passive:
+                        if name in passive or _exited_controller_process(proc):
                             continue
                         return "processo do usuário sem estado comprovado"
                     if len(data) > 65536:
                         return "ambiente de processo excede orçamento de leitura"
-                    if any(part.startswith((b"SteamGameId=", b"SteamAppId=")) and
-                           part.split(b"=", 1)[1] not in (b"", b"0", b"413080")
-                           for part in data.split(b"\0")):
-                        return "aplicativo Steam ativo; perfil de desktop preservado"
+                    if reason := game_environment(data, additional):
+                        return reason
                 except (FileNotFoundError, ProcessLookupError):
                     continue
         except OSError:
             return "processos de jogos não comprovados"
         return ""
+
+    def desktop_blocker(self, report, *, mapper_pid=None):
+        """Recheck the foreground desktop before changing built-in inputs."""
+        if reason := (self._game_blocker() if mapper_pid is None else self._game_blocker(mapper_pid=mapper_pid)):
+            return reason
+        if "deck_desktop" not in report:
+            return ""
+        native = self._native
+        native.deadline = native.clock() + 3
+        if reason := phasezero_controller(native):
+            return reason
+        from ..adapters.accessibility import ProbeError
+        try:
+            expected = {"Active": "yes", "Remote": "no", "LockedHint": "no", "Type": "wayland",
+                        "User": str(os.getuid()), "Class": "user", "Seat": "seat0", "Desktop": "KDE"}
+            raw = native.call(["loginctl", "show-session", "auto", *["--property=" + f for f in expected]])
+            values = dict(line.split("=", 1) for line in raw.splitlines())
+            if values != expected:
+                return "desktop local do Deck inativo, bloqueado ou desconhecido"
+            # A fullscreen title outside Steam may have no game identifier at all.
+            window = native.call(["kdotool", "getactivewindow"]).strip()
+            if not re.fullmatch(r"\{[0-9a-fA-F-]{36}\}", window):
+                return "janela em foco não comprovada"
+            info = native.call([native.qdbus, report["service_owner"], "/KWin",
+                                "org.kde.KWin.getWindowInfo", window])
+            if native.call(["kdotool", "getactivewindow"]).strip() != window:
+                return "foco mudou durante a verificação"
+            props = dict(line.split(": ", 1) for line in info.splitlines() if ": " in line)
+            if props.get("fullscreen") != "false":
+                if props.get("fullscreen") != "true" or not self._desktop_application(props):
+                    return "janela em tela cheia ou foco desconhecido; controle preservado"
+        except (OSError, ValueError, ProbeError):
+            return "sessão ou janela em foco não comprovada"
+        return self.profiles.controller_conflict()
+
+    @staticmethod
+    def _desktop_application(props):
+        # A fullscreen file manager or editor still needs desktop controls.
+        apps = {"org.kde.dolphin": {"dolphin"}, "org.kde.kate": {"kate"},
+                "org.kde.konsole": {"konsole"}, "chatgpt": {"chatgpt"}, "codex": {"codex", "chatgpt"},
+                "claude": {"claude", "claude-desktop"}, "code": {"code"},
+                "libreoffice-writer": {"soffice.bin"}, "libreoffice-calc": {"soffice.bin"}}
+        pid = props.get("pid", "")
+        names = apps.get(props.get("resourceClass", "").lower())
+        if not names or not pid.isdecimal():
+            return False
+        proc = Path("/proc") / pid
+        return proc.stat().st_uid == os.getuid() and (proc / "exe").readlink().name.lower() in names
 
     @staticmethod
     def _phasezero_audio_blocker(identity):
@@ -139,7 +244,7 @@ class DeckProfileGuard:
         if leases:
             return "recurso em uso ou reparo por outro responsável: " + leases[0]
         if key == "touchpad":
-            return self._game_blocker()
+            return "; ".join(report.get("blockers", [])) or self.desktop_blocker(report)
         return ''
 
     def manual_parameters(self, report):
@@ -245,7 +350,12 @@ class DeckProfileGuard:
                 self._fault_seen = {key: 0 for key in KEYS}
                 self._healthy_seen = {key: 0 for key in KEYS}
         self._last_sample = mono
+        from ..audit_profile import normal
+        regular_profile = normal()
         for key in KEYS:
+            if key == "microphone" and not regular_profile:
+                self._fault_seen[key] = self._healthy_seen[key] = 0
+                continue
             current = observed.get(key, {})
             if current.get("state") != "fault":
                 self._fault_seen[key] = 0
@@ -325,25 +435,30 @@ class DeckProfileGuard:
         blocker = self.budget_blocker(policy, key)
         if blocker:
             return result(Outcome.REFUSED, blocker)
-        attempts = [a for a in policy["profile_attempts"] if 0 <= now - a["ts"] < 3600]
-        attempts.append({"key": key, "ts": now, "operation_id": plan.operation_id})
-        policy["profile_attempts"] = attempts
-        self.store.save(policy)  # The journal already contains the intent.
-        try:
-            self.profiles.restore(key, before)
-            deadline = time.monotonic() + (8 if before['identity'].get('recovery') else 4)
-            stable_since = None
-            while time.monotonic() < deadline:
-                after = self.profiles.steam() if key == "touchpad" else self.profiles.microphone()
-                if after.get("state") == "healthy" and self._matches(key, after, plan.params["baseline"]):
-                    stable_since = stable_since or time.monotonic()
-                    if time.monotonic() - stable_since >= (2 if key == "touchpad" else 1):
-                        return result(Outcome.OK, "perfil de desktop restaurado e confirmado; uso físico não testado")
-                else:
-                    stable_since = None
-                time.sleep(.3)
-        except (RuntimeError, OSError, ValueError, TimeoutError):
-            pass
+        from ..audit_profile import SUSPENDED, normal_effects
+        gate = normal_effects() if key == "microphone" and automatic else nullcontext(True)
+        with gate as allowed:
+            if not allowed:
+                return result(Outcome.REFUSED, SUSPENDED)
+            attempts = [a for a in policy["profile_attempts"] if 0 <= now - a["ts"] < 3600]
+            attempts.append({"key": key, "ts": now, "operation_id": plan.operation_id})
+            policy["profile_attempts"] = attempts
+            self.store.save(policy)  # The journal already contains the intent.
+            try:
+                self.profiles.restore(key, before)
+                deadline = time.monotonic() + (8 if before['identity'].get('recovery') else 4)
+                stable_since = None
+                while time.monotonic() < deadline:
+                    after = self.profiles.steam() if key == "touchpad" else self.profiles.microphone()
+                    if after.get("state") == "healthy" and self._matches(key, after, plan.params["baseline"]):
+                        stable_since = stable_since or time.monotonic()
+                        if time.monotonic() - stable_since >= (2 if key == "touchpad" else 1):
+                            return result(Outcome.OK, "perfil de desktop restaurado e confirmado; uso físico não testado")
+                    else:
+                        stable_since = None
+                    time.sleep(.3)
+            except (RuntimeError, OSError, ValueError, TimeoutError):
+                pass
         policy = self.store.read()
         policy["profile_circuit"][key] = "efeito incerto; verificar antes de repetir"
         self.store.save(policy)
