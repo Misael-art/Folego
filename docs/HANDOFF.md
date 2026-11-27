@@ -33,6 +33,22 @@
   suíte, o ACPI marcou até 90 °C. Às 22:57, já sem a suíte, houve um pico de
   95 °C com o ChatGPT no topo da CPU, sem corte. A GUI residente só usa o código
   novo depois de reaberta, e o alívio no host real ainda não foi observado.
+- Outros erros vistos no KSystemLog/journal:
+  - A linha de boot do BigLinux traz `nomce`, `nowatchdog`, `nosoftlockup`,
+    `tsc=nowatchdog`, `intremap=off`, `split_lock_detect=off` e
+    `clearcpuid=514` (UMIP; o kernel fica marcado como "TESTING ONLY"). Com
+    `nomce`, aparece `mce: Unable to init MCE device (rc: -5)` e erros de máquina
+    não são registrados. Sem watchdog/softlockup, um travamento também não deixa
+    rastro. Isso limita o diagnóstico dos cortes e não foi alterado: mudar o boot
+    exige ação do owner.
+  - FAT `BIGLIVE` (`mmcblk0p4`, cartão SD) ficou sujo após o corte e pede `fsck`
+    com o volume desmontado.
+  - Ruído sem relação com os cortes: `kscreen-doctor` aborta 5× por boot sob o
+    usuário `sddm` (949). Isso vem de `plasma-big-apply-icc.service`
+    (`biglinux-session-and-themes`), que roda na tela de login sem display. O
+    `xdg-desktop-portal-gtk` falha por `cannot open display` antes do ambiente
+    Wayland e sobe depois. Também aparecem regras udev de `trezord`/`valve-gdu`/
+    `kyber`, `opt3001` sem resposta e `i2c_designware ... lost arbitration`.
 - O texto binário colado do KSystemLog tem padrão de bytes de imagem (pixels
   BGRA repetidos); é inferência, não mensagens de erro legíveis. Os journals dos três boots não têm mensagens binárias além
   de escapes ANSI curtos do `ai-memory`.
