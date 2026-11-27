@@ -266,7 +266,7 @@ def build_parser() -> argparse.ArgumentParser:
     ai = commands.add_parser("ai", help="cotas, diagnóstico e recuperação pelo responsável Web")
     ai.add_argument("sub", choices=["status", "recover-web", "reset-note", "limit-note",
                                     "render-status", "render-software", "render-restore", "care-status", "care-enable", "care-disable",
-                                    "care-sync", "care-reconcile"])
+                                    "care-sync", "care-reconcile", "state-status", "state-recover"])
     ai.add_argument("--adopt-legacy", help="com care-enable: manifesto privado da orientação manual anterior")
     ai.add_argument("--account", help="com recover-web/reset-note: identidade da conta (account_id de status --json)")
     ai.add_argument("--expires", help="com reset-note/limit-note: validade ou retorno do limite Web 'DD/MM/AAAA HH:MM' (hora local)")
@@ -3112,6 +3112,24 @@ def _dispatch(ns, argv) -> int:
             else:
                 print(result['message'] + '\n' + result['scope'])
             return EXIT_REFUSED if result['state'] == 'conflict' else EXIT_OK
+        if ns.sub.startswith('state-'):
+            from .actions.codex_state_recovery import CodexStateRecovery
+            recovery = CodexStateRecovery()
+            if ns.sub == 'state-status':
+                report = recovery.status()
+                print(json.dumps(dict(schema=1, **report), ensure_ascii=False) if ns.json else report['detail'])
+                return EXIT_OK if report['state'] == 'clean' else EXIT_PARTIAL if report['state'] == 'pending' else EXIT_UNKNOWN
+            if not ns.confirmar:
+                return _emit_gate_refusal(ns, 'codex-state', 'Use --confirmar para reverter a transação interrompida',
+                                          EXIT_NEEDS_CONFIRM)
+            reports = recovery.handle()
+            if ns.json:
+                print(json.dumps(dict(schema=1, reports=reports), ensure_ascii=False))
+            else:
+                print('\n'.join(r['detail'] for r in reports) or 'Nenhuma transação interrompida nos bancos do Codex')
+            outcomes = {r['outcome'] for r in reports}
+            return (EXIT_UNKNOWN if 'desconhecido' in outcomes else EXIT_REFUSED if 'recusa' in outcomes
+                    else EXIT_OK)
         if ns.sub == 'recover-web':
             if not ns.confirmar:
                 print('Use --confirmar para solicitar o ciclo ao responsável Web já habilitado')

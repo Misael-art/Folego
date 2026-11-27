@@ -233,6 +233,21 @@ são duráveis antes da escrita. Mudança externa ou recibo inválido bloqueia o
 efeito; não há escalada automática de sinais. Se uma instância anterior ficou
 presa, seu encerramento continua separado e precisa de confirmação própria.
 
+Se o Codex Desktop para na abertura com `attempt to write a readonly database`,
+um desligamento não limpo deixou uma transação SQLite interrompida (*hot
+journal*) num banco da `~/.codex`. O Fôlego verifica a cada 30 s os bancos em
+modo rollback da raiz e de `sqlite/`. Se um deles tem journal pendente e nenhum
+processo o usa, a intenção é registrada no diário e o par banco + journal é
+copiado e conferido por SHA-256 em `~/.local/share/folego/recovery/codex-sqlite/<ID>/`.
+O estado é revalidado antes do efeito, e o próprio SQLite reverte a transação
+numa abertura com escrita. O Fôlego confere `quick_check` e a abertura somente
+leitura e avisa na bandeja. Bancos em WAL, em uso, destino em RAM, falta de
+espaço com 10 GiB de margem ou o Modo Auditor bloqueiam o efeito. No máximo 3
+reparos por hora, e um reparo incerto bloqueia o mesmo banco. Nenhum processo é
+sinalizado: reabra o Codex Desktop se ele ficou sem janela. Na CLI,
+`./dev run ai state-status --json` consulta e `./dev run ai state-recover
+--confirmar` executa o mesmo fluxo.
+
 Ao lado das entregas, um **presente verde piscando** mostra as redefinições
 disponíveis confirmadas das contas do provedor. Clique para consultar a conta;
 o resgate continua no cliente de IA.

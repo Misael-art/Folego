@@ -244,3 +244,7 @@ class Tray:
 
     def show_web_capacity_error(self, detail):
         self._notice('service', 'Codex Web · erro de capacidade', detail)
+
+    def show_codex_state(self, repaired, detail):
+        self._notice('service', 'Codex · banco de estado reparado' if repaired
+                     else 'Codex · reparo do banco incerto', detail)
