@@ -347,6 +347,31 @@ def test_thermal_guard_uses_only_matching_acpi_limits_and_fresh_samples(tmp_path
     assert failed["state"] == "unknown"
 
 
+def test_cooperative_relief_holds_the_recent_peak_that_preceded_cuts():
+    """26/11/2026: 88–92 °C spikes, a cool 59 °C reading, then 95 °C and a cut."""
+    base = dict(ts=1000, mem=MemInfo(1000, 500), swap_used_kb=0,
+                swap_total_kb=0, pressure_memory=None, pressure_io=None,
+                pressure_cpu=None, load=None, apps=(), self_rss_kb=0,
+                boot_id="boot-1", temperature_sensor="acpitz",
+                thermal_passive_c=100, thermal_critical_c=105)
+    tracker = ThermalTracker()
+    now = time.monotonic()
+    assert tracker.observe(Snapshot(**base, mono=now, temperature_c=85))["relief"] is None
+    spike = tracker.observe(Snapshot(**base, mono=now + 15, temperature_c=92))
+    assert spike["state"] == "observed" and spike["relief"] == "danger"
+    cool = tracker.observe(Snapshot(**base, mono=now + 30, temperature_c=59))
+    assert cool["relief"] == "danger"  # one cool reading does not clear the request
+    assert tracker.observe(Snapshot(**base, mono=now + 45, temperature_c=95))["relief"] == "critical"
+    assert tracker.observe(Snapshot(**base, mono=now + 200, temperature_c=60))["relief"] == "critical"
+    assert tracker.observe(Snapshot(**base, mono=now + 230, temperature_c=60))["relief"] is None
+    unknown = tracker.observe(Snapshot(**base, mono=now + 231, temperature_c=None))
+    assert "relief" not in unknown or unknown["relief"] is None
+    no_limit = ThermalTracker().observe(Snapshot(**dict(base, thermal_passive_c=None,
+                                                        thermal_critical_c=None),
+                                                 mono=now, temperature_c=99))
+    assert no_limit["relief"] is None
+
+
 def test_health_cli_reports_power_and_protection_without_writing_receipts(
         fake_home, fake_proc, tmp_path, monkeypatch, capsys):
     from folego.cli import main

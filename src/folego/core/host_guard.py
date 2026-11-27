@@ -9,6 +9,13 @@ import time
 from .snapshot import OK, Snapshot
 
 WINDOW_S = 240.0
+# Cooperative relief follows the recent peak, not one reading. On the Jupiter
+# (ACPI passive 100 °C) the abrupt cuts of 26/11/2026 came at most 17 s after
+# a 95–98 °C sample, with 85–92 °C spikes minutes earlier, while the next
+# sample often read 60 °C. A request that is cleared by the next cool reading
+# never reaches an agent in time.
+RELIEF_HOLD_S = 180.0
+RELIEF_MARGINS_C = (("critical", 5.0), ("danger", 10.0))
 _PRESSURE_LIMITS = (("memory", "pressure_memory", 5.0),
                     ("io", "pressure_io", 10.0),
                     ("cpu", "pressure_cpu", 25.0))
@@ -167,7 +174,12 @@ class ThermalTracker:
             state = "high"
         elif limit is not None and peak[1] >= limit - 5:
             state = "recent_high"
-        return {"state": state, "current_c": round(value, 1),
+        relief = None
+        if limit is not None:
+            held = max(item[1] for item in self.samples if now - item[0] <= RELIEF_HOLD_S)
+            relief = next((level for level, margin in RELIEF_MARGINS_C
+                           if held >= limit - margin), None)
+        return {"state": state, "current_c": round(value, 1), "relief": relief,
                 "peak_c": round(peak[1], 1), "sensor": snapshot.temperature_sensor,
                 "fan_rpm": snapshot.fan_rpm, "passive_c": passive,
                 "critical_c": critical, "top_process": peak[2],

@@ -1,5 +1,58 @@
 # Passagem para o próximo agente — atualizada em 26/11/2026
 
+## Cortes abruptos de 26/11 e alívio térmico antecipado — 26/11/2026
+
+- Evidência: os boots `d643c531` (19:46), `af3e5b11` (21:30) e `7a5c768c`
+  (22:34) terminaram sem desligamento no journal e sem mensagem de kernel. As
+  últimas amostras do histórico do Fôlego tinham 98, 97 e 95 °C (ACPI `acpitz`,
+  passivo 100, crítico 105). Isso ocorreu no máximo 17 s antes do fim. Em
+  ~11.800 amostras, só 16 chegaram a ≥95 °C (0,14%). RAM, swap e PSI estavam
+  normais, e o AC estava presente.
+- O mesmo sensor varia de 59 para 95 °C entre amostras de 15 s. Picos de 85–92 °C
+  apareceram de 2 a 36 min antes de cada corte. Inferência: o trip crítico (ou o
+  desligamento térmico do firmware) é atingido entre amostras. Isso não foi
+  comprovado. O kernel 6.18 do Manjaro não tem o driver da plataforma Steam Deck
+  (`VLV0100` sem `steamdeck`/`steamdeck_hwmon`); a ventoinha fica no controle
+  padrão do EC e sem tacômetro.
+- Lacuna corrigida: o pedido cooperativo aos agentes só saía com a leitura em
+  ≥100 °C, que nunca ocorreu antes de um corte, e era limpo pela próxima leitura
+  fria. Agora `ThermalTracker` expõe `relief`, calculado pelo pico dos últimos
+  180 s: `danger` a ≥ passivo−10 e `critical` a ≥ passivo−5. A GUI publica esse
+  nível no canal cooperativo existente. O despertar da tela continua ligado ao
+  estado instantâneo.
+- `session capacity/run` também aguarda quando o histórico do boot registra pico
+  ≥ limite térmico nos últimos 240 s. Histórico ilegível vira `unknown`;
+  ausente não adiciona evidência. `sdcc` entrou na lista de cargas pesadas.
+- Sem efeito novo: o canal continua consultivo, não altera ventoinha, perfil
+  ou processos. A troca automática de perfil por calor exigiria autorização
+  própria (a proteção de perfil só cobre queda de tensão). A eficácia contra
+  os cortes só se comprova com novas noites de uso. Não houve teste de
+  aquecimento.
+- Validação: `folego session run ... -- ./dev check` (admissão `ready`):
+  headless **1.644 passed**, GUI **2.094 passed**, 2 pulados em cada. Durante a
+  suíte, o ACPI marcou até 90 °C. Às 22:57, já sem a suíte, houve um pico de
+  95 °C com o ChatGPT no topo da CPU, sem corte. A GUI residente só usa o código
+  novo depois de reaberta, e o alívio no host real ainda não foi observado.
+- Outros erros vistos no KSystemLog/journal:
+  - A linha de boot do BigLinux traz `nomce`, `nowatchdog`, `nosoftlockup`,
+    `tsc=nowatchdog`, `intremap=off`, `split_lock_detect=off` e
+    `clearcpuid=514` (UMIP; o kernel fica marcado como "TESTING ONLY"). Com
+    `nomce`, aparece `mce: Unable to init MCE device (rc: -5)` e erros de máquina
+    não são registrados. Sem watchdog/softlockup, um travamento também não deixa
+    rastro. Isso limita o diagnóstico dos cortes e não foi alterado: mudar o boot
+    exige ação do owner.
+  - FAT `BIGLIVE` (`mmcblk0p4`, cartão SD) ficou sujo após o corte e pede `fsck`
+    com o volume desmontado.
+  - Ruído sem relação com os cortes: `kscreen-doctor` aborta 5× por boot sob o
+    usuário `sddm` (949). Isso vem de `plasma-big-apply-icc.service`
+    (`biglinux-session-and-themes`), que roda na tela de login sem display. O
+    `xdg-desktop-portal-gtk` falha por `cannot open display` antes do ambiente
+    Wayland e sobe depois. Também aparecem regras udev de `trezord`/`valve-gdu`/
+    `kyber`, `opt3001` sem resposta e `i2c_designware ... lost arbitration`.
+- O texto binário colado do KSystemLog tem padrão de bytes de imagem (pixels
+  BGRA repetidos); é inferência, não mensagens de erro legíveis. Os journals dos três boots não têm mensagens binárias além
+  de escapes ANSI curtos do `ai-memory`.
+
 ## Reparo automático do estado SQLite do Codex — 26/11/2026
 
 - Incidente: depois de reboots não limpos às 21:27, 21:30 e 22:03, o Codex

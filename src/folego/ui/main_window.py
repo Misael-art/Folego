@@ -253,6 +253,7 @@ class MainWindow(QMainWindow):
         self._pressure_last_sent = 0.0
         self._pressure_last_status = 0.0
         self._pressure_seen = False
+        self._relief_level = 0
         self.options.screen_energy_requested.connect(self._screen_energy_request)
         self.ai_monitor.deliveries_ready.connect(self._screen_delivery_attention)
         self.ai_monitor.web_mcp_reported.connect(self._web_mcp_reported)
@@ -420,6 +421,7 @@ class MainWindow(QMainWindow):
             self._pressure_next = None
             if not previously_restricted:
                 self._pressure_request("clear")
+                self._relief_level = 0
         elif previously_restricted:
             self.ai_monitor.start(from_now=True)
             self._screen_timer.start()
@@ -613,16 +615,17 @@ class MainWindow(QMainWindow):
     def _observe_cooperative_pressure(self, level):
         now = time.monotonic()
         if level:
-            if level != self._screen_thermal_level or now - self._pressure_last_sent >= 45:
+            if level != self._relief_level or now - self._pressure_last_sent >= 45:
                 self._pressure_request('publish', 'critical' if level == 2 else 'danger')
                 self._pressure_last_sent = now
                 self._pressure_last_status = now
             elif now - self._pressure_last_status >= 15:
                 self._pressure_request('status')
                 self._pressure_last_status = now
-        elif self._screen_thermal_level or not self._pressure_seen:
+        elif self._relief_level or not self._pressure_seen:
             self._pressure_request('clear')
         self._pressure_seen = True
+        self._relief_level = level
 
     def _start_host_guard(self):
         if self._host_guard_factory is None or self._host_guard_poller is not None:
@@ -788,7 +791,9 @@ class MainWindow(QMainWindow):
                 self.tray.show_pressure_alert(pressure_alert)
         level = {'danger': 1, 'critical': 2}.get(thermal.get('state'), 0)
         if not self._audit_restricted:
-            self._observe_cooperative_pressure(level)
+            # The request anticipates the cut from the held recent peak.
+            self._observe_cooperative_pressure(
+                {'danger': 1, 'critical': 2}.get(thermal.get('relief'), 0))
         if level > self._screen_thermal_level:
             self._wake_screen()
         self._screen_thermal_level = level

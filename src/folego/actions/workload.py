@@ -19,12 +19,35 @@ from ..safely.mounts import destination_verdict
 from .accessibility import private_path, read_object, save_object
 
 HEAVY = {"cc1", "cc1plus", "rustc", "cargo", "ninja", "make", "cmake", "pytest", "makepkg",
-         "pacman", "rpm", "dpkg", "qemu-system-x86", "ld.lld"}
+         "pacman", "rpm", "dpkg", "qemu-system-x86", "ld.lld", "sdcc"}
 MIB = 1024 ** 2
+# One cool reading hides the 15 s spikes that preceded the cuts of 26/11/2026.
+THERMAL_RECENT_S = 240
 
 
 def _state():
     return paths.state_dir() / "foreground-work.json"
+
+
+def _recent_thermal_peak(snapshot):
+    """Hottest recorded sample of this boot and sensor in the recent window.
+
+    Returns ``(peak, problem)``. A missing history adds no evidence; an
+    unreadable one is reported instead of being taken as cool.
+    """
+    from ..adapters.host_timeline import read_timeline
+    report = read_timeline(boot_id=snapshot.boot_id, limit=60, tail_bytes=96 * 1024)
+    if report["quality"] == "missing":
+        return None, None
+    if report["quality"] == "unknown":
+        return None, "Histórico térmico recente ilegível"
+    now_ns = int(snapshot.mono * 1e9)
+    values = [row["temperature_c"] for row in report["samples"]
+              if row.get("temperature_sensor") == snapshot.temperature_sensor
+              and type(row.get("temperature_c")) in (int, float)
+              and type(row.get("mono_ns")) is int
+              and 0 <= now_ns - row["mono_ns"] <= THERMAL_RECENT_S * 1_000_000_000]
+    return max(values, default=None), None
 
 
 @contextmanager
@@ -144,8 +167,14 @@ def capacity(ram_mib, disk_mib, dest):
         unknown.append("Temperatura ou limite passivo do sensor indisponível")
     else:
         limit = snapshot.thermal_passive_c - 10
-        if snapshot.temperature_c >= (min(90, limit) if deck else limit):
+        limit = min(90, limit) if deck else limit
+        peak, problem = _recent_thermal_peak(snapshot)
+        if problem:
+            unknown.append(problem)
+        if snapshot.temperature_c >= limit:
             wait.append("Margem térmica insuficiente")
+        elif peak is not None and peak >= limit:
+            wait.append(f"Pico térmico recente de {peak:g} °C (limite {limit:g} °C)")
     tmp_root = job_root_for(os.environ, mounts)
     free = min(_free_mib(dest, mounts), _free_mib(tmp_root, mounts))
     if free < disk_mib + 10240:

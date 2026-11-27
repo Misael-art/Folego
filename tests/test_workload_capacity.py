@@ -93,6 +93,41 @@ def test_capacity_checks_estimates_pressure_and_partial_sources(tmp_path, monkey
     assert workload.capacity(10, 0, tmp_path)["decision"] == "unknown"
 
 
+def test_capacity_waits_after_a_recent_spike_hidden_by_a_cool_reading(tmp_path, monkeypatch):
+    from folego.adapters.host_timeline import HostTimelineRecorder
+    from folego.core.snapshot import MemInfo
+    from folego import paths
+    root = tmp_path / "proc"
+    (root / "1").mkdir(parents=True)
+    (root / "1/comm").write_text("systemd\n")
+    (root / "self/ns").mkdir(parents=True)
+    (root / "self/ns/pid").touch()
+    (root / "vmstat").write_text("pswpin 0\npswpout 0\n")
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv("DECKWELLNESS_PROC_ROOT", str(root))
+    monkeypatch.setenv("DECKWELLNESS_SYS_ROOT", str(tmp_path / "sys"))
+    monkeypatch.setattr(workload.time, "sleep", lambda _: None)
+    monkeypatch.setattr(workload, "read_mounts_checked", lambda: ((("/", "btrfs"),), None))
+    monkeypatch.setattr(workload, "_free_mib", lambda *args: 15000)
+    base = replace(_snapshot(1000), procs=(), thermal_passive_c=100,
+                   mem=MemInfo(16 * 1024 ** 2, 8 * 1024 ** 2))
+    snap = replace(base, mono=1200, temperature_c=59)
+    monkeypatch.setattr(workload, "MetricsCollector", lambda: SimpleNamespace(collect=lambda: snap))
+    assert workload.capacity(10, 0, tmp_path)["decision"] == "ready"  # no history: instant reading
+    recorder = HostTimelineRecorder(paths.host_timeline_dir())
+    recorder.record(replace(base, temperature_c=95))
+    recorder.record(replace(base, mono=1020, temperature_c=61))
+    result = workload.capacity(10, 0, tmp_path)
+    assert result["decision"] == "wait"
+    assert any("Pico térmico recente de 95" in reason for reason in result["reasons"])
+    snap = replace(base, mono=1000 + workload.THERMAL_RECENT_S + 30, temperature_c=59)
+    assert workload.capacity(10, 0, tmp_path)["decision"] == "ready"
+    (paths.host_timeline_dir() / f"{base.boot_id}.jsonl").chmod(0o644)
+    result = workload.capacity(10, 0, tmp_path)
+    assert result["decision"] == "unknown"
+    assert "Histórico térmico recente ilegível" in result["reasons"]
+
+
 def test_scope_cpu_requires_same_cgroup_identity_and_monotonic_window(tmp_path, monkeypatch):
     from folego.adapters.workload_scopes import WorkloadScopes
     monkeypatch.setenv("DECKWELLNESS_SYS_ROOT", str(tmp_path))

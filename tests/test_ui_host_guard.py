@@ -133,3 +133,17 @@ def test_btrfs_recent_increase_remains_visible_after_stable_poll(qapp):
     assert "+1 erro de corrupção nas últimas 24 h" in win.disk.host_health.rows["btrfs"].text()
     assert "itens para revisar" in win.dashboard.host_status.text()
     win.quit()
+
+
+def test_cooperative_request_follows_held_relief_without_waking_screen(qapp, monkeypatch):
+    win = MainWindow()
+    sent = []
+    monkeypatch.setattr(win, "_pressure_request", lambda action, value=None: sent.append((action, value)))
+    win._observe_cooperative_pressure(1)
+    win._observe_cooperative_pressure(1)
+    win._observe_cooperative_pressure(2)
+    win._observe_cooperative_pressure(0)
+    win._observe_cooperative_pressure(0)
+    assert sent == [("publish", "danger"), ("publish", "critical"), ("clear", None)]
+    assert win._screen_thermal_level == 0
+    win.close()
