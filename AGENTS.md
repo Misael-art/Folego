@@ -67,6 +67,16 @@ Este projeto não depende do HOME, disco, venv, serviços ou skills do host ante
   Nunca encher runtime real, sinalizar agentes/daemons de trabalho ou recriar
   serviços UUID para produzir evidência.
 
+### Reparo automático do estado SQLite do Codex solicitado em 26/11
+
+O usuário autorizou o Fôlego a reverter automaticamente uma transação SQLite
+interrompida (*hot journal*) nos bancos em modo rollback da raiz do Codex
+(`$CODEX_HOME` ou `~/.codex`) e de `sqlite/`, depois que isso travou o Codex
+Desktop. O efeito exige diário de intenção, cópia verificada em destino
+persistente, revalidação no ato e nenhum processo usando o banco. Ele passa pelo
+Modo Auditor e por um disjuntor. Só o SQLite reverte; nada é apagado à mão, WAL
+não é tocado e nenhum processo é sinalizado. Escopo em `actions/codex_state_recovery.py`.
+
 ### Perfis de controle de desktop solicitados em 25/11
 
 A escolha persistente do usuário no seletor ou na CLI autoriza o mapa alternativo

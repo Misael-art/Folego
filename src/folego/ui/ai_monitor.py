@@ -14,6 +14,7 @@ class AIMonitor(QObject):
     deliveries_ready = Signal(object)
     web_mcp_reported = Signal(object)
     web_capacity_reported = Signal(object)
+    codex_state_reported = Signal(object)
 
     def __init__(self, parent=None, *, collect_fn=None, deliveries=None, alerts=None):
         super().__init__(parent)
@@ -25,15 +26,20 @@ class AIMonitor(QObject):
         self.deliveries = deliveries or DeliveryMonitor()
         from ..actions.web_recovery import WebRecovery
         self.web_recovery = WebRecovery(self.deliveries) if deliveries is None else None
+        from ..actions.codex_state_recovery import CodexStateRecovery
+        self.codex_state = CodexStateRecovery() if deliveries is None else None
         self.alerts = alerts or AlertSounds(self)
         self.poller = Poller(collect_fn or ai_sessions.collect, interval_s=60, parent=self, offload=True)
         self.delivery_poller = Poller(self._collect_deliveries, interval_s=5, parent=self, offload=True)
+        self.state_poller = Poller(self._check_codex_state, interval_s=30, parent=self, offload=True)
+        self.state_poller.snapshot_ready.connect(self._codex_state_checked)
         self.poller.snapshot_ready.connect(self.set_items)
         self.delivery_poller.snapshot_ready.connect(self.set_deliveries)
         self.poller.error.connect(lambda _: self.set_items([ai_sessions.unknown(p, 'Consulta falhou') for p in ai_sessions.NAMES]))
         self.delivery_poller.error.connect(lambda _: self.set_deliveries([dict(provider=p, count=None, pending=[]) for p in ai_sessions.NAMES]))
         self.destroyed.connect(self.poller._stop.set)
         self.destroyed.connect(self.delivery_poller._stop.set)
+        self.destroyed.connect(self.state_poller._stop.set)
 
     def _collect_deliveries(self):
         rows = self.deliveries.collect()
@@ -41,6 +47,18 @@ class AIMonitor(QObject):
         if self.web_recovery is not None and normal():
             self.web_recovery.handle(rows, since=self._started_at)
         return rows
+
+    def _check_codex_state(self):
+        from ..audit_profile import normal
+        if self.codex_state is None or not normal():
+            return []
+        return self.codex_state.handle()
+
+    def _codex_state_checked(self, reports):
+        # Refusals (in use, Auditor) are retried silently; effects are reported.
+        for report in reports:
+            if report.get('outcome') in ('sucesso', 'desconhecido'):
+                self.codex_state_reported.emit(report)
 
     def set_items(self, items):
         self.items = items
@@ -71,11 +89,11 @@ class AIMonitor(QObject):
         if from_now:
             self._started_at = time.time()
         self.alerts.start()
-        for poller in (self.poller, self.delivery_poller):
+        for poller in (self.poller, self.delivery_poller, self.state_poller):
             poller.start(); poller.request()
 
     def pause(self):
-        self.poller.pause(); self.delivery_poller.pause()
+        self.poller.pause(); self.delivery_poller.pause(); self.state_poller.pause()
 
     def shutdown(self):
-        self.poller.stop(); self.delivery_poller.stop(); self.alerts.shutdown()
+        self.poller.stop(); self.delivery_poller.stop(); self.state_poller.stop(); self.alerts.shutdown()

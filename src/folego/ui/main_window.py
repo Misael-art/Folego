@@ -257,6 +257,7 @@ class MainWindow(QMainWindow):
         self.ai_monitor.deliveries_ready.connect(self._screen_delivery_attention)
         self.ai_monitor.web_mcp_reported.connect(self._web_mcp_reported)
         self.ai_monitor.web_capacity_reported.connect(self._web_capacity_reported)
+        self.ai_monitor.codex_state_reported.connect(self._codex_state_reported)
         self._screen_delivery_ids = set()
         self._web_mcp_note = ''
         self._screen_thermal_level = 0
@@ -589,6 +590,12 @@ class MainWindow(QMainWindow):
         self.tray.show_web_capacity_error(detail)
         if self._compact is not None:
             self._compact._shortcut_result('Codex Web: ' + detail)
+        self._wake_screen()
+
+    def _codex_state_reported(self, report):
+        self.tray.show_codex_state(report.get('outcome') == 'sucesso', report.get('detail') or '')
+        if self._compact is not None:
+            self._compact._shortcut_result('Codex: ' + (report.get('detail') or ''))
         self._wake_screen()
 
     def _pressure_request(self, action, value=None):

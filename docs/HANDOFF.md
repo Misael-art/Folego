@@ -1,5 +1,26 @@
 # Passagem para o próximo agente — atualizada em 26/11/2026
 
+## Reparo automático do estado SQLite do Codex — 26/11/2026
+
+- Incidente: depois de reboots não limpos às 21:27, 21:30 e 22:03, o Codex
+  Desktop (`chatgpt-bin` 26.1120.41243) parou no bootstrap com `ERR_SQLITE_ERROR
+  attempt to write a readonly database`. `~/.codex/.codex-global-state.sqlite`
+  tinha um *hot journal*, e o app abre esse banco com `readOnly`. Uma abertura
+  com escrita deixou o SQLite reverter a transação (`integrity_check` ok), e o
+  par original foi preservado em `~/.codex/recovery/global-state-hot-journal-20261126/`.
+- Pedido do usuário: autofix no Fôlego. `adapters/codex_state.py` detecta,
+  copia, revalida e deixa o SQLite reverter. `actions/codex_state_recovery.py`
+  coordena com diário, Auditor e disjuntor (3 reparos/h). `AIMonitor` verifica a
+  cada 30 s e avisa na bandeja só quando há efeito. A CLI tem `ai state-status`
+  e `ai state-recover --confirmar`.
+- Processos do mesmo usuário com descritores ilegíveis, como o `systemd --user`,
+  usam `/proc/locks` como prova de uso.
+- `./dev check`: headless **1.642 passed**, GUI **2.091 passed**, 2 pulados em
+  cada. Seis testes novos com *hot journal* real, criado por um escritor que
+  morre no meio da transação. `ai state-status --json` no host: `clean`. Não
+  houve reaceite ponta a ponta com um novo corte: a GUI do Fôlego em execução
+  continua com o código anterior até ser reaberta.
+
 ## Master System fora do dock e retorno do mapeador — 26/11/2026
 
 O EmuAtlas reconheceu em P1 o controle interno do Deck. A tradução do evdev
